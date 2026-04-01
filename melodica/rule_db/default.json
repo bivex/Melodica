@@ -1,0 +1,45 @@
+{
+  "_comment": "Built-in classical chord progression rules for ChordProgressionRuleDB.",
+  "version": "1.0",
+  "contexts": ["classical", "pop", "jazz"],
+  "rules": [
+    {"from_degree": 1, "from_quality": 0, "to_degree": 4, "to_quality": 0, "weight": 0.80, "context": ["classical", "pop"]},
+    {"from_degree": 1, "from_quality": 0, "to_degree": 5, "to_quality": 0, "weight": 0.90, "context": ["classical"]},
+    {"from_degree": 1, "from_quality": 0, "to_degree": 6, "to_quality": 1, "weight": 0.70, "context": ["classical", "pop"]},
+    {"from_degree": 1, "from_quality": 0, "to_degree": 2, "to_quality": 1, "weight": 0.55, "context": ["classical"]},
+    {"from_degree": 1, "from_quality": 0, "to_degree": 3, "to_quality": 1, "weight": 0.50, "context": ["classical"]},
+
+    {"from_degree": 2, "from_quality": 1, "to_degree": 5, "to_quality": 0, "weight": 0.95, "context": ["classical", "jazz"]},
+    {"from_degree": 2, "from_quality": 1, "to_degree": 5, "to_quality": 5, "weight": 0.90, "context": ["jazz"]},
+    {"from_degree": 2, "from_quality": 7, "to_degree": 5, "to_quality": 5, "weight": 0.92, "context": ["jazz"]},
+
+    {"from_degree": 3, "from_quality": 1, "to_degree": 4, "to_quality": 0, "weight": 0.65, "context": ["classical"]},
+    {"from_degree": 3, "from_quality": 1, "to_degree": 6, "to_quality": 1, "weight": 0.70, "context": ["classical"]},
+
+    {"from_degree": 4, "from_quality": 0, "to_degree": 5, "to_quality": 0, "weight": 0.85, "context": ["classical", "pop"]},
+    {"from_degree": 4, "from_quality": 0, "to_degree": 1, "to_quality": 0, "weight": 0.60, "context": ["classical", "pop"]},
+    {"from_degree": 4, "from_quality": 0, "to_degree": 2, "to_quality": 1, "weight": 0.70, "context": ["classical"]},
+
+    {"from_degree": 5, "from_quality": 0, "to_degree": 1, "to_quality": 0, "weight": 1.00, "context": ["classical", "pop"]},
+    {"from_degree": 5, "from_quality": 5, "to_degree": 1, "to_quality": 0, "weight": 0.98, "context": ["jazz"]},
+    {"from_degree": 5, "from_quality": 0, "to_degree": 6, "to_quality": 1, "weight": 0.65, "context": ["classical", "pop"]},
+    {"from_degree": 5, "from_quality": 0, "to_degree": 4, "to_quality": 0, "weight": 0.40, "context": ["pop"]},
+
+    {"from_degree": 6, "from_quality": 1, "to_degree": 2, "to_quality": 1, "weight": 0.80, "context": ["classical"]},
+    {"from_degree": 6, "from_quality": 1, "to_degree": 4, "to_quality": 0, "weight": 0.75, "context": ["classical", "pop"]},
+    {"from_degree": 6, "from_quality": 1, "to_degree": 5, "to_quality": 0, "weight": 0.70, "context": ["pop"]},
+    {"from_degree": 6, "from_quality": 1, "to_degree": 1, "to_quality": 0, "weight": 0.55, "context": ["pop"]},
+
+    {"from_degree": 7, "from_quality": 2, "to_degree": 1, "to_quality": 0, "weight": 0.90, "context": ["classical"]},
+    {"from_degree": 7, "from_quality": 2, "to_degree": 3, "to_quality": 1, "weight": 0.60, "context": ["classical"]},
+
+    {"from_degree": 1, "from_quality": 6, "to_degree": 4, "to_quality": 6, "weight": 0.85, "context": ["jazz"]},
+    {"from_degree": 2, "from_quality": 6, "to_degree": 5, "to_quality": 5, "weight": 0.90, "context": ["jazz"]},
+    {"from_degree": 4, "from_quality": 4, "to_degree": 1, "to_quality": 4, "weight": 0.80, "context": ["jazz"]},
+
+    {"from_degree": 1, "from_quality": 0, "to_degree": 4, "to_quality": 0, "weight": 0.85, "context": ["pop"]},
+    {"from_degree": 6, "from_quality": 1, "to_degree": 4, "to_quality": 0, "weight": 0.80, "context": ["pop"]},
+    {"from_degree": 4, "from_quality": 0, "to_degree": 5, "to_quality": 0, "weight": 0.88, "context": ["pop"]},
+    {"from_degree": 5, "from_quality": 0, "to_degree": 6, "to_quality": 1, "weight": 0.72, "context": ["pop"]}
+  ]
+}

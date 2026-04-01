@@ -1,0 +1,27 @@
+{
+  "generator": {
+    "type": "BassGenerator",
+    "params": {
+      "density": 0.7,
+      "key_range_low": 36,
+      "key_range_high": 55,
+      "complexity": 0.5,
+      "leap_probability": 0.2
+    },
+    "config": {
+      "style": "root_fifth",
+      "rhythm": {
+        "type": "EuclideanRhythmGenerator",
+        "config": {"slots_per_beat": 2, "hits_per_bar": 5, "offset": 1, "gate": 0.9}
+      }
+    }
+  },
+  "modifiers": [
+    {
+      "type": "FollowRhythmModifier",
+      "config": {
+        "source_track": "Lead"
+      }
+    }
+  ]
+}

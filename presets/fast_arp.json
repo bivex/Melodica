@@ -1,0 +1,23 @@
+{
+  "generator": {
+    "type": "ArpeggiatorGenerator",
+    "params": {
+      "density": 0.7,
+      "key_range_low": 60,
+      "key_range_high": 84,
+      "complexity": 0.5,
+      "leap_probability": 0.2
+    },
+    "config": {
+      "pattern": "up_down",
+      "note_duration": 0.125,
+      "voicing": "closed",
+      "octaves": 2,
+      "rhythm": {
+        "type": "EuclideanRhythmGenerator",
+        "config": {"slots_per_beat": 4, "hits_per_bar": 11, "offset": 0, "gate": 0.85}
+      }
+    }
+  },
+  "modifiers": []
+}

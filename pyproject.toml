@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "melodica"
+version = "0.1.0"
+description = "Melodica — a composition generator for modern music"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "mido>=1.3",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+neural = [
+    "torch>=2.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["melodica*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mutmut]
+paths_to_mutate = ["melodica/harmonize/"]
+pytest_add_cli_args = ["-c", "mutmut_pytest.ini"]
+also_copy = ["mutmut_pytest.ini", "conftest.py"]

@@ -1,0 +1,17 @@
+{
+  "generator": {
+    "type": "ChordGenerator",
+    "params": {
+      "density": 0.45,
+      "key_range_low": 55,
+      "key_range_high": 80,
+      "complexity": 0.4,
+      "leap_probability": 0.15
+    },
+    "config": {
+      "voicing": "closed",
+      "rhythm": null
+    }
+  },
+  "modifiers": []
+}

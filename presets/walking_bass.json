@@ -1,0 +1,17 @@
+{
+  "generator": {
+    "type": "BassGenerator",
+    "params": {
+      "density": 0.85,
+      "key_range_low": 36,
+      "key_range_high": 52,
+      "complexity": 0.7,
+      "leap_probability": 0.3
+    },
+    "config": {
+      "style": "walking",
+      "rhythm": null
+    }
+  },
+  "modifiers": []
+}

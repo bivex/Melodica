@@ -1,0 +1,18 @@
+{
+  "generator": {
+    "type": "MelodyGenerator",
+    "params": {
+      "density": 0.55,
+      "key_range_low": 64,
+      "key_range_high": 96,
+      "complexity": 0.6,
+      "leap_probability": 0.25
+    },
+    "config": {
+      "rhythm": null,
+      "prefer_chord_tones": 0.7,
+      "direction_bias": 0.1
+    }
+  },
+  "modifiers": []
+}

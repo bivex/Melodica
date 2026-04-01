@@ -1,0 +1,182 @@
+Metadata-Version: 2.4
+Name: melodica
+Version: 0.1.0
+Summary: Melodica — a composition generator for modern music
+License: MIT
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: mido>=1.3
+Requires-Dist: numpy>=1.24
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4; extra == "dev"
+Requires-Dist: pytest-cov>=4.1; extra == "dev"
+Provides-Extra: neural
+Requires-Dist: torch>=2.0; extra == "neural"
+
+# Melodica
+
+> A composition generator for modern music.
+
+Melodica implements a three-engine harmonization architecture with an extensive phrase-generation library for automated music composition, providing a clear, testable Python API.
+
+---
+
+## Quick Start
+
+```python
+from melodica import harmonize, Note, Scale, Mode
+
+melody = [
+    Note(pitch=60, start=0.0, duration=1.0),  # C4
+    Note(pitch=62, start=1.0, duration=1.0),  # D4
+    Note(pitch=64, start=2.0, duration=1.0),  # E4
+    Note(pitch=65, start=3.0, duration=1.0),  # F4
+]
+
+chords = harmonize(melody, engine="adaptive", chord_rhythm=2.0)
+for c in chords:
+    print(c)
+```
+
+## Script example: DF Downtempo
+
+The `scripts/df_downtempo.py` script demonstrates a practical Melodica workflow:
+- Read melody / chord settings
+- Generate harmonization and phrase arrangements
+- Export MIDI output
+
+Run:
+
+```bash
+python scripts/df_downtempo.py
+```
+
+## Engines
+
+| ID | Name | Algorithm |
+|----|------|-----------|
+| 0  | `functional` | 18th-century functional harmony, cadential T→S→D→T |
+| 1  | `rules` | Viterbi search over a weighted chord-progression rule graph |
+| 2  | `adaptive` | Heuristic candidate search: simplicity + melody fit + look-ahead |
+
+## Chord Detection
+
+```python
+from melodica import detect_chord, detect_scale, Note
+
+notes = [Note(60, 0, 1), Note(64, 0, 1), Note(67, 0, 1)]  # C major
+chord = detect_chord(notes)
+# ChordLabel(root=0, quality=Quality.MAJOR, …)
+
+scale = detect_scale(notes)
+# Scale(root=0, mode=Mode.MAJOR)
+```
+
+## MIDI I/O
+
+```python
+from melodica import from_midi, chords_to_midi, notes_to_midi
+
+melody = from_midi("song.mid", track=0)
+chords = harmonize(melody)
+chords_to_midi(chords, "chords.mid", voicing="open")
+```
+
+## Generators & Idea Tool
+
+```python
+from melodica import (
+    harmonize, Note, Scale, Mode, IdeaTrack, PhraseInstance, StaticPhrase,
+    NoteInfo, generate_idea, slots_to_notes, notes_to_midi,
+)
+from melodica.generators.melody import MelodyGenerator
+
+key = Scale(root=0, mode=Mode.MAJOR)
+melody = [Note(60, 0, 1), Note(62, 1, 1), Note(64, 2, 1), Note(65, 3, 1)]
+chords = harmonize(melody, key=key)
+
+gen = MelodyGenerator()
+seed = PhraseInstance(static=StaticPhrase(notes=[NoteInfo(60, 0, 1)]))
+
+track = IdeaTrack(seed_phrases=[seed], generator=gen, phrase_order="AABA")
+slots = generate_idea(track, chords, key, beats_per_slot=4.0)
+notes = slots_to_notes(slots)
+notes_to_midi(notes, "idea.mid", bpm=120)
+```
+
+## Project Layout
+
+```
+melodica/
+├── __init__.py          # public API
+├── types.py             # domain model (enums, dataclasses, invariants)
+├── utils.py             # pure pitch-class arithmetic
+├── detection.py         # chord detection, scale detection
+├── midi.py              # MIDI adapter (only module using mido)
+├── idea.py              # Idea Tool six-stage pipeline
+├── engines/
+│   ├── __init__.py      # HarmonizerPort + build_engine() factory
+│   ├── functional.py    # Engine 0 — 18th-century functional
+│   ├── rule_based.py    # Engine 1 — Viterbi + rule graph
+│   └── adaptive.py      # Engine 2 — heuristic candidate search
+├── generators/
+│   ├── __init__.py              # PhraseGenerator ABC, GeneratorParams, freeze()
+│   ├── melody.py                # MelodyGenerator
+│   ├── markov.py                # MarkovMelodyGenerator
+│   ├── arpeggiator.py           # ArpeggiatorGenerator
+│   ├── bass.py                  # BassGenerator & walking bass patterns
+│   ├── chord_gen.py             # ChordGenerator
+│   ├── ostinato.py              # OstinatoGenerator
+│   ├── piano_comp.py            # PianoCompGenerator
+│   ├── strum.py                 # StrumGenerator
+│   ├── staccato.py              # StaccatoGenerator
+│   ├── ambient.py               # AmbientGenerator
+│   ├── vocal_melisma.py         # VocalMelismaGenerator
+│   ├── neural_melody.py         # NeuralMelodyGenerator (torch-based)
+│   ├── rhythm_lab.py            # RhythmLab for grid-based rhythms
+│   └── (100+ more specialized generators)
+└── rule_db/
+    ├── __init__.py      # ChordProgressionRuleDB
+    └── default.json     # built-in classical/jazz/pop rules
+tests/
+├── test_types.py
+├── test_detection.py
+├── test_engines.py
+├── test_generators.py
+└── test_idea.py
+```
+
+## Architecture
+
+Melodica follows hexagonal (ports-and-adapters) architecture with strict layer separation:
+
+```
+Presentation / CLI
+      ↓
+Application  (harmonize, generate_idea)
+      ↓
+Domain       (types, engines, generators — pure logic)
+      ↑
+Infrastructure adapters (midi.py — the only I/O boundary)
+```
+
+- **Domain → no I/O**: `types.py`, `utils.py`, `detection.py`, `engines/`, `generators/` contain zero I/O.
+- **Infrastructure isolation**: only `midi.py` imports `mido`.
+- **DIP**: engines depend on `HarmonizerPort` protocol; callers use `build_engine()` factory.
+- **ISP**: `HarmonizerPort` has one method (`harmonize`); `PhraseGeneratorProtocol` has one (`render`).
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `mido`  | MIDI file read/write |
+| `numpy` | Krumhansl-Schmuckler key profiles |
+
+Python ≥ 3.11.
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest
+```

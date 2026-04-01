@@ -1,0 +1,28 @@
+{
+    "name": "madonna_groove",
+    "generator": {
+        "type": "BassGenerator",
+        "params": {},
+        "config": {
+            "style": "root_fifth"
+        }
+    },
+    "modifiers": [
+        {
+            "type": "GrooveModifier",
+            "config": {
+                "swing": 0.6,
+                "tightness": 0.9,
+                "random_velocity": 10
+            }
+        },
+        {
+            "type": "PolishedOctaveModifier",
+            "config": {
+                "octave_shift": -1,
+                "probability": 1.0,
+                "velocity_scale": 0.4
+            }
+        }
+    ]
+}

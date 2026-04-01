@@ -1,0 +1,20 @@
+{
+  "generator": {
+    "type": "ArpeggiatorGenerator",
+    "params": {
+      "density": 0.5,
+      "key_range_low": 43,
+      "key_range_high": 95,
+      "complexity": 0.5,
+      "leap_probability": 0.2
+    },
+    "config": {
+      "pattern": "up",
+      "note_duration": 0.5,
+      "voicing": "spread",
+      "octaves": 2,
+      "rhythm": null
+    }
+  },
+  "modifiers": []
+}

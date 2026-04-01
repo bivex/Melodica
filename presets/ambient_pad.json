@@ -1,0 +1,17 @@
+{
+  "generator": {
+    "type": "AmbientPadGenerator",
+    "params": {
+      "density": 0.5,
+      "key_range_low": 36,
+      "key_range_high": 72,
+      "complexity": 0.5,
+      "leap_probability": 0.2
+    },
+    "config": {
+      "voicing": "spread",
+      "overlap": 0.1
+    }
+  },
+  "modifiers": []
+}

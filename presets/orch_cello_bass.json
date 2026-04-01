@@ -1,0 +1,17 @@
+{
+  "generator": {
+    "type": "BassGenerator",
+    "params": {
+      "density": 0.5,
+      "key_range_low": 36,
+      "key_range_high": 64,
+      "complexity": 0.4,
+      "leap_probability": 0.2
+    },
+    "config": {
+      "style": "root_fifth",
+      "rhythm": null
+    }
+  },
+  "modifiers": []
+}
