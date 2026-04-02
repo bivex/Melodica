@@ -1,4 +1,16 @@
-#!/usr/bin/env python3
+
+# Copyright (c) 2026 Bivex
+#
+# Author: Bivex
+# Available for contact via email: support@b-b.top
+# For up-to-date contact information:
+# https://github.com/bivex
+#
+# Created: 2026-04-02 03:04
+# Last Updated: 2026-04-02 03:04
+#
+# Licensed under the MIT License.
+# Commercial licensing available upon request.
 """extract_pdf_text.py — Extract full text from any PDF using pypdf."""
 
 import sys
