@@ -96,13 +96,24 @@ class MelodyPitchSelector:
         is_downbeat: bool = False,
         is_on_beat: bool = False,
         is_penultimate: bool = False,
+        progress: float = 0.0,
+        climax_pitch: int | None = None,
+        next_chord: types.ChordLabel | None = None,
+        register_center: int | None = None,
+        range_span: int = 20,
     ) -> int:
         gen = self._gen
 
-        # Penultimate: snap to step above tonic
+        # Penultimate: snap to scale degree above tonic
         if is_penultimate and chord:
             root_pc = chord.root
-            target_pc = (root_pc + 2) % 12  # step above tonic
+            scale_pcs = key.degrees()
+            # Find the next scale degree above the root
+            above = [pc for pc in scale_pcs if pc > root_pc]
+            if above:
+                target_pc = above[0]
+            else:
+                target_pc = scale_pcs[0] if scale_pcs else (root_pc + 2) % 12
             return nearest_pitch(target_pc, prev_pitch)
 
         pool = self.get_pitch_pool(chord, key, is_downbeat, is_on_beat)
@@ -134,6 +145,17 @@ class MelodyPitchSelector:
             else (1 if (force_opposite and last_interval < 0) else 0)
         )
 
+        # Climax bias: before 65% of phrase, nudge upward toward climax
+        if climax_pitch is not None and progress < 0.65 and required_direction == 0:
+            ascent_strength = 0.35 * (1.0 - progress / 0.65)
+            if prev_pitch < climax_pitch and random.random() < ascent_strength:
+                required_direction = 1  # bias upward toward climax
+
+        # Post-climax: after 65%, allow descent
+        if climax_pitch is not None and progress >= 0.65 and required_direction == 0:
+            if prev_pitch >= climax_pitch - 2 and random.random() < 0.3:
+                required_direction = -1  # bias downward after peak
+
         candidates = self.build_candidates(
             pool, prev_pitch, low, high, interval_set, required_direction
         )
@@ -152,15 +174,68 @@ class MelodyPitchSelector:
         if not candidates:
             return prev_pitch
 
-        # Direction bias nudges the target slightly
-        bias = round(gen.direction_bias * 2)
-        target = prev_pitch + bias
+        if len(candidates) == 1:
+            return candidates[0]
 
-        # Random movement vs. directed (voice-leading)
+        # Voice-leading: near chord boundary, prefer common tones with next chord
+        if next_chord is not None and chord is not None:
+            next_pcs = set(next_chord.pitch_classes())
+            common = [c for c in candidates if c % 12 in next_pcs]
+            if common and random.random() < 0.45:
+                return min(common, key=lambda p: abs(p - prev_pitch))
+
+        # Climax: occasionally snap toward climax pitch
+        if climax_pitch is not None and progress < 0.70 and random.random() < 0.25:
+            by_climax = sorted(candidates, key=lambda p: abs(p - climax_pitch))
+            return by_climax[0]
+
+        # Direction bias: weighted probability instead of dead rounding
+        bias = gen.direction_bias
+        if abs(bias) > 0.01:
+            return self._biased_choice(candidates, prev_pitch, bias, register_center)
+
+        # Register awareness: if register_center set, weight toward it
+        if register_center is not None and range_span > 0:
+            smoothness = getattr(gen, "register_smoothness", 0.5)
+            if smoothness > 0.1 and random.random() < smoothness:
+                return min(candidates, key=lambda p: abs(p - register_center))
+
+        # Random movement vs. directed (closest to previous)
         if random.random() < gen.random_movement:
             return random.choice(candidates)
         else:
-            return min(candidates, key=lambda p: abs(p - target))
+            return min(candidates, key=lambda p: abs(p - prev_pitch))
+
+    def _biased_choice(
+        self,
+        candidates: list[int],
+        prev_pitch: int,
+        bias: float,
+        register_center: int | None = None,
+    ) -> int:
+        """Weight candidates by direction bias and optionally register proximity."""
+        weights: list[float] = []
+        for c in candidates:
+            diff = c - prev_pitch
+            if diff > 0:
+                w = 1.0 + bias * 2.0
+            elif diff < 0:
+                w = 1.0 - bias * 2.0
+            else:
+                w = 1.0
+            # Boost candidates near register center
+            if register_center is not None:
+                dist = abs(c - register_center)
+                w *= max(0.2, 1.0 - dist / 24.0)
+            weights.append(max(0.05, w))
+        total = sum(weights)
+        r = random.random() * total
+        cumul = 0.0
+        for c, w in zip(candidates, weights):
+            cumul += w
+            if r <= cumul:
+                return c
+        return candidates[-1]
 
     def build_candidates(
         self,

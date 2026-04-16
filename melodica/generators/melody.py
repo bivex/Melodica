@@ -6,7 +6,7 @@
 # https://github.com/bivex
 #
 # Created: 2026-04-02 03:04
-# Last Updated: 2026-04-02 03:04
+# Last Updated: 2026-04-16
 #
 # Licensed under the MIT License.
 # Commercial licensing available upon request.
@@ -16,17 +16,38 @@ generators/melody.py — MelodyGenerator.
 
 Layer: Application / Domain
 
-Melodica-matching parameters (all with defaults):
-  steps_probability        0.86  — fraction of moves that are steps (≤2 semitones)
+Core pitch parameters:
+  steps_probability        0.86  — fraction of moves that are steps (<=2 semitones)
   note_repetition_probability 0.14 — probability of repeating the last pitch
   random_movement          0.80  — fraction of selections made randomly (vs. closest)
   harmony_note_probability 0.64  — fraction from chord tones (vs. scale tones)
-  note_range_low/high      54/76 — E3/E5 override (beats params.key_range)
+  note_range_low/high      54/76 — range override (beats params.key_range)
   first_note               "chord_root"      — strategy for the very first pitch
-  last_note                "last_chord_root" — strategy for the very last pitch
-  after_leap               "any"             — constraint on move following a leap
-  allowed_up_intervals     None (= all)      — frozenset of semitone distances allowed up
-  allowed_down_intervals   None (= all)      — frozenset of semitone distances allowed down
+  last_note                "last_chord_root"  — strategy for the very last pitch
+  after_leap               "any"              — constraint on move following a leap
+  allowed_up/down_intervals None (= all)      — frozenset of semitone distances
+
+Phrasing & contour:
+  phrase_length            0.0   — beats per phrase (0 = no phrasing)
+  phrase_rest_probability  0.2   — chance of rest between phrases
+  phrase_contour           "arch" — "arch", "rise_fall", "flat", "rise"
+  accent_pattern           "natural" — "natural", "strong_weak", "syncopated"
+
+Rhythm:
+  syncopation              0.0   — 0-1, shift notes off-beat
+  rhythm_variety           0.0   — 0-1, mix of durations
+  rhythm_motif             None  — list of duration ratios, e.g. [1.0, 0.5, 0.5, 1.0]
+
+Register & smoothness:
+  register_smoothness      0.5   — 0-1, penalize large interval jumps
+  direction_bias           0.0   — -1 to 1, up/down tendency (weighted)
+
+Motivic development:
+  motif_probability        0.0   — 0-1, chance of referencing stored motif
+  motif_variation           "transpose" — "transpose", "invert", "retrograde", "any"
+
+Ornamentation:
+  ornament_probability     0.0   — 0-1, grace notes before strong beats
 """
 
 from __future__ import annotations
@@ -52,35 +73,37 @@ from melodica.generators._melody_pitch import (
 
 
 # Interval constants and utility helpers re-exported from _melody_pitch
-# (kept here so existing imports from this module continue to work)
 
 FIRST_NOTE_OPTIONS = frozenset(
     {
-        "chord_root",  # root of the first chord (default)
-        "any_chord",  # random tone of the first chord
-        "scale",  # random scale tone near middle
-        "tonic",  # scale root
+        "chord_root",
+        "any_chord",
+        "scale",
+        "tonic",
         "step_above_tonic",
         "step_below_tonic",
     }
 )
 LAST_NOTE_OPTIONS = frozenset(
     {
-        "last_chord_root",  # root of the last chord (default)
+        "last_chord_root",
         "any_chord",
         "scale",
-        "any",  # no constraint
+        "any",
     }
 )
 AFTER_LEAP_OPTIONS = frozenset(
     {
-        "step_opposite",  # step in the opposite direction
-        "step_any",  # any step
-        "step_or_smaller_opposite",  # step or smaller leap, opposite direction
-        "leap_opposite",  # leap in the opposite direction
-        "any",  # no constraint (default)
+        "step_opposite",
+        "step_any",
+        "step_or_smaller_opposite",
+        "leap_opposite",
+        "any",
     }
 )
+CONTOUR_OPTIONS = frozenset({"arch", "rise_fall", "flat", "rise"})
+ACCENT_OPTIONS = frozenset({"natural", "strong_weak", "syncopated"})
+MOTIF_VARIATION_OPTIONS = frozenset({"transpose", "invert", "retrograde", "any"})
 
 
 # ---------------------------------------------------------------------------
@@ -90,52 +113,33 @@ AFTER_LEAP_OPTIONS = frozenset(
 
 @dataclass
 class MelodyGenerator(PhraseGenerator):
-    """
-    Generates a stepwise/leaping melodic line over a chord sequence.
-
-    harmony_note_probability / prefer_chord_tones:
-        Probability [0–1] that a pitch is drawn from chord tones (vs. scale tones).
-         default: 0.64.  `prefer_chord_tones` is a legacy alias.
-    steps_probability:
-        Probability [0–1] that a non-repeated move is a step (≤2 semitones).
-         default: 0.86.  Overrides params.leap_probability when set.
-    note_repetition_probability:
-        Probability [0–1] of repeating the previous pitch.  default: 0.14.
-    random_movement:
-        Probability [0–1] of choosing randomly among valid candidates (vs. closest).
-         default: 0.80.
-    first_note / last_note:
-        Strategy for the opening and closing pitch.
-    after_leap:
-        Constraint applied on the note immediately following a leap.
-    allowed_up_intervals / allowed_down_intervals:
-        frozenset of semitone distances permitted when moving up / down.
-        None = use DEFAULT_UP/DOWN_INTERVALS.
-    """
 
     name: str = "Melody Generator"
     rhythm: RhythmGenerator | None = None
 
     # Mode: how chord/scale tones are used
-    mode: str = "downbeat_chord"  # "downbeat_chord", "scale_only", "on_beat_chord", "chord_only", "scale_and_chord"
+    mode: str = "downbeat_chord"
 
-    # Pitch-pool control (harmony vs. scale tones)
+    # Pitch-pool control
     harmony_note_probability: float = 0.64
     prefer_chord_tones: float = 0.64  # legacy alias
 
     # Step / leap / repetition balance
-    steps_probability: float | None = None  # None → use 1 − params.leap_probability
+    steps_probability: float | None = None
     note_repetition_probability: float = 0.14
 
     # Random vs. directed selection
     random_movement: float = 0.80
 
-    # Note-range override (default: G2-F4)
+    # Note-range override
     note_range_low: int | None = None
     note_range_high: int | None = None
 
-    # Direction tendency (kept for backward compat; still nudges targets)
+    # Direction tendency
     direction_bias: float = 0.0
+
+    # Register smoothness: penalize large jumps
+    register_smoothness: float = 0.5
 
     # Phrase-boundary strategies
     first_note: str = "chord_root"
@@ -145,18 +149,36 @@ class MelodyGenerator(PhraseGenerator):
     after_leap: str = "any"
 
     # Climax
-    climax: str = "first_plus_maj3"  # "first_plus_maj3", "none", "up_3rd", "up_5th", "up_octave"
+    climax: str = "first_plus_maj3"
 
-    # Penultimate note is a step above tonic
+    # Penultimate note resolves to tonic
     penultimate_step_above: bool = True
 
     # Allow 2nd/7th as melody notes even in chord-only mode
     allow_2nd: bool = True
     allow_7th: bool = True
 
-    # Interval filters (None = use defaults)
+    # Interval filters
     allowed_up_intervals: frozenset[int] | None = None
     allowed_down_intervals: frozenset[int] | None = None
+
+    # Phrasing & contour
+    phrase_length: float = 0.0
+    phrase_rest_probability: float = 0.2
+    phrase_contour: str = "arch"
+    accent_pattern: str = "natural"
+
+    # Rhythm
+    syncopation: float = 0.0
+    rhythm_variety: float = 0.0
+    rhythm_motif: list[float] | None = None
+
+    # Motivic development
+    motif_probability: float = 0.0
+    motif_variation: str = "transpose"
+
+    # Ornaments
+    ornament_probability: float = 0.0
 
     def __init__(
         self,
@@ -164,7 +186,6 @@ class MelodyGenerator(PhraseGenerator):
         *,
         rhythm: RhythmGenerator | None = None,
         mode: str = "downbeat_chord",
-        # Backward-compat alias first
         prefer_chord_tones: float | None = None,
         harmony_note_probability: float = 0.64,
         steps_probability: float | None = None,
@@ -173,6 +194,7 @@ class MelodyGenerator(PhraseGenerator):
         note_range_low: int | None = None,
         note_range_high: int | None = None,
         direction_bias: float = 0.0,
+        register_smoothness: float = 0.5,
         first_note: str = "chord_root",
         last_note: str = "last_chord_root",
         after_leap: str = "any",
@@ -182,11 +204,24 @@ class MelodyGenerator(PhraseGenerator):
         allow_7th: bool = True,
         allowed_up_intervals: frozenset[int] | None = None,
         allowed_down_intervals: frozenset[int] | None = None,
+        # phrasing & contour
+        phrase_length: float = 0.0,
+        phrase_rest_probability: float = 0.2,
+        phrase_contour: str = "arch",
+        accent_pattern: str = "natural",
+        # rhythm
+        syncopation: float = 0.0,
+        rhythm_variety: float = 0.0,
+        rhythm_motif: list[float] | None = None,
+        # motivic development
+        motif_probability: float = 0.0,
+        motif_variation: str = "transpose",
+        # ornaments
+        ornament_probability: float = 0.0,
     ) -> None:
         super().__init__(params)
         self.rhythm = rhythm
 
-        # prefer_chord_tones → harmony_note_probability (legacy alias)
         if prefer_chord_tones is not None:
             self.harmony_note_probability = prefer_chord_tones
             self.prefer_chord_tones = prefer_chord_tones
@@ -194,25 +229,20 @@ class MelodyGenerator(PhraseGenerator):
             self.harmony_note_probability = harmony_note_probability
             self.prefer_chord_tones = harmony_note_probability
 
-        self.steps_probability = steps_probability  # None handled at render time
+        self.steps_probability = steps_probability
         self.note_repetition_probability = max(0.0, min(1.0, note_repetition_probability))
         self.random_movement = max(0.0, min(1.0, random_movement))
         self.note_range_low = note_range_low
         self.note_range_high = note_range_high
         self.direction_bias = direction_bias
+        self.register_smoothness = max(0.0, min(1.0, register_smoothness))
 
         if first_note not in FIRST_NOTE_OPTIONS:
-            raise ValueError(
-                f"first_note must be one of {sorted(FIRST_NOTE_OPTIONS)}; got {first_note!r}"
-            )
+            raise ValueError(f"first_note must be one of {sorted(FIRST_NOTE_OPTIONS)}; got {first_note!r}")
         if last_note not in LAST_NOTE_OPTIONS:
-            raise ValueError(
-                f"last_note must be one of {sorted(LAST_NOTE_OPTIONS)}; got {last_note!r}"
-            )
+            raise ValueError(f"last_note must be one of {sorted(LAST_NOTE_OPTIONS)}; got {last_note!r}")
         if after_leap not in AFTER_LEAP_OPTIONS:
-            raise ValueError(
-                f"after_leap must be one of {sorted(AFTER_LEAP_OPTIONS)}; got {after_leap!r}"
-            )
+            raise ValueError(f"after_leap must be one of {sorted(AFTER_LEAP_OPTIONS)}; got {after_leap!r}")
         self.first_note = first_note
         self.last_note = last_note
         self.after_leap = after_leap
@@ -223,7 +253,33 @@ class MelodyGenerator(PhraseGenerator):
         self.allow_7th = allow_7th
         self.allowed_up_intervals = allowed_up_intervals
         self.allowed_down_intervals = allowed_down_intervals
+
+        # Phrasing & contour
+        self.phrase_length = max(0.0, phrase_length)
+        self.phrase_rest_probability = max(0.0, min(1.0, phrase_rest_probability))
+        if phrase_contour not in CONTOUR_OPTIONS:
+            raise ValueError(f"phrase_contour must be one of {sorted(CONTOUR_OPTIONS)}; got {phrase_contour!r}")
+        self.phrase_contour = phrase_contour
+        if accent_pattern not in ACCENT_OPTIONS:
+            raise ValueError(f"accent_pattern must be one of {sorted(ACCENT_OPTIONS)}; got {accent_pattern!r}")
+        self.accent_pattern = accent_pattern
+
+        # Rhythm
+        self.syncopation = max(0.0, min(1.0, syncopation))
+        self.rhythm_variety = max(0.0, min(1.0, rhythm_variety))
+        self.rhythm_motif = rhythm_motif
+
+        # Motivic development
+        self.motif_probability = max(0.0, min(1.0, motif_probability))
+        if motif_variation not in MOTIF_VARIATION_OPTIONS:
+            raise ValueError(f"motif_variation must be one of {sorted(MOTIF_VARIATION_OPTIONS)}; got {motif_variation!r}")
+        self.motif_variation = motif_variation
+
+        # Ornaments
+        self.ornament_probability = max(0.0, min(1.0, ornament_probability))
+
         self._last_context: RenderContext | None = None
+        self._stored_motif: list[int] = []  # pitches of stored motif
         self._pitch_selector: MelodyPitchSelector = MelodyPitchSelector(self)
 
     # ------------------------------------------------------------------
@@ -241,14 +297,14 @@ class MelodyGenerator(PhraseGenerator):
             return []
 
         events = self._build_events(duration_beats)
+        if not events:
+            return []
+
         notes: list[types.NoteInfo] = []
 
         low = self.note_range_low if self.note_range_low is not None else self.params.key_range_low
-        high = (
-            self.note_range_high if self.note_range_high is not None else self.params.key_range_high
-        )
+        high = self.note_range_high if self.note_range_high is not None else self.params.key_range_high
 
-        # Effective steps probability: explicit > 1 − leap_probability
         steps_prob = (
             self.steps_probability
             if self.steps_probability is not None
@@ -258,81 +314,114 @@ class MelodyGenerator(PhraseGenerator):
         # Initialise prev_pitch via first_note strategy
         prev_pitch = self._first_pitch(chords[0], key, low, high, context)
 
-        last_interval = 0  # signed semitones of the most recent move
+        # Restore motif from previous render if available
+        if context and hasattr(context, "prev_pitches") and len(context.prev_pitches) >= 3:
+            self._stored_motif = list(context.prev_pitches[-6:])
+
+        # Compute climax pitch
+        climax_pitch = self._compute_climax(prev_pitch, low, high)
+
+        last_interval = 0
         last_chord: types.ChordLabel | None = None
+        range_span = high - low
+
+        # Phrase boundaries for contour
+        phrase_len = self.phrase_length if self.phrase_length > 0 else duration_beats
+
+        # Store first phrase as motif
+        motif_notes: list[int] = []
+        first_phrase_end = phrase_len
 
         for i, event in enumerate(events):
             chord = chord_at(chords, event.onset)
             last_chord = chord
             is_last = i == len(events) - 1
 
-            # Beat position for mode
             is_downbeat = event.onset % 1.0 < 0.1
             is_on_beat = event.onset % 0.5 < 0.1
-
-            # Penultimate note: step above tonic
             is_penultimate = i == len(events) - 2 and self.penultimate_step_above and not is_last
 
-            # ---- Note repetition ----
-            if notes and random.random() < self.note_repetition_probability:
+            # Progress through full duration
+            progress = event.onset / duration_beats if duration_beats > 0 else 0.0
+
+            # Phrase-internal position (0.0 → 1.0 within current phrase)
+            phrase_pos = (event.onset % phrase_len) / phrase_len if phrase_len > 0 else 0.0
+
+            # Register target: where the melody "should be" based on contour
+            register_center = self._register_target(phrase_pos, progress, low, high, climax_pitch)
+
+            # Next chord for voice-leading
+            next_chord = chord_at(chords, event.onset + 2.0) if event.onset + 2.0 < duration_beats else None
+
+            # ---- Motif reference ----
+            if (
+                self.motif_probability > 0
+                and len(self._stored_motif) >= 3
+                and i < len(self._stored_motif)
+                and random.random() < self.motif_probability
+            ):
+                pitch = self._apply_motif(self._stored_motif, i, prev_pitch, low, high, key)
+            elif notes and random.random() < self.note_repetition_probability:
                 pitch = prev_pitch
             elif is_last and self.last_note != "any":
-                # ---- Last-note strategy ----
                 pitch = self._last_pitch(last_chord, key, prev_pitch, low, high)
             else:
-                # ---- Normal selection ----
                 active_key = key.get_key_at(event.onset) if hasattr(key, "get_key_at") else key
                 pitch = self._pick_pitch(
-                    chord,
-                    active_key,
-                    prev_pitch,
-                    low,
-                    high,
-                    last_interval,
-                    steps_prob,
-                    is_downbeat,
-                    is_on_beat,
-                    is_penultimate,
+                    chord, active_key, prev_pitch, low, high,
+                    last_interval, steps_prob,
+                    is_downbeat, is_on_beat, is_penultimate,
+                    progress=progress,
+                    climax_pitch=climax_pitch,
+                    next_chord=next_chord,
+                    register_center=register_center,
+                    range_span=range_span,
                 )
 
             # Clamp to range
             pitch = max(low, min(high, pitch))
 
+            # Compute velocity with accent pattern and phrase contour
             base_vel = _velocity_from_density(self.params.density)
-            vel = int(base_vel * event.velocity_factor)
+            vel = self._apply_velocity(base_vel, event, phrase_pos, progress)
 
-            notes.append(
-                types.NoteInfo(
-                    pitch=pitch,
-                    start=round(event.onset, 6),
-                    duration=event.duration,
-                    velocity=max(0, min(types.MIDI_MAX, vel)),
-                )
-            )
+            notes.append(types.NoteInfo(
+                pitch=pitch,
+                start=round(event.onset, 6),
+                duration=event.duration,
+                velocity=max(0, min(types.MIDI_MAX, vel)),
+            ))
+
+            # Collect first phrase pitches as motif
+            if event.onset < first_phrase_end and len(motif_notes) < 8:
+                motif_notes.append(pitch)
+
             last_interval = pitch - prev_pitch
             prev_pitch = pitch
 
-        # Leap-after-fill: insert passing tones between large leaps.
-        # Skipped in strict chord-tone mode (harmony_note_probability == 1.0)
-        # because passing tones would be scale tones, violating the constraint.
-        # Use after_leap="step_opposite" to tame leaps without passing tones.
+        # Store motif for future renders
+        if motif_notes and len(motif_notes) >= 3:
+            self._stored_motif = motif_notes
+
+        # Post-processing
         if self.harmony_note_probability < 1.0:
             notes = self._fill_leaps(notes, key)
 
+        if self.ornament_probability > 0:
+            notes = self._add_ornaments(notes, key, low, high)
+
         # Phrase arch velocity contour
         from melodica.generators._postprocess import apply_phrase_arch
+        notes = apply_phrase_arch(notes, duration_beats, context.phrase_position if context else 0.0)
 
-        notes = apply_phrase_arch(
-            notes,
-            duration_beats,
-            context.phrase_position if context else 0.0,
-        )
-
+        # Context with motif memory
+        motif_memory = self._stored_motif[-8:] if self._stored_motif else []
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(
                 last_pitch=notes[-1].pitch,
                 last_velocity=notes[-1].velocity,
                 last_chord=last_chord,
+                last_pitches=motif_memory,
             )
         else:
             self._last_context = None
@@ -340,7 +429,7 @@ class MelodyGenerator(PhraseGenerator):
         return notes
 
     # ------------------------------------------------------------------
-    # Pitch selection
+    # Pitch selection (delegates to MelodyPitchSelector)
     # ------------------------------------------------------------------
 
     def _pick_pitch(
@@ -355,70 +444,156 @@ class MelodyGenerator(PhraseGenerator):
         is_downbeat: bool = False,
         is_on_beat: bool = False,
         is_penultimate: bool = False,
+        progress: float = 0.0,
+        climax_pitch: int | None = None,
+        next_chord: types.ChordLabel | None = None,
+        register_center: int | None = None,
+        range_span: int = 20,
     ) -> int:
         return self._pitch_selector.pick_pitch(
-            chord,
-            key,
-            prev_pitch,
-            low,
-            high,
-            last_interval,
-            steps_prob,
-            is_downbeat,
-            is_on_beat,
-            is_penultimate,
+            chord, key, prev_pitch, low, high,
+            last_interval, steps_prob,
+            is_downbeat, is_on_beat, is_penultimate,
+            progress=progress,
+            climax_pitch=climax_pitch,
+            next_chord=next_chord,
+            register_center=register_center,
+            range_span=range_span,
         )
 
-    def _build_candidates(
-        self,
-        pool: list[int],
-        prev_pitch: int,
-        low: int,
-        high: int,
-        interval_set: frozenset[int],
-        required_direction: int,  # +1=up, -1=down, 0=either
-    ) -> list[int]:
-        return self._pitch_selector.build_candidates(
-            pool,
-            prev_pitch,
-            low,
-            high,
-            interval_set,
-            required_direction,
-        )
+    def _build_candidates(self, pool, prev_pitch, low, high, interval_set, required_direction):
+        return self._pitch_selector.build_candidates(pool, prev_pitch, low, high, interval_set, required_direction)
 
-    def _get_pitch_pool(
-        self,
-        chord: types.ChordLabel | None,
-        key: types.Scale,
-        is_downbeat: bool = False,
-        is_on_beat: bool = False,
-    ) -> list[int]:
+    def _get_pitch_pool(self, chord, key, is_downbeat=False, is_on_beat=False):
         return self._pitch_selector.get_pitch_pool(chord, key, is_downbeat, is_on_beat)
 
-    # ------------------------------------------------------------------
-    # First / last note strategies
-    # ------------------------------------------------------------------
-
-    def _first_pitch(
-        self,
-        first_chord: types.ChordLabel,
-        key: types.Scale,
-        low: int,
-        high: int,
-        context: RenderContext | None,
-    ) -> int:
+    def _first_pitch(self, first_chord, key, low, high, context):
         return self._pitch_selector.first_pitch(first_chord, key, low, high, context)
 
-    def _last_pitch(
+    def _last_pitch(self, last_chord, key, prev_pitch, low, high):
+        return self._pitch_selector.last_pitch(last_chord, key, prev_pitch, low, high)
+
+    # ------------------------------------------------------------------
+    # Register target (phrase contour)
+    # ------------------------------------------------------------------
+
+    def _register_target(
+        self, phrase_pos: float, global_progress: float, low: int, high: int, climax_pitch: int
+    ) -> int:
+        """Compute the target register center based on phrase contour position."""
+        mid = (low + high) // 2
+        if self.climax == "none" and self.phrase_contour == "flat":
+            return mid
+
+        if self.phrase_contour == "arch":
+            # Rise to 60%, peak, fall to 100%
+            if phrase_pos < 0.6:
+                frac = phrase_pos / 0.6
+                return int(mid + (climax_pitch - mid) * frac)
+            else:
+                frac = (phrase_pos - 0.6) / 0.4
+                return int(climax_pitch - (climax_pitch - mid) * frac * 0.7)
+
+        elif self.phrase_contour == "rise_fall":
+            # Symmetric: rise first half, fall second half
+            if phrase_pos < 0.5:
+                frac = phrase_pos / 0.5
+                return int(mid + (climax_pitch - mid) * frac)
+            else:
+                frac = (phrase_pos - 0.5) / 0.5
+                return int(climax_pitch - (climax_pitch - low) * frac * 0.5)
+
+        elif self.phrase_contour == "rise":
+            # Only rise, no fall
+            return int(mid + (climax_pitch - mid) * phrase_pos)
+
+        return mid  # "flat"
+
+    # ------------------------------------------------------------------
+    # Velocity dynamics
+    # ------------------------------------------------------------------
+
+    def _apply_velocity(self, base_vel: int, event: RhythmEvent, phrase_pos: float, global_progress: float) -> int:
+        """Apply accent pattern and phrase contour to velocity."""
+        vel = base_vel * event.velocity_factor
+
+        # Accent pattern
+        is_downbeat = event.onset % 1.0 < 0.1
+        is_on_beat = event.onset % 0.5 < 0.1
+        is_offbeat = not is_on_beat
+
+        if self.accent_pattern == "strong_weak":
+            if is_downbeat:
+                vel *= 1.15
+            elif is_offbeat:
+                vel *= 0.80
+        elif self.accent_pattern == "syncopated":
+            if is_offbeat:
+                vel *= 1.10
+            elif is_downbeat:
+                vel *= 0.90
+
+        # Phrase contour dynamics: crescendo to climax, diminuendo after
+        if self.phrase_contour != "flat" and self.phrase_length > 0:
+            if phrase_pos < 0.6:
+                # Crescendo: 0.85 → 1.0
+                contour_factor = 0.85 + 0.15 * (phrase_pos / 0.6)
+            else:
+                # Diminuendo: 1.0 → 0.75
+                contour_factor = 1.0 - 0.25 * ((phrase_pos - 0.6) / 0.4)
+            vel *= contour_factor
+
+        # Small random touch variation
+        vel *= random.uniform(0.92, 1.08)
+
+        return max(1, min(127, int(vel)))
+
+    # ------------------------------------------------------------------
+    # Motivic development
+    # ------------------------------------------------------------------
+
+    def _apply_motif(
         self,
-        last_chord: types.ChordLabel | None,
-        key: types.Scale,
+        motif: list[int],
+        index: int,
         prev_pitch: int,
         low: int,
         high: int,
+        key: types.Scale,
     ) -> int:
-        return self._pitch_selector.last_pitch(last_chord, key, prev_pitch, low, high)
+        """Apply a stored motif with variation (transpose, invert, retrograde)."""
+        if not motif:
+            return prev_pitch
+
+        # Pick variation
+        variation = self.motif_variation
+        if variation == "any":
+            variation = random.choice(["transpose", "invert", "retrograde"])
+
+        motif_idx = index % len(motif)
+
+        if variation == "transpose":
+            # Transpose motif so first note matches prev_pitch
+            offset = prev_pitch - motif[0]
+            pitch = motif[motif_idx] + offset
+        elif variation == "invert":
+            # Invert intervals around motif center
+            center = sum(motif) // len(motif)
+            interval = motif[motif_idx] - center
+            pitch = prev_pitch + (center - motif[motif_idx])  # inverted interval
+            # Snap toward prev_pitch for first note
+            if motif_idx == 0:
+                pitch = prev_pitch
+            else:
+                pitch = prev_pitch - interval
+        elif variation == "retrograde":
+            reversed_motif = list(reversed(motif))
+            offset = prev_pitch - reversed_motif[0]
+            pitch = reversed_motif[motif_idx] + offset
+        else:
+            pitch = motif[motif_idx]
+
+        return max(low, min(high, pitch))
 
     # ------------------------------------------------------------------
     # Rhythm / events
@@ -427,56 +602,191 @@ class MelodyGenerator(PhraseGenerator):
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
         if self.rhythm is not None:
             return self.rhythm.generate(duration_beats)
-        step = max(0.25, (1.0 - self.params.density) * 2.0)
-        t, events = 0.0, []
+
+        # Motif-based rhythm
+        if self.rhythm_motif is not None and len(self.rhythm_motif) >= 2:
+            return self._build_motif_events(duration_beats)
+
+        base_step = max(0.25, (1.0 - self.params.density) * 2.0)
+        events: list[RhythmEvent] = []
+        t = 0.0
+        dur_pool = self._duration_pool(base_step)
+
         while t < duration_beats:
-            dur = max(0.125, step - 0.01)
-            events.append(RhythmEvent(onset=round(t, 6), duration=dur, velocity_factor=1.0))
-            t += step
+            # Phrase gap
+            if self.phrase_length > 0 and t > 0 and t % self.phrase_length < base_step:
+                if random.random() < self.phrase_rest_probability:
+                    gap = random.choice([0.25, 0.5, 0.5, 1.0])
+                    t += gap
+                    continue
+
+            # Pick duration with variety
+            if self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
+                dur = random.choice(dur_pool)
+            else:
+                dur = max(0.125, base_step - 0.01)
+
+            # Syncopation
+            onset = t
+            if self.syncopation > 0 and random.random() < self.syncopation:
+                shift = random.choice([0.125, 0.25, 0.25, 0.375])
+                onset = t + shift
+
+            is_downbeat = onset % 1.0 < 0.1
+            vel_factor = random.uniform(1.05, 1.15) if is_downbeat else random.uniform(0.85, 1.0)
+
+            events.append(RhythmEvent(onset=round(onset, 6), duration=max(0.1, dur), velocity_factor=vel_factor))
+            t += base_step
+
         return events
+
+    def _build_motif_events(self, duration_beats: float) -> list[RhythmEvent]:
+        """Build events from a repeating rhythm_motif pattern."""
+        motif = self.rhythm_motif
+        base_step = max(0.25, (1.0 - self.params.density) * 2.0)
+
+        events: list[RhythmEvent] = []
+        t = 0.0
+        motif_idx = 0
+
+        while t < duration_beats:
+            # Phrase gap
+            if self.phrase_length > 0 and t > 0 and t % self.phrase_length < base_step:
+                if random.random() < self.phrase_rest_probability:
+                    gap = random.choice([0.25, 0.5, 0.5, 1.0])
+                    t += gap
+                    continue
+
+            ratio = motif[motif_idx % len(motif)]
+            dur = max(0.1, base_step * ratio)
+
+            # Slight syncopation on some repeats
+            onset = t
+            if self.syncopation > 0 and random.random() < self.syncopation:
+                shift = random.choice([0.125, 0.25])
+                onset = t + shift
+
+            is_downbeat = onset % 1.0 < 0.1
+            vel_factor = random.uniform(1.05, 1.15) if is_downbeat else random.uniform(0.85, 1.0)
+
+            events.append(RhythmEvent(onset=round(onset, 6), duration=dur, velocity_factor=vel_factor))
+            t += base_step
+            motif_idx += 1
+
+        return events
+
+    def _duration_pool(self, base_step: float) -> list[float]:
+        return [
+            max(0.1, base_step * 0.5),
+            max(0.125, base_step),
+            max(0.125, base_step),
+            base_step * 1.5,
+            base_step * 2.0,
+            max(0.1, base_step * 0.25),
+        ]
+
+    # ------------------------------------------------------------------
+    # Climax
+    # ------------------------------------------------------------------
+
+    def _compute_climax(self, first_pitch: int, low: int, high: int) -> int:
+        offset_map: dict[str, int] = {
+            "first_plus_maj3": 4,
+            "up_3rd": 4,
+            "up_5th": 7,
+            "up_octave": 12,
+        }
+        if self.climax == "none":
+            return first_pitch
+        offset = offset_map.get(self.climax, 4)
+        return min(high, first_pitch + offset)
+
+    # ------------------------------------------------------------------
+    # Ornamentation
+    # ------------------------------------------------------------------
+
+    def _add_ornaments(self, notes: list[types.NoteInfo], key: types.Scale, low: int, high: int) -> list[types.NoteInfo]:
+        if not notes or self.ornament_probability <= 0:
+            return notes
+
+        scale_pcs = set(key.degrees())
+        result: list[types.NoteInfo] = []
+        for note in notes:
+            is_strong = note.start % 1.0 < 0.15
+            if is_strong and random.random() < self.ornament_probability:
+                approach_above = random.random() < 0.5
+                for offset in [2, 1, 3]:
+                    grace_pc = (note.pitch + offset * (1 if approach_above else -1)) % 12
+                    if grace_pc in scale_pcs:
+                        grace_pitch = note.pitch + offset * (1 if approach_above else -1)
+                        if low <= grace_pitch <= high:
+                            grace_start = max(0, note.start - 0.125)
+                            result.append(types.NoteInfo(
+                                pitch=grace_pitch,
+                                start=round(grace_start, 6),
+                                duration=0.0625,
+                                velocity=max(1, int(note.velocity * 0.6)),
+                            ))
+                        break
+            result.append(note)
+        result.sort(key=lambda n: n.start)
+        return result
 
     # ------------------------------------------------------------------
     # Post-processing
     # ------------------------------------------------------------------
 
     def _fill_leaps(self, notes: list[types.NoteInfo], key) -> list[types.NoteInfo]:
-        """Insert a passing tone between any two consecutive notes > 5 semitones apart."""
         if len(notes) < 2:
             return notes
+
+        low = self.note_range_low if self.note_range_low is not None else self.params.key_range_low
+        high = self.note_range_high if self.note_range_high is not None else self.params.key_range_high
+        scale_pcs = set(key.degrees()) if hasattr(key, "degrees") else set(range(12))
+
         result = [notes[0]]
+        fills_added = 0
+        max_fills = max(2, len(notes) // 4)
+
         for i in range(1, len(notes)):
             gap = notes[i].pitch - notes[i - 1].pitch
-            if abs(gap) > 5:
+            abs_gap = abs(gap)
+
+            if abs_gap > 5 and fills_added < max_fills:
                 direction = 1 if gap > 0 else -1
-                pass_pitch = notes[i - 1].pitch + direction * min(abs(gap) // 2, 3)
-                pass_start = (notes[i - 1].start + notes[i].start) / 2
-                active_key = key.get_key_at(pass_start) if hasattr(key, "get_key_at") else key
-                if hasattr(active_key, "contains") and not active_key.contains(pass_pitch % 12):
-                    for offset in [1, -1, 2, -2]:
-                        if active_key.contains((pass_pitch + offset) % 12):
-                            pass_pitch += offset
-                            break
-                low = (
-                    self.note_range_low
-                    if self.note_range_low is not None
-                    else self.params.key_range_low
-                )
-                high = (
-                    self.note_range_high
-                    if self.note_range_high is not None
-                    else self.params.key_range_high
-                )
-                pass_pitch = max(low, min(high, pass_pitch))
-                pass_dur = min(notes[i - 1].duration, 0.25)
-                result.append(
-                    types.NoteInfo(
+                num_fills = 2 if abs_gap > 9 else 1
+                span = notes[i].start - notes[i - 1].start
+
+                for fill_idx in range(num_fills):
+                    if num_fills == 1:
+                        frac = 0.5
+                        step = min(abs_gap // 2, 4)
+                    else:
+                        frac = (fill_idx + 1) / (num_fills + 1)
+                        step = round(abs_gap * frac)
+
+                    pass_pitch = notes[i - 1].pitch + direction * max(1, step)
+                    pass_start = notes[i - 1].start + span * frac
+
+                    if pass_pitch % 12 not in scale_pcs:
+                        for offset in [1, -1, 2, -2]:
+                            if (pass_pitch + offset) % 12 in scale_pcs:
+                                pass_pitch += offset
+                                break
+
+                    pass_pitch = max(low, min(high, pass_pitch))
+                    pass_dur = min(notes[i - 1].duration, 0.25)
+
+                    result.append(types.NoteInfo(
                         pitch=pass_pitch,
                         start=round(pass_start, 6),
                         duration=pass_dur,
-                        velocity=max(1, min(127, int(notes[i].velocity * 0.7))),
-                    )
-                )
+                        velocity=max(1, min(127, int(notes[i].velocity * 0.65))),
+                    ))
+                    fills_added += 1
+
             result.append(notes[i])
+
         return result
 
 
