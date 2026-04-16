@@ -54,6 +54,8 @@ from melodica.composer.unified_style import (
     list_styles,
     register_style,
 )
+from melodica.composer.psychoacoustic import PsychoEvent, PsychoConfig, PsychoReport
+from melodica.composer.harmonic_verifier import ClashEvent, VerifierConfig, VerifierReport
 
 __all__ = [
     "VoiceLeadingEngine",
@@ -73,4 +75,28 @@ __all__ = [
     "PhraseMemory",
     "Phrase",
     "Transform",
+    "pitch_class_weights",
+    "guide_tones",
+    "avoid_notes",
+    "chord_tone_pcs",
+    "weight_pitch",
+    "best_chord_tone",
+    "guide_tone_resolution",
+    "CandidateScorer",
+    "ScoringContext",
+    "pick_best_note",
+    "UnifiedStyle",
+    "HarmonyProfile",
+    "MelodyProfile",
+    "RhythmProfile",
+    "InstrumentationProfile",
+    "get_unified_style",
+    "list_styles",
+    "register_style",
+    "PsychoEvent",
+    "PsychoConfig",
+    "PsychoReport",
+    "ClashEvent",
+    "VerifierConfig",
+    "VerifierReport",
 ]

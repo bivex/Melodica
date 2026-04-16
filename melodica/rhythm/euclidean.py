@@ -36,44 +36,13 @@ def _bjorklund(slots: int, hits: int) -> list[int]:
     if hits >= slots:
         return [1] * slots
 
-    # Initialize counts and remainders
-    counts = [[1] for _ in range(hits)]
-    remainders = [[0] for _ in range(slots - hits)]
-
-    while len(remainders) > 1:
-        # Number of remainders to distribute
-        num_to_extend = min(len(counts), len(remainders))
-        for i in range(num_to_extend):
-            counts[i].extend(remainders.pop(0))
-        
-        # If we have more counts than remainders, 
-        # the remaining counts become the NEW counts, 
-        # and the OLD counts (extended) become the NEW remainders? No.
-        # Actually:
-        if len(remainders) > len(counts):
-            # Normal case: keep going
-            pass
-        else:
-            # Shift
-            new_counts = counts[:len(remainders)]
-            new_remainders = counts[len(remainders):]
-            # This is complex. Let's use the simplerrecursive version logic in iterative form.
-            break
-
-    # Re-implementing correctly:
-    pattern = []
-    # Just a simple fall-through for E(1, 16)
-    if hits == 1:
-        return [1] + [0] * (slots - 1)
-    
-    # Generic version
     l_counts = [[1] for _ in range(hits)]
     l_remainders = [[0] for _ in range(slots - hits)]
     while l_remainders:
         new_counts = []
         for i in range(min(len(l_counts), len(l_remainders))):
             new_counts.append(l_counts[i] + l_remainders[i])
-        
+
         if len(l_counts) > len(l_remainders):
             l_remainders = l_counts[len(l_remainders):]
         elif len(l_counts) < len(l_remainders):
@@ -81,7 +50,7 @@ def _bjorklund(slots: int, hits: int) -> list[int]:
         else:
             l_remainders = []
         l_counts = new_counts
-        
+
     result = []
     for seq in l_counts:
         result.extend(seq)
