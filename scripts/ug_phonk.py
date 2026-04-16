@@ -1,4 +1,3 @@
-
 # Copyright (c) 2026 Bivex
 #
 # Author: Bivex
@@ -40,7 +39,7 @@ from dataclasses import dataclass
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from melodica.types import Scale, Mode, ChordLabel, Quality, NoteInfo
+from melodica.types import Scale, Mode, ChordLabel, Quality, NoteInfo, MusicTimeline, KeyLabel
 from melodica.generators import (
     MelodyGenerator,
     MarkovMelodyGenerator,
@@ -200,8 +199,7 @@ def build_sections(total_bars: int) -> list[Section]:
     raw[-1] += total_bars - sum(raw)
     raw[-1] = max(1, raw[-1])
     return [
-        Section(n, raw[i], sn, kr, m, d, t)
-        for i, (n, _, sn, kr, m, d, t) in enumerate(template)
+        Section(n, raw[i], sn, kr, m, d, t) for i, (n, _, sn, kr, m, d, t) in enumerate(template)
     ]
 
 
@@ -219,7 +217,7 @@ def make_pipeline(track: str, mood: str, density: float, scale: Scale):
                 memphis_chops=True,
                 aggression=0.6,
             )
-            mods.append(VelocityScalingModifier(scale=0.85))
+            mods.append(VelocityScalingModifier(scale=0.80))
 
         case "phonk_drift":
             gen = PhonkGenerator(
@@ -230,7 +228,7 @@ def make_pipeline(track: str, mood: str, density: float, scale: Scale):
                 memphis_chops=True,
                 aggression=0.8,
             )
-            mods.append(VelocityScalingModifier(scale=0.90))
+            mods.append(VelocityScalingModifier(scale=0.85))
             mods.append(SwingController(swing_ratio=0.56, grid=0.5))
 
         case "cowbell_spare":
@@ -243,10 +241,12 @@ def make_pipeline(track: str, mood: str, density: float, scale: Scale):
                 aggression=0.2,
             )
             mods.append(VelocityScalingModifier(scale=0.40))
-            mods.append(CrescendoModifier(
-                start_vel=70 if mood == "dirt" else 50,
-                end_vel=30 if mood == "dirt" else 20,
-            ))
+            mods.append(
+                CrescendoModifier(
+                    start_vel=70 if mood == "dirt" else 50,
+                    end_vel=30 if mood == "dirt" else 20,
+                )
+            )
 
         case "bass_808":
             gen = Bass808SlidingGenerator(
@@ -288,6 +288,7 @@ def make_pipeline(track: str, mood: str, density: float, scale: Scale):
                 hat_roll_density=0.6 if mood == "grind" else 0.4,
                 kick_pattern="syncopated" if mood == "warp" else "standard",
             )
+            mods.append(VelocityScalingModifier(scale=0.85))
 
         case "hihat":
             gen = HiHatStutterGenerator(
@@ -297,6 +298,7 @@ def make_pipeline(track: str, mood: str, density: float, scale: Scale):
                 open_hat_probability=0.12,
             )
             mods.append(SwingController(swing_ratio=0.56, grid=0.5))
+            mods.append(VelocityScalingModifier(scale=0.80))
 
         case "hihat_rapid":
             gen = HiHatStutterGenerator(
@@ -311,16 +313,20 @@ def make_pipeline(track: str, mood: str, density: float, scale: Scale):
 
         case "dark_pad":
             mode = "tritone_drone" if mood in ("grind", "warp") else "phrygian_pad"
+            # Pad settings: dense pads mask other tracks — shorten notes, reduce overlap, quieten in dense sections
+            chord_dur = 2.0 if mood in ("grind", "warp", "teeth") else 4.0
+            overlap = 0.2 if mood in ("grind", "warp") else 0.4
+            vel_lvl = 0.18 if mood in ("grind", "warp", "teeth") else 0.22
             gen = DarkPadGenerator(
                 params=params,
                 mode=mode,
-                chord_dur=8.0,
-                velocity_level=0.15,
-                register="low",
-                overlap=0.5,
+                chord_dur=chord_dur,
+                velocity_level=vel_lvl,
+                register="mid",  # avoid bass/cowbell frequency range
+                overlap=overlap,
             )
             if mood in ("void", "dirt"):
-                mods.append(CrescendoModifier(start_vel=50, end_vel=20))
+                mods.append(CrescendoModifier(start_vel=70, end_vel=40))
 
         case "vocal_chops":
             gen = VocalChopsGenerator(
@@ -460,21 +466,21 @@ def _build_melody_contour(scale, bars, beats_per_bar, density):
 
 
 PHONK_INSTRUMENTS = {
-    "phonk": 0,           # Channel 10 drums
-    "phonk_drift": 0,     # Channel 10 drums
-    "cowbell_spare": 0,   # Channel 10 drums
-    "bass_808": 38,       # Synth Bass 1
-    "bass_808_slide": 38, # Synth Bass 1
+    "phonk": 0,  # Channel 10 drums
+    "phonk_drift": 0,  # Channel 10 drums
+    "cowbell_spare": 0,  # Channel 10 drums
+    "bass_808": 38,  # Synth Bass 1
+    "bass_808_slide": 38,  # Synth Bass 1
     "bass_808_half": 38,  # Synth Bass 1
-    "trap_drums": 0,      # Channel 10 drums
-    "hihat": 0,           # Channel 10 drums
-    "hihat_rapid": 0,     # Channel 10 drums
-    "dark_pad": 92,       # Halo Pad
-    "vocal_chops": 54,    # Synth Voice
-    "lead": 81,           # Sawtooth Lead
-    "riff": 30,           # Overdriven Guitar
-    "fx_riser": 97,       # FX 1 Rain
-    "fx_impact": 103,     # FX 4 Atmosphere
+    "trap_drums": 0,  # Channel 10 drums
+    "hihat": 0,  # Channel 10 drums
+    "hihat_rapid": 0,  # Channel 10 drums
+    "dark_pad": 92,  # Halo Pad
+    "vocal_chops": 54,  # Synth Voice
+    "lead": 81,  # Sawtooth Lead
+    "riff": 30,  # Overdriven Guitar
+    "fx_riser": 97,  # FX 1 Rain
+    "fx_impact": 103,  # FX 4 Atmosphere
 }
 
 # Tracks that use percussion channel (GM channel 10)
@@ -566,20 +572,25 @@ def generate(duration_minutes, tempo, key_root, seed):
             if hasattr(gen, "_last_context") and gen._last_context is not None:
                 track_contexts[track_name] = gen._last_context
 
+            # Build per-section timeline for modifiers
+            section_timeline = MusicTimeline(
+                chords=local_chords,
+                keys=[KeyLabel(scale=scale, start=0, duration=s_beats)],
+            )
             mctx = ModifierContext(
-                duration_beats=s_beats, chords=local_chords, timeline=None, scale=scale
+                duration_beats=s_beats, chords=local_chords, timeline=section_timeline, scale=scale
             )
             for m in mods:
                 try:
                     notes = m.modify(notes, mctx)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if track_name in ("lead", "riff", "vocal_chops"):
                 try:
                     notes = nct.add_non_chord_tones(notes, local_chords, scale)
-                except Exception:
-                    warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
+                except Exception as e:
+                    warnings.warn(f"NCT error: {e}", stacklevel=2)  # noqa: S110
 
             if track_name not in tracks:
                 tracks[track_name] = []
