@@ -19,6 +19,8 @@ upbeat_rnb.py — Upbeat R&B with pocket groove, Rhodes comping, and soul.
   Intro (4) -> V1 (8) -> Pre (4) -> Hook (8) -> Break (4) -> V2 (8) -> Hook 2 (8) -> Outro (4)
 
 DNA:
+  - MelodyGenerator / MarkovMelodyGenerator for intelligent melodies
+  - CountermelodyGenerator for hook counter-lines
   - GrooveGenerator drives the pocket (soul/funk)
   - WalkingBass + BassSlap for melodic low-end
   - PianoComp (Rhodes) with syncopated rootless voicings
@@ -48,7 +50,9 @@ from melodica.generators.organ_drawbars import OrganDrawbarsGenerator
 from melodica.generators.guitar_strumming import GuitarStrummingGenerator
 from melodica.generators.backbeat import BackbeatGenerator
 from melodica.generators.ghost_notes import GhostNotesGenerator
-from melodica.generators.lead_synth import LeadSynthGenerator
+from melodica.generators.melody import MelodyGenerator
+from melodica.generators.markov import MarkovMelodyGenerator
+from melodica.generators.countermelody import CountermelodyGenerator
 from melodica.generators.vocal_chops import VocalChopsGenerator
 from melodica.generators.fx_riser import FXRiserGenerator
 from melodica.generators.fx_impact import FXImpactGenerator
@@ -75,25 +79,25 @@ SECTIONS = [
     # Intro: Rhodes whispers, bass hint, groove tease — mood set
     ("Intro",   4,  ["keys_warmup", "bass_hint", "groove_hint"]),
 
-    # V1: pocket locks — groove, walking bass, keys comp, organ pad, ghost feel
-    ("V1",      8,  ["groove", "bass", "keys_comp", "organ", "backbeat", "ghost", "lead_spare"]),
+    # V1: pocket locks — groove, walking bass, keys comp, organ pad, melody starts
+    ("V1",      8,  ["groove", "bass", "keys_comp", "organ", "backbeat", "ghost", "melody"]),
 
     # Pre: bass goes slap, chords busier, backbeat intensifies — tension ramp
-    ("Pre",     4,  ["bass_slap", "keys_busy", "backbeat_up", "organ", "ghost", "riser"]),
+    ("Pre",     4,  ["bass_slap", "keys_busy", "backbeat_up", "organ", "ghost", "melody_pre", "riser"]),
 
-    # Hook: everything — groove full, slap bass, funk guitar, chops, maj9 chords
+    # Hook: everything — groove full, slap bass, funk guitar, chops, melody + counter
     ("Hook",    8,  ["groove_full", "bass_slap_hook", "keys_hook", "guitar_funk", "chops",
-                     "backbeat_hook", "ghost_hook", "lead"]),
+                     "backbeat_hook", "ghost_hook", "melody_hook", "counter"]),
 
-    # Break: strip to Rhodes + organ + walking bass — breathe
-    ("Break",   4,  ["keys_soft", "organ_soft", "bass_walk"]),
+    # Break: strip to Rhodes + organ + walking bass + solo melody — breathe
+    ("Break",   4,  ["keys_soft", "organ_soft", "bass_walk", "melody_solo"]),
 
     # V2: groove back, guitar enters, chops — busier than V1
-    ("V2",      8,  ["groove", "bass", "keys_comp", "guitar_funk", "ghost", "chops", "lead_spare"]),
+    ("V2",      8,  ["groove", "bass", "keys_comp", "guitar_funk", "ghost", "chops", "melody"]),
 
     # Hook 2: same as Hook + riser going in
     ("Hook 2",  8,  ["groove_full", "bass_slap_hook", "keys_hook", "guitar_funk", "chops",
-                     "backbeat_hook", "ghost_hook", "lead", "riser"]),
+                     "backbeat_hook", "ghost_hook", "melody_hook", "counter", "riser"]),
 
     # Outro: Rhodes + organ fade, walking bass, impact
     ("Outro",   4,  ["keys_soft", "organ_soft", "bass_walk", "impact"]),
@@ -393,30 +397,93 @@ def build(name):
             mods += [SwingController(swing_ratio=0.56, grid=0.5),
                      VelocityScalingModifier(scale=0.65)]
 
-        # ── lead ────────────────────────────────────────────────────
+        # ── melody — professional melodic intelligence ──────────────
 
-        case "lead":
-            gen = LeadSynthGenerator(
+        case "melody":
+            gen = MelodyGenerator(
                 params=GeneratorParams(density=0.40),
-                style="retro",
-                portamento=0.12,
-                note_length="mixed",
+                harmony_note_probability=0.68,
+                note_range_low=58,
+                note_range_high=79,
+                note_repetition_probability=0.12,
+                steps_probability=0.88,
+                random_movement=0.75,
+                first_note="any_chord",
+                last_note="last_chord_root",
+                after_leap="step_opposite",
+                climax="first_plus_maj3",
             )
             mods += [LimitNoteRangeModifier(low=58, high=79),
-                     VelocityScalingModifier(scale=0.45),
+                     VelocityScalingModifier(scale=0.48),
                      HumanizeModifier(timing_std=0.02, velocity_std=5),
                      SwingController(swing_ratio=0.55, grid=0.5)]
 
-        case "lead_spare":
-            gen = LeadSynthGenerator(
-                params=GeneratorParams(density=0.20),
-                style="retro",
-                portamento=0.08,
-                note_length="legato",
+        case "melody_hook":
+            gen = MelodyGenerator(
+                params=GeneratorParams(density=0.50),
+                harmony_note_probability=0.72,
+                note_range_low=60,
+                note_range_high=82,
+                note_repetition_probability=0.08,
+                steps_probability=0.85,
+                random_movement=0.70,
+                first_note="chord_root",
+                last_note="last_chord_root",
+                after_leap="step_opposite",
+                climax="up_5th",
+                penultimate_step_above=True,
             )
-            mods += [LimitNoteRangeModifier(low=58, high=76),
-                     VelocityScalingModifier(scale=0.30),
-                     HumanizeModifier(timing_std=0.03, velocity_std=4)]
+            mods += [LimitNoteRangeModifier(low=60, high=82),
+                     VelocityScalingModifier(scale=0.55),
+                     HumanizeModifier(timing_std=0.015, velocity_std=4),
+                     SwingController(swing_ratio=0.55, grid=0.5)]
+
+        case "melody_pre":
+            gen = MelodyGenerator(
+                params=GeneratorParams(density=0.45),
+                harmony_note_probability=0.65,
+                note_range_low=58,
+                note_range_high=80,
+                note_repetition_probability=0.10,
+                steps_probability=0.90,
+                random_movement=0.70,
+                first_note="scale",
+                last_note="any",
+                after_leap="step_any",
+                climax="up_octave",
+            )
+            mods += [LimitNoteRangeModifier(low=58, high=80),
+                     VelocityScalingModifier(scale=0.42),
+                     CrescendoModifier(start_vel=40, end_vel=72),
+                     HumanizeModifier(timing_std=0.02, velocity_std=5)]
+
+        case "melody_solo":
+            gen = MarkovMelodyGenerator(
+                params=GeneratorParams(density=0.35),
+                harmony_note_probability=0.75,
+                note_range_low=58,
+                note_range_high=77,
+                note_repetition_probability=0.18,
+                direction_bias=0.05,
+            )
+            mods += [LimitNoteRangeModifier(low=58, high=77),
+                     VelocityScalingModifier(scale=0.40),
+                     HumanizeModifier(timing_std=0.025, velocity_std=4),
+                     CrescendoModifier(start_vel=55, end_vel=30)]
+
+        # ── counter-melody ──────────────────────────────────────────
+
+        case "counter":
+            gen = CountermelodyGenerator(
+                params=GeneratorParams(density=0.35),
+                motion_preference="mixed",
+                dissonance_on_weak=True,
+                interval_limit=7,
+            )
+            mods += [LimitNoteRangeModifier(low=65, high=84),
+                     VelocityScalingModifier(scale=0.38),
+                     HumanizeModifier(timing_std=0.025, velocity_std=4),
+                     SwingController(swing_ratio=0.55, grid=0.5)]
 
         # ── chops ───────────────────────────────────────────────────
 
@@ -481,8 +548,11 @@ INSTRUMENTS = {
     "backbeat_hook":      0,
     "ghost":              0,
     "ghost_hook":         0,
-    "lead":              82,    # Sawtooth Lead (bright)
-    "lead_spare":        82,
+    "melody":            82,    # Sawtooth Lead
+    "melody_hook":       82,
+    "melody_pre":        82,
+    "melody_solo":        5,    # Electric Piano 2 (DX Rhodes)
+    "counter":           52,    # Synth Strings 2
     "chops":             54,    # Synth Voice
     "riser":             97,
     "impact":            103,
