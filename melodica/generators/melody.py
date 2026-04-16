@@ -437,7 +437,8 @@ class MelodyGenerator(PhraseGenerator):
             self._stored_motif = motif_notes
 
         # Post-processing
-        if self.harmony_note_probability < 1.0:
+        # Skip fills when using shared rhythm to maintain aligned onsets across tracks
+        if self.harmony_note_probability < 1.0 and not hasattr(self.rhythm, "_coordinator"):
             notes = self._fill_leaps(notes, key)
 
         if self.ornament_probability > 0:
