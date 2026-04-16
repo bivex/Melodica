@@ -55,4 +55,5 @@ CHORD_TEMPLATES: dict[Quality, list[int]] = {
     Quality.CLUSTER_MAJOR_2: [0, 2, 4, 7],
     Quality.POLY_CHORD_C_FM: [0, 4, 7, 10, 14],
     Quality.SCRIABIN_MYSTIC: [0, 4, 7, 10, 13, 16],
+    Quality.MAJ_TRIAD_B9: [0, 4, 7, 13],
 }

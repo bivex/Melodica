@@ -141,7 +141,7 @@ MODE_DATABASE: dict[Mode, ScaleDefinition] = {
     
     # Scriabin
     Mode.PROMETHEUS: ScaleDefinition([0, 2, 4, 6, 9, 10], "Scriabin", ["Radiant", "Ethereal"]),
-    Mode.MYSTIC: ScaleDefinition([0, 2, 4, 6, 9, 10], "Scriabin", ["Mystic"]),
+    Mode.MYSTIC: ScaleDefinition([0, 2, 4, 6, 9, 11], "Scriabin", ["Mystic"]),
     Mode.ENIGMATIC: ScaleDefinition([0, 1, 3, 5, 7, 9, 10], "Verdi", ["Unusual", "Enigmatic"]),
     
     # Jazz Variations
@@ -165,6 +165,54 @@ MODE_DATABASE: dict[Mode, ScaleDefinition] = {
     # Microtonal
     Mode.QUARTER_TONE_MINOR: ScaleDefinition([0.0, 2.0, 3.0, 5.0, 7.0, 8.0, 10.0], "Modernist", microtonal_support=True),
     Mode.ARABIC_SIKAH:       ScaleDefinition([0.0, 1.5, 3.5, 5.0, 7.0, 8.5, 10.5], "Ethnic", microtonal_support=True),
+
+    # Blues & Pentatonic
+    Mode.BLUES:              ScaleDefinition([0, 3, 5, 6, 7, 10], "Blues", ["Blues", "Raw"]),
+    Mode.MAJOR_PENTATONIC:   ScaleDefinition([0, 2, 4, 7, 9], "Pentatonic", ["Open", "Folk"]),
+    Mode.MINOR_PENTATONIC:   ScaleDefinition([0, 3, 5, 7, 10], "Pentatonic", ["Blues", "Rock"]),
+
+    # Symmetric
+    Mode.WHOLE_TONE:         ScaleDefinition([0, 2, 4, 6, 8, 10], "Symmetric", ["Floating", "Dreamy"]),
+    Mode.DIMINISHED:         ScaleDefinition([0, 2, 3, 5, 6, 8, 9, 11], "Symmetric", ["Tense", "Jazz"]),
+    Mode.HALF_WHOLE_DIMINISHED: ScaleDefinition([0, 1, 3, 4, 6, 7, 9, 10], "Symmetric", ["Jazz", "Dark"]),
+    Mode.WHOLE_HALF_DIMINISHED: ScaleDefinition([0, 2, 3, 5, 6, 8, 9, 11], "Symmetric", ["Jazz"]),
+
+    # Bebop
+    Mode.BEBOP_MAJOR:        ScaleDefinition([0, 2, 4, 5, 7, 8, 9, 11], "Jazz", ["Bebop", "Major"]),
+    Mode.BEBOP_MINOR:        ScaleDefinition([0, 2, 3, 5, 7, 8, 10, 11], "Jazz", ["Bebop", "Minor"]),
+    Mode.BEBOP_DOMINANT:     ScaleDefinition([0, 2, 4, 5, 7, 9, 10, 11], "Jazz", ["Bebop", "Dominant"]),
+    Mode.BEBOP_DOM_6:        ScaleDefinition([0, 2, 4, 5, 7, 9, 10], "Jazz", ["Bebop"]),
+    Mode.BEBOP_DOM_7:        ScaleDefinition([0, 1, 2, 4, 5, 7, 9, 10], "Jazz", ["Bebop"]),
+    Mode.BEBOP_DOM_8:        ScaleDefinition([0, 2, 3, 5, 6, 7, 9, 10], "Jazz", ["Bebop"]),
+
+    # Hungarian / Gypsy
+    Mode.HUNGARIAN_MINOR:    ScaleDefinition([0, 2, 3, 6, 7, 8, 11], "Ethnic", ["Hungarian", "Dark"]),
+    Mode.HUNGARIAN_MAJOR:    ScaleDefinition([0, 3, 4, 6, 7, 9, 10], "Ethnic", ["Hungarian"]),
+    Mode.GYPSY:              ScaleDefinition([0, 1, 4, 5, 7, 8, 11], "Ethnic", ["Gypsy", "Exotic"]),
+
+    # Japanese
+    Mode.HIROJOSHI:          ScaleDefinition([0, 2, 3, 7, 8], "Ethnic", ["Japanese", "Zen"]),
+    Mode.KUMOI:              ScaleDefinition([0, 2, 5, 7, 10], "Ethnic", ["Japanese"]),
+    Mode.JAPANESE:           ScaleDefinition([0, 1, 5, 7, 8], "Ethnic", ["Japanese", "Pentatonic"]),
+
+    # Exotic
+    Mode.SPANISH_8_TONE:     ScaleDefinition([0, 1, 2, 3, 5, 6, 7, 8], "Exotic", ["Spanish", "Flamenco"]),
+    Mode.BYZANTINE:          ScaleDefinition([0, 1, 4, 5, 7, 8, 11], "Exotic", ["Byzantine", "Eastern"]),
+    Mode.PERSIAN:            ScaleDefinition([0, 1, 4, 5, 6, 8, 11], "Exotic", ["Persian", "Ancient"]),
+    Mode.ARABIAN:            ScaleDefinition([0, 2, 3, 6, 7, 8, 11], "Exotic", ["Arabian", "Desert"]),
+    Mode.ALTERED:            ScaleDefinition([0, 1, 3, 4, 6, 8, 10], "Jazz", ["Altered", "Tension"]),
+    Mode.LYDIAN_DOMINANT:    ScaleDefinition([0, 2, 4, 6, 7, 9, 10], "Jazz", ["Lydian Dom", "Jazz"]),
+
+    # Neapolitan
+    Mode.NEAPOLITAN_MAJOR:   ScaleDefinition([0, 1, 3, 5, 7, 9, 11], "Classical", ["Neapolitan"]),
+    Mode.NEAPOLITAN_MINOR:   ScaleDefinition([0, 1, 3, 5, 7, 8, 11], "Classical", ["Neapolitan", "Dark"]),
+
+    # Other theoretical
+    Mode.AEOLIAN_BB7:        ScaleDefinition([0, 2, 3, 5, 7, 8, 10], "Theoretical", ["Minor variant"]),
+    Mode.AUGMENTED:          ScaleDefinition([0, 3, 4, 7, 8, 11], "Symmetric", ["Augmented", "Alien"]),
+    Mode.AUGMENTED_MODE_2:   ScaleDefinition([0, 1, 4, 5, 8, 9], "Symmetric", ["Augmented"]),
+    Mode.ALT_BB3:            ScaleDefinition([0, 1, 3, 4, 6, 8, 10], "Jazz", ["Altered"]),
+    Mode.ALT_BB3_BB7:        ScaleDefinition([0, 1, 3, 4, 6, 8, 9], "Jazz", ["Altered", "Dark"]),
 }
 
 # Fallback/Backward compat:

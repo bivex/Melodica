@@ -74,11 +74,14 @@ def nearest_pitch_above(pc: int, reference_midi: int) -> int:
 def nearest_pitch_below(pc: int, reference_midi: int) -> int:
     """
     Highest MIDI pitch with pitch class `pc` that is <= reference_midi.
+    Returns -1 if no such pitch exists (reference_midi < pc in octave 0).
     """
     base = (reference_midi // 12) * 12 + pc
     if base > reference_midi:
         base -= 12
-    return max(0, base)
+    if base < 0:
+        return -1
+    return base
 
 
 def nearest_pitch(pc: int, reference_midi: int) -> int:
@@ -88,6 +91,8 @@ def nearest_pitch(pc: int, reference_midi: int) -> int:
     """
     above = nearest_pitch_above(pc, reference_midi)
     below = nearest_pitch_below(pc, reference_midi)
+    if below < 0:
+        return above
     if abs(above - reference_midi) <= abs(reference_midi - below):
         return above
     return below
@@ -240,11 +245,11 @@ def is_scale_tone(pitch: int, scale: Scale) -> bool:
 
 
 def chord_at(chords: list[ChordLabel], beat: float) -> ChordLabel | None:
-    """Return the chord active at the given beat position, or None if empty."""
+    """Return the chord active at the given beat position, or None."""
     for c in reversed(chords):
         if c.start <= beat:
             return c
-    return chords[0] if chords else None
+    return None
 
 
 # ---------------------------------------------------------------------------

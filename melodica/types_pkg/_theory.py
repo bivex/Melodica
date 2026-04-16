@@ -79,7 +79,7 @@ class Scale:
         pattern = r"^([#b])?([IViv]+)(m|maj)?(7)?(?:/([IViv]+))?$"
         match = re.match(pattern, roman)
         if not match:
-            return self.diatonic_chord(1)
+            raise ValueError(f"Invalid Roman numeral: {roman!r}")
 
         accidental, numeral, quality_str, has_7, inv_numeral = match.groups()
         mapping = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8}
@@ -87,18 +87,20 @@ class Scale:
 
         is_minor = numeral.islower() or quality_str == "m"
         is_maj7 = quality_str == "maj"
+        wants_seventh = has_7 is not None or is_maj7
 
-        chord = self.diatonic_chord(degree, seventh=(has_7 is not None or is_maj7))
+        # Get diatonic chord (correctly handles 7th quality via fix #1)
+        chord = self.diatonic_chord(degree, seventh=wants_seventh)
 
-        if numeral.isupper() and not is_maj7:
-            chord = ChordLabel(root=chord.root, quality=Quality.MAJOR)
-        elif numeral.islower():
-            chord = ChordLabel(root=chord.root, quality=Quality.MINOR)
-
+        # Explicit quality overrides — only override triad quality, keep 7th from diatonic
         if is_maj7 and has_7:
-            chord = ChordLabel(root=chord.root, quality=Quality.MAJOR7)
+            chord = dataclasses.replace(chord, quality=Quality.MAJOR7)
         elif is_minor and has_7:
-            chord = ChordLabel(root=chord.root, quality=Quality.MINOR7)
+            chord = dataclasses.replace(chord, quality=Quality.MINOR7)
+        elif numeral.isupper() and not wants_seventh and not is_maj7:
+            chord = dataclasses.replace(chord, quality=Quality.MAJOR)
+        elif is_minor and not wants_seventh:
+            chord = dataclasses.replace(chord, quality=Quality.MINOR)
 
         if inv_numeral:
             inv_deg = mapping.get(inv_numeral.upper(), 1)
@@ -112,8 +114,6 @@ class Scale:
         n = len(degs)
         if not (1 <= degree <= n):
             raise ValueError(f"degree must be 1–{n}, got {degree}")
-        degs = self.degrees()
-        n = len(degs)
         root_pc = degs[(degree - 1) % n]
         third_pc = degs[(degree + 1) % n]
         fifth_pc = degs[(degree + 3) % n]
@@ -123,7 +123,11 @@ class Scale:
         fifth_ivl = (fifth_pc - root_pc) % 12
 
         if third_ivl == 4 and fifth_ivl == 7:
-            quality = Quality.MAJOR7 if seventh else Quality.MAJOR
+            if seventh and seventh_pc is not None:
+                seventh_ivl = (seventh_pc - root_pc) % 12
+                quality = Quality.DOMINANT7 if seventh_ivl == 10 else Quality.MAJOR7
+            else:
+                quality = Quality.MAJOR
         elif third_ivl == 3 and fifth_ivl == 7:
             quality = Quality.MINOR7 if seventh else Quality.MINOR
         elif third_ivl == 3 and fifth_ivl == 6:
@@ -139,7 +143,7 @@ class Scale:
         return ChordLabel(
             root=root_pc,
             quality=quality,
-            extensions=[seventh_pc] if seventh_pc is not None else [],
+            extensions=[],
             degree=degree,
         )
 
