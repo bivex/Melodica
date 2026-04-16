@@ -1,4 +1,3 @@
-
 # Copyright (c) 2026 Bivex
 #
 # Author: Bivex
@@ -30,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from melodica.types import Scale, Mode, ChordLabel, Quality, NoteInfo
+from melodica.types import Scale, Mode, ChordLabel, Quality, NoteInfo, MusicTimeline, KeyLabel
 from melodica.generators import GeneratorParams
 from melodica.generators.afrobeats import AfrobeatsGenerator
 from melodica.generators.afro_percussion import AfroPercussionGenerator
@@ -62,29 +61,42 @@ SCALE = Scale(root=9, mode=Mode.DORIAN)  # A Dorian — bright but minor
 
 SECTIONS = [
     # Intro: percussion sets the groove, pad hints at harmony
-    ("Intro",   4,  ["afro_perc", "pad"]),
-
+    ("Intro", 4, ["afro_perc", "pad"]),
     # V1: full drums + bass enter, guitar starts the pattern — room for vocal
-    ("V1",      8,  ["afro_drums", "bass", "guitar", "pad", "shaker"]),
-
+    ("V1", 8, ["afro_drums", "bass", "guitar", "pad", "shaker"]),
     # Hook: everything opens up — lead, guitar busier, chops, afro perc accents
-    ("Hook",    8,  ["afro_drums", "bass", "guitar_hook", "pad", "lead", "chops", "afro_perc", "shaker"]),
-
+    (
+        "Hook",
+        8,
+        ["afro_drums", "bass", "guitar_hook", "pad", "lead", "chops", "afro_perc", "shaker"],
+    ),
     # Break: strip to percussion + guitar + pad — groove keeps, energy drops
-    ("Break",   4,  ["afro_perc", "guitar_soft", "pad", "shaker"]),
-
+    ("Break", 4, ["afro_perc", "guitar_soft", "pad", "shaker"]),
     # V2: drums + bass back, guitar + chops — busier than V1
-    ("V2",      8,  ["afro_drums", "bass", "guitar", "pad", "chops", "shaker"]),
-
+    ("V2", 8, ["afro_drums", "bass", "guitar", "pad", "chops", "shaker"]),
     # Hook 2: same as Hook + riser going in
-    ("Hook 2",  8,  ["afro_drums", "bass", "guitar_hook", "pad", "lead", "chops", "afro_perc", "shaker", "riser"]),
-
+    (
+        "Hook 2",
+        8,
+        [
+            "afro_drums",
+            "bass",
+            "guitar_hook",
+            "pad",
+            "lead",
+            "chops",
+            "afro_perc",
+            "shaker",
+            "riser",
+        ],
+    ),
     # Outro: groove fades, percussion last to go
-    ("Outro",   4,  ["afro_perc", "pad", "impact"]),
+    ("Outro", 4, ["afro_perc", "pad", "impact"]),
 ]
 
 
 # ── harmony ──────────────────────────────────────────────────────────────────
+
 
 def harmonize(bars, bpb=4):
     harmonizer = HMM3Harmonizer(
@@ -113,18 +125,19 @@ def harmonize(bars, bpb=4):
         chords.append(
             chords[-1]
             if chords
-            else ChordLabel(root=int(degs[0]), quality=Quality.MINOR,
-                            start=len(chords) * bpb, duration=bpb)
+            else ChordLabel(
+                root=int(degs[0]), quality=Quality.MINOR, start=len(chords) * bpb, duration=bpb
+            )
         )
     return chords
 
 
 # ── tracks ───────────────────────────────────────────────────────────────────
 
+
 def build(name):
     mods = []
     match name:
-
         case "afro_drums":
             gen = AfrobeatsGenerator(
                 params=GeneratorParams(density=0.55),
@@ -153,8 +166,7 @@ def build(name):
                 slide_type="overlap",
                 slide_probability=0.35,
             )
-            mods += [LimitNoteRangeModifier(low=28, high=52),
-                     VelocityScalingModifier(scale=0.80)]
+            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.80)]
 
         case "guitar":
             gen = HighlifeGuitarGenerator(
@@ -166,8 +178,10 @@ def build(name):
                 interlocking=False,
                 pentatonic_bias=0.7,
             )
-            mods += [HumanizeModifier(timing_std=0.02, velocity_std=5),
-                     VelocityScalingModifier(scale=0.55)]
+            mods += [
+                HumanizeModifier(timing_std=0.02, velocity_std=5),
+                VelocityScalingModifier(scale=0.55),
+            ]
 
         case "guitar_hook":
             gen = HighlifeGuitarGenerator(
@@ -179,8 +193,10 @@ def build(name):
                 interlocking=True,
                 pentatonic_bias=0.65,
             )
-            mods += [HumanizeModifier(timing_std=0.02, velocity_std=4),
-                     VelocityScalingModifier(scale=0.60)]
+            mods += [
+                HumanizeModifier(timing_std=0.02, velocity_std=4),
+                VelocityScalingModifier(scale=0.60),
+            ]
 
         case "guitar_soft":
             gen = HighlifeGuitarGenerator(
@@ -192,17 +208,19 @@ def build(name):
                 interlocking=False,
                 pentatonic_bias=0.8,
             )
-            mods += [VelocityScalingModifier(scale=0.35),
-                     HumanizeModifier(timing_std=0.03, velocity_std=3)]
+            mods += [
+                VelocityScalingModifier(scale=0.35),
+                HumanizeModifier(timing_std=0.03, velocity_std=3),
+            ]
 
         case "pad":
             gen = DarkPadGenerator(
                 params=GeneratorParams(density=0.25),
                 mode="minor_pad",
-                chord_dur=8.0,
-                velocity_level=0.10,
-                register="low",
-                overlap=0.5,
+                chord_dur=4.0,  # shorter to reduce masking
+                velocity_level=0.18,  # louder
+                register="mid",  # avoid bass frequency range
+                overlap=0.4,
             )
 
         case "lead":
@@ -212,9 +230,11 @@ def build(name):
                 portamento=0.15,
                 note_length="mixed",
             )
-            mods += [LimitNoteRangeModifier(low=60, high=80),
-                     HumanizeModifier(timing_std=0.02, velocity_std=5),
-                     VelocityScalingModifier(scale=0.50)]
+            mods += [
+                LimitNoteRangeModifier(low=60, high=80),
+                HumanizeModifier(timing_std=0.02, velocity_std=5),
+                VelocityScalingModifier(scale=0.50),
+            ]
 
         case "chops":
             gen = VocalChopsGenerator(
@@ -224,8 +244,10 @@ def build(name):
                 chop_pattern="syncopated",
                 source_pitch=64,
             )
-            mods += [VelocityScalingModifier(scale=0.40),
-                     HumanizeModifier(timing_std=0.03, velocity_std=4)]
+            mods += [
+                VelocityScalingModifier(scale=0.40),
+                HumanizeModifier(timing_std=0.03, velocity_std=4),
+            ]
 
         case "shaker":
             gen = AfrobeatsGenerator(
@@ -265,24 +287,25 @@ def build(name):
 # ── instruments ──────────────────────────────────────────────────────────────
 
 INSTRUMENTS = {
-    "afro_drums":    0,
-    "afro_perc":     0,
-    "bass":          38,    # Synth Bass 1
-    "guitar":        25,    # Nylon Guitar
-    "guitar_hook":   28,    # Electric Guitar (clean)
-    "guitar_soft":   25,    # Nylon Guitar
-    "pad":           90,    # Polysynth pad
-    "lead":          81,    # Sawtooth Lead
-    "chops":         54,    # Synth Voice
-    "shaker":        0,
-    "riser":         97,
-    "impact":        103,
+    "afro_drums": 0,
+    "afro_perc": 0,
+    "bass": 38,  # Synth Bass 1
+    "guitar": 25,  # Nylon Guitar
+    "guitar_hook": 28,  # Electric Guitar (clean)
+    "guitar_soft": 25,  # Nylon Guitar
+    "pad": 90,  # Polysynth pad
+    "lead": 81,  # Sawtooth Lead
+    "chops": 54,  # Synth Voice
+    "shaker": 0,
+    "riser": 97,
+    "impact": 103,
 }
 
 PERC = {"afro_drums", "afro_perc", "shaker"}
 
 
 # ── generate ─────────────────────────────────────────────────────────────────
+
 
 def generate(tempo, seed):
     if seed is not None:
@@ -313,28 +336,50 @@ def generate(tempo, seed):
                 current_scale=SCALE,
             )
 
+            # Render uses local-chord time; modifiers get absolute-timeline context
             notes = gen.render(chords, SCALE, s_beats, ctx)
             if hasattr(gen, "_last_context") and gen._last_context is not None:
                 contexts[tn] = gen._last_context
 
-            mc = ModifierContext(duration_beats=s_beats, chords=chords, timeline=None, scale=SCALE)
+            # Shift chords to absolute position for timeline/modifiers
+            abs_chords = [
+                ChordLabel(
+                    root=c.root,
+                    quality=c.quality,
+                    start=round(c.start + beat_offset, 6),
+                    duration=c.duration,
+                    degree=c.degree,
+                )
+                for c in chords
+            ]
+
+            # Build per-section timeline for modifiers
+            section_timeline = MusicTimeline(
+                chords=abs_chords,
+                keys=[KeyLabel(scale=SCALE, start=0, duration=s_beats)],
+            )
+            mc = ModifierContext(
+                duration_beats=s_beats, chords=abs_chords, timeline=section_timeline, scale=SCALE
+            )
             for m in mods:
                 try:
                     notes = m.modify(notes, mc)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if tn not in tracks:
                 tracks[tn] = []
             for n in notes:
-                tracks[tn].append(NoteInfo(
-                    pitch=n.pitch,
-                    start=round(n.start + beat_offset, 6),
-                    duration=n.duration,
-                    velocity=n.velocity,
-                    articulation=n.articulation,
-                    expression=n.expression,
-                ))
+                tracks[tn].append(
+                    NoteInfo(
+                        pitch=n.pitch,
+                        start=round(n.start + beat_offset, 6),
+                        duration=n.duration,
+                        velocity=n.velocity,
+                        articulation=n.articulation,
+                        expression=n.expression,
+                    )
+                )
 
         beat_offset += s_beats
 
@@ -372,8 +417,9 @@ def main():
     for n, ns in sorted(tracks.items()):
         print(f"    {n:18s}: {len(ns):5d} notes")
 
-    export_multitrack_midi(tracks, args.output, bpm=args.tempo, key="Am",
-                           cc_events=cc, instruments=INSTRUMENTS)
+    export_multitrack_midi(
+        tracks, args.output, bpm=args.tempo, key="Am", cc_events=cc, instruments=INSTRUMENTS
+    )
     print(f"\n  -> {args.output} ({Path(args.output).stat().st_size / 1024:.1f} KB)")
 
 

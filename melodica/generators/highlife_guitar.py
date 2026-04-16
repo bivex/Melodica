@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, MIDI_MAX
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 @dataclass
@@ -148,7 +148,7 @@ class HighlifeGuitarGenerator(PhraseGenerator):
                     break
                 pc = random.choice(scale_pcs)
                 pitch = nearest_pitch(pc, prev)
-                pitch = max(48, min(84, pitch))
+                pitch = snap_to_scale(max(48, min(84, pitch)), key)
                 is_mute = random.random() < self.palm_mute_ratio
                 vel = 65 if is_mute else 75
                 dur = 0.3 if is_mute else 0.4
@@ -175,7 +175,7 @@ class HighlifeGuitarGenerator(PhraseGenerator):
                     break
                 pc = root_pc if off in (0.0, 2.0) else random.choice(scale_pcs)
                 pitch = nearest_pitch(pc, prev)
-                pitch = max(48, min(84, pitch))
+                pitch = snap_to_scale(max(48, min(84, pitch)), key)
                 is_mute = random.random() < self.palm_mute_ratio
                 vel = 80 if off in (0.0, 2.0) else 65
                 notes.append(
@@ -196,7 +196,7 @@ class HighlifeGuitarGenerator(PhraseGenerator):
                 pitch = nearest_pitch(pc, prev)
                 notes.append(
                     NoteInfo(
-                        pitch=max(48, min(84, pitch)),
+                        pitch=snap_to_scale(max(48, min(84, pitch)), key),
                         start=round(onset, 6),
                         duration=0.2,
                         velocity=60,
@@ -216,7 +216,7 @@ class HighlifeGuitarGenerator(PhraseGenerator):
                 pitch = nearest_pitch(pc, prev)
                 notes.append(
                     NoteInfo(
-                        pitch=max(48, min(84, pitch)),
+                        pitch=snap_to_scale(max(48, min(84, pitch)), key),
                         start=round(onset, 6),
                         duration=0.9,
                         velocity=55,
@@ -240,6 +240,9 @@ class HighlifeGuitarGenerator(PhraseGenerator):
             pitch = nearest_pitch(pc, mid)
             notes.append(
                 NoteInfo(
-                    pitch=max(48, min(84, pitch)), start=round(onset, 6), duration=0.3, velocity=60
+                    pitch=snap_to_scale(max(48, min(84, pitch)), key),
+                    start=round(onset, 6),
+                    duration=0.3,
+                    velocity=60,
                 )
             )
