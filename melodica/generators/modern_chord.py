@@ -27,7 +27,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, Quality
-from melodica.utils import chord_pitches_closed, chord_pitches_open, chord_at
+from melodica.utils import chord_pitches_closed, chord_pitches_open, chord_at, snap_to_scale
 
 
 # Rhythm patterns (beat offsets within a bar)
@@ -135,7 +135,7 @@ class ModernChordPatternGenerator(PhraseGenerator):
             for p in pitches:
                 notes.append(
                     NoteInfo(
-                        pitch=p,
+                        pitch=snap_to_scale(p, key),
                         start=round(event.onset, 6),
                         duration=round(dur, 6),
                         velocity=max(1, min(127, vel)),

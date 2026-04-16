@@ -39,7 +39,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 GALLOP_RHYTHM = [0.15, 0.15, 0.3, 0.4]  # short-short-long pattern
@@ -114,9 +114,9 @@ class PowerChordGenerator(PhraseGenerator):
                 continue
             last_chord = chord
 
-            root = nearest_pitch(chord.root, prev_root)
+            root = snap_to_scale(nearest_pitch(chord.root, prev_root), key)
             root = max(low, min(mid - 5, root))
-            fifth = root + 7
+            fifth = snap_to_scale(root + 7, key)
             prev_root = root
 
             is_muted = random.random() < self.palm_mute_ratio

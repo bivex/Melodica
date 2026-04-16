@@ -38,7 +38,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 def _build_close(root: int, intervals: list[int]) -> list[int]:
@@ -197,7 +197,7 @@ class ChordVoicingGenerator(PhraseGenerator):
             intervals = _CHORD_INTERVALS.get(quality, [0, 4, 7])
 
             pitches = builder(base_midi, intervals)
-            pitches = [max(0, min(127, p)) for p in pitches]
+            pitches = [snap_to_scale(max(0, min(127, p)), key) for p in pitches]
 
             chord_dur = (
                 min(chord.end - t, duration_beats - t)

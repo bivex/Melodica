@@ -43,6 +43,7 @@ from melodica.utils import (
     nearest_pitch_above,
     chord_at,
     voice_leading_distance,
+    snap_to_scale,
 )
 
 
@@ -122,7 +123,7 @@ class VoiceLeadingGenerator(PhraseGenerator):
             for pitch in voicing:
                 notes.append(
                     NoteInfo(
-                        pitch=pitch,
+                        pitch=snap_to_scale(pitch, key),
                         start=round(event.onset, 6),
                         duration=event.duration,
                         velocity=max(1, min(127, vel)),
