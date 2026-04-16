@@ -26,9 +26,6 @@ from __future__ import annotations
 import typing
 from dataclasses import dataclass
 
-if typing.TYPE_CHECKING:
-    pass
-
 
 @dataclass(frozen=True)
 class RhythmEvent:

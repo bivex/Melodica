@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import math
 import random
+import warnings
 import argparse
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -877,7 +878,7 @@ def generate(duration_minutes, tempo, key_root, seed):
                 try:
                     notes = m.modify(notes, mctx)
                 except Exception:
-                    pass
+                    warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if track_name not in tracks:
                 tracks[track_name] = []

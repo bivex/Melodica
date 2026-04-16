@@ -23,6 +23,7 @@ Sections layer/unlayer tracks for arrangement dynamics.
 
 import sys
 import random
+import warnings
 import argparse
 from pathlib import Path
 
@@ -373,7 +374,7 @@ def generate(tempo, seed):
                 try:
                     notes = m.modify(notes, mctx)
                 except Exception:
-                    pass
+                    warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if track_name not in tracks:
                 tracks[track_name] = []

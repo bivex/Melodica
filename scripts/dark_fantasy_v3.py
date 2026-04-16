@@ -24,6 +24,7 @@ dark_fantasy_v3.py — Fully-wired Dark Fantasy Generator.
 
 import sys
 import random
+import warnings
 import argparse
 from pathlib import Path
 from dataclasses import dataclass
@@ -879,14 +880,14 @@ def generate(duration_minutes: float, tempo: int, key_root: int, seed: int | Non
                 try:
                     notes = m.modify(notes, mctx)
                 except Exception:
-                    pass
+                    warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             # NCT for melodic tracks
             if track_name in ("melody", "dyads", "call_response", "arp"):
                 try:
                     notes = nct.add_non_chord_tones(notes, local_chords, scale)
                 except Exception:
-                    pass
+                    warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             # Offset and store
             if track_name not in tracks:

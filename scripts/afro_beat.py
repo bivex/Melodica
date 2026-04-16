@@ -24,6 +24,7 @@ Each section has character — no lazy +/- one track.
 
 import sys
 import random
+import warnings
 import argparse
 from pathlib import Path
 
@@ -321,7 +322,7 @@ def generate(tempo, seed):
                 try:
                     notes = m.modify(notes, mc)
                 except Exception:
-                    pass
+                    warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if tn not in tracks:
                 tracks[tn] = []
