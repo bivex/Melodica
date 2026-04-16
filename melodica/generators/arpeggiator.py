@@ -29,7 +29,12 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica import types
-from melodica.utils import chord_pitches_closed, chord_pitches_open, chord_pitches_spread, snap_to_scale
+from melodica.utils import (
+    chord_pitches_closed,
+    chord_pitches_open,
+    chord_pitches_spread,
+    snap_to_scale,
+)
 
 
 PATTERNS = frozenset(
@@ -151,7 +156,7 @@ class ArpeggiatorGenerator(PhraseGenerator):
         notes: list[types.NoteInfo] = []
 
         chord_idx = 0
-        current_pitches = self._pitches_for_chord(chords[0])
+        current_pitches = self._pitches_for_chord(chords[0], key)
         seq = self._make_sequence(current_pitches)
         seq_pos = 0
         last_pitch: int | None = None
@@ -160,7 +165,7 @@ class ArpeggiatorGenerator(PhraseGenerator):
             # Advance chord if needed
             while chord_idx + 1 < len(chords) and event.onset >= chords[chord_idx + 1].start:
                 chord_idx += 1
-                current_pitches = self._pitches_for_chord(chords[chord_idx])
+                current_pitches = self._pitches_for_chord(chords[chord_idx], key)
                 seq = self._make_sequence(current_pitches)
                 if last_pitch is not None:
                     seq_pos = self._continue_sequence(seq, last_pitch)
@@ -226,7 +231,7 @@ class ArpeggiatorGenerator(PhraseGenerator):
             t += self.note_duration
         return events
 
-    def _pitches_for_chord(self, chord: types.ChordLabel) -> list[int]:
+    def _pitches_for_chord(self, chord: types.ChordLabel, key: types.Scale) -> list[int]:
         if self.voicing == "open":
             base_pitches = chord_pitches_open(chord, self.params.key_range_low)
         elif self.voicing == "spread":
