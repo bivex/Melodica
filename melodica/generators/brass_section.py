@@ -38,7 +38,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed
+from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed, snap_to_scale
 
 
 @dataclass
@@ -108,6 +108,7 @@ class BrassSectionGenerator(PhraseGenerator):
             last_chord = chord
 
             voicing = chord_pitches_closed(chord, mid)
+            voicing = [snap_to_scale(p, key) for p in voicing]
             voicing = voicing[: self.divisi_count]
 
             if self.articulation == "hit":

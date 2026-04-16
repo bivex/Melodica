@@ -36,7 +36,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 @dataclass
@@ -94,7 +94,7 @@ class OrchestralHitGenerator(PhraseGenerator):
         last_chord = chords[-1]
 
         for chord in chords:
-            hit_pitches = self._get_hit_pitches(chord, mid)
+            hit_pitches = self._get_hit_pitches(chord, mid, key)
 
             if self.hit_type == "riser_hit":
                 # Rising buildup before the hit
@@ -103,6 +103,7 @@ class OrchestralHitGenerator(PhraseGenerator):
                 riser_pc = chord.root
                 for i in range(int(riser_dur / 0.25)):
                     p = nearest_pitch(int(riser_pc), mid - 12 + i * 2)
+                    p = snap_to_scale(p, key)
                     p = max(self.params.key_range_low, min(self.params.key_range_high, p))
                     vel = int(30 + i * 8)
                     notes.append(
@@ -158,18 +159,21 @@ class OrchestralHitGenerator(PhraseGenerator):
             )
         return notes
 
-    def _get_hit_pitches(self, chord: ChordLabel, anchor: int) -> list[int]:
+    def _get_hit_pitches(self, chord: ChordLabel, anchor: int, key: Scale) -> list[int]:
         pcs = chord.pitch_classes()
         if not pcs:
-            return [nearest_pitch(chord.root, anchor)]
+            return [snap_to_scale(nearest_pitch(chord.root, anchor), key)]
 
         if self.voicing == "unison":
             p = nearest_pitch(int(pcs[0]), anchor)
+            p = snap_to_scale(p, key)
             return [max(self.params.key_range_low, min(self.params.key_range_high, p))]
 
         elif self.voicing == "octave":
             lo = nearest_pitch(int(pcs[0]), anchor - 12)
             hi = nearest_pitch(int(pcs[0]), anchor)
+            lo = snap_to_scale(lo, key)
+            hi = snap_to_scale(hi, key)
             return [
                 max(self.params.key_range_low, min(self.params.key_range_high, lo)),
                 max(self.params.key_range_low, min(self.params.key_range_high, hi)),
@@ -180,6 +184,7 @@ class OrchestralHitGenerator(PhraseGenerator):
             for i, pc in enumerate(pcs[:4]):
                 offset = (i - len(pcs) // 2) * 12
                 p = nearest_pitch(int(pc), anchor + offset)
+                p = snap_to_scale(p, key)
                 p = max(self.params.key_range_low, min(self.params.key_range_high, p))
                 pitches.append(p)
             return sorted(set(pitches))

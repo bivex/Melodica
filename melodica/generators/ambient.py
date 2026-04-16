@@ -27,7 +27,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.render_context import RenderContext
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica import types
-from melodica.utils import chord_pitches_spread, chord_pitches_open, chord_at
+from melodica.utils import chord_pitches_spread, chord_pitches_open, chord_at, snap_to_scale
 
 
 @dataclass
@@ -97,7 +97,7 @@ class AmbientPadGenerator(PhraseGenerator):
                     continue
                 last_chord = chord
                 pitches = voicing_fn(chord, self.params.key_range_low)
-                pitches = [p for p in pitches if low <= p <= high]
+                pitches = [snap_to_scale(p, key) for p in pitches if low <= p <= high]
 
                 # Voice lead: shift pitches to minimize movement from previous
                 if prev_pitches:
@@ -119,7 +119,7 @@ class AmbientPadGenerator(PhraseGenerator):
         else:
             for chord in chords:
                 pitches = voicing_fn(chord, self.params.key_range_low)
-                pitches = [p for p in pitches if low <= p <= high]
+                pitches = [snap_to_scale(p, key) for p in pitches if low <= p <= high]
 
                 # Voice lead
                 if prev_pitches:

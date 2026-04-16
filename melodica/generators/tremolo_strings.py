@@ -126,22 +126,25 @@ class TremoloStringsGenerator(PhraseGenerator):
             )
         return notes
 
-    def _pick_pitches(self, chord: ChordLabel, anchor: int) -> list[int]:
+    def _pick_pitches(self, chord: ChordLabel, anchor: int, key: Scale) -> list[int]:
         low = self.params.key_range_low
         high = self.params.key_range_high
 
         if self.variant == "single":
             root = nearest_pitch(chord.root, anchor)
+            root = snap_to_scale(root, key)
             return [max(low, min(high, root))]
         elif self.variant == "chord":
-            return [max(low, min(high, p)) for p in chord_pitches_closed(chord, anchor)]
+            return [max(low, min(high, snap_to_scale(p, key))) for p in chord_pitches_closed(chord, anchor)]
         elif self.variant == "octave":
             root = nearest_pitch(chord.root, anchor)
-            return [max(low, min(high, root)), min(127, root + 12)]
+            root = snap_to_scale(root, key)
+            return [max(low, min(high, root)), min(127, snap_to_scale(root + 12, key))]
         elif self.variant == "cluster":
             root = nearest_pitch(chord.root, anchor)
-            return [max(low, min(high, root + i)) for i in range(3)]
-        return [max(low, min(high, nearest_pitch(chord.root, anchor)))]
+            root = snap_to_scale(root, key)
+            return [max(low, min(high, snap_to_scale(root + i, key))) for i in range(3)]
+        return [max(low, min(high, snap_to_scale(nearest_pitch(chord.root, anchor), key)))]
 
     def _dynamic(self, elapsed: float, total: float, note_idx: int) -> int:
         base = int(45 + self.params.density * 25)

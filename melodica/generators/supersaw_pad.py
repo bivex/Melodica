@@ -37,7 +37,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed
+from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed, snap_to_scale
 
 
 @dataclass
@@ -101,13 +101,13 @@ class SupersawPadGenerator(PhraseGenerator):
         last_chord: ChordLabel | None = None
 
         if self.variant == "trance":
-            notes = self._trance(chords, duration_beats, mid)
+            notes = self._trance(chords, duration_beats, mid, key)
         elif self.variant == "ambient":
-            notes = self._ambient(chords, duration_beats, mid)
+            notes = self._ambient(chords, duration_beats, mid, key)
         elif self.variant == "stabs":
-            notes = self._stabs(chords, duration_beats, mid)
+            notes = self._stabs(chords, duration_beats, mid, key)
         elif self.variant == "plucks":
-            notes = self._plucks(chords, duration_beats, mid)
+            notes = self._plucks(chords, duration_beats, mid, key)
 
         if chords:
             last_chord = chords[-1]
@@ -120,7 +120,7 @@ class SupersawPadGenerator(PhraseGenerator):
             )
         return notes
 
-    def _trance(self, chords: list[ChordLabel], dur: float, anchor: int) -> list[NoteInfo]:
+    def _trance(self, chords: list[ChordLabel], dur: float, anchor: int, key: Scale) -> list[NoteInfo]:
         notes = []
         vel = int(55 + self.params.density * 25)
 
@@ -129,7 +129,7 @@ class SupersawPadGenerator(PhraseGenerator):
             voicing = voicing[: self.voice_count]
 
             for i, p in enumerate(voicing):
-                p = max(self.params.key_range_low, min(self.params.key_range_high, p))
+                p = snap_to_scale(max(self.params.key_range_low, min(self.params.key_range_high, p)), key)
                 # Velocity variation simulates detune
                 v = vel + random.randint(-5, 5)
 
@@ -159,7 +159,7 @@ class SupersawPadGenerator(PhraseGenerator):
 
         return notes
 
-    def _ambient(self, chords: list[ChordLabel], dur: float, anchor: int) -> list[NoteInfo]:
+    def _ambient(self, chords: list[ChordLabel], dur: float, anchor: int, key: Scale) -> list[NoteInfo]:
         notes = []
         vel = int(40 + self.params.density * 20)
 
@@ -174,7 +174,7 @@ class SupersawPadGenerator(PhraseGenerator):
             spread = spread[: self.voice_count]
 
             for p in spread:
-                p = max(self.params.key_range_low, min(self.params.key_range_high, p))
+                p = snap_to_scale(max(self.params.key_range_low, min(self.params.key_range_high, p)), key)
                 notes.append(
                     NoteInfo(
                         pitch=p,
@@ -186,7 +186,7 @@ class SupersawPadGenerator(PhraseGenerator):
 
         return notes
 
-    def _stabs(self, chords: list[ChordLabel], dur: float, anchor: int) -> list[NoteInfo]:
+    def _stabs(self, chords: list[ChordLabel], dur: float, anchor: int, key: Scale) -> list[NoteInfo]:
         notes = []
         vel = int(65 + self.params.density * 30)
 
@@ -200,7 +200,7 @@ class SupersawPadGenerator(PhraseGenerator):
             voicing = voicing[: self.voice_count]
 
             for p in voicing:
-                p = max(self.params.key_range_low, min(self.params.key_range_high, p))
+                p = snap_to_scale(max(self.params.key_range_low, min(self.params.key_range_high, p)), key)
                 notes.append(
                     NoteInfo(
                         pitch=p,
@@ -213,7 +213,7 @@ class SupersawPadGenerator(PhraseGenerator):
 
         return notes
 
-    def _plucks(self, chords: list[ChordLabel], dur: float, anchor: int) -> list[NoteInfo]:
+    def _plucks(self, chords: list[ChordLabel], dur: float, anchor: int, key: Scale) -> list[NoteInfo]:
         notes = []
         vel = int(55 + self.params.density * 30)
 
@@ -226,7 +226,7 @@ class SupersawPadGenerator(PhraseGenerator):
             voicing = chord_pitches_closed(chord, anchor)
             # Single pluck from voicing
             p = random.choice(voicing) if voicing else anchor
-            p = max(self.params.key_range_low, min(self.params.key_range_high, p))
+            p = snap_to_scale(max(self.params.key_range_low, min(self.params.key_range_high, p)), key)
             notes.append(
                 NoteInfo(
                     pitch=p,

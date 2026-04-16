@@ -28,7 +28,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, OCTAVE, MIDI_MAX
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 REGISTRATIONS = {"jazz", "gospel", "rock", "ballad"}
@@ -102,7 +102,7 @@ class OrganDrawbarsGenerator(PhraseGenerator):
             leslie_dur = event.duration * (0.95 if self.leslie_speed == "fast" else 0.98)
 
             for i, pitch in enumerate(drawbar_pitches):
-                pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+                pitch = snap_to_scale(max(self.params.key_range_low, min(self.params.key_range_high, pitch)), key)
                 drawbar_factor = 0.6 + 0.4 * math.sin(
                     math.pi * (i + 1) / (len(drawbar_pitches) + 1)
                 )

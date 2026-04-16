@@ -36,7 +36,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 SECTION_VOICINGS: dict[str, list[int]] = {
@@ -119,6 +119,7 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
                 pc = pcs[voice_idx % len(pcs)]
                 anchor = mid + offset * 12
                 pitch = nearest_pitch(int(pc), anchor)
+                pitch = snap_to_scale(pitch, key)
                 pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
 
                 base_vel = int(55 + self.params.density * 25) + vel_boost
