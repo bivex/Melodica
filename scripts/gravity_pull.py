@@ -285,13 +285,18 @@ def build_track(name):
 
         case "lead_descent":
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.35, leap_probability=0.15),
+                params=GeneratorParams(density=0.70),
                 harmony_note_probability=0.55,
                 steps_probability=0.75,
                 note_repetition_probability=0.08,
+                direction_bias=-0.3,
+                phrase_length=4.0,
+                phrase_contour="rise_fall",
+                rhythm_variety=0.4,
+                syncopation=0.25,
             )
             mods.append(LimitNoteRangeModifier(low=55, high=74))
-            mods.append(VelocityScalingModifier(scale=0.40))
+            mods.append(VelocityScalingModifier(scale=0.45))
             mods.append(HumanizeModifier(timing_std=0.03, velocity_std=5))
 
         case "lead_dark":
@@ -318,13 +323,18 @@ def build_track(name):
 
         case "melody":
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.45, leap_probability=0.20),
+                params=GeneratorParams(density=0.75),
                 harmony_note_probability=0.60,
-                steps_probability=0.65,
+                steps_probability=0.70,
                 note_repetition_probability=0.10,
+                phrase_length=4.0,
+                phrase_contour="arch",
+                rhythm_variety=0.5,
+                syncopation=0.30,
+                ornament_probability=0.12,
             )
             mods.append(LimitNoteRangeModifier(low=57, high=76))
-            mods.append(VelocityScalingModifier(scale=0.50))
+            mods.append(VelocityScalingModifier(scale=0.55))
             mods.append(HumanizeModifier(timing_std=0.03, velocity_std=5))
 
         case "countermelody":
