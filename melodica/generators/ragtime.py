@@ -39,7 +39,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed
+from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed, snap_to_scale
 
 
 # Syncopation patterns: (beat_offset, duration) for right hand
@@ -133,7 +133,7 @@ class RagtimeGenerator(PhraseGenerator):
                     vel = int(self._velocity() * (1.1 if is_bass else 0.9))
 
                     if is_bass:
-                        bass = nearest_pitch(chord.root, prev_bass)
+                        bass = snap_to_scale(nearest_pitch(chord.root, prev_bass), key)
                         bass = max(low, min(mid - 5, bass))
                         notes.append(
                             NoteInfo(
@@ -156,6 +156,7 @@ class RagtimeGenerator(PhraseGenerator):
                     else:
                         voicing = chord_pitches_closed(chord, mid)
                         for p in voicing:
+                            p = snap_to_scale(p, key)
                             notes.append(
                                 NoteInfo(
                                     pitch=max(mid - 5, min(mid + 12, p)),
@@ -178,7 +179,7 @@ class RagtimeGenerator(PhraseGenerator):
                         continue
 
                     pc = random.choice(rh_pcs)
-                    pitch = nearest_pitch(int(pc), prev_rh)
+                    pitch = snap_to_scale(nearest_pitch(int(pc), prev_rh), key)
 
                     # Keep RH above mid
                     while pitch < mid + 5:

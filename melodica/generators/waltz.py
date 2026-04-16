@@ -38,7 +38,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_pitches_closed, chord_at
+from melodica.utils import nearest_pitch, chord_pitches_closed, chord_at, snap_to_scale
 
 
 @dataclass
@@ -108,7 +108,7 @@ class WaltzGenerator(PhraseGenerator):
             if self.variant == "viennese":
                 if beat_in_bar == 0:
                     # Bass on 1
-                    bass = nearest_pitch(chord.root, prev_bass)
+                    bass = snap_to_scale(nearest_pitch(chord.root, prev_bass), key)
                     bass = max(low, min(mid - 5, bass))
                     notes.append(
                         NoteInfo(pitch=bass, start=round(t, 6), duration=0.9, velocity=vel)
@@ -128,13 +128,14 @@ class WaltzGenerator(PhraseGenerator):
                     dur = 0.35 if self.staccato_chords else 0.85
                     voicing = chord_pitches_closed(chord, mid)
                     for p in voicing:
+                        p = snap_to_scale(p, key)
                         notes.append(
                             NoteInfo(pitch=p, start=round(t, 6), duration=dur, velocity=vel)
                         )
 
             elif self.variant == "jazz":
                 if beat_in_bar == 0:
-                    bass = nearest_pitch(chord.root, prev_bass)
+                    bass = snap_to_scale(nearest_pitch(chord.root, prev_bass), key)
                     bass = max(low, min(mid - 5, bass))
                     notes.append(
                         NoteInfo(pitch=bass, start=round(t, 6), duration=0.9, velocity=vel)
@@ -144,6 +145,7 @@ class WaltzGenerator(PhraseGenerator):
                     # Chord on 2
                     voicing = chord_pitches_closed(chord, mid)
                     for p in voicing:
+                        p = snap_to_scale(p, key)
                         notes.append(
                             NoteInfo(
                                 pitch=p, start=round(t, 6), duration=0.4, velocity=int(vel * 0.9)
@@ -153,6 +155,7 @@ class WaltzGenerator(PhraseGenerator):
                     # Chord on 3
                     voicing = chord_pitches_closed(chord, mid)
                     for p in voicing:
+                        p = snap_to_scale(p, key)
                         notes.append(
                             NoteInfo(
                                 pitch=p, start=round(t, 6), duration=0.4, velocity=int(vel * 0.85)
@@ -161,7 +164,7 @@ class WaltzGenerator(PhraseGenerator):
 
             elif self.variant == "romantic":
                 if beat_in_bar == 0:
-                    bass = nearest_pitch(chord.root, prev_bass)
+                    bass = snap_to_scale(nearest_pitch(chord.root, prev_bass), key)
                     bass = max(low, min(mid - 5, bass))
                     notes.append(
                         NoteInfo(pitch=bass, start=round(t, 6), duration=0.9, velocity=vel)
@@ -171,6 +174,7 @@ class WaltzGenerator(PhraseGenerator):
                     # Arpeggiated chord
                     voicing = chord_pitches_closed(chord, mid)
                     for i, p in enumerate(voicing):
+                        p = snap_to_scale(p, key)
                         notes.append(
                             NoteInfo(
                                 pitch=p, start=round(t + i * 0.08, 6), duration=0.7, velocity=vel
@@ -180,7 +184,7 @@ class WaltzGenerator(PhraseGenerator):
             elif self.variant == "modern":
                 # Syncopated
                 if beat_in_bar == 0:
-                    bass = nearest_pitch(chord.root, prev_bass)
+                    bass = snap_to_scale(nearest_pitch(chord.root, prev_bass), key)
                     bass = max(low, min(mid - 5, bass))
                     notes.append(
                         NoteInfo(pitch=bass, start=round(t, 6), duration=0.9, velocity=vel)
@@ -190,12 +194,14 @@ class WaltzGenerator(PhraseGenerator):
                     # Anticipated chord
                     voicing = chord_pitches_closed(chord, mid)
                     for p in voicing:
+                        p = snap_to_scale(p, key)
                         notes.append(
                             NoteInfo(pitch=p, start=round(t + 0.3, 6), duration=0.3, velocity=vel)
                         )
                 else:
                     voicing = chord_pitches_closed(chord, mid)
                     for p in voicing:
+                        p = snap_to_scale(p, key)
                         notes.append(
                             NoteInfo(pitch=p, start=round(t, 6), duration=0.8, velocity=vel)
                         )

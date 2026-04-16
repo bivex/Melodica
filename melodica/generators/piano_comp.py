@@ -27,7 +27,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, MIDI_MAX
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 COMP_STYLES = {"jazz", "pop", "bossa", "waltz"}
@@ -110,7 +110,7 @@ class PianoCompGenerator(PhraseGenerator):
             accent = accents[idx % len(accents)]
             vel = int(self._velocity() * event.velocity_factor * accent)
             for pitch in pitches:
-                pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+                pitch = snap_to_scale(max(self.params.key_range_low, min(self.params.key_range_high, pitch)), key)
                 notes.append(
                     NoteInfo(
                         pitch=pitch,

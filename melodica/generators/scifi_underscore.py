@@ -99,7 +99,7 @@ class SciFiUnderscoreGenerator(PhraseGenerator):
             )
         return notes
 
-    def _render_pad(self, notes, bar_start, total, chord):
+    def _render_pad(self, notes, bar_start, total, chord, key):
         mid = 54
         pcs = chord.pitch_classes()
         # Add 9th for sci-fi color
@@ -108,12 +108,12 @@ class SciFiUnderscoreGenerator(PhraseGenerator):
         vel = 40 if self.variant == "blade_runner" else 45 if self.variant == "space" else 55
         if bar_start < total:
             for pc in pcs:
-                pitch = nearest_pitch(pc, mid)
+                pitch = snap_to_scale(nearest_pitch(pc, mid), key)
                 notes.append(
                     NoteInfo(pitch=pitch, start=round(bar_start, 6), duration=3.8, velocity=vel)
                 )
 
-    def _render_arp(self, notes, bar_start, total, chord):
+    def _render_arp(self, notes, bar_start, total, chord, key):
         mid = 72
         if self.variant == "cyberpunk":
             # Aggressive sequenced arp
@@ -122,10 +122,10 @@ class SciFiUnderscoreGenerator(PhraseGenerator):
             idx = 0
             while t < min(bar_start + 4.0, total):
                 pc = pcs[idx % len(pcs)]
-                pitch = nearest_pitch(pc, mid)
+                pitch = snap_to_scale(max(48, min(84, nearest_pitch(pc, mid))), key)
                 notes.append(
                     NoteInfo(
-                        pitch=max(48, min(84, pitch)),
+                        pitch=pitch,
                         start=round(t, 6),
                         duration=self.arp_speed * 0.7,
                         velocity=75,
@@ -135,8 +135,8 @@ class SciFiUnderscoreGenerator(PhraseGenerator):
                 idx += 1
         elif self.variant == "retro_sci_fi":
             # Carpenter-style: simple up-down
-            root = nearest_pitch(chord.root, mid)
-            fifth = nearest_pitch((chord.root + 7) % 12, root)
+            root = snap_to_scale(nearest_pitch(chord.root, mid), key)
+            fifth = snap_to_scale(nearest_pitch((chord.root + 7) % 12, root), key)
             seq = [root, fifth, root + 12, fifth]
             t = bar_start
             idx = 0
@@ -157,10 +157,10 @@ class SciFiUnderscoreGenerator(PhraseGenerator):
             while t < min(bar_start + 4.0, total):
                 if random.random() < self.pad_density:
                     pc = random.choice(chord.pitch_classes())
-                    pitch = nearest_pitch(pc, mid)
+                    pitch = snap_to_scale(max(48, min(84, nearest_pitch(pc, mid))), key)
                     notes.append(
                         NoteInfo(
-                            pitch=max(48, min(84, pitch)),
+                            pitch=pitch,
                             start=round(t, 6),
                             duration=1.0,
                             velocity=45,
@@ -168,8 +168,8 @@ class SciFiUnderscoreGenerator(PhraseGenerator):
                     )
                 t += 1.0
 
-    def _render_bass(self, notes, bar_start, total, chord, low):
-        pitch = max(low, min(low + 12, nearest_pitch(chord.root, low + 6)))
+    def _render_bass(self, notes, bar_start, total, chord, low, key):
+        pitch = snap_to_scale(max(low, min(low + 12, nearest_pitch(chord.root, low + 6))), key)
         if self.variant == "cyberpunk":
             for beat in range(4):
                 onset = bar_start + beat

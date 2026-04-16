@@ -38,7 +38,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_pitches_closed, chord_at
+from melodica.utils import nearest_pitch, chord_pitches_closed, chord_at, snap_to_scale
 
 
 @dataclass
@@ -112,7 +112,7 @@ class ReggaeSkankGenerator(PhraseGenerator):
             for p in voicing:
                 notes.append(
                     NoteInfo(
-                        pitch=max(self.params.key_range_low, min(self.params.key_range_high, p)),
+                        pitch=snap_to_scale(max(self.params.key_range_low, min(self.params.key_range_high, p)), key),
                         start=round(event.onset, 6),
                         duration=dur,
                         velocity=max(1, min(127, vel)),

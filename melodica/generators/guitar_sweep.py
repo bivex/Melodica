@@ -28,7 +28,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, OCTAVE, MIDI_MAX
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 SWEEP_DIRECTIONS = {"up", "down", "both"}
@@ -104,7 +104,7 @@ class GuitarSweepGenerator(PhraseGenerator):
             base_vel = int(self._velocity() * event.velocity_factor)
 
             for i, pitch in enumerate(sweep_pitches):
-                # Velocity curve: louder at extremes, softer in middle
+                pitch = snap_to_scale(pitch, key)
                 progress = i / max(len(sweep_pitches) - 1, 1)
                 vel_boost = 1.0 + self.velocity_curve * 0.2 * (abs(2.0 * progress - 1.0) ** 0.5)
                 vel = int(base_vel * vel_boost)

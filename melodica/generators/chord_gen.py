@@ -35,6 +35,7 @@ from melodica.utils import (
     chord_pitches_spread,
     chord_at,
     voice_leading_distance,
+    snap_to_scale,
 )
 
 
@@ -138,7 +139,7 @@ class ChordGenerator(PhraseGenerator):
             for pitch in pitches:
                 notes.append(
                     NoteInfo(
-                        pitch=pitch,
+                        pitch=snap_to_scale(pitch, key),
                         start=round(event.onset, 6),
                         duration=event.duration,
                         velocity=max(0, min(127, vel)),

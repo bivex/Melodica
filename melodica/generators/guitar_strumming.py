@@ -28,7 +28,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, MIDI_MAX
-from melodica.utils import nearest_pitch, chord_at, build_guitar_voicing
+from melodica.utils import nearest_pitch, chord_at, build_guitar_voicing, snap_to_scale
 
 
 STRUM_PATTERNS = {"folk", "pop", "reggae", "funk", "ballad"}
@@ -113,9 +113,9 @@ class GuitarStrummingGenerator(PhraseGenerator):
                         p = nearest_pitch(chord.root, self.params.key_range_low + 12)
                         notes.append(
                             NoteInfo(
-                                pitch=max(
+                                pitch=snap_to_scale(max(
                                     self.params.key_range_low, min(self.params.key_range_high, p)
-                                ),
+                                ), key),
                                 start=round(event.onset + s * 0.005, 6),
                                 duration=0.03,
                                 velocity=max(1, min(MIDI_MAX, dead_vel)),
@@ -138,9 +138,9 @@ class GuitarStrummingGenerator(PhraseGenerator):
                 strum_dur = 0.25 if is_muted else event.duration - delay
                 notes.append(
                     NoteInfo(
-                        pitch=max(
+                        pitch=snap_to_scale(max(
                             self.params.key_range_low, min(self.params.key_range_high, pitch)
-                        ),
+                        ), key),
                         start=round(event.onset + delay, 6),
                         duration=round(max(0.04, strum_dur), 6),
                         velocity=max(0, min(MIDI_MAX, vel)),

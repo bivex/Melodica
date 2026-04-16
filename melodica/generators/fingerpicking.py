@@ -31,7 +31,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import semitones_up, chord_at, build_guitar_voicing
+from melodica.utils import semitones_up, chord_at, build_guitar_voicing, snap_to_scale
 
 SUSTAIN_OPTIONS = {"no", "yes", "bottom_note", "bottom_two"}
 
@@ -123,7 +123,7 @@ class FingerpickingGenerator(PhraseGenerator):
             string_idx = self.pattern[seq_idx % len(self.pattern)]
             string_idx = min(string_idx, len(filtered) - 1)
 
-            pitch = filtered[string_idx]
+            pitch = snap_to_scale(filtered[string_idx], key)
 
             # Sustain logic
             is_bottom = string_idx == 0

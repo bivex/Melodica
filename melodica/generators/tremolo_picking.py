@@ -36,7 +36,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 @dataclass
@@ -122,7 +122,7 @@ class TremoloPickingGenerator(PhraseGenerator):
                         n_dur *= 0.5
                     notes.append(
                         NoteInfo(
-                            pitch=max(low, min(high, p)),
+                            pitch=snap_to_scale(max(low, min(high, p)), key),
                             start=round(t, 6),
                             duration=n_dur * 0.85,
                             velocity=max(1, min(127, vel + random.randint(-3, 3))),
