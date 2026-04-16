@@ -1,4 +1,3 @@
-
 # Copyright (c) 2026 Bivex
 #
 # Author: Bivex
@@ -29,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from melodica.types import Scale, Mode, ChordLabel, Quality, NoteInfo
+from melodica.types import Scale, Mode, ChordLabel, Quality, NoteInfo, MusicTimeline, KeyLabel
 from melodica.generators import (
     GeneratorParams,
 )
@@ -67,7 +66,18 @@ VERSE_1 = [
 ]
 
 HOOK = [
-    (8, ["bass_808_slide", "trap_drums_hard", "hihat_rapid", "cowbell_full", "dark_pad", "lead", "ghost_snare"]),
+    (
+        8,
+        [
+            "bass_808_slide",
+            "trap_drums_hard",
+            "hihat_rapid",
+            "cowbell_full",
+            "dark_pad",
+            "lead",
+            "ghost_snare",
+        ],
+    ),
 ]
 
 VERSE_2 = [
@@ -75,7 +85,19 @@ VERSE_2 = [
 ]
 
 HOOK_2 = [
-    (8, ["bass_808_slide", "trap_drums_hard", "hihat_rapid", "cowbell_full", "dark_pad", "lead", "ghost_snare", "fx_riser"]),
+    (
+        8,
+        [
+            "bass_808_slide",
+            "trap_drums_hard",
+            "hihat_rapid",
+            "cowbell_full",
+            "dark_pad",
+            "lead",
+            "ghost_snare",
+            "fx_riser",
+        ],
+    ),
 ]
 
 OUTRO = [
@@ -110,7 +132,9 @@ def harmonize_section(bars, beats_per_bar=4):
         else:
             pc = int(degs[0]) if random.random() < 0.6 else int(degs[min(3, len(degs) - 1)])
         contour.append(
-            NoteInfo(pitch=44 + pc, start=bar * beats_per_bar, duration=beats_per_bar - 0.1, velocity=55)
+            NoteInfo(
+                pitch=44 + pc, start=bar * beats_per_bar, duration=beats_per_bar - 0.1, velocity=55
+            )
         )
     s_beats = bars * beats_per_bar
     chords = harmonizer.harmonize(contour, SCALE, s_beats)
@@ -118,12 +142,18 @@ def harmonize_section(bars, beats_per_bar=4):
         chords.append(
             chords[-1]
             if chords
-            else ChordLabel(root=int(degs[0]), quality=Quality.MINOR, start=len(chords) * beats_per_bar, duration=beats_per_bar)
+            else ChordLabel(
+                root=int(degs[0]),
+                quality=Quality.MINOR,
+                start=len(chords) * beats_per_bar,
+                duration=beats_per_bar,
+            )
         )
     return chords
 
 
 # -- track builders ---------------------------------------------------------------
+
 
 def build_track(name, density=0.5):
     params = GeneratorParams(density=density)
@@ -167,6 +197,7 @@ def build_track(name, density=0.5):
                 hat_roll_density=0.4,
                 kick_pattern="standard",
             )
+            mods.append(VelocityScalingModifier(scale=0.85))
 
         case "trap_drums_hard":
             gen = TrapDrumsGenerator(
@@ -175,6 +206,7 @@ def build_track(name, density=0.5):
                 hat_roll_density=0.6,
                 kick_pattern="syncopated",
             )
+            mods.append(VelocityScalingModifier(scale=0.85))
 
         case "hihat":
             gen = HiHatStutterGenerator(
@@ -184,6 +216,7 @@ def build_track(name, density=0.5):
                 open_hat_probability=0.10,
             )
             mods.append(SwingController(swing_ratio=0.55, grid=0.5))
+            mods.append(VelocityScalingModifier(scale=0.80))
 
         case "hihat_rapid":
             gen = HiHatStutterGenerator(
@@ -193,7 +226,7 @@ def build_track(name, density=0.5):
                 open_hat_probability=0.06,
             )
             mods.append(SwingController(swing_ratio=0.57, grid=0.5))
-            mods.append(VelocityScalingModifier(scale=0.80))
+            mods.append(VelocityScalingModifier(scale=0.65))
 
         case "cowbell_spare":
             gen = PhonkGenerator(
@@ -215,15 +248,15 @@ def build_track(name, density=0.5):
                 memphis_chops=True,
                 aggression=0.55,
             )
-            mods.append(VelocityScalingModifier(scale=0.75))
+            mods.append(VelocityScalingModifier(scale=0.65))  # was 0.75 — pull back vs pad
 
         case "dark_pad":
             gen = DarkPadGenerator(
                 params=GeneratorParams(density=0.3),
                 mode="phrygian_pad",
-                chord_dur=8.0,
-                velocity_level=0.12,
-                register="low",
+                chord_dur=4.0,  # shorter chords to reduce masking
+                velocity_level=0.18,  # slightly louder
+                register="mid",  # move up an octave — out of bass/cowbell way
                 overlap=0.5,
             )
 
@@ -296,31 +329,37 @@ def build_track(name, density=0.5):
 # -- instruments ------------------------------------------------------------------
 
 INSTRUMENTS = {
-    "bass_808": 38,         # Synth Bass 1
-    "bass_808_slide": 38,   # Synth Bass 1
-    "bass_808_half": 38,    # Synth Bass 1
+    "bass_808": 38,  # Synth Bass 1
+    "bass_808_slide": 38,  # Synth Bass 1
+    "bass_808_half": 38,  # Synth Bass 1
     "trap_drums": 0,
     "trap_drums_hard": 0,
     "hihat": 0,
     "hihat_rapid": 0,
     "cowbell_spare": 0,
     "cowbell_full": 0,
-    "dark_pad": 92,         # Halo Pad
-    "lead": 81,             # Sawtooth Lead
+    "dark_pad": 92,  # Halo Pad
+    "lead": 81,  # Sawtooth Lead
     "lead_spare": 81,
-    "vocal_chops": 54,      # Synth Voice
+    "vocal_chops": 54,  # Synth Voice
     "ghost_snare": 0,
-    "fx_riser": 97,         # FX 1 Rain
-    "fx_impact": 103,       # FX 4 Atmosphere
+    "fx_riser": 97,  # FX 1 Rain
+    "fx_impact": 103,  # FX 4 Atmosphere
 }
 
 PERC_TRACKS = {
-    "trap_drums", "trap_drums_hard", "hihat", "hihat_rapid",
-    "cowbell_spare", "cowbell_full", "ghost_snare",
+    "trap_drums",
+    "trap_drums_hard",
+    "hihat",
+    "hihat_rapid",
+    "cowbell_spare",
+    "cowbell_full",
+    "ghost_snare",
 }
 
 
 # -- generate ---------------------------------------------------------------------
+
 
 def generate(tempo, seed):
     if seed is not None:
@@ -344,8 +383,13 @@ def generate(tempo, seed):
 
         # shift chords to absolute position
         abs_chords = [
-            ChordLabel(root=c.root, quality=c.quality, start=round(c.start + beat_offset, 6),
-                       duration=c.duration, degree=c.degree)
+            ChordLabel(
+                root=c.root,
+                quality=c.quality,
+                start=round(c.start + beat_offset, 6),
+                duration=c.duration,
+                degree=c.degree,
+            )
             for c in chords
         ]
 
@@ -369,11 +413,18 @@ def generate(tempo, seed):
             if hasattr(gen, "_last_context") and gen._last_context is not None:
                 track_contexts[track_name] = gen._last_context
 
-            mctx = ModifierContext(duration_beats=s_beats, chords=chords, timeline=None, scale=SCALE)
+            # Build per-section timeline for modifiers
+            section_timeline = MusicTimeline(
+                chords=abs_chords,
+                keys=[KeyLabel(scale=SCALE, start=0, duration=s_beats)],
+            )
+            mctx = ModifierContext(
+                duration_beats=s_beats, chords=abs_chords, timeline=section_timeline, scale=SCALE
+            )
             for m in mods:
                 try:
                     notes = m.modify(notes, mctx)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if track_name not in tracks:
