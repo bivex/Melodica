@@ -37,7 +37,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 SECTION_VOICE_COUNTS: dict[str, int] = {
@@ -121,6 +121,7 @@ class StringsEnsembleGenerator(PhraseGenerator):
                 spread = (div_idx - self.divisi // 2) * 3
                 anchor = mid + spread
                 pitch = nearest_pitch(int(pc), anchor)
+                pitch = snap_to_scale(pitch, key)
                 pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
 
                 for _ in range(voice_count):

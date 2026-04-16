@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, OCTAVE, MIDI_MAX
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 PATTERN_OFFSETS: dict[str, list[tuple[float, float, str]]] = {
@@ -164,6 +164,7 @@ class Bass808SlidingGenerator(PhraseGenerator):
                 # Octave jump variation
                 if self.slide_type == "octave_jump" and random.random() < 0.25:
                     pitch += random.choice([0, OCTAVE])
+                    pitch = snap_to_scale(pitch, key)
 
                 # Velocity
                 if note_type == "ghost":

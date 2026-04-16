@@ -38,7 +38,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Quality, Scale
-from melodica.utils import nearest_pitch, nearest_pitch_above, chord_at
+from melodica.utils import nearest_pitch, nearest_pitch_above, chord_at, snap_to_scale
 
 
 NAMED_PATTERNS: dict[str, list[int]] = {
@@ -119,7 +119,7 @@ class AlbertiBassGenerator(PhraseGenerator):
             last_chord = chord
 
             deg = degrees[pat_idx % len(degrees)]
-            pitch = self._degree_to_pitch(deg, chord, anchor)
+            pitch = self._degree_to_pitch(deg, chord, anchor, key)
 
             # Voice lead on chord change
             if self.voice_lead and chord != prev_chord and prev_pitch is not None:
@@ -157,7 +157,7 @@ class AlbertiBassGenerator(PhraseGenerator):
     # Pitch computation
     # ------------------------------------------------------------------
 
-    def _degree_to_pitch(self, degree: int, chord: ChordLabel, anchor: int) -> int:
+    def _degree_to_pitch(self, degree: int, chord: ChordLabel, anchor: int, key: Scale | None = None) -> int:
         """
         Map a chord-tone degree (1=root, 3=third, 5=fifth, etc.) to a MIDI pitch.
 
@@ -180,6 +180,8 @@ class AlbertiBassGenerator(PhraseGenerator):
             target_pc = (chord.root + degree - 1) % 12
 
         pitch = nearest_pitch(target_pc, anchor)
+        if key is not None and not key.contains(pitch % 12):
+            pitch = snap_to_scale(pitch, key)
 
         # Handle octave displacement for patterns spanning wide range
         if degree == 5 and len(pcs) > 1:

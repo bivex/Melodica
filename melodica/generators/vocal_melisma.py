@@ -29,7 +29,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, OCTAVE, MIDI_MAX
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 STYLES = {"rnb", "gospel", "opera", "pop"}
@@ -93,7 +93,7 @@ class VocalMelismaGenerator(PhraseGenerator):
             if chord is None:
                 continue
             last_chord = chord
-            run_pitches = self._build_run(chord, prev_pitch)
+            run_pitches = self._build_run(chord, prev_pitch, key)
             if not run_pitches:
                 continue
 
@@ -108,9 +108,12 @@ class VocalMelismaGenerator(PhraseGenerator):
                 vel = int(base_vel * arc)
 
                 if random.random() < self.ornament_prob and i > 0:
-                    gp = max(
-                        self.params.key_range_low,
-                        min(self.params.key_range_high, pitch + random.choice([-1, 1])),
+                    gp = snap_to_scale(
+                        max(
+                            self.params.key_range_low,
+                            min(self.params.key_range_high, pitch + random.choice([-1, 1])),
+                        ),
+                        key,
                     )
                     gd = min(0.05, note_dur * 0.3)
                     notes.append(
@@ -141,13 +144,15 @@ class VocalMelismaGenerator(PhraseGenerator):
             )
         return notes
 
-    def _build_run(self, chord: ChordLabel, anchor: int) -> list[int]:
+    def _build_run(self, chord: ChordLabel, anchor: int, key: Scale | None = None) -> list[int]:
         contour = _STYLE_RUNS.get(self.style, _STYLE_RUNS["rnb"])
         pcs = chord.pitch_classes()
         pitches, cur = [], anchor
         for i in range(self.run_length):
             pc = int(pcs[contour[i % len(contour)] % len(pcs)])
             p = nearest_pitch(pc, cur)
+            if key is not None:
+                p = snap_to_scale(p, key)
             if self.params.key_range_low <= p <= self.params.key_range_high:
                 pitches.append(p)
                 cur = p

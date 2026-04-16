@@ -27,7 +27,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import chord_at
+from melodica.utils import chord_at, snap_to_scale
 
 
 @dataclass
@@ -70,7 +70,7 @@ class RandomNoteGenerator(PhraseGenerator):
         notes: list[NoteInfo] = []
 
         for event in events:
-            pitch = random.randint(self.note_range[0], self.note_range[1])
+            pitch = snap_to_scale(random.randint(self.note_range[0], self.note_range[1]), key)
             vel = random.randint(self.velocity_range[0], self.velocity_range[1])
 
             notes.append(

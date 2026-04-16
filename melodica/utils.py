@@ -239,6 +239,33 @@ def is_scale_tone(pitch: int, scale: Scale) -> bool:
     return scale.contains(pitch % 12)
 
 
+def snap_to_scale(pitch: int, key: Scale) -> int:
+    """Snap a MIDI pitch to the nearest scale tone in *key*.
+
+    If the pitch is already in-scale, returns it unchanged.
+    Otherwise finds the closest in-scale pitch by semitone distance.
+    Ties broken upward.
+    """
+    if key.contains(pitch % 12):
+        return pitch
+    best = pitch
+    best_dist = 999
+    for offset in range(1, 7):
+        for candidate in (pitch - offset, pitch + offset):
+            if 0 <= candidate <= 127 and key.contains(candidate % 12):
+                if offset < best_dist:
+                    best_dist = offset
+                    best = candidate
+        if best_dist < 999:
+            break
+    return best
+
+
+def snap_pitches_to_scale(pitches: list[int], key: Scale) -> list[int]:
+    """Snap a list of pitches to scale tones."""
+    return [snap_to_scale(p, key) for p in pitches]
+
+
 # ---------------------------------------------------------------------------
 # Chord lookup (shared across generators)
 # ---------------------------------------------------------------------------

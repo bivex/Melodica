@@ -36,7 +36,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed
+from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed, snap_to_scale
 
 
 @dataclass
@@ -98,7 +98,7 @@ class VocalOohsGenerator(PhraseGenerator):
             voicing = voicing[: self.harmony_count]
 
             for i, p in enumerate(voicing):
-                p = max(self.params.key_range_low, min(self.params.key_range_high, p))
+                p = snap_to_scale(max(self.params.key_range_low, min(self.params.key_range_high, p)), key)
                 vel = int(45 + self.params.density * 20)
                 # Vibrato
                 vel += random.randint(-int(self.vibrato * 8), int(self.vibrato * 8))

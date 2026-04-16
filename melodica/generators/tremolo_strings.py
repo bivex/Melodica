@@ -36,7 +36,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed
+from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed, snap_to_scale
 
 
 @dataclass
@@ -95,7 +95,7 @@ class TremoloStringsGenerator(PhraseGenerator):
                 continue
             last_chord = chord
 
-            pitches = self._pick_pitches(chord, mid)
+            pitches = self._pick_pitches(chord, mid, key)
             end = min(event.onset + event.duration, duration_beats)
             t = event.onset
             total_dur = end - event.onset

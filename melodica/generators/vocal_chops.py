@@ -37,7 +37,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 @dataclass
@@ -122,7 +122,7 @@ class VocalChopsGenerator(PhraseGenerator):
                 t = event.onset
                 end = min(event.onset + event.duration, duration_beats)
                 pc = random.choice(pcs)
-                pitch = max(low, min(high, nearest_pitch(int(pc), prev_pitch)))
+                pitch = snap_to_scale(max(low, min(high, nearest_pitch(int(pc), prev_pitch))), key)
                 vel = self._velocity()
                 while t < end:
                     n_dur = min(self.stutter_speed, end - t)
@@ -135,7 +135,7 @@ class VocalChopsGenerator(PhraseGenerator):
             elif self.processing == "reverse":
                 # Reversed: note starts softly and builds
                 pc = random.choice(pcs)
-                pitch = max(low, min(high, nearest_pitch(int(pc), prev_pitch)))
+                pitch = snap_to_scale(max(low, min(high, nearest_pitch(int(pc), prev_pitch))), key)
                 for i in range(4):
                     prog = i / 3
                     vel = int(20 + self._velocity() * prog)
@@ -152,7 +152,7 @@ class VocalChopsGenerator(PhraseGenerator):
 
             else:  # pitch_shift / formant
                 pc = random.choice(pcs)
-                pitch = max(low, min(high, nearest_pitch(int(pc), prev_pitch)))
+                pitch = snap_to_scale(max(low, min(high, nearest_pitch(int(pc), prev_pitch))), key)
                 vel = self._velocity()
                 notes.append(
                     NoteInfo(

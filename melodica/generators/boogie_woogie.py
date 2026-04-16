@@ -38,7 +38,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Quality, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 NAMED_PATTERNS: dict[str, list[int]] = {
@@ -125,7 +125,7 @@ class BoogieWoogieGenerator(PhraseGenerator):
                 pat_idx = 0
 
             deg = degrees[pat_idx % len(degrees)]
-            pitch = self._degree_to_pitch(deg, chord, prev_pitch, low, high)
+            pitch = self._degree_to_pitch(deg, chord, prev_pitch, low, high, key)
 
             # Octave double on bass notes (degree 1)
             vel = self._velocity(event, pat_idx, len(degrees))
@@ -168,7 +168,7 @@ class BoogieWoogieGenerator(PhraseGenerator):
             return [1, 1, 5, 6, 7, 6, 5, 3]
 
     def _degree_to_pitch(
-        self, degree: int, chord: ChordLabel, prev: int, low: int, high: int
+        self, degree: int, chord: ChordLabel, prev: int, low: int, high: int, key: Scale | None = None
     ) -> int:
         root = chord.root
         # Blues scale degrees: 1=0, 2=3, 3=5, 4=6, 5=7, 6=10
@@ -176,6 +176,8 @@ class BoogieWoogieGenerator(PhraseGenerator):
         offset = blues_map.get(degree, (degree - 1) * 2)
         pc = (root + offset) % 12
         pitch = nearest_pitch(pc, prev)
+        if key is not None:
+            pitch = snap_to_scale(pitch, key)
         return max(low, min(high, pitch))
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:

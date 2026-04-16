@@ -29,7 +29,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, OCTAVE, MIDI_MAX
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 SLAP_PATTERNS = {"funky", "pop", "slap_pop", "octave"}
@@ -142,6 +142,7 @@ class BassSlapGenerator(PhraseGenerator):
                 dur = event.duration * 0.2
 
             pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+            pitch = snap_to_scale(pitch, key)
 
             notes.append(
                 NoteInfo(

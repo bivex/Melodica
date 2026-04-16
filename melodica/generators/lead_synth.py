@@ -42,7 +42,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 @dataclass
@@ -126,7 +126,7 @@ class LeadSynthGenerator(PhraseGenerator):
             pcs = chord.pitch_classes()
             pc = random.choice(pcs) if pcs else chord.root
             pitch = nearest_pitch(int(pc), prev_pitch)
-            pitch = max(low, min(high, pitch))
+            pitch = snap_to_scale(max(low, min(high, pitch)), key)
 
             dur = self._apply_articulation(event.duration, i)
             vel = self._velocity(i, event.velocity_factor)

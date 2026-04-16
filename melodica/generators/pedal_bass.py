@@ -26,7 +26,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, OCTAVE
-from melodica.utils import nearest_pitch, nearest_pitch_above, chord_at
+from melodica.utils import nearest_pitch, nearest_pitch_above, chord_at, snap_to_scale
 
 
 @dataclass
@@ -99,7 +99,9 @@ class PedalBassGenerator(PhraseGenerator):
             # Add fifth if pedal_note == "both"
             if self.pedal_note == "both":
                 fifth_pc = (root_pc + 7) % 12
-                fifth_pitch = nearest_pitch_above(fifth_pc, self.params.key_range_low)
+                fifth_pitch = snap_to_scale(
+                    nearest_pitch_above(fifth_pc, self.params.key_range_low), key
+                )
                 fifth_pitch = max(
                     self.params.key_range_low, min(self.params.key_range_high, fifth_pitch)
                 )
@@ -113,7 +115,9 @@ class PedalBassGenerator(PhraseGenerator):
                 )
             elif self.pedal_note == "fifth":
                 fifth_pc = (root_pc + 7) % 12
-                fifth_pitch = nearest_pitch_above(fifth_pc, self.params.key_range_low)
+                fifth_pitch = snap_to_scale(
+                    nearest_pitch_above(fifth_pc, self.params.key_range_low), key
+                )
                 fifth_pitch = max(
                     self.params.key_range_low, min(self.params.key_range_high, fifth_pitch)
                 )

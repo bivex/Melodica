@@ -29,7 +29,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica import types
-from melodica.utils import chord_pitches_closed, chord_pitches_open, chord_pitches_spread
+from melodica.utils import chord_pitches_closed, chord_pitches_open, chord_pitches_spread, snap_to_scale
 
 
 PATTERNS = frozenset(
@@ -236,7 +236,7 @@ class ArpeggiatorGenerator(PhraseGenerator):
 
         pitches = list(base_pitches)
         for i in range(1, self.octaves):
-            pitches.extend([p + types.OCTAVE * i for p in base_pitches])
+            pitches.extend([snap_to_scale(p + types.OCTAVE * i, key) for p in base_pitches])
 
         return sorted(list(set(pitches)))
 

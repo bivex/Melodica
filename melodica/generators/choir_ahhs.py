@@ -35,7 +35,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 SATB_OCTAVES = [0, 0, -1, -1]  # soprano, alto, tenor, bass offsets from mid
@@ -104,7 +104,9 @@ class ChoirAahsGenerator(PhraseGenerator):
                 pc = pcs[voice_idx % len(pcs)]
                 anchor = mid + SATB_OCTAVES[voice_idx] * 12
                 pitch = nearest_pitch(int(pc), anchor)
-                pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+                pitch = snap_to_scale(
+                    max(self.params.key_range_low, min(self.params.key_range_high, pitch)), key
+                )
 
                 vel = self._velocity()
                 vel += random.randint(-int(self.vibrato * 10), int(self.vibrato * 10))

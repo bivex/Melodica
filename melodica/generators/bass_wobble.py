@@ -43,7 +43,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 WOBBLE_RATES: dict[str, float] = {
@@ -135,7 +135,7 @@ class BassWobbleGenerator(PhraseGenerator):
             # Pitch slide: approach from semitone below
             if self.pitch_slide and prev_pitch is not None and prev_pitch != pitch:
                 slide_pc = (int(root_pc) - 1) % 12
-                slide_pitch = nearest_pitch(slide_pc, prev_pitch)
+                slide_pitch = snap_to_scale(nearest_pitch(slide_pc, prev_pitch), key)
                 slide_pitch = max(
                     self.params.key_range_low, min(self.params.key_range_high, slide_pitch)
                 )

@@ -44,7 +44,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 ACID_PATTERN = [0.0, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 2.75, 3.0, 3.5]
@@ -121,7 +121,7 @@ class SynthBassGenerator(PhraseGenerator):
                 continue
             last_chord = chord
 
-            pitch = self._pick_pitch(chord, prev_pitch, low, mid)
+            pitch = self._pick_pitch(chord, prev_pitch, low, mid, key)
             is_slide = random.random() < self.slide_probability and prev_slide is False
             is_accent = random.random() < 0.3
 
@@ -167,7 +167,7 @@ class SynthBassGenerator(PhraseGenerator):
             )
         return notes
 
-    def _pick_pitch(self, chord: ChordLabel, prev: int, low: int, mid: int) -> int:
+    def _pick_pitch(self, chord: ChordLabel, prev: int, low: int, mid: int, key: Scale | None = None) -> int:
         root_pc = chord.root
 
         if self.pattern == "reese":
@@ -190,6 +190,8 @@ class SynthBassGenerator(PhraseGenerator):
             pitch = nearest_pitch(root_pc, prev)
             if random.random() < self.octave_variation:
                 pitch += random.choice([-12, 12])
+            if key is not None:
+                pitch = snap_to_scale(pitch, key)
             return max(low, min(mid, pitch))
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:

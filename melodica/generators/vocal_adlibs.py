@@ -28,7 +28,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, OCTAVE, MIDI_MAX
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 REGISTERS = {"low", "mid", "high"}
@@ -109,7 +109,9 @@ class VocalAdlibsGenerator(PhraseGenerator):
 
             if self.style == "shout" and random.random() < 0.3:
                 pitch = min(MIDI_MAX, pitch + OCTAVE)
-            pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+            pitch = snap_to_scale(
+                max(self.params.key_range_low, min(self.params.key_range_high, pitch)), key
+            )
 
             notes.append(
                 NoteInfo(

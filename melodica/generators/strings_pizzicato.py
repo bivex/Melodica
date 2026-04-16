@@ -38,7 +38,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 @dataclass
@@ -114,7 +114,9 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                 pc_a = pcs[0]
                 pc_b = pcs[min(2, len(pcs) - 1)]
                 pitch_a = nearest_pitch(int(pc_a), prev_pitch)
+                pitch_a = snap_to_scale(pitch_a, key)
                 pitch_b = nearest_pitch(int(pc_b), prev_pitch)
+                pitch_b = snap_to_scale(pitch_b, key)
                 use_a = True
                 while t < end:
                     p = pitch_a if use_a else pitch_b
@@ -139,6 +141,7 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                 # Single pluck event
                 pc = random.choice(pcs)
                 pitch = nearest_pitch(int(pc), prev_pitch)
+                pitch = snap_to_scale(pitch, key)
                 pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
 
                 vel = self._velocity()
