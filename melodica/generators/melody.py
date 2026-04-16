@@ -318,8 +318,8 @@ class MelodyGenerator(PhraseGenerator):
         if context and hasattr(context, "prev_pitches") and len(context.prev_pitches) >= 3:
             self._stored_motif = list(context.prev_pitches[-6:])
 
-        # Compute climax pitch
-        climax_pitch = self._compute_climax(prev_pitch, low, high)
+        # Compute base climax pitch
+        base_climax = self._compute_climax(prev_pitch, low, high)
 
         last_interval = 0
         last_chord: types.ChordLabel | None = None
@@ -327,6 +327,8 @@ class MelodyGenerator(PhraseGenerator):
 
         # Phrase boundaries for contour
         phrase_len = self.phrase_length if self.phrase_length > 0 else duration_beats
+        # Global climax: rises across phrases, peaks ~60-70% through duration
+        total_phrases = max(1, int(duration_beats / phrase_len)) if phrase_len > 0 else 1
 
         # Store first phrase as motif
         motif_notes: list[int] = []
@@ -347,6 +349,16 @@ class MelodyGenerator(PhraseGenerator):
             # Phrase-internal position (0.0 → 1.0 within current phrase)
             phrase_pos = (event.onset % phrase_len) / phrase_len if phrase_len > 0 else 0.0
 
+            # Per-phrase climax: rises across phrases, peaks globally ~65%
+            phrase_idx = int(event.onset / phrase_len) if phrase_len > 0 else 0
+            phrase_frac = phrase_idx / max(1, total_phrases - 1)
+            # Global arch: rise to 65%, then fall
+            if phrase_frac < 0.65:
+                climax_offset = int((base_climax - low) * 0.4 * (phrase_frac / 0.65))
+            else:
+                climax_offset = int((base_climax - low) * 0.4 * (1.0 - (phrase_frac - 0.65) / 0.35) * 0.5)
+            climax_pitch = min(high, base_climax + climax_offset)
+
             # Register target: where the melody "should be" based on contour
             register_center = self._register_target(phrase_pos, progress, low, high, climax_pitch)
 
@@ -357,7 +369,6 @@ class MelodyGenerator(PhraseGenerator):
             if (
                 self.motif_probability > 0
                 and len(self._stored_motif) >= 3
-                and i < len(self._stored_motif)
                 and random.random() < self.motif_probability
             ):
                 pitch = self._apply_motif(self._stored_motif, i, prev_pitch, low, high, key)
@@ -410,9 +421,10 @@ class MelodyGenerator(PhraseGenerator):
         if self.ornament_probability > 0:
             notes = self._add_ornaments(notes, key, low, high)
 
-        # Phrase arch velocity contour
-        from melodica.generators._postprocess import apply_phrase_arch
-        notes = apply_phrase_arch(notes, duration_beats, context.phrase_position if context else 0.0)
+        # Phrase arch velocity contour — only when _apply_velocity didn't already do it
+        if self.phrase_contour == "flat" or self.phrase_length <= 0:
+            from melodica.generators._postprocess import apply_phrase_arch
+            notes = apply_phrase_arch(notes, duration_beats, context.phrase_position if context else 0.0)
 
         # Context with motif memory
         motif_memory = self._stored_motif[-8:] if self._stored_motif else []
@@ -611,6 +623,8 @@ class MelodyGenerator(PhraseGenerator):
         events: list[RhythmEvent] = []
         t = 0.0
         dur_pool = self._duration_pool(base_step)
+        # Step multipliers for rhythmic variety — vary the *advance*, not just duration
+        step_pool = [base_step * 0.5, base_step * 0.75, base_step, base_step, base_step * 1.5]
 
         while t < duration_beats:
             # Phrase gap
@@ -636,7 +650,12 @@ class MelodyGenerator(PhraseGenerator):
             vel_factor = random.uniform(1.05, 1.15) if is_downbeat else random.uniform(0.85, 1.0)
 
             events.append(RhythmEvent(onset=round(onset, 6), duration=max(0.1, dur), velocity_factor=vel_factor))
-            t += base_step
+
+            # Vary the step to create true rhythmic variety
+            if self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
+                t += random.choice(step_pool)
+            else:
+                t += base_step
 
         return events
 
@@ -746,15 +765,15 @@ class MelodyGenerator(PhraseGenerator):
 
         result = [notes[0]]
         fills_added = 0
-        max_fills = max(2, len(notes) // 4)
+        max_fills = max(4, len(notes) // 2)
 
         for i in range(1, len(notes)):
             gap = notes[i].pitch - notes[i - 1].pitch
             abs_gap = abs(gap)
 
-            if abs_gap > 5 and fills_added < max_fills:
+            if abs_gap > 4 and fills_added < max_fills:
                 direction = 1 if gap > 0 else -1
-                num_fills = 2 if abs_gap > 9 else 1
+                num_fills = min(abs_gap // 3, 4) if abs_gap > 7 else 1
                 span = notes[i].start - notes[i - 1].start
 
                 for fill_idx in range(num_fills):

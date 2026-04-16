@@ -303,12 +303,16 @@ class MelodyPitchSelector:
         if not chord_pcs:
             return scale_pcs
 
-        # Expand chord pcs with allow_2nd/allow_7th
+        # Expand chord pcs with allow_2nd/allow_7th (by scale degree, not hardcoded PC)
         pool = list(chord_pcs)
-        if gen.allow_2nd and 2 in scale_pcs and 2 not in pool:
-            pool.append(2)
-        if gen.allow_7th and 11 in scale_pcs and 11 not in pool:
-            pool.append(11)
+        if gen.allow_2nd and len(scale_pcs) >= 2:
+            pc2 = scale_pcs[1]
+            if pc2 not in pool:
+                pool.append(pc2)
+        if gen.allow_7th and len(scale_pcs) >= 7:
+            pc7 = scale_pcs[6]
+            if pc7 not in pool:
+                pool.append(pc7)
 
         # Apply mode
         if gen.mode == "scale_only":
