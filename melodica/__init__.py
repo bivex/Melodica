@@ -29,6 +29,7 @@ Public API:
   - notes_to_midi(), chords_to_midi()
   - generate_idea()   — Idea Tool pipeline (§9)
   - slots_to_notes()  — flatten arrangement to absolute NoteInfo list
+  - VirtualMidiOut    — real-time virtual MIDI port (requires [live])
 """
 
 from __future__ import annotations
@@ -61,6 +62,8 @@ __all__ = [
     # Idea Tool
     "generate_idea",
     "slots_to_notes",
+    # Virtual MIDI (requires [live])
+    "VirtualMidiOut",
 ]
 
 # --- Domain types ---
@@ -96,6 +99,12 @@ from melodica.midi import (
 
 # --- Idea Tool ---
 from melodica.idea import generate_idea, slots_to_notes
+
+# --- Virtual MIDI (lazy — optional [live] dependency) ---
+try:
+    from melodica.virtual_midi import VirtualMidiOut
+except ImportError:
+    VirtualMidiOut = None  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------
