@@ -64,6 +64,8 @@ __all__ = [
     "slots_to_notes",
     # Virtual MIDI (requires [live])
     "VirtualMidiOut",
+    # VST Player (requires pedalboard)
+    "VSTPlayer",
 ]
 
 # --- Domain types ---
@@ -105,6 +107,12 @@ try:
     from melodica.virtual_midi import VirtualMidiOut
 except ImportError:
     VirtualMidiOut = None  # type: ignore[assignment,misc]
+
+# --- VST Player (lazy — optional pedalboard dependency) ---
+try:
+    from melodica.vst_player import VSTPlayer
+except ImportError:
+    VSTPlayer = None  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------

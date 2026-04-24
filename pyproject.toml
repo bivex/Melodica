@@ -25,6 +25,9 @@ neural = [
 live = [
     "python-rtmidi>=1.5",
 ]
+vst = [
+    "pedalboard>=0.9",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
