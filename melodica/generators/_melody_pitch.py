@@ -307,16 +307,24 @@ class MelodyPitchSelector:
         if not chord_pcs:
             return scale_pcs
 
-        # Expand chord pcs with allow_2nd/allow_7th (by scale degree, not hardcoded PC)
+        # Expand chord pcs with allow_2nd/allow_7th (chord extensions, not scale degrees)
         pool = list(chord_pcs)
-        if gen.allow_2nd and len(scale_pcs) >= 2:
-            pc2 = scale_pcs[1]
-            if pc2 not in pool:
-                pool.append(pc2)
-        if gen.allow_7th and len(scale_pcs) >= 7:
-            pc7 = scale_pcs[6]
-            if pc7 not in pool:
-                pool.append(pc7)
+        if chord:
+            root = chord.root
+            if gen.allow_2nd:
+                # 9th = root + 14 semitones (2nd in next octave) or +2 in current
+                ninth = (root + 2) % 12
+                if ninth not in pool:
+                    pool.append(ninth)
+            if gen.allow_7th:
+                # 7th depends on chord quality: major=11, minor=10, dominant=10
+                seventh = (root + 10) % 12  # minor 7th default
+                if hasattr(chord, 'quality'):
+                    from melodica.types import Quality
+                    if chord.quality == Quality.MAJOR:
+                        seventh = (root + 11) % 12  # major 7th
+                if seventh not in pool:
+                    pool.append(seventh)
 
         # Apply mode
         if gen.mode == "scale_only":
