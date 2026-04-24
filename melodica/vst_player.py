@@ -44,7 +44,8 @@ def list_vst3_plugins(search_paths: list[str] | None = None) -> list[dict[str, s
     """Scan standard VST3 directories and return found plugins.
 
     Returns:
-        [{"name": "Surge XT", "path": "/Library/Audio/Plug-Ins/VST3/Surge XT.vst3"}, ...]
+        [{"name": "Surge XT", "path": "...", "plugin_name": None}, ...]
+        plugin_name is set when a .vst3 bundle contains multiple plugins (e.g. Serum2).
     """
     if search_paths is None:
         search_paths = [
@@ -57,9 +58,18 @@ def list_vst3_plugins(search_paths: list[str] | None = None) -> list[dict[str, s
         base_path = Path(base)
         if not base_path.exists():
             continue
-        for child in base_path.iterdir():
-            if child.suffix == ".vst3":
-                results.append({"name": child.stem, "path": str(child)})
+        for child in sorted(base_path.iterdir()):
+            if child.suffix != ".vst3":
+                continue
+            try:
+                names = VST3Plugin.get_plugin_names_for_file(str(child))
+            except Exception:
+                names = []
+            if names:
+                for name in names:
+                    results.append({"name": name, "path": str(child), "plugin_name": name})
+            else:
+                results.append({"name": child.stem, "path": str(child), "plugin_name": ""})
     return results
 
 
@@ -136,15 +146,27 @@ class VSTPlayer:
         player.render_wav(notes, bpm=120, path="out.wav")
     """
 
-    def __init__(self, vst_path: str | Path, sample_rate: int = 44100) -> None:
+    def __init__(
+        self,
+        vst_path: str | Path,
+        *,
+        plugin_name: str | None = None,
+        sample_rate: int = 44100,
+        normalize: bool = True,
+    ) -> None:
         self._path = str(vst_path)
+        self._plugin_name = plugin_name
         self._sr = sample_rate
+        self._normalize = normalize
         self._plugin: VST3Plugin | None = None
 
     @property
     def plugin(self) -> VST3Plugin:
         if self._plugin is None:
-            self._plugin = VST3Plugin(self._path)
+            kw: dict = {}
+            if self._plugin_name:
+                kw["plugin_name"] = self._plugin_name
+            self._plugin = VST3Plugin(self._path, **kw)
         return self._plugin
 
     @property
@@ -162,6 +184,14 @@ class VSTPlayer:
     # Render to numpy array
     # ------------------------------------------------------------------
 
+    def _normalize_audio(self, audio: np.ndarray) -> np.ndarray:
+        if not self._normalize:
+            return audio
+        peak = np.max(np.abs(audio))
+        if peak > 0:
+            audio = audio / peak * 0.9
+        return audio
+
     def render_notes(
         self,
         notes: list[NoteInfo],
@@ -173,7 +203,8 @@ class VSTPlayer:
         """Render NoteInfo list through the VST instrument. Returns float32 array (2, samples)."""
         msgs = _notes_to_mido_messages(notes, bpm, channel, program)
         duration = _total_duration(notes, bpm)
-        return self.plugin(msgs, duration=duration, sample_rate=self._sr, reset=True)
+        audio = self.plugin(msgs, duration=duration, sample_rate=self._sr, reset=True)
+        return self._normalize_audio(audio)
 
     def render_tracks(
         self,
@@ -184,7 +215,8 @@ class VSTPlayer:
         """Render Track list through the VST instrument. Returns float32 array (2, samples)."""
         msgs = _tracks_to_mido_messages(tracks, bpm)
         duration = _total_tracks_duration(tracks, bpm)
-        return self.plugin(msgs, duration=duration, sample_rate=self._sr, reset=True)
+        audio = self.plugin(msgs, duration=duration, sample_rate=self._sr, reset=True)
+        return self._normalize_audio(audio)
 
     # ------------------------------------------------------------------
     # Save to file
