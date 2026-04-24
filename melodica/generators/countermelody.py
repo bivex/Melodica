@@ -118,9 +118,16 @@ class CountermelodyGenerator(PhraseGenerator):
 
         # Get primary melody pitch at a given beat
         primary = self.primary_melody
+        # Build primary melody from prev_pitches if available
         if primary is None and context and context.prev_pitches:
-            # Fallback: use prev_pitches as a hint
-            primary = None
+            # Create simple melody from prev_pitches
+            primary = [
+                NoteInfo(pitch=p, start=float(i), duration=1.0, velocity=80)
+                for i, p in enumerate(context.prev_pitches)
+            ]
+
+        # Track previous primary pitch for direction calculation
+        prev_primary_pitch: int | None = None
 
         for event in events:
             chord = chord_at(chords, event.onset)
@@ -134,9 +141,16 @@ class CountermelodyGenerator(PhraseGenerator):
             is_strong_beat = (event.onset % 1.0) < 0.1
 
             if primary_pitch is not None:
+                # Calculate primary melody direction (current vs previous primary pitch)
+                primary_direction = 0
+                if prev_primary_pitch is not None:
+                    primary_direction = primary_pitch - prev_primary_pitch
+
                 pitch = self._pitch_against_primary(
-                    chord, primary_pitch, prev_pitch, is_strong_beat, key, low, high
+                    chord, primary_pitch, prev_pitch, is_strong_beat, key, low, high,
+                    primary_direction
                 )
+                prev_primary_pitch = primary_pitch
             else:
                 # Free counterpoint: stepwise motion biased toward chord tones
                 pitch = self._free_counter_pitch(chord, prev_pitch, key, low, high)
@@ -161,6 +175,13 @@ class CountermelodyGenerator(PhraseGenerator):
                 last_pitch=notes[-1].pitch,
                 last_velocity=notes[-1].velocity,
                 last_chord=last_chord,
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
+            )
+        else:
+            self._last_context = (context or RenderContext()).with_end_state(
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
             )
         return notes
 
@@ -194,10 +215,11 @@ class CountermelodyGenerator(PhraseGenerator):
         key: Scale,
         low: int,
         high: int,
+        primary_direction: int = 0,
     ) -> int:
         """Choose a counter-melody pitch against the primary voice."""
         pcs = chord.pitch_classes()
-        candidates: list[tuple[int, int]] = []  # (pitch, score)
+        candidates: list[tuple[int, int]] = [] # (pitch, score)
 
         motion = self.motion_preference
         if motion == "mixed":
@@ -205,8 +227,6 @@ class CountermelodyGenerator(PhraseGenerator):
                 ["contrary", "oblique", "mixed_free"],
                 weights=[0.4, 0.2, 0.4],
             )[0]
-
-        primary_direction = primary_pitch - prev_pitch if prev_pitch else 0
 
         for pc in pcs + [chord.root]:
             for octave_offset in [-12, 0, 12]:
