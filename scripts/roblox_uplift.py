@@ -13,12 +13,20 @@
 """
 roblox_uplift.py — Roblox Uplift Theme.
 
-40 bars @ 128 BPM (~1.9 min)
+64 bars @ 128 BPM (~2.0 min)
 
-  Intro (4) -> Verse (8) -> Build (4) -> Drop (8) -> Break (4) -> Drop 2 (8) -> Outro (4)
+  Intro (4) -> Verse (12) -> Build (4) -> Drop (16) -> Break (4) -> Drop 2 (16) -> Outro (8)
 
-DNA: chiptune hook, supersaw uplift, driving house beat, bright arps,
-     choir swells, brass stabs. Game energy with cinematic scale.
+Register map (avoid masking):
+  Sub-bass:   24-36   bass, chip_bass
+  Low:        36-48   (drums percussive only)
+  Mid-low:    48-60   pad root, piano
+  Mid:        60-72   lead, brass, choir
+  Mid-high:   72-84   arp, ostinato
+  High:       84-96   chip_lead (hook — sits above everything)
+
+DNA: chiptune hook (high register), supersaw pad, house beat, bright arps,
+     choir swells, brass fanfare. Game energy, cinematic scale.
 """
 
 import sys
@@ -62,30 +70,31 @@ SCALE = Scale(root=0, mode=Mode.MAJOR)  # C Major — bright, uplifting
 
 
 # ── arrangement ──────────────────────────────────────────────────────────────
+# 64 bars = 2:00 @ 128 BPM
 
 SECTIONS = [
-    # Intro: chiptune hook alone — establishes the theme, sparse
+    # Intro: chiptune hook alone in high register — the theme
     ("Intro", 4, ["chip_lead"]),
-    # Verse: drums + bass + ostinato enter, pad underlays — still restrained
-    ("Verse", 8, ["drums", "bass", "chip_bass", "ostinato", "pad"]),
-    # Build: arp rises, transition energy, piano stabs, riser — tension
+    # Verse: groove establishes — drums, bass, pad. ostinato hints. restrained energy
+    ("Verse", 12, ["drums", "bass", "chip_bass", "pad", "ostinato"]),
+    # Build: arp enters high, piano stabs, riser climbs, transition accelerates
     ("Build", 4, ["drums", "bass", "pad", "arp", "piano", "build_up", "riser"]),
-    # Drop: full explosion — lead, pluck arp, brass, choir, everything hits
+    # Drop: full energy — lead + brass + choir. No chip_lead here (differentiates from Drop 2)
     (
         "Drop",
-        8,
-        ["drums", "bass", "pad", "lead", "arp", "chip_lead", "brass", "choir", "piano"],
+        16,
+        ["drums", "bass", "pad", "lead", "arp", "brass", "choir", "piano"],
     ),
-    # Break: silence then choir + stinger — cinematic reset
+    # Break: strip to choir + stinger + pad_quiet — cinematic breath, tension reset
     ("Break", 4, ["choir", "stinger", "pad_quiet"]),
-    # Drop 2: everything back, choir louder, brass hits harder — peak energy
+    # Drop 2: everything fires — chip_lead returns, ostinato back. Peak energy
     (
         "Drop 2",
-        8,
+        16,
         ["drums", "bass", "pad", "lead", "arp", "chip_lead", "brass", "choir", "piano", "ostinato"],
     ),
-    # Outro: chiptune callback + impact — the hook bookends the track
-    ("Outro", 4, ["chip_lead", "impact"]),
+    # Outro: chip_lead callback + pad fade + impact — hook bookends the track
+    ("Outro", 8, ["chip_lead", "pad_quiet", "impact"]),
 ]
 
 
@@ -127,169 +136,185 @@ def harmonize(bars, bpb=4):
 
 
 # ── tracks ───────────────────────────────────────────────────────────────────
+# Register separation is critical — each track gets its own frequency space.
 
 
 def build(name):
     mods = []
     match name:
-        # ── chiptune: the hook ────────────────────────────────────────────
+        # ── chiptune hook: HIGH register (84-96) ──────────────────────────
         case "chip_lead":
             gen = ChiptuneGenerator(
-                params=GeneratorParams(density=0.50),
+                params=GeneratorParams(density=0.35),
                 variant="nes_classic",
                 channels=["pulse1"],
                 duty_cycle="50%",
-                arpeggio_speed=0.125,
+                arpeggio_speed=0.25,
                 melody_style="arpeggio",
             )
             mods += [
-                LimitNoteRangeModifier(low=60, high=84),
-                HumanizeModifier(timing_std=0.01, velocity_std=6),
-                VelocityScalingModifier(scale=0.60),
+                LimitNoteRangeModifier(low=84, high=96),
+                HumanizeModifier(timing_std=0.01, velocity_std=5),
+                VelocityScalingModifier(scale=0.70),
             ]
 
         case "chip_bass":
             gen = ChiptuneGenerator(
-                params=GeneratorParams(density=0.40),
+                params=GeneratorParams(density=0.35),
                 variant="nes_classic",
                 channels=["triangle"],
                 melody_style="stepwise",
             )
-            mods += [LimitNoteRangeModifier(low=36, high=48), VelocityScalingModifier(scale=0.55)]
+            mods += [LimitNoteRangeModifier(low=24, high=36), VelocityScalingModifier(scale=0.60)]
 
         # ── drums ────────────────────────────────────────────────────────
         case "drums":
             gen = FourOnFloorGenerator(
-                params=GeneratorParams(density=0.60),
+                params=GeneratorParams(density=0.55),
                 variant="house",
             )
 
-        # ── bass ─────────────────────────────────────────────────────────
+        # ── bass: SUB-BASS register (36-48) ──────────────────────────────
         case "bass":
             gen = SynthBassGenerator(
-                params=GeneratorParams(density=0.50),
+                params=GeneratorParams(density=0.45),
                 waveform="saw",
                 pattern="plucked",
             )
-            mods += [LimitNoteRangeModifier(low=36, high=52), VelocityScalingModifier(scale=0.70)]
+            mods += [LimitNoteRangeModifier(low=36, high=48), VelocityScalingModifier(scale=0.75)]
 
-        # ── pad: big uplifting supersaw ──────────────────────────────────
+        # ── pad: MID-LOW register (48-60) ────────────────────────────────
         case "pad":
             gen = SupersawPadGenerator(
-                params=GeneratorParams(density=0.25),
+                params=GeneratorParams(density=0.20),
                 variant="trance",
                 voice_count=5,
                 detune_amount=0.14,
                 release_time=1.5,
                 sidechain_feel=True,
             )
+            mods += [LimitNoteRangeModifier(low=48, high=60)]
 
         case "pad_quiet":
             gen = SupersawPadGenerator(
-                params=GeneratorParams(density=0.15),
+                params=GeneratorParams(density=0.12),
                 variant="ambient",
                 voice_count=3,
                 detune_amount=0.05,
-                release_time=2.5,
+                release_time=3.0,
                 sidechain_feel=False,
             )
-            mods += [VelocityScalingModifier(scale=0.20), CrescendoModifier(start_vel=20, end_vel=55)]
+            mods += [
+                LimitNoteRangeModifier(low=48, high=60),
+                VelocityScalingModifier(scale=0.25),
+                CrescendoModifier(start_vel=20, end_vel=50),
+            ]
 
-        # ── arp: bright 16th-note arpeggios ──────────────────────────────
+        # ── arp: MID-HIGH register (72-84) ───────────────────────────────
         case "arp":
             gen = ArpeggiatorGenerator(
-                params=GeneratorParams(density=0.55),
+                params=GeneratorParams(density=0.50),
                 pattern="up",
                 note_duration=0.25,
             )
             mods += [
-                LimitNoteRangeModifier(low=60, high=84),
-                HumanizeModifier(timing_std=0.008, velocity_std=3),
-                VelocityScalingModifier(scale=0.40),
+                LimitNoteRangeModifier(low=72, high=84),
+                HumanizeModifier(timing_std=0.008, velocity_std=4),
+                VelocityScalingModifier(scale=0.65),
             ]
 
-        # ── lead: main melody ────────────────────────────────────────────
+        # ── lead: MID register (60-72) ───────────────────────────────────
         case "lead":
             gen = LeadSynthGenerator(
-                params=GeneratorParams(density=0.50),
+                params=GeneratorParams(density=0.45),
                 style="retro",
                 portamento=0.08,
                 note_length="mixed",
             )
             mods += [
-                LimitNoteRangeModifier(low=60, high=84),
+                LimitNoteRangeModifier(low=60, high=72),
                 HumanizeModifier(timing_std=0.012, velocity_std=7),
-                VelocityScalingModifier(scale=0.60),
+                VelocityScalingModifier(scale=0.75),
             ]
 
-        # ── ostinato: repeating hook pattern ─────────────────────────────
+        # ── ostinato: MID-HIGH register (72-84) — but sparse ─────────────
         case "ostinato":
             gen = OstinatoGenerator(
-                params=GeneratorParams(density=0.50),
+                params=GeneratorParams(density=0.35),
                 pattern="1-3-5-3",
                 repeat_notes=2,
             )
             mods += [
-                LimitNoteRangeModifier(low=64, high=80),
-                VelocityScalingModifier(scale=0.40),
+                LimitNoteRangeModifier(low=72, high=84),
+                VelocityScalingModifier(scale=0.50),
                 HumanizeModifier(timing_std=0.01, velocity_std=4),
             ]
 
-        # ── piano: rhythmic chord stabs ──────────────────────────────────
+        # ── piano: MID-LOW register (48-60) ──────────────────────────────
         case "piano":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.50),
+                params=GeneratorParams(density=0.45),
                 comp_style="pop",
                 voicing_type="close",
                 accent_pattern="syncopated",
-                chord_density=0.60,
+                chord_density=0.55,
             )
             mods += [
-                HumanizeModifier(timing_std=0.015, velocity_std=7),
-                VelocityScalingModifier(scale=0.45),
+                LimitNoteRangeModifier(low=48, high=60),
+                HumanizeModifier(timing_std=0.015, velocity_std=8),
+                VelocityScalingModifier(scale=0.65),
             ]
 
-        # ── choir: epic swells ───────────────────────────────────────────
+        # ── choir: MID register (60-72) ──────────────────────────────────
         case "choir":
             gen = ChoirAahsGenerator(
-                params=GeneratorParams(density=0.25),
+                params=GeneratorParams(density=0.20),
                 voice_count=4,
                 dynamics="mf",
                 vibrato=0.20,
                 syllable="aah",
             )
-            mods += [VelocityScalingModifier(scale=0.30), CrescendoModifier(start_vel=30, end_vel=75)]
+            mods += [
+                LimitNoteRangeModifier(low=60, high=72),
+                VelocityScalingModifier(scale=0.35),
+                CrescendoModifier(start_vel=30, end_vel=75),
+            ]
 
-        # ── brass: triumphant stabs ──────────────────────────────────────
+        # ── brass: MID register (60-72) — stabs only, not sustained ──────
         case "brass":
             gen = BrassSectionGenerator(
-                params=GeneratorParams(density=0.30),
-                articulation="fanfare",
-                voicing="open",
+                params=GeneratorParams(density=0.25),
+                articulation="hit",
+                voicing="closed",
                 intensity=0.75,
                 divisi_count=3,
-                breath_gap=2.5,
+                breath_gap=3.0,
             )
-            mods += [VelocityScalingModifier(scale=0.45), HumanizeModifier(timing_std=0.01, velocity_std=5)]
+            mods += [
+                LimitNoteRangeModifier(low=60, high=72),
+                VelocityScalingModifier(scale=0.60),
+                HumanizeModifier(timing_std=0.01, velocity_std=5),
+            ]
 
         # ── transitions ──────────────────────────────────────────────────
         case "build_up":
             gen = TransitionGenerator(
-                params=GeneratorParams(density=0.45),
+                params=GeneratorParams(density=0.40),
                 transition_type="build",
                 length_beats=16.0,
                 octave_range=2,
                 rhythm_acceleration=1.5,
                 pitch_strategy="chord_tone",
             )
+            mods += [LimitNoteRangeModifier(low=60, high=84)]
 
         case "riser":
             gen = FXRiserGenerator(
-                params=GeneratorParams(density=0.30),
+                params=GeneratorParams(density=0.25),
                 riser_type="synth",
                 length_beats=4.0,
                 pitch_curve="exponential",
-                peak_velocity=105,
+                peak_velocity=100,
             )
 
         case "stinger":
@@ -434,9 +459,9 @@ def main():
     args = ap.parse_args()
 
     bars = sum(s[1] for s in SECTIONS)
-    mins = bars * 4 / args.tempo * 60
+    secs = bars * 4 / args.tempo * 60
     print(f"Roblox Uplift Theme")
-    print(f"  {mins:.1f} min ({bars} bars @ {args.tempo} BPM)")
+    print(f"  {secs:.0f}s = {secs / 60:.1f}min ({bars} bars @ {args.tempo} BPM)")
     print(f"  C Major\n")
 
     tracks, cc = generate(args.tempo, args.seed)
