@@ -203,6 +203,13 @@ class ArpeggiatorGenerator(PhraseGenerator):
                 last_velocity=notes[-1].velocity,
                 last_chord=chords[chord_idx] if chords else None,
                 last_pitches=[notes[-1].pitch],
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
+            )
+        else:
+            self._last_context = (context or RenderContext()).with_end_state(
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
             )
 
         return notes

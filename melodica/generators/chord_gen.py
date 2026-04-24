@@ -171,6 +171,13 @@ class ChordGenerator(PhraseGenerator):
                 last_velocity=notes[-1].velocity,
                 last_chord=last_chord,
                 last_pitches=prev_pitches,
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
+            )
+        else:
+            self._last_context = (context or RenderContext()).with_end_state(
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
             )
 
         return notes

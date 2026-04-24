@@ -184,14 +184,22 @@ class BassGenerator(PhraseGenerator):
             seq_idx += 1
 
         if notes:
-            last_chord = chord_at(chords, notes[-1].start)
             self._last_context = (context or RenderContext()).with_end_state(
                 last_pitch=notes[-1].pitch,
                 last_velocity=notes[-1].velocity,
                 last_chord=last_chord,
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
+            )
+        else:
+            self._last_context = (context or RenderContext()).with_end_state(
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
             )
         return notes
 
+    # ------------------------------------------------------------------
+    # Pool building
     # ------------------------------------------------------------------
     # Pool building
     # ------------------------------------------------------------------
