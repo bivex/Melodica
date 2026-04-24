@@ -73,6 +73,14 @@ def make_chords(bars=4, bpb=4):
 
 
 def pitch_hash(notes):
+    """Hash pitches + start times — catches rhythm changes too."""
+    return hashlib.md5(
+        ",".join(f"{n.pitch}:{n.start:.4f}" for n in notes).encode()
+    ).hexdigest()[:12]
+
+
+def pitch_only_hash(notes):
+    """Hash pitches only — for pitch-uniqueness checks."""
     return hashlib.md5(",".join(str(n.pitch) for n in notes).encode()).hexdigest()[:12]
 
 
@@ -213,19 +221,29 @@ def test_enum_coverage():
         print(f"    {ap:20s}: vel_range={vel_range:3d}  hash={h}  {len(notes)} notes")
         results[f"accent:{ap}"] = {"hash": h, "vel_range": vel_range, "count": len(notes)}
 
-    # Motif variation
-    print("\n  [motif_variation]  (motif_probability=0.8, phrase_length=4)")
+    # Motif variation — test across multiple seeds to avoid false convergence
+    print("\n  [motif_variation]  (motif_probability=0.8, phrase_length=4, 10 seeds)")
+    mv_hashes = {}
     for mv in MOTIF_VARIATIONS:
-        gen = MelodyGenerator(
-            params=GeneratorParams(density=0.5),
-            phrase_length=4.0,
-            motif_probability=0.8,
-            motif_variation=mv,
-        )
-        notes = generate_one(gen, seed=42)
-        h = pitch_hash(notes)
-        print(f"    {mv:20s}: hash={h}  {len(notes)} notes")
-        results[f"motif:{mv}"] = {"hash": h, "count": len(notes)}
+        hashes = set()
+        for seed in range(10):
+            gen = MelodyGenerator(
+                params=GeneratorParams(density=0.5),
+                phrase_length=4.0,
+                motif_probability=0.8,
+                motif_variation=mv,
+            )
+            notes = generate_one(gen, seed=seed)
+            hashes.add(pitch_hash(notes))
+        mv_hashes[mv] = hashes
+        print(f"    {mv:20s}: unique={len(hashes)}/10  hashes={sorted(hashes)[:3]}...")
+        results[f"motif:{mv}"] = {"unique_out_of_10": len(hashes)}
+
+    # Check that at least some variations differ from each other
+    all_mv_hashes = set()
+    for h in mv_hashes.values():
+        all_mv_hashes.update(h)
+    print(f"    Cross-variation diversity: {len(all_mv_hashes)} unique across all variations")
 
     return results
 

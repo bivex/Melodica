@@ -732,7 +732,7 @@ class MelodyGenerator(PhraseGenerator):
             events.append(
                 RhythmEvent(onset=round(onset, 6), duration=dur, velocity_factor=vel_factor)
             )
-            t += base_step
+            t += dur
             motif_idx += 1
 
         return events
