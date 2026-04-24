@@ -66,6 +66,8 @@ __all__ = [
     "VirtualMidiOut",
     # VST Player (requires pedalboard)
     "VSTPlayer",
+    # Live Loopback (requires [live])
+    "LiveLoopback",
 ]
 
 # --- Domain types ---
@@ -113,6 +115,12 @@ try:
     from melodica.vst_player import VSTPlayer
 except ImportError:
     VSTPlayer = None  # type: ignore[assignment,misc]
+
+# --- Live Loopback (lazy — optional [live] dependency) ---
+try:
+    from melodica.live_loopback import LiveLoopback
+except ImportError:
+    LiveLoopback = None  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------
