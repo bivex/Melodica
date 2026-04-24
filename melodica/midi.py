@@ -284,6 +284,7 @@ def export_multitrack_midi(
     timeline: "MusicTimeline | None" = None,
     cc_events: "dict[str, list[tuple[float, int, int]]] | None" = None,
     instruments: "dict[str, int] | None" = None,
+    diagnose: bool = False,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -295,6 +296,7 @@ def export_multitrack_midi(
     cc_events: { "TrackName": [(beat, cc_num, cc_val), ...] } — standalone CC events.
     instruments: { "TrackName": gm_program_number } — GM instrument per track.
         Default: 0 (Acoustic Grand Piano). Keys not found default to 0.
+    diagnose: if True, run diagnostic analysis on tracks and print fix suggestions.
     """
     from melodica.types import TICKS_PER_BEAT, MIDI_MAX
 
@@ -427,6 +429,12 @@ def export_multitrack_midi(
         mid.save(path)
     else:
         mid._save(path)
+
+    if diagnose:
+        from melodica.composer.diagnostics import diagnose_tracks
+
+        label = str(path) if isinstance(path, (str, Path)) else None
+        diagnose_tracks(tracks_data, bpm=bpm, label=label)
 
 
 def export_midi(

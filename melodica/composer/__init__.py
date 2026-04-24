@@ -56,6 +56,7 @@ from melodica.composer.unified_style import (
 )
 from melodica.composer.psychoacoustic import PsychoEvent, PsychoConfig, PsychoReport
 from melodica.composer.harmonic_verifier import ClashEvent, VerifierConfig, VerifierReport
+from melodica.composer.diagnostics import diagnose_tracks, DiagnosticReport
 
 __all__ = [
     "VoiceLeadingEngine",
@@ -99,4 +100,6 @@ __all__ = [
     "ClashEvent",
     "VerifierConfig",
     "VerifierReport",
+    "diagnose_tracks",
+    "DiagnosticReport",
 ]
