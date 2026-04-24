@@ -214,6 +214,10 @@ class MelodyPitchSelector:
         register_center: int | None = None,
     ) -> int:
         """Weight candidates by direction bias and optionally register proximity."""
+        if not candidates:
+            return prev_pitch
+        if len(candidates) == 1:
+            return candidates[0]
         weights: list[float] = []
         for c in candidates:
             diff = c - prev_pitch
@@ -413,5 +417,8 @@ class MelodyPitchSelector:
                     (nearest_pitch(pc, prev_pitch) for pc in pcs),
                     key=lambda p: abs(p - prev_pitch),
                 )
-            case _:  # "any"
+            case _:  # "any" - return a random pitch from available pool
+                pcs = last_chord.pitch_classes() if last_chord else key.degrees()
+                if pcs:
+                    return nearest_pitch(random.choice(list(pcs)), prev_pitch)
                 return prev_pitch

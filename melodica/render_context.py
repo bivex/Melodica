@@ -46,12 +46,18 @@ class RenderContext:
         last_chord: ChordLabel | None = None,
         last_pitches: list[int] | None = None,
         current_scale: Scale | None = None,
+        duration_beats: float = 0.0,
+        total_duration: float = 0.0,
     ) -> RenderContext:
         """Return a new context with updated state for the next phrase."""
+        # Update phrase position based on duration
+        new_phrase_position = self.phrase_position
+        if total_duration > 0 and duration_beats > 0:
+            new_phrase_position = min(1.0, self.phrase_position + duration_beats / total_duration)
         return RenderContext(
             prev_pitch=last_pitch if last_pitch is not None else self.prev_pitch,
             prev_velocity=last_velocity if last_velocity is not None else self.prev_velocity,
-            phrase_position=self.phrase_position,
+            phrase_position=new_phrase_position,
             prev_chord=last_chord if last_chord is not None else self.prev_chord,
             prev_pitches=last_pitches if last_pitches is not None else self.prev_pitches,
             current_scale=current_scale if current_scale is not None else self.current_scale,

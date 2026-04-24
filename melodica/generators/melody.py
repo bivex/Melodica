@@ -460,6 +460,8 @@ class MelodyGenerator(PhraseGenerator):
                 last_velocity=notes[-1].velocity,
                 last_chord=last_chord,
                 last_pitches=motif_memory,
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
             )
         else:
             self._last_context = None
@@ -627,13 +629,11 @@ class MelodyGenerator(PhraseGenerator):
             pitch = motif[motif_idx] + offset
         elif variation == "invert":
             # Invert intervals around motif center
-            center = sum(motif) // len(motif)
-            interval = motif[motif_idx] - center
-            pitch = prev_pitch + (center - motif[motif_idx])  # inverted interval
-            # Snap toward prev_pitch for first note
             if motif_idx == 0:
                 pitch = prev_pitch
             else:
+                center = sum(motif) // len(motif)
+                interval = motif[motif_idx] - center
                 pitch = prev_pitch - interval
         elif variation == "retrograde":
             reversed_motif = list(reversed(motif))
