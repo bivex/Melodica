@@ -73,6 +73,98 @@ def list_vst3_plugins(search_paths: list[str] | None = None) -> list[dict[str, s
     return results
 
 
+def list_surge_xt_presets() -> list[dict[str, str]]:
+    """List all Surge XT factory + 3rd party presets (.fxp).
+
+    Returns:
+        [{"name": "Bass 1", "category": "Basses", "path": "..."}, ...]
+    """
+    import xml.etree.ElementTree as ET
+
+    results: list[dict[str, str]] = []
+    base = Path("/Library/Application Support/Surge XT")
+    for subdir in ("patches_factory", "patches_3rdparty"):
+        patches_dir = base / subdir
+        if not patches_dir.exists():
+            continue
+        for cat_dir in sorted(patches_dir.iterdir()):
+            if not cat_dir.is_dir():
+                continue
+            for fxp in sorted(cat_dir.rglob("*.fxp")):
+                name = fxp.stem
+                try:
+                    with open(fxp, "rb") as f:
+                        data = f.read()
+                    xml_start = data.find(b"<?xml")
+                    end = data.find(b"</patch>", xml_start)
+                    if xml_start >= 0 and end >= 0:
+                        tree = ET.fromstring(data[xml_start : end + len(b"</patch>")])
+                        meta = tree.find("meta")
+                        if meta is not None:
+                            author = meta.get("author", "")
+                            cat = meta.get("category", cat_dir.name)
+                        else:
+                            author = ""
+                            cat = cat_dir.name
+                    else:
+                        author = ""
+                        cat = cat_dir.name
+                except Exception:
+                    author = ""
+                    cat = cat_dir.name
+                results.append({
+                    "name": name,
+                    "category": cat,
+                    "author": author,
+                    "path": str(fxp),
+                })
+    return results
+
+
+def _load_surge_fxp(vst: VST3Plugin, fxp_path: str) -> int:
+    """Load a Surge XT .fxp preset by mapping XML params to VST3 parameters.
+
+    Returns number of matched parameters.
+    """
+    import xml.etree.ElementTree as ET
+
+    with open(fxp_path, "rb") as f:
+        data = f.read()
+
+    xml_start = data.find(b"<?xml")
+    end = data.find(b"</patch>", xml_start)
+    if xml_start < 0 or end < 0:
+        return 0
+
+    tree = ET.fromstring(data[xml_start : end + len(b"</patch>")])
+    matched = 0
+
+    for p in tree.findall(".//parameters/*"):
+        fxp_name = p.tag
+        val: float
+        try:
+            val = float(p.get("value", "0"))
+        except (ValueError, TypeError):
+            continue
+
+        # Map fxp param names → VST3 param names (osc1→osc_1, filter1→filter_1, etc.)
+        vst_name = (
+            fxp_name.replace("osc1", "osc_1")
+            .replace("osc2", "osc_2")
+            .replace("osc3", "osc_3")
+            .replace("filter1", "filter_1")
+            .replace("filter2", "filter_2")
+        )
+        if vst_name in vst.parameters:
+            try:
+                vst.parameters[vst_name].raw_value = val
+                matched += 1
+            except Exception:
+                pass
+
+    return matched
+
+
 def _notes_to_mido_messages(
     notes: list[NoteInfo],
     bpm: float,
@@ -179,6 +271,17 @@ class VSTPlayer:
 
     def set_parameter(self, name: str, value: float) -> None:
         self.plugin.parameters[name] = value
+
+    def load_preset(self, path: str | Path) -> int:
+        """Load a preset file. Supports Surge XT .fxp via XML param mapping.
+
+        Returns number of matched parameters.
+        """
+        path = Path(path)
+        if path.suffix == ".fxp":
+            return _load_surge_fxp(self.plugin, str(path))
+        self.plugin.load_preset(str(path))
+        return -1
 
     # ------------------------------------------------------------------
     # Render to numpy array
