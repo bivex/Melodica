@@ -269,6 +269,40 @@ python scripts/melodica_cli.py arrange \
 | **Нет CI/CD** | Отсутствуют `.github/workflows/` или аналоги |
 | **Скудная документация** | Только `docs/Generators.md` (билингвальный EN/RU), нет API reference |
 | **Неоднородный стиль импортов** | `from melodica.types import X` и `import melodica.types` используются бессистемно |
+| **`composition/styles.py` не импортирован** | Модуль только в TYPE_CHECKING, возможно должен быть в runtime |
+
+---
+
+## Модульная связность (2025-04-25)
+
+### Общий статус
+
+**✅ Нет осиротевших модулей** — каждый модуль импортируется хотя бы одним другим файлом.
+
+### Модули CLI/Script-уровня (Entry Points)
+
+Эти модули намеренно НЕ импортируются `melodica/` — они точки входа:
+
+| Модуль | Используется | Примечание |
+|--------|--------------|------------|
+| `idea_tool.py` | tests, `scripts/dark_fantasy.py` | 902-строчный CLI. Использует factory.py, генераторы. НЕ часть публичного API |
+| `composition/styles.py` | demos, tests | Только TYPE_CHECKING в `composition/__init__.py` — **требует проверки** |
+
+### Внутренние модули (Корректно скрыты)
+
+| Модуль | Импортируется | Статус |
+|--------|---------------|--------|
+| `modifiers/rc_variations_*.py` | `modifiers/rc_variations` | ✅ Приватные |
+| `modifiers/variations_*.py` | `modifiers/variations` | ✅ Приватные |
+| `harmonize/_hmm_*.py` | `advanced.py`, `auto_harmonize.py` | ✅ Приватные |
+| `harmonize/_specialized.py` | `advanced.py` | ✅ Приватный |
+
+### Application Layer (Подключены ✓)
+
+| Модуль | Импортируется | Статус |
+|--------|---------------|--------|
+| `application/automation.py` | `composition/__init__.py` | ✅ |
+| `application/orchestration.py` | `composition/__init__.py` | ✅ |
 
 ---
 
