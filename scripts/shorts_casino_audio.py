@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """
-scripts/shorts_nutra_audio.py — Nutra YouTube Shorts audio using Melodica SDK (improved).
+scripts/shorts_casino_audio.py — Casino/Gambling YouTube Shorts audio using Melodica SDK.
 
-Major-key, raised bass, proper chord progression, and richer instrumentation.
+ Themes: slot machine wins, roulette spins, high rollers, lucky strikes, all-in moments.
+ Mood: exciting, tense, celebratory, flashing lights.
+
+ 3-section structure:
+   HOOK      (0–2s): intense SFX (slot chimes, winning bells), driving beat
+   DYNAMICS  (2–T-2.5s): groove builds, periodic win SFX
+   LOOP      (T-2.5–T): celebratory peak → smooth transition to start
+
+ Key: C major (bright, celebratory)
+ Variants: slots (classic casino), roulette (sophisticated), high_roller (luxury)
 """
 
 import sys, random, argparse
@@ -30,83 +39,103 @@ from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 
 
-# ── niche config ─────────────────────────────────────────────────────────────
+# ── Casino niche config ───────────────────────────────────────────────────────
 NICHE_CONFIG = {
-    "weight_loss": {
-        "tempo": 165,
-        "hook_sfx": ["whoosh", "punch", "ding"],
-        "sfx_interval": 2.5,
-        "voice_tone": "motivational",
-        "music_volume": 0.3,
-        "sfx_volume": 0.8,
+    "slots": {
+        "tempo": 155,  # steady, hypnotic
+        "hook_sfx": ["slot_win", "bell_win", "cherry_chime", "coin_drop"],
+        "sfx_interval": 2.8,
+        "voice_tone": "exciting",
+        "music_volume": 0.35,
+        "sfx_volume": 0.9,
+        "bass_style": "walking",  # blues walking bass
+        "pad_style": "bright",
     },
-    "supplements": {
-        "tempo": 150,
-        "hook_sfx": ["sparkle", "chime", "sci-fi"],
-        "sfx_interval": 3.0,
-        "voice_tone": "scientific",
-        "music_volume": 0.3,
-        "sfx_volume": 0.8,
-    },
-    "fitness": {
-        "tempo": 175,
-        "hook_sfx": ["drum_hit", "strike", "power"],
-        "sfx_interval": 2.0,
-        "voice_tone": "energetic",
-        "music_volume": 0.3,
-        "sfx_volume": 0.8,
-    },
-    "biohacking": {
-        "tempo": 155,
-        "hook_sfx": ["cyber", "glitch", "digital"],
+    "roulette": {
+        "tempo": 128,  # slower, tension
+        "hook_sfx": ["roulette_spin", "ball_click", "card_shuffle", "chip_stack"],
         "sfx_interval": 3.5,
-        "voice_tone": "calm_tech",
+        "voice_tone": "sophisticated",
         "music_volume": 0.3,
-        "sfx_volume": 0.8,
+        "sfx_volume": 0.85,
+        "bass_style": "pulsing",
+        "pad_style": "dark",
     },
-    "detox": {
-        "tempo": 140,
-        "hook_sfx": ["water", "clean", "chime"],
-        "sfx_interval": 3.0,
-        "voice_tone": "healing",
-        "music_volume": 0.3,
-        "sfx_volume": 0.8,
+    "high_roller": {
+        "tempo": 168,  # fast, energetic
+        "hook_sfx": ["win_bell", "jackpot_win", "dice_roll", "card_shuffle"],
+        "sfx_interval": 2.2,
+        "voice_tone": "luxury",
+        "music_volume": 0.4,
+        "sfx_volume": 1.0,
+        "bass_style": "driving",
+        "pad_style": "bright",
     },
 }
 
+# Casino SFX presets (mapped to melodic MIDI notes)
 SFX_PRESETS = {
-    "whoosh": {"note": 100, "velocity": 80, "duration": 0.1},
-    "punch": {"note": 60, "velocity": 100, "duration": 0.1},
-    "ding": {"note": 84, "velocity": 90, "duration": 0.2},
-    "sparkle": {"note": 120, "velocity": 70, "duration": 0.3},
-    "chime": {"note": 96, "velocity": 85, "duration": 0.4},
-    "sci-fi": {"note": 105, "velocity": 75, "duration": 0.2},
-    "drum_hit": {"note": 36, "velocity": 110, "duration": 0.05},
-    "strike": {"note": 38, "velocity": 100, "duration": 0.05},
-    "power": {"note": 50, "velocity": 105, "duration": 0.1},
-    "cyber": {"note": 110, "velocity": 70, "duration": 0.15},
-    "glitch": {"note": 70, "velocity": 90, "duration": 0.05},
-    "digital": {"note": 88, "velocity": 80, "duration": 0.1},
-    "water": {"note": 50, "velocity": 60, "duration": 0.5},
-    "clean": {"note": 60, "velocity": 65, "duration": 0.4},
-    "tribal": {"note": 45, "velocity": 95, "duration": 0.1},
+    "slot_win": {"note": 72, "velocity": 100, "duration": 0.2},  # high sparkle
+    "bell_win": {"note": 84, "velocity": 110, "duration": 0.3},  # celebratory bell
+    "cherry_chime": {"note": 96, "velocity": 85, "duration": 0.4},  # classic slots
+    "coin_drop": {"note": 60, "velocity": 90, "duration": 0.15},
+    "roulette_spin": {"note": 120, "velocity": 70, "duration": 0.5},
+    "ball_click": {"note": 100, "velocity": 95, "duration": 0.1},
+    "card_shuffle": {"note": 36, "velocity": 80, "duration": 0.3},
+    "chip_stack": {"note": 48, "velocity": 95, "duration": 0.2},
+    "win_bell": {"note": 88, "velocity": 110, "duration": 0.4},
+    "jackpot_win": {"note": 108, "velocity": 115, "duration": 0.6},
+    "dice_roll": {"note": 54, "velocity": 85, "duration": 0.4},
 }
 
+# Voice accent markers (for voice-over sync points)
 VOICE_ACCENTS = {
-    "motivational": [(2.0, +5), (6.0, +7), (12.0, +12)],
-    "scientific": [(2.5, +3), (7.0, +5), (12.0, +7)],
-    "energetic": [(1.5, +7), (5.0, +10), (9.0, +12)],
-    "calm_tech": [(3.0, +4), (8.0, +6), (14.0, +8)],
-    "healing": [(4.0, +3), (10.0, +5), (15.0, +7)],
+    "exciting": [(1.5, +8), (4.5, +10), (8.0, +12)],
+    "sophisticated": [(2.5, +5), (6.0, +8), (10.0, +10)],
+    "luxury": [(1.0, +10), (3.5, +12), (6.0, +15)],
 }
 
-# I - V - vi - IV  (C major)
-PROGRESSION = [
-    (0, Quality.MAJOR),  # I  C
-    (7, Quality.MAJOR),  # V  G
-    (9, Quality.MINOR),  # vi Am
-    (5, Quality.MAJOR),  # IV F
-]
+# Bass patterns by style
+BASSLINE_PATTERNS = {
+    "walking": [  # bluesy walking bass (root-5-6-b3)
+        (0.0, 36),
+        (0.5, 43),
+        (1.0, 45),
+        (1.5, 39),
+        (2.0, 36),
+        (2.5, 43),
+        (3.0, 45),
+        (3.5, 39),
+    ],
+    "pulsing": [
+        (0.0, 36),
+        (0.25, 36),
+        (0.5, 36),
+        (0.75, 36),
+        (1.0, 40),
+        (1.25, 36),
+        (1.5, 40),
+        (1.75, 36),
+    ],
+    "driving": [
+        (0.0, 36),
+        (0.5, 36),
+        (1.0, 39),
+        (1.5, 36),
+        (2.0, 40),
+        (2.5, 36),
+        (3.0, 39),
+        (3.5, 36),
+    ],
+}
+BASS_CYCLE = 4  # bars
+
+# Drum variants
+DRUM_VARIANTS = {
+    "standard": {"variant": "standard", "hat_roll": 0.3, "kick": "standard", "open_hat": 0.10},
+    "aggressive": {"variant": "drill", "hat_roll": 0.6, "kick": "syncopated", "open_hat": 0.15},
+    "smooth": {"variant": "melodic", "hat_roll": 0.4, "kick": "standard", "open_hat": 0.20},
+}
 
 PERC_TRACKS = {"drums", "sfx", "clicks", "voice"}
 
@@ -116,7 +145,7 @@ PERC_TRACKS = {"drums", "sfx", "clicks", "voice"}
 
 @dataclass
 class BasslineGenerator(PhraseGenerator):
-    """Root-fifth bass pattern following chord progression, raised octave."""
+    """Casino bass: walking (bluesy) or pulsing/driving depending on style."""
 
     niche_cfg: dict
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
@@ -132,32 +161,27 @@ class BasslineGenerator(PhraseGenerator):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        style = self.niche_cfg.get("bass_style", "walking")
+        pattern = BASSLINE_PATTERNS.get(style, BASSLINE_PATTERNS["walking"])
+        cycle = BASS_CYCLE
         tempo = self.niche_cfg["tempo"]
         sec_per_beat = 60.0 / tempo
-        note_dur_sec = 0.2
-        note_dur = note_dur_sec / sec_per_beat
+        note_dur = 0.25 / sec_per_beat  # 16th-note feel
         notes: list[NoteInfo] = []
         t = 0.0
         while t < duration_beats:
-            chord = chord_at(chords, t)
-            if chord is not None:
-                # beat within bar (4/4)
-                beat_in_bar = t % 4
-                # root on 1 & 3, fifth on 2 & 4
-                if beat_in_bar < 0.5 or (beat_in_bar >= 2 and beat_in_bar < 2.5):
-                    pc = chord.root % 12
-                else:
-                    pc = (chord.root + 7) % 12
-                pitch = 36 + 12 + pc  # C2 + 12 = C3 region
+            for offset, midi_note in pattern:
+                start = t + offset
+                if start >= duration_beats:
+                    continue
+                d = min(note_dur, duration_beats - start)
+                vel = 100 if style == "walking" else 112
                 notes.append(
                     NoteInfo(
-                        pitch=pitch,
-                        start=round(t, 6),
-                        duration=round(min(note_dur, duration_beats - t), 6),
-                        velocity=112,
+                        pitch=midi_note, start=round(start, 6), duration=round(d, 6), velocity=vel
                     )
                 )
-            t += 0.5  # eighth-note grid
+            t += cycle
         if notes:
             self._last_context = RenderContext(
                 prev_pitch=notes[-1].pitch,
@@ -171,7 +195,7 @@ class BasslineGenerator(PhraseGenerator):
 
 @dataclass
 class DrumsGenerator(PhraseGenerator):
-    """Trap drums with section-based variation."""
+    """Casino drums — section-based variants."""
 
     niche_cfg: dict
     section: str = "Dynamics"
@@ -192,29 +216,18 @@ class DrumsGenerator(PhraseGenerator):
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
         if self.section == "Hook":
-            gen = TrapDrumsGenerator(
-                params=GeneratorParams(density=0.55),
-                variant="drill",
-                hat_roll_density=0.6,
-                kick_pattern="syncopated",
-                open_hat_probability=0.15,
-            )
+            cfg = DRUM_VARIANTS["aggressive"]
         elif self.section == "Loop":
-            gen = TrapDrumsGenerator(
-                params=GeneratorParams(density=0.5),
-                variant="melodic",
-                hat_roll_density=0.4,
-                kick_pattern="standard",
-                open_hat_probability=0.2,
-            )
+            cfg = DRUM_VARIANTS["smooth"]
         else:
-            gen = TrapDrumsGenerator(
-                params=GeneratorParams(density=0.45),
-                variant="standard",
-                hat_roll_density=0.3,
-                kick_pattern="standard",
-                open_hat_probability=0.1,
-            )
+            cfg = DRUM_VARIANTS["standard"]
+        gen = TrapDrumsGenerator(
+            params=GeneratorParams(density=0.55 if self.section == "Hook" else 0.45),
+            variant=cfg["variant"],
+            hat_roll_density=cfg["hat_roll"],
+            kick_pattern=cfg["kick"],
+            open_hat_probability=cfg["open_hat"],
+        )
         notes = gen.render(chords, key, duration_beats, context)
         if notes:
             self._last_context = RenderContext(
@@ -228,7 +241,9 @@ class DrumsGenerator(PhraseGenerator):
 
 
 @dataclass
-class SFXGenerator(PhraseGenerator):
+class CasinoSFXGenerator(PhraseGenerator):
+    """Casino-themed SFX hits (slot wins, bells, chips, roulette)."""
+
     niche_cfg: dict
     section: str = "Dynamics"
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
@@ -253,26 +268,30 @@ class SFXGenerator(PhraseGenerator):
         notes: list[NoteInfo] = []
 
         if self.section == "Hook":
+            # Front-loaded heavy SFX (multiple hits)
             t_sec = 0.1
-            for _ in range(2):
+            for i in range(4):
                 sfx = SFX_PRESETS[random.choice(sfx_list)]
                 d = sfx["duration"]
+                vel = sfx["velocity"]
                 notes.append(
                     NoteInfo(
                         pitch=sfx["note"],
                         start=round(t_sec / sec_per_beat, 6),
                         duration=round(d / sec_per_beat, 6),
-                        velocity=sfx["velocity"],
+                        velocity=vel,
                     )
                 )
-                t_sec += d + 0.1
+                t_sec += d + 0.08
+
         elif self.section == "Dynamics":
+            # Periodic SFX throughout, more frequent for high_roller
             interval = self.niche_cfg["sfx_interval"]
             t_sec = 0.0
             while t_sec < duration_beats * sec_per_beat:
                 sfx = SFX_PRESETS[random.choice(sfx_list)]
                 d = sfx["duration"]
-                vel = int(self.niche_cfg.get("sfx_volume", 0.8) * sfx["velocity"])
+                vel = int(self.niche_cfg.get("sfx_volume", 0.9) * sfx["velocity"])
                 notes.append(
                     NoteInfo(
                         pitch=sfx["note"],
@@ -282,25 +301,39 @@ class SFXGenerator(PhraseGenerator):
                     )
                 )
                 t_sec += interval
-        else:  # Loop
-            step = 0.3
-            for i in range(3):
-                t_sec = i * step
-                if t_sec >= duration_beats * sec_per_beat:
-                    break
-                sfx = SFX_PRESETS[random.choice(sfx_list)]
-                d = sfx["duration"] * 1.5
-                vel = int(self.niche_cfg.get("sfx_volume", 0.8) * sfx["velocity"] * (1.0 - i * 0.2))
+
+        else:  # Loop — big finish, then sparse
+            # One big celebratory hit at loop start
+            t_sec = 0.0
+            big_sfx = random.choice(["jackpot_win", "bell_win", "win_bell"])
+            sfx = SFX_PRESETS[big_sfx]
+            vel = int(self.niche_cfg.get("sfx_volume", 0.9) * sfx["velocity"])
+            notes.append(
+                NoteInfo(
+                    pitch=sfx["note"],
+                    start=round(t_sec / sec_per_beat, 6),
+                    duration=round(
+                        min(sfx["duration"] * 2, (duration_beats * sec_per_beat - t_sec))
+                        / sec_per_beat,
+                        6,
+                    ),
+                    velocity=vel,
+                )
+            )
+            # Optional second smaller hit
+            if duration_beats * sec_per_beat > 1.5:
+                t_sec = 1.2
+                sfx2 = SFX_PRESETS[random.choice(sfx_list)]
+                vel2 = int(vel * 0.7)
                 notes.append(
                     NoteInfo(
-                        pitch=sfx["note"],
+                        pitch=sfx2["note"],
                         start=round(t_sec / sec_per_beat, 6),
-                        duration=round(
-                            min(d, (duration_beats * sec_per_beat - t_sec)) / sec_per_beat, 6
-                        ),
-                        velocity=vel,
+                        duration=round(sfx2["duration"] / sec_per_beat, 6),
+                        velocity=vel2,
                     )
                 )
+
         if notes:
             self._last_context = RenderContext(
                 prev_pitch=notes[-1].pitch,
@@ -313,8 +346,8 @@ class SFXGenerator(PhraseGenerator):
 
 
 @dataclass
-class ChordalPadGenerator(PhraseGenerator):
-    """Sustained chord pad in mid register, very quiet."""
+class CasinoPadGenerator(PhraseGenerator):
+    """Lush pad — bright (slots/high_roller) or dark (roulette)."""
 
     niche_cfg: dict
     _last_context = None
@@ -333,19 +366,20 @@ class ChordalPadGenerator(PhraseGenerator):
         if not chords:
             return []
         notes: list[NoteInfo] = []
-        base_velocity = int(self.niche_cfg.get("music_volume", 0.3) * 30)
+        style = self.niche_cfg.get("pad_style", "bright")
+        base_velocity = int(
+            self.niche_cfg.get("music_volume", 0.35) * (28 if style == "bright" else 18)
+        )
         for c in chords:
-            # Only triad tones
+            # Triad only
             if c.quality == Quality.MAJOR:
                 intervals = [0, 4, 7]
             elif c.quality == Quality.MINOR:
                 intervals = [0, 3, 7]
-            elif c.quality == Quality.DIMINISHED:
-                intervals = [0, 3, 6]
             else:
                 intervals = [0, 4, 7]
-            # Higher register (C5+) to avoid masking bass/drums
-            base_pitch = 72 + c.root
+            # Bright style = higher register (C5+), dark = lower (C4)
+            base_pitch = (72 if style == "bright" else 60) + c.root
             for i in intervals:
                 pitch = base_pitch + i
                 if pitch > 127:
@@ -354,7 +388,7 @@ class ChordalPadGenerator(PhraseGenerator):
                     NoteInfo(
                         pitch=pitch,
                         start=round(c.start, 6),
-                        duration=round(c.duration * 0.95, 6),  # slight legato overlap
+                        duration=round(c.duration * (0.9 if style == "bright" else 0.95), 6),
                         velocity=base_velocity,
                     )
                 )
@@ -387,7 +421,7 @@ class VoiceAccentGenerator(PhraseGenerator):
             d = 0.15 / sec_per_beat
             notes.append(
                 NoteInfo(
-                    pitch=60,
+                    pitch=72,
                     start=round(t, 6),
                     duration=round(d, 6),
                     velocity=70,
@@ -418,10 +452,19 @@ class ClicksGenerator(PhraseGenerator):
         step = 0.5 / sec_per_beat
         t = step
         notes: list[NoteInfo] = []
+        # Shuffle feel: uneven eighths
+        shuffle_offset = 0.08 / sec_per_beat
         while t < duration_beats:
-            note = 72 if random.random() > 0.7 else 56
+            note = 72 if random.random() > 0.5 else 56
             d = 0.03 / sec_per_beat
-            notes.append(NoteInfo(pitch=note, start=round(t, 6), duration=round(d, 6), velocity=70))
+            notes.append(
+                NoteInfo(
+                    pitch=note,
+                    start=round(t + (shuffle_offset if random.random() > 0.5 else 0), 6),
+                    duration=round(d, 6),
+                    velocity=70,
+                )
+            )
             t += step
         if notes:
             self._last_context = RenderContext(
@@ -435,7 +478,9 @@ class ClicksGenerator(PhraseGenerator):
 
 
 @dataclass
-class LeadGenerator(PhraseGenerator):
+class CasinoLeadGenerator(PhraseGenerator):
+    """Synth lead — bright, celebratory, chord-tone based."""
+
     niche_cfg: dict
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
@@ -451,26 +496,25 @@ class LeadGenerator(PhraseGenerator):
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
         base_gen = LeadSynthGenerator(
-            params=GeneratorParams(density=0.4),  # lower density
-            style="techno",
+            params=GeneratorParams(density=0.45),
+            style="retro" if self.niche_cfg.get("bass_style") == "walking" else "techno",
             note_length="staccato",
-            portamento=0.0,
-            vibrato_rate=0.5,
+            portamento=0.1,
+            vibrato_rate=0.6,
             vibrato_depth=0.3,
         )
         notes = base_gen.render(chords, key, duration_beats, context)
-        # Filter to chord tones only (reduce harmonic clashes)
+        # Filter to chord tones only
         filtered: list[NoteInfo] = []
         for n in notes:
             chord = chord_at(chords, n.start)
             if chord is not None:
-                # Build set of chord tones (root + third + fifth) in octave span
                 root_pc = chord.root % 12
                 third_pc = (chord.root + (3 if chord.quality == Quality.MINOR else 4)) % 12
                 fifth_pc = (chord.root + 7) % 12
                 allowed = {root_pc, third_pc, fifth_pc}
                 if n.pitch % 12 in allowed:
-                    n.velocity = int(n.velocity * 0.8)  # lower vel to sit back
+                    n.velocity = int(n.velocity * 0.88)
                     filtered.append(n)
         if filtered:
             self._last_context = RenderContext(
@@ -483,13 +527,125 @@ class LeadGenerator(PhraseGenerator):
         return filtered
 
 
-# ── Sections & Harmony ───────────────────────────────────────────────────────
+@dataclass
+class FanfareGenerator(PhraseGenerator):
+    """Short celebratory brass stabs — plays on downbeats of chord changes."""
 
-TRACKS = ["bass", "drums", "sfx", "pad", "voice", "clicks", "lead"]
+    niche_cfg: dict
+    _last_context: RenderContext | None = field(default=None, init=False, repr=False)
+
+    def __init__(self, params: GeneratorParams | None = None, *, niche_cfg: dict):
+        super().__init__(params)
+        self.niche_cfg = niche_cfg
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        notes: list[NoteInfo] = []
+        if not chords:
+            return notes
+        # Play a short stab on beat 1 of every 4-bar cycle (or every chord change)
+        beat_dur = 1.0  # quarter note
+        for c in chords:
+            # Only on downbeat
+            if c.start % 4 == 0:
+                # Root + 3rd in mid-high register (trumpet range)
+                root_pc = c.root % 12
+                third_pc = (c.root + (3 if c.quality == Quality.MINOR else 4)) % 12
+                # Two-note stab: root then third
+                t = c.start
+                vel = 105
+                dur = 0.15  # short staccato
+                notes.append(
+                    NoteInfo(
+                        pitch=60 + root_pc, start=round(t, 6), duration=round(dur, 6), velocity=vel
+                    )
+                )
+                notes.append(
+                    NoteInfo(
+                        pitch=60 + third_pc + 12,
+                        start=round(t, 6),
+                        duration=round(dur, 6),
+                        velocity=vel,
+                    )
+                )
+        if notes:
+            self._last_context = RenderContext(
+                prev_pitch=notes[-1].pitch,
+                prev_velocity=notes[-1].velocity,
+                prev_chord=chords[-1] if chords else None,
+                prev_pitches=[],
+                current_scale=key,
+            )
+        return notes
+
+
+@dataclass
+class CoinDropGenerator(PhraseGenerator):
+    """Random coin drop sounds — sporadic, celebratory micro-SFX."""
+
+    niche_cfg: dict
+    _last_context: RenderContext | None = field(default=None, init=False, repr=False)
+
+    def __init__(self, params: GeneratorParams | None = None, *, niche_cfg: dict):
+        super().__init__(params)
+        self.niche_cfg = niche_cfg
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        tempo = self.niche_cfg["tempo"]
+        sec_per_beat = 60.0 / tempo
+        notes: list[NoteInfo] = []
+        # Random interval between 0.5 and 1.5 seconds
+        t_sec = random.uniform(0.3, 0.8)
+        coin_notes = [72, 60, 48]  # high, mid, low coin drops
+        while t_sec < duration_beats * sec_per_beat:
+            note = random.choice(coin_notes)
+            vel = random.randint(65, 85)
+            d = 0.15
+            notes.append(
+                NoteInfo(
+                    pitch=note,
+                    start=round(t_sec / sec_per_beat, 6),
+                    duration=round(d / sec_per_beat, 6),
+                    velocity=vel,
+                )
+            )
+            t_sec += random.uniform(0.5, 1.5)
+        if notes:
+            self._last_context = RenderContext(
+                prev_pitch=notes[-1].pitch,
+                prev_velocity=notes[-1].velocity,
+                prev_chord=chords[-1] if chords else None,
+                prev_pitches=[],
+                current_scale=key,
+            )
+        return notes
+
+
+# ── Harmony & Sections ───────────────────────────────────────────────────────
+
+# Chord progression for casino tension/release — I–V–vi–IV
+PROGRESSION = [
+    (0, Quality.MAJOR),  # C
+    (7, Quality.MAJOR),  # G
+    (9, Quality.MINOR),  # Am
+    (5, Quality.MAJOR),  # F
+]
+
+TRACKS = ["bass", "drums", "sfx", "pad", "voice", "clicks", "lead", "fanfare", "coins"]
 
 
 def make_sections(duration_sec: float, bpm: int) -> list[tuple[str, int, list[str]]]:
-    """Create 3-part structure (Hook/Dynamics/Loop) bar counts."""
     hook_sec = 2.0
     loop_sec = 2.5
     dyn_sec = max(0.0, duration_sec - hook_sec - loop_sec)
@@ -504,7 +660,6 @@ def make_sections(duration_sec: float, bpm: int) -> list[tuple[str, int, list[st
 
 
 def harmonize(bars: int, bpb: int = 4) -> list[ChordLabel]:
-    """Predefined I-V-vi-IV progression cycling."""
     chords: list[ChordLabel] = []
     for i in range(bars):
         root, qual = PROGRESSION[i % 4]
@@ -522,19 +677,23 @@ def build(track_name: str, niche_cfg: dict, section: str):
                 HumanizeModifier(timing_std=0.008, velocity_std=4)
             ]
         case "sfx":
-            return SFXGenerator(params=params, niche_cfg=niche_cfg, section=section), []
+            return CasinoSFXGenerator(params=params, niche_cfg=niche_cfg, section=section), []
         case "pad":
-            return ChordalPadGenerator(params=params, niche_cfg=niche_cfg), [
-                VelocityScalingModifier(scale=0.8)
+            return CasinoPadGenerator(params=params, niche_cfg=niche_cfg), [
+                VelocityScalingModifier(scale=0.7)
             ]
         case "voice":
             return VoiceAccentGenerator(params=params, niche_cfg=niche_cfg), []
         case "clicks":
             return ClicksGenerator(params=params, niche_cfg=niche_cfg), []
         case "lead":
-            return LeadGenerator(params=GeneratorParams(density=0.5), niche_cfg=niche_cfg), [
-                HumanizeModifier(timing_std=0.01, velocity_std=5)
+            return CasinoLeadGenerator(params=GeneratorParams(density=0.4), niche_cfg=niche_cfg), [
+                HumanizeModifier(timing_std=0.01, velocity_std=4)
             ]
+        case "fanfare":
+            return FanfareGenerator(params=GeneratorParams(density=0.3), niche_cfg=niche_cfg), []
+        case "coins":
+            return CoinDropGenerator(params=GeneratorParams(density=0.2), niche_cfg=niche_cfg), []
         case _:
             return None, []
 
@@ -544,53 +703,51 @@ def build(track_name: str, niche_cfg: dict, section: str):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate Shorts audio (improved arrangement) using Melodica SDK",
-        epilog="Niche options: weight_loss, supplements, fitness, biohacking, detox",
+        description="Generate Casino Shorts audio using Melodica SDK",
+        epilog="Casino variants: slots, roulette, high_roller",
     )
-    parser.add_argument("--niche", required=True)
-    parser.add_argument("--duration", type=float, default=15.0)
-    parser.add_argument("--output", type=str, default="nutra_shorts_v2.mid")
-    parser.add_argument("--tempo", type=int, default=None)
+    parser.add_argument(
+        "--variant", default="slots", help="Casino variant: slots, roulette, high_roller"
+    )
+    parser.add_argument("--duration", type=float, default=15.0, help="Duration seconds")
+    parser.add_argument("--output", type=str, default="casino_shorts.mid", help="Output MIDI path")
+    parser.add_argument("--tempo", type=int, default=None, help="Override BPM")
     args = parser.parse_args()
 
-    if args.niche not in NICHE_CONFIG:
-        print(f"❌ Unknown niche '{args.niche}'. Available: {list(NICHE_CONFIG.keys())}")
+    if args.variant not in NICHE_CONFIG:
+        print(f"❌ Unknown variant '{args.variant}'. Available: {list(NICHE_CONFIG.keys())}")
         return 1
 
-    niche_cfg = NICHE_CONFIG[args.niche].copy()
+    niche_cfg = NICHE_CONFIG[args.variant].copy()
     if args.tempo:
         niche_cfg["tempo"] = args.tempo
 
     bpm = niche_cfg["tempo"]
     bpb = 4
     SECTIONS = make_sections(args.duration, bpm)
-    total_bars = sum(b for _, b, _ in SECTIONS)
 
-    # Build global chord list
+    # Build absolute chord list
     all_chords: list[ChordLabel] = []
     cur_bar = 0
     for bars in [b for _, b, _ in SECTIONS]:
         sec_chords = harmonize(bars, bpb)
-        # shift chords to absolute positions
         for c in sec_chords:
             all_chords.append(
                 ChordLabel(
-                    root=c.root, quality=c.quality, start=(cur_bar + c.start), duration=c.duration
+                    root=c.root, quality=c.quality, start=cur_bar + c.start, duration=c.duration
                 )
             )
         cur_bar += bars
 
-    # Main orchestration
     engine = ArticulationEngine()
     tracks: dict[str, list[NoteInfo]] = {}
     contexts: dict[str, RenderContext] = {}
     beat_offset = 0.0
-    scale = Scale(root=0, mode=Mode.MAJOR)
+    scale = Scale(root=0, mode=Mode.MAJOR)  # C major
 
-    print(f"🎬 {args.niche} | {args.duration}s | {bpm} BPM | C major")
+    print(f"🎰 {args.variant.upper()} CASINO | {args.duration}s | {bpm} BPM | C major")
     for section_name, bars, track_names in SECTIONS:
         s_beats = bars * bpb
-        # chords active during this section
         section_chords = [c for c in all_chords if beat_offset <= c.start < beat_offset + s_beats]
         print(f"  [{section_name:10s}] {bars:2d} bars | {', '.join(track_names)}")
         for tn in track_names:
@@ -640,8 +797,8 @@ def main():
     desk = MixingDesk(niche_cfg)
     tracks = desk.apply_mixing(tracks, SECTIONS, bpm)
 
-    # Fade-out at the very end of LOOP section
-    loop_start_beat = sum(b for _, b, _ in SECTIONS[:2]) * 4  # Hook+Dynamics bars in beats
+    # Fade-out at LOOP start
+    loop_start_beat = sum(b for _, b, _ in SECTIONS[:2]) * 4
     tracks = desk.apply_fade_loop_end(tracks, loop_start_beat, fade_beats=2.0)
 
     # ============================================
@@ -664,12 +821,12 @@ def main():
         if tn not in cc_events:
             cc_events[tn] = []
         cc_events[tn].extend(pan_list)
-        cc_events[tn].sort(key=lambda ev: ev[0])  # sort by time
+        cc_events[tn].sort(key=lambda ev: ev[0])
 
     INSTRUMENTS = {
         "bass": 33,  # Electric Bass (finger)
-        "drums": 117,  # Synth Drum (for melodic channel)
-        "sfx": 10,  # Glockenspiel
+        "drums": 117,  # Synth Drum
+        "sfx": 10,  # Glockenspiel (bright SFX)
         "pad": 88,  # New Age Pad
         "voice": 54,  # Synth Voice
         "clicks": 14,  # Xylophone
@@ -689,17 +846,19 @@ def main():
 
     hook_sec = SECTIONS[0][1] * 4 * 60 / bpm
     dyn_sec = SECTIONS[1][1] * 4 * 60 / bpm
-    print(f"\n✅ Saved: {output_path} ({args.duration}s, {bpm} BPM, niche={args.niche}, key=C)")
+    print(f"\n✅ Saved: {output_path} ({args.duration}s, {bpm} BPM, variant={args.variant}, key=C)")
     print("📋 Structure:")
-    print(f"  0–{hook_sec:.1f}s   : HOOK  (heavy SFX, drums)")
-    print(f"  {hook_sec:.1f}–{hook_sec + dyn_sec:.1f}s : DYNAMICS (full groove, chordal pad, lead)")
-    print(f"  {hook_sec + dyn_sec:.1f}–{args.duration:.1f}s : LOOP  (transition to start)")
+    print(f"  0–{hook_sec:.1f}s   : HOOK  (heavy casino SFX, aggressive drums)")
+    print(
+        f"  {hook_sec:.1f}–{hook_sec + dyn_sec:.1f}s : DYNAMICS (full groove, {'bright' if niche_cfg['pad_style'] == 'bright' else 'dark'} pad, lead)"
+    )
+    print(f"  {hook_sec + dyn_sec:.1f}–{args.duration:.1f}s : LOOP  (transition)")
     print("\n🎯 Tips:")
-    print(f"  • Voice tone: {niche_cfg['voice_tone']}")
+    print(f"  • Bass: {niche_cfg['bass_style']} | Pad: {niche_cfg['pad_style']}")
     print(
         f"  • Music volume: {niche_cfg['music_volume'] * 100:.0f}%, SFX: {niche_cfg['sfx_volume'] * 100:.0f}%"
     )
-    print("  • Improved: raised bass, chord progression I-V-vi-IV, lead synth, percussive SFX\n")
+    print("  • Chord progression: I–V–vi–IV (C–G–Am–F)\n")
 
 
 if __name__ == "__main__":

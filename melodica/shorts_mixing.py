@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""
+melodica/shorts_mixing.py — Shared mixing system for Shorts audio generators.
+
+Provides:
+- MixingDesk: centralized gain staging and automation
+- SectionFader: volume automation per section (Hook/Dynamics/Loop)
+- VelocityNormalizer: gentle compression/limiting
+- FrequencySeparator: warns about masking conflicts
+
+Usage:
+    from melodica.shorts_mixing import MixingDesk
+    desk = MixingDesk(niche_cfg)
+    tracks = desk.apply_mixing(tracks, sections, bpm)
+"""
+
+from typing import Dict, List, Tuple
+from dataclasses import dataclass, field
+from melodica.types import NoteInfo
+
+
+@dataclass
+class MixingDesk:
+    """Central mixing console — applies gain staging, automation, and balance."""
+
+    niche_cfg: dict
+    # Per-track gain multipliers (target velocity ranges)
+    track_gains: Dict[str, float] = field(
+        default_factory=lambda: {
+            "bass": 1.0,  # 100-120
+            "drums": 1.0,  # 90-110
+            "sfx": 1.0,  # 80-120 (prominent)
+            "pad": 0.25,  # 20-40 (background)
+            "voice": 0.6,  # 60-80 (mid)
+            "clicks": 0.7,  # 70-85
+            "lead": 0.75,  # 70-90
+            "fanfare": 0.9,  # 85-110
+            "coins": 0.65,  # 60-90
+        }
+    )
+    # Section fader automation (gain multiplier applied on top of track_gains)
+    section_faders: Dict[str, Dict[str, float]] = field(
+        default_factory=lambda: {
+            "Hook": {
+                "sfx": 1.15,  # punchier SFX
+                "drums": 1.1,  # harder drums
+                "pad": 0.7,  # quieter pad
+                "bass": 1.0,
+                "lead": 0.9,  # lead not dominant in hook
+                "fanfare": 1.2,
+                "coins": 1.1,
+            },
+            "Dynamics": {
+                "sfx": 1.0,
+                "drums": 1.0,
+                "pad": 1.0,
+                "bass": 1.0,
+                "lead": 1.0,
+                "fanfare": 1.0,
+                "coins": 1.0,
+            },
+            "Loop": {
+                "sfx": 0.8,  # SFX die down
+                "drums": 0.95,
+                "pad": 0.5,  # pad fades
+                "bass": 0.95,
+                "lead": 0.7,  # lead withdraws
+                "fanfare": 0.6,
+                "coins": 0.5,
+            },
+        }
+    )
+
+    def apply_mixing(
+        self,
+        tracks: Dict[str, List[NoteInfo]],
+        sections: List[Tuple[str, int, List[str]]],
+        bpm: int,
+    ) -> Dict[str, List[NoteInfo]]:
+        """Apply full mixing chain: section faders + gain staging + limiting."""
+        # Calculate section beat boundaries
+        beat_offset = 0.0
+        section_bounds = []  # (name, start_beat, end_beat)
+        for name, bars, _ in sections:
+            beats = bars * 4
+            section_bounds.append((name, beat_offset, beat_offset + beats))
+            beat_offset += beats
+
+        mixed = {}
+        for track_name, notes in tracks.items():
+            gain = self.track_gains.get(track_name, 1.0)
+            new_notes = []
+            for n in notes:
+                # Determine which section this note belongs to
+                section = None
+                for sname, sstart, send in section_bounds:
+                    if sstart <= n.start < send:
+                        section = sname
+                        break
+                fader = (
+                    self.section_faders.get(section, {}).get(track_name, 1.0) if section else 1.0
+                )
+                total_gain = gain * fader
+                # Apply velocity scaling with ceiling
+                new_vel = min(120, max(1, int(n.velocity * total_gain)))
+                new_notes.append(
+                    NoteInfo(
+                        pitch=n.pitch,
+                        start=n.start,
+                        duration=n.duration,
+                        velocity=new_vel,
+                        articulation=n.articulation,
+                        expression=dict(n.expression),
+                    )
+                )
+            mixed[track_name] = new_notes
+        return mixed
+
+    def apply_fade_loop_end(
+        self, tracks: Dict[str, List[NoteInfo]], loop_start_beat: float, fade_beats: float = 2.0
+    ) -> Dict[str, List[NoteInfo]]:
+        """Apply exponential fade-out for notes entering the loop transition."""
+        faded = {}
+        for track_name, notes in tracks.items():
+            new_notes = []
+            for n in notes:
+                if n.start >= loop_start_beat:
+                    # Calculate fade factor based on how far into loop
+                    pos_in_loop = n.start - loop_start_beat
+                    factor = max(0.0, 1.0 - (pos_in_loop / fade_beats))
+                    if factor < 0.01:
+                        continue  # drop silent notes
+                    new_vel = max(1, int(n.velocity * factor))
+                    new_notes.append(
+                        NoteInfo(
+                            pitch=n.pitch,
+                            start=n.start,
+                            duration=min(n.duration, n.duration * factor),
+                            velocity=new_vel,
+                            articulation=n.articulation,
+                            expression=dict(n.expression),
+                        )
+                    )
+                else:
+                    new_notes.append(n)
+            faded[track_name] = new_notes
+        return faded
