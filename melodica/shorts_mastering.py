@@ -6,7 +6,7 @@ Applies final loudness normalization (LUFS-target simulation via RMS),
 real stereo panning (MIDI CC10), multiband compression, and brickwall limiting.
 """
 
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple
 from dataclasses import dataclass, field
 from melodica.types import NoteInfo
 
@@ -155,9 +155,9 @@ class MasteringDesk:
 
         return mastered, pan_cc_events
 
-    def quality_report(self, tracks: Dict[str, List[NoteInfo]]) -> Dict[str, Any]:
+    def quality_report(self, tracks: Dict[str, List[NoteInfo]]) -> dict[str, object]:
         """Generate mastering quality metrics."""
-        report = {
+        report: dict[str, object] = {
             "peak_velocity": 0,
             "rms_velocity": 0.0,
             "clipping_notes": 0,
