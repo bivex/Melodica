@@ -399,3 +399,8 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Shorts audio build artifacts
+output/shorts_mids/*.mid
+output/shorts_mids/*.mp3
+output/shorts_mids/*.wav
