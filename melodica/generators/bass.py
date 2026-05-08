@@ -187,7 +187,7 @@ class BassGenerator(PhraseGenerator):
             self._last_context = (context or RenderContext()).with_end_state(
                 last_pitch=notes[-1].pitch,
                 last_velocity=notes[-1].velocity,
-                last_chord=last_chord,
+                last_chord=prev_chord,
                 duration_beats=duration_beats,
                 total_duration=duration_beats,
             )
