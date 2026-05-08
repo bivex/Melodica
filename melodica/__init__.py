@@ -30,6 +30,11 @@ Public API:
   - generate_idea()   — Idea Tool pipeline (§9)
   - slots_to_notes()  — flatten arrangement to absolute NoteInfo list
   - VirtualMidiOut    — real-time virtual MIDI port (requires [live])
+  - LeadSynthGenerator — melodic lead-line generator (retro/techno/trance/supersaw)
+  - CountermelodyGenerator — contrapuntal counter-melody (contrary motion)
+  - MelodyGenerator — general-purpose melody facade (stepwise, arpeggiated, mixed)
+  - MixingDesk        — Shorts audio mixing (gain staging, section faders, fade)
+  - MasteringDesk     — Shorts audio mastering (LUFS normalization, CC10 pan, limiting)
   - VSTPlayer         — VST3/AU plugin host (requires pedalboard)
   - LiveLoopback      — real-time audio loopback (requires [live])
   - MixingDesk        — Shorts audio mixing (gain staging, section faders, fade)
@@ -68,6 +73,10 @@ __all__ = [
     "slots_to_notes",
     # Virtual MIDI (requires [live])
     "VirtualMidiOut",
+    # Lead & Melody Generators
+    "LeadSynthGenerator",
+    "MelodyGenerator",
+    "CountermelodyGenerator",
     # VST Player (requires pedalboard)
     "VSTPlayer",
     # Live Loopback (requires [live])
@@ -132,6 +141,11 @@ except ImportError:
 # --- Shorts Audio Suite (mixing & mastering) ---
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
+
+# --- Melody Generators ---
+from melodica.generators.lead_synth import LeadSynthGenerator
+from melodica.generators.melody import MelodyGenerator
+from melodica.generators.countermelody import CountermelodyGenerator
 
 
 # ---------------------------------------------------------------------------
