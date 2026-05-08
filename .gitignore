@@ -404,3 +404,8 @@ FodyWeavers.xsd
 output/shorts_mids/*.mid
 output/shorts_mids/*.mp3
 output/shorts_mids/*.wav
+
+# Generated demo audio/MIDI artifacts (all under output/)
+output/**/*.mid
+output/**/*.wav
+output/**/*.mp3
