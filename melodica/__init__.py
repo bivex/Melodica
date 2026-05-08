@@ -30,6 +30,10 @@ Public API:
   - generate_idea()   — Idea Tool pipeline (§9)
   - slots_to_notes()  — flatten arrangement to absolute NoteInfo list
   - VirtualMidiOut    — real-time virtual MIDI port (requires [live])
+  - VSTPlayer         — VST3/AU plugin host (requires pedalboard)
+  - LiveLoopback      — real-time audio loopback (requires [live])
+  - MixingDesk        — Shorts audio mixing (gain staging, section faders, fade)
+  - MasteringDesk     — Shorts audio mastering (LUFS normalization, CC10 pan, limiting)
 """
 
 from __future__ import annotations
@@ -68,6 +72,9 @@ __all__ = [
     "VSTPlayer",
     # Live Loopback (requires [live])
     "LiveLoopback",
+    # Shorts Audio Production
+    "MixingDesk",
+    "MasteringDesk",
 ]
 
 # --- Domain types ---
@@ -121,6 +128,10 @@ try:
     from melodica.live_loopback import LiveLoopback
 except ImportError:
     LiveLoopback = None  # type: ignore[assignment,misc]
+
+# --- Shorts Audio Suite (mixing & mastering) ---
+from melodica.shorts_mixing import MixingDesk
+from melodica.shorts_mastering import MasteringDesk
 
 
 # ---------------------------------------------------------------------------
