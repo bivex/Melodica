@@ -28,9 +28,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import mido
+import mido  # type: ignore
 
-from melodica.types import ChordLabel, Note, NoteInfo, Track
+from melodica.types import ChordLabel, Note, NoteInfo, Track, Scale, MusicTimeline
 
 
 # ---------------------------------------------------------------------------
@@ -442,7 +442,7 @@ def export_midi(
     path: str | Path,
     *,
     bpm: float = 120.0,
-    timeline: "MusicTimeline" | None = None,
+    timeline: MusicTimeline | None = None,
 ) -> None:
     """
     Write a list of high-level Track objects to a MIDI file.

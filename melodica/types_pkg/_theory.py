@@ -105,7 +105,7 @@ class Scale:
         if inv_numeral:
             inv_deg = mapping.get(inv_numeral.upper(), 1)
             inv_pc = self.degrees()[inv_deg - 1]
-            chord.bass = inv_pc
+            chord.bass = int(round(inv_pc))
 
         return chord
 
@@ -141,7 +141,7 @@ class Scale:
         else:
             quality = Quality.MAJOR  # fallback
         return ChordLabel(
-            root=root_pc,
+            root=int(round(root_pc)),
             quality=quality,
             extensions=[],
             degree=degree,
