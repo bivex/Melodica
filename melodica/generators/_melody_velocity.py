@@ -3,7 +3,8 @@
 Responsibilities:
   - Apply accent patterns (strong_weak, syncopated)
   - Apply phrase contour dynamics (crescendo/diminuendo to climax)
-  - Add random velocity variation
+  - Scale by continuous beat strength from GrooveProfile
+  - Add humanized micro-variation with accent bursts and ghost notes
 """
 
 from __future__ import annotations
@@ -39,38 +40,50 @@ class VelocityProcessor:
         self.phrase_length = phrase_length
 
     def apply(
-        self, base_vel: int, event: RhythmEvent, phrase_pos: float, global_progress: float
+        self,
+        base_vel: int,
+        event: RhythmEvent,
+        phrase_pos: float,
+        global_progress: float,
+        beat_strength: float = 1.0,
     ) -> int:
         """Apply accents and contour to base velocity."""
         vel = base_vel * event.velocity_factor
 
-        # Accent pattern
+        # Beat strength scaling (from GrooveProfile)
+        vel *= 0.7 + 0.3 * beat_strength
+
+        # Accent pattern (supplementary to beat strength)
         is_downbeat = event.onset % 1.0 < 0.1
-        is_on_beat = event.onset % 0.5 < 0.1
-        is_offbeat = not is_on_beat
+        is_offbeat = event.onset % 0.5 >= 0.1
 
         if self.accent_pattern == "strong_weak":
             if is_downbeat:
-                vel *= 1.15
+                vel *= 1.10
             elif is_offbeat:
-                vel *= 0.80
+                vel *= 0.88
         elif self.accent_pattern == "syncopated":
             if is_offbeat:
-                vel *= 1.10
+                vel *= 1.08
             elif is_downbeat:
-                vel *= 0.90
+                vel *= 0.93
 
         # Phrase contour dynamics
         if self.phrase_contour != "flat" and self.phrase_length > 0:
             if phrase_pos < 0.6:
-                # Crescendo: 0.85 → 1.0
                 contour_factor = 0.85 + 0.15 * (phrase_pos / 0.6)
             else:
-                # Diminuendo: 1.0 → 0.75
                 contour_factor = 1.0 - 0.25 * ((phrase_pos - 0.6) / 0.4)
             vel *= contour_factor
 
-        # Small random touch variation
-        vel *= random.uniform(0.92, 1.08)
+        # Humanized micro-variation
+        # Accent burst: occasional emphasis on random notes
+        if random.random() < 0.05:
+            vel *= 1.15
+        # Ghost note: occasional very quiet note on weak beats
+        elif beat_strength < 0.4 and random.random() < 0.03:
+            vel *= 0.6
+        else:
+            vel *= random.uniform(0.92, 1.08)
 
         return max(1, min(127, int(vel)))

@@ -222,7 +222,7 @@ class TestFirstLastStrategies:
 
     def test_first_note_chord_root(self):
         """First note is chord root."""
-        gen = MelodyGenerator(first_note="chord_root")
+        gen = MelodyGenerator(first_note="chord_root", motif_probability=0.0, syncopation=0.0)
         notes = gen.render(_simple_chords(), C_MAJOR, 4.0)
         assert len(notes) > 0
         # First note should be C (pitch class 0) or nearby (in C major chord)

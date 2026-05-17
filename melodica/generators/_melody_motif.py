@@ -1,9 +1,9 @@
 """Melody motivic development — motif storage and variation.
 
 Responsibilities:
-  - Store motif from earlier phrase
-  - Apply motif with transformation (transpose, invert, retrograde)
-  - Motif probability-based referencing
+  - Store motif from earlier phrase (pitches + intervals + rhythm)
+  - Apply motif with transformation (transpose, invert, retrograde, sequence, fragment)
+  - Motif probability-based referencing with thematic curve
 """
 
 from __future__ import annotations
@@ -14,7 +14,10 @@ from melodica.types import Scale
 from melodica.utils import snap_to_scale
 
 
-MOTIF_VARIATION_OPTIONS = frozenset({"transpose", "invert", "retrograde", "any"})
+MOTIF_VARIATION_OPTIONS = frozenset({"transpose", "invert", "retrograde", "sequence", "fragment", "any"})
+
+# Sequence transposition intervals (scale degrees up or down)
+_SEQUENCE_DEGREES = [-5, -4, -3, -2, 2, 3, 4, 5]
 
 
 class MotifManager:
@@ -28,21 +31,35 @@ class MotifManager:
             )
         self.motif_variation = motif_variation
         self._stored_motif: list[int] = []
+        self._stored_intervals: list[int] = []  # signed intervals between consecutive pitches
+        self._stored_rhythm: list[float] = []   # relative durations
 
-    def store_motif(self, motif: list[int]) -> None:
+    def store_motif(self, motif: list[int], rhythm: list[float] | None = None) -> None:
         """Store a motif for future reuse."""
         if len(motif) >= 3:
-            self._stored_motif = motif[-8:]  # keep last 8 notes max
+            self._stored_motif = motif[-8:]
+            # Compute intervallic contour
+            self._stored_intervals = [
+                motif[i + 1] - motif[i] for i in range(len(motif) - 1)
+            ]
+            if rhythm and len(rhythm) >= 2:
+                self._stored_rhythm = rhythm[-8:]
+            else:
+                self._stored_rhythm = []
 
     def clear(self) -> None:
         """Clear stored motif."""
         self._stored_motif.clear()
+        self._stored_intervals.clear()
+        self._stored_rhythm.clear()
 
-    def apply(self, prev_pitch: int, low: int, high: int, key: Scale, motif_idx: int) -> int:
+    def apply(
+        self, prev_pitch: int, low: int, high: int, key: Scale, motif_idx: int
+    ) -> int:
         """Apply stored motif with variation, or return prev_pitch if not triggered."""
         if (
             self.motif_probability <= 0
-            or len(self._stored_motif) < 3
+            or len(self._stored_intervals) < 2
             or random.random() >= self.motif_probability
         ):
             return prev_pitch
@@ -50,26 +67,95 @@ class MotifManager:
         # Pick variation
         variation = self.motif_variation
         if variation == "any":
-            variation = random.choice(["transpose", "invert", "retrograde"])
+            variation = random.choice(["transpose", "invert", "retrograde", "sequence", "fragment"])
 
-        motif = self._stored_motif
-        idx = motif_idx % len(motif)
+        intervals = self._stored_intervals
 
-        if variation == "transpose":
-            offset = prev_pitch - motif[0]
-            pitch = motif[idx] + offset
+        if variation == "sequence":
+            return self._apply_sequence(prev_pitch, low, high, key, motif_idx)
+        elif variation == "fragment":
+            return self._apply_fragment(prev_pitch, low, high, key, motif_idx)
+        elif variation == "transpose":
+            return self._apply_transpose(prev_pitch, low, high, key, motif_idx)
         elif variation == "invert":
-            if idx == 0:
-                pitch = prev_pitch
-            else:
-                center = sum(motif) // len(motif)
-                interval = motif[idx] - center
-                pitch = prev_pitch - interval
+            return self._apply_invert(prev_pitch, low, high, key, motif_idx)
         elif variation == "retrograde":
-            reversed_motif = list(reversed(motif))
-            offset = prev_pitch - reversed_motif[0]
-            pitch = reversed_motif[idx] + offset
-        else:
-            pitch = motif[idx]
+            return self._apply_retrograde(prev_pitch, low, high, key, motif_idx)
 
+        return prev_pitch
+
+    def get_rhythm(self) -> list[float]:
+        """Return stored rhythm pattern, if available."""
+        return list(self._stored_rhythm) if self._stored_rhythm else []
+
+    # ------------------------------------------------------------------
+    # Variation implementations
+    # ------------------------------------------------------------------
+
+    def _apply_transpose(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
+        """Transpose motif to start from prev_pitch."""
+        motif = self._stored_motif
+        i = idx % len(motif)
+        offset = prev_pitch - motif[0]
+        pitch = motif[i] + offset
+        return snap_to_scale(max(low, min(high, pitch)), key)
+
+    def _apply_invert(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
+        """Invert intervals around prev_pitch."""
+        intervals = self._stored_intervals
+        i = idx % len(intervals)
+        pitch = prev_pitch
+        for step in range(min(i + 1, len(intervals))):
+            pitch -= intervals[step]  # invert: negate each interval
+        return snap_to_scale(max(low, min(high, pitch)), key)
+
+    def _apply_retrograde(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
+        """Play motif backwards."""
+        reversed_motif = list(reversed(self._stored_motif))
+        i = idx % len(reversed_motif)
+        offset = prev_pitch - reversed_motif[0]
+        pitch = reversed_motif[i] + offset
+        return snap_to_scale(max(low, min(high, pitch)), key)
+
+    def _apply_sequence(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
+        """Replay interval pattern transposed by a scale degree."""
+        intervals = self._stored_intervals
+        i = idx % len(intervals)
+        # Compute cumulative interval up to position i
+        cumulative = sum(intervals[: i + 1])
+        # Transpose by a random scale degree
+        degree_shift = random.choice(_SEQUENCE_DEGREES)
+        scale_pcs = key.degrees()
+        if scale_pcs:
+            # Map degree shift to semitone shift
+            base_pc = prev_pitch % 12
+            base_idx = None
+            for si, pc in enumerate(scale_pcs):
+                if pc == base_pc:
+                    base_idx = si
+                    break
+            if base_idx is not None:
+                target_idx = (base_idx + degree_shift) % len(scale_pcs)
+                semitone_shift = scale_pcs[target_idx] - scale_pcs[base_idx]
+                # Handle octave wrap
+                if degree_shift > 0 and semitone_shift < 0:
+                    semitone_shift += 12
+                elif degree_shift < 0 and semitone_shift > 0:
+                    semitone_shift -= 12
+            else:
+                semitone_shift = degree_shift * 2  # fallback
+        else:
+            semitone_shift = degree_shift * 2
+
+        pitch = prev_pitch + semitone_shift + cumulative
+        return snap_to_scale(max(low, min(high, pitch)), key)
+
+    def _apply_fragment(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
+        """Use only the first 2-3 intervals of the motif."""
+        intervals = self._stored_intervals
+        frag_len = min(random.choice([2, 2, 3]), len(intervals))
+        i = idx % frag_len
+        cumulative = sum(intervals[: i + 1])
+        offset = prev_pitch - (self._stored_motif[0] if self._stored_motif else prev_pitch)
+        pitch = self._stored_motif[0] + offset + cumulative
         return snap_to_scale(max(low, min(high, pitch)), key)

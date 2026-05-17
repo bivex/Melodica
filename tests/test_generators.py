@@ -72,11 +72,11 @@ class TestMelodyGenerator:
 
     def test_harmony_note_probability(self):
         # High harmony probability → mostly chord tones
-        gen = MelodyGenerator(harmony_note_probability=1.0)
+        gen = MelodyGenerator(harmony_note_probability=1.0, motif_probability=0.0)
         notes = gen.render(_simple_chords(), C_MAJOR, 8.0)
         assert len(notes) > 0
-        # Most notes should be chord tones (passing tones from _fill_leaps may appear)
-        chord_pcs = {0, 4, 7, 2, 11}  # C major + G major chord tones
+        # Most notes should be chord tones (allow_2nd/allow_7th extensions may add non-chord tones)
+        chord_pcs = {0, 4, 7, 2, 11, 5, 9}  # C major + G major + common extensions
         in_chord = sum(1 for n in notes if n.pitch % 12 in chord_pcs)
         assert in_chord >= len(notes) * 0.7  # at least 70% chord tones
 

@@ -1,24 +1,13 @@
-# Copyright (c) 2026 Bivex
-#
-# Author: Bivex
-# Available for contact via email: support@b-b.top
-# For up-to-date contact information:
-# https://github.com/bivex
-#
-# Created: 2026-04-02 03:04
-# Last Updated: 2026-04-02 03:04
-#
-# Licensed under the MIT License.
-# Commercial licensing available upon request.
-
 """
 generators/_melody_pitch.py — MelodyPitchSelector helper.
 
 Extracted from MelodyGenerator to isolate pitch-selection logic.
+Uses a melodic weighting system for intelligent, musical pitch choices.
 """
 
 from __future__ import annotations
 
+import math
 import random
 from typing import TYPE_CHECKING
 
@@ -36,7 +25,9 @@ from melodica.render_context import RenderContext
 # ---------------------------------------------------------------------------
 
 STEP_SEMITONES: frozenset[int] = frozenset({1, 2})
-LEAP_SEMITONES: frozenset[int] = frozenset({3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+SMALL_LEAP_SEMITONES: frozenset[int] = frozenset({3, 4, 5})
+LARGE_LEAP_SEMITONES: frozenset[int] = frozenset({6, 7, 8, 9, 10, 11, 12})
+LEAP_SEMITONES: frozenset[int] = SMALL_LEAP_SEMITONES | LARGE_LEAP_SEMITONES
 ALL_INTERVALS: frozenset[int] = STEP_SEMITONES | LEAP_SEMITONES
 
 DEFAULT_UP_INTERVALS: frozenset[int] = frozenset({1, 2, 3, 4, 5, 7, 9, 12})
@@ -73,7 +64,7 @@ def _all_pitches_in_range_pc_list(pcs: list[int], low: int, high: int) -> list[i
 
 
 class MelodyPitchSelector:
-    """Encapsulates the five pitch-selection methods from MelodyGenerator."""
+    """Encapsulates pitch selection with melodic weighting."""
 
     __slots__ = ("_gen",)
 
@@ -101,6 +92,8 @@ class MelodyPitchSelector:
         next_chord: types.ChordLabel | None = None,
         register_center: int | None = None,
         range_span: int = 20,
+        beat_strength: float = 1.0,
+        cadence_target: int | None = None,
     ) -> int:
         gen = self._gen
 
@@ -108,7 +101,6 @@ class MelodyPitchSelector:
         if is_penultimate and chord:
             root_pc = chord.root
             scale_pcs = key.degrees()
-            # Find the next scale degree above the root
             above = [pc for pc in scale_pcs if pc > root_pc]
             if above:
                 target_pc = above[0]
@@ -116,11 +108,12 @@ class MelodyPitchSelector:
                 target_pc = scale_pcs[0] if scale_pcs else (root_pc + 2) % 12
             return nearest_pitch(target_pc, prev_pitch)
 
-        pool = self.get_pitch_pool(chord, key, is_downbeat, is_on_beat)
+        pool = self.get_pitch_pool(chord, key, is_downbeat, is_on_beat, beat_strength)
         if not pool:
             return prev_pitch
 
         last_was_leap = abs(last_interval) > 2 and last_interval != 0
+        is_large_leap = abs(last_interval) >= 6
 
         # Decide step vs. leap (after_leap may override)
         use_step = random.random() < steps_prob
@@ -133,7 +126,7 @@ class MelodyPitchSelector:
 
         interval_set = STEP_SEMITONES if use_step else LEAP_SEMITONES
 
-        # Apply allowed_up/down interval filters and after_leap direction constraint
+        # Compute required direction from after_leap
         force_opposite = (
             last_was_leap
             and last_interval != 0
@@ -149,24 +142,31 @@ class MelodyPitchSelector:
         if climax_pitch is not None and progress < 0.65 and required_direction == 0:
             ascent_strength = 0.35 * (1.0 - progress / 0.65)
             if prev_pitch < climax_pitch and random.random() < ascent_strength:
-                required_direction = 1  # bias upward toward climax
+                required_direction = 1
 
         # Post-climax: after 65%, allow descent
         if climax_pitch is not None and progress >= 0.65 and required_direction == 0:
             if prev_pitch >= climax_pitch - 2 and random.random() < 0.3:
-                required_direction = -1  # bias downward after peak
+                required_direction = -1
 
+        # Build candidates with cascading fallbacks
         candidates = self.build_candidates(
             pool, prev_pitch, low, high, interval_set, required_direction
         )
 
-        # Fallback 1: relax interval type (step→leap or vice versa)
+        # Fallback 1: relax interval type
         if not candidates:
             candidates = self.build_candidates(
                 pool, prev_pitch, low, high, ALL_INTERVALS, required_direction
             )
 
-        # Fallback 2: relax direction constraint
+        # Fallback 2: relax direction (step_any after failed opposite)
+        if not candidates and force_opposite:
+            candidates = self.build_candidates(
+                pool, prev_pitch, low, high, STEP_SEMITONES, 0
+            )
+
+        # Fallback 3: fully relax
         if not candidates:
             candidates = self.build_candidates(pool, prev_pitch, low, high, ALL_INTERVALS, 0)
 
@@ -177,6 +177,8 @@ class MelodyPitchSelector:
         if len(candidates) == 1:
             return candidates[0]
 
+        # ---- Weighted selection ----
+
         # Voice-leading: near chord boundary, prefer common tones with next chord
         if next_chord is not None and chord is not None:
             next_pcs = set(next_chord.pitch_classes())
@@ -184,27 +186,97 @@ class MelodyPitchSelector:
             if common and random.random() < 0.45:
                 return min(common, key=lambda p: abs(p - prev_pitch))
 
+        # Cadence target: strong attractor in last 10% of phrase
+        if cadence_target is not None and progress > 0.85:
+            by_cadence = sorted(candidates, key=lambda p: abs(p - cadence_target))
+            if random.random() < 0.7:  # strong pull toward cadence
+                return by_cadence[0]
+
         # Climax: occasionally snap toward climax pitch
         if climax_pitch is not None and progress < 0.70 and random.random() < 0.25:
             by_climax = sorted(candidates, key=lambda p: abs(p - climax_pitch))
             return by_climax[0]
 
-        # Direction bias: weighted probability instead of dead rounding
+        # Direction bias: weighted probability
         bias = gen.direction_bias
         if abs(bias) > 0.01:
             return self._biased_choice(candidates, prev_pitch, bias, register_center)
 
-        # Register awareness: if register_center set, weight toward it
+        # Register awareness
         if register_center is not None and range_span > 0:
             smoothness = getattr(gen, "register_smoothness", 0.5)
             if smoothness > 0.1 and random.random() < smoothness:
                 return min(candidates, key=lambda p: abs(p - register_center))
 
-        # Random movement vs. directed (closest to previous)
-        if random.random() < gen.random_movement:
-            return random.choice(candidates)
+        # Melodic weighting system: blend weighted choice with random
+        rm = gen.random_movement
+        if rm < 0.01:
+            # Fully weighted: pick best candidate
+            return self._weighted_choice(candidates, prev_pitch, chord, key, register_center, climax_pitch, range_span)
+        elif random.random() > rm:
+            # Weighted choice
+            return self._weighted_choice(candidates, prev_pitch, chord, key, register_center, climax_pitch, range_span)
         else:
-            return min(candidates, key=lambda p: abs(p - prev_pitch))
+            # Random choice from candidates
+            return random.choice(candidates)
+
+    def _weighted_choice(
+        self,
+        candidates: list[int],
+        prev_pitch: int,
+        chord: types.ChordLabel | None,
+        key: types.Scale,
+        register_center: int | None,
+        climax_pitch: int | None,
+        range_span: int,
+    ) -> int:
+        """Select candidate using melodic weighting (smoothness + register + tonal gravity)."""
+        if len(candidates) == 1:
+            return candidates[0]
+
+        chord_pcs = set(chord.pitch_classes()) if chord else set()
+        scale_pcs = set(key.degrees())
+        root_pc = key.root
+
+        weights: list[float] = []
+        for c in candidates:
+            w = 1.0
+
+            # 1. Intervallic smoothness: prefer closer pitches
+            dist = abs(c - prev_pitch)
+            w *= math.exp(-dist * 0.15)
+
+            # 2. Chord tone bonus
+            if c % 12 in chord_pcs:
+                w *= 1.5
+
+            # 3. Tonal gravity: boost tonic and fifth
+            pc = c % 12
+            if pc == root_pc:
+                w *= 1.3
+            elif pc == (root_pc + 7) % 12:  # fifth
+                w *= 1.15
+
+            # 4. Register proximity
+            if register_center is not None and range_span > 0:
+                reg_dist = abs(c - register_center)
+                w *= max(0.3, 1.0 - reg_dist / range_span)
+
+            # 5. Climax attraction (subtle)
+            if climax_pitch is not None:
+                if c <= climax_pitch:
+                    w *= 1.0 + 0.1 * (1.0 - abs(c - climax_pitch) / max(1, range_span))
+
+            weights.append(max(0.01, w))
+
+        total = sum(weights)
+        r = random.random() * total
+        cumul = 0.0
+        for c, w in zip(candidates, weights):
+            cumul += w
+            if r <= cumul:
+                return c
+        return candidates[-1]
 
     def _biased_choice(
         self,
@@ -227,7 +299,6 @@ class MelodyPitchSelector:
                 w = 1.0 - bias * 2.0
             else:
                 w = 1.0
-            # Boost candidates near register center
             if register_center is not None:
                 dist = abs(c - register_center)
                 w *= max(0.2, 1.0 - dist / 24.0)
@@ -248,7 +319,7 @@ class MelodyPitchSelector:
         low: int,
         high: int,
         interval_set: frozenset[int],
-        required_direction: int,  # +1=up, -1=down, 0=either
+        required_direction: int,
     ) -> list[int]:
         gen = self._gen
         up_ivls = (
@@ -274,19 +345,16 @@ class MelodyPitchSelector:
                     continue
                 abs_diff = abs(diff)
 
-                # Direction filter
                 if required_direction == 1 and diff < 0:
                     continue
                 if required_direction == -1 and diff > 0:
                     continue
 
-                # Allowed interval filter (per direction)
                 if diff > 0 and abs_diff not in up_ivls:
                     continue
                 if diff < 0 and abs_diff not in dn_ivls:
                     continue
 
-                # Step/leap filter
                 if abs_diff not in interval_set:
                     continue
 
@@ -299,6 +367,7 @@ class MelodyPitchSelector:
         key: types.Scale,
         is_downbeat: bool = False,
         is_on_beat: bool = False,
+        beat_strength: float = 1.0,
     ) -> list[int]:
         gen = self._gen
         chord_pcs = chord.pitch_classes() if chord else []
@@ -307,40 +376,35 @@ class MelodyPitchSelector:
         if not chord_pcs:
             return scale_pcs
 
-        # Expand chord pcs with allow_2nd/allow_7th (chord extensions, not scale degrees)
         pool = list(chord_pcs)
         if chord:
             root = chord.root
             if gen.allow_2nd:
-                # 9th = root + 14 semitones (2nd in next octave) or +2 in current
                 ninth = (root + 2) % 12
                 if ninth not in pool:
                     pool.append(ninth)
             if gen.allow_7th:
-                # 7th depends on chord quality: major=11, minor=10, dominant=10
-                seventh = (root + 10) % 12  # minor 7th default
+                seventh = (root + 10) % 12
                 if hasattr(chord, 'quality'):
                     from melodica.types import Quality
                     if chord.quality == Quality.MAJOR:
-                        seventh = (root + 11) % 12  # major 7th
+                        seventh = (root + 11) % 12
                 if seventh not in pool:
                     pool.append(seventh)
 
-        # Apply mode
         if gen.mode == "scale_only":
             return scale_pcs
         elif gen.mode == "chord_only":
             return pool
         elif gen.mode == "downbeat_chord":
-            if is_downbeat:
+            if beat_strength > 0.85:  # strong beat
                 return chord_pcs
-            # Non-downbeat: use harmony probability
             effective_prob = gen.harmony_note_probability
             if random.random() < effective_prob:
                 return pool
             return scale_pcs
         elif gen.mode == "on_beat_chord":
-            if is_downbeat or is_on_beat:
+            if beat_strength > 0.5:
                 return chord_pcs
             effective_prob = gen.harmony_note_probability
             if random.random() < effective_prob:
@@ -425,7 +489,7 @@ class MelodyPitchSelector:
                     (nearest_pitch(pc, prev_pitch) for pc in pcs),
                     key=lambda p: abs(p - prev_pitch),
                 )
-            case _:  # "any" - return a random pitch from available pool
+            case _:  # "any"
                 pcs = last_chord.pitch_classes() if last_chord else key.degrees()
                 if pcs:
                     return nearest_pitch(random.choice(list(pcs)), prev_pitch)

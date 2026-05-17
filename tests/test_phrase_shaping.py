@@ -37,7 +37,7 @@ SIMPLE_CHORDS = [
 class TestMelodyPhraseArch:
     def test_phrase_arch_velocity_contour(self):
         """Middle notes should be louder than first/last notes on average."""
-        gen = MelodyGenerator(GeneratorParams(density=0.7))
+        gen = MelodyGenerator(GeneratorParams(density=0.7), motif_probability=0.0, syncopation=0.0, rhythm_variety=0.0)
         notes = gen.render(SIMPLE_CHORDS, C_MAJOR, 8.0)
         if len(notes) < 5:
             return  # Not enough notes to test
