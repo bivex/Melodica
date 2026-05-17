@@ -44,6 +44,7 @@ from melodica.generators._melody_velocity import VelocityProcessor, _velocity_fr
 from melodica.generators._melody_motif import MotifManager
 from melodica.generators._melody_ornament import OrnamentProcessor
 from melodica.generators._melody_fill import FillProcessor
+from melodica.generators._melody_drama import DramaticArc, DRAMA_SHAPE_OPTIONS
 
 # Option sets
 FIRST_NOTE_OPTIONS = frozenset(
@@ -101,6 +102,9 @@ class MelodyGenerator(PhraseGenerator):
         motif_variation: str = "any",
         # ornaments
         ornament_probability: float = 0.0,
+        # dramatic arc
+        drama_shape: str = "none",
+        drama_peak: float = 0.70,
     ) -> None:
         super().__init__(params)
         self.rhythm = rhythm
@@ -174,6 +178,14 @@ class MelodyGenerator(PhraseGenerator):
         # Ornaments
         self.ornament_probability = max(0.0, min(1.0, ornament_probability))
 
+        # Dramatic arc
+        if drama_shape not in DRAMA_SHAPE_OPTIONS:
+            raise ValueError(
+                f"drama_shape must be in {sorted(DRAMA_SHAPE_OPTIONS)}; got {drama_shape!r}"
+            )
+        self.drama_shape = drama_shape
+        self.drama_peak = max(0.3, min(0.9, drama_peak))
+
         # Helpers (lazy-initialized in render)
         self._pitch_selector = MelodyPitchSelector(self)
         self._last_context: RenderContext | None = None
@@ -221,6 +233,9 @@ class MelodyGenerator(PhraseGenerator):
         ornament_proc = OrnamentProcessor(ornament_probability=self.ornament_probability)
         fill_proc = FillProcessor(self.note_range_low, self.note_range_high, self.params)
 
+        # Dramatic arc
+        drama = DramaticArc(self.drama_shape, duration_beats, self.drama_peak)
+
         events = rhythm_builder.build_events(duration_beats)
         if not events:
             return []
@@ -241,7 +256,6 @@ class MelodyGenerator(PhraseGenerator):
         # Restore motif from previous render
         if context and hasattr(context, "prev_pitches") and len(context.prev_pitches) >= 3:
             motif_mgr._stored_motif = list(context.prev_pitches[-6:])
-            # Also restore intervallic contour
             pitches = list(context.prev_pitches[-6:])
             if len(pitches) >= 3:
                 motif_mgr._stored_intervals = [
@@ -265,15 +279,20 @@ class MelodyGenerator(PhraseGenerator):
         motif_notes: list[int] = []
         motif_durations: list[float] = []
 
-        for i, event in enumerate(events):
+        # ---- Dramatic pauses: pre-scan events and insert gaps ----
+        drama_events = self._apply_dramatic_pauses(
+            events, drama, duration_beats
+        )
+
+        for i, event in enumerate(drama_events):
             chord = chord_at(chords, event.onset)
             last_chord = chord
-            is_last = i == len(events) - 1
+            is_last = i == len(drama_events) - 1
 
             beat_str = groove.beat_strength(event.onset)
             is_downbeat = beat_str > 0.85
             is_on_beat = beat_str > 0.5
-            is_penultimate = i == len(events) - 2 and self.penultimate_step_above and not is_last
+            is_penultimate = i == len(drama_events) - 2 and self.penultimate_step_above and not is_last
 
             progress = event.onset / duration_beats if duration_beats > 0 else 0.0
             phrase_pos = (event.onset % phrase_len) / phrase_len if phrase_len > 0 else 0.0
@@ -282,43 +301,74 @@ class MelodyGenerator(PhraseGenerator):
 
             active_key = key.get_key_at(event.onset) if hasattr(key, "get_key_at") else key
 
-            # Phrase climax
+            # ---- Dramatic arc shaping ----
+            tension = drama.tension(event.onset)
+
+            # Register shift from drama
+            reg_shift = drama.register_shift(event.onset, range_span)
+            effective_low = max(self.params.key_range_low, low)
+            effective_high = min(self.params.key_range_high + reg_shift, high + reg_shift)
+            effective_climax = min(effective_high, base_climax + reg_shift)
+
+            # Phrase climax (drama-enhanced)
             if phrase_frac < 0.65:
-                climax_offset = int((base_climax - low) * 0.4 * (phrase_frac / 0.65))
+                climax_offset = int((effective_climax - effective_low) * 0.4 * (phrase_frac / 0.65))
             else:
                 climax_offset = int(
-                    (base_climax - low) * 0.4 * (1.0 - (phrase_frac - 0.65) / 0.35) * 0.5
+                    (effective_climax - effective_low) * 0.4 * (1.0 - (phrase_frac - 0.65) / 0.35) * 0.5
                 )
-            climax_pitch = min(high, base_climax + climax_offset)
+            climax_pitch = min(effective_high, effective_climax + climax_offset)
 
-            register_center = contour.register_target(phrase_pos, progress, low, high, climax_pitch)
+            register_center = contour.register_target(phrase_pos, progress, effective_low, effective_high, climax_pitch)
             next_chord = (
                 chord_at(chords, event.onset + 2.0) if event.onset + 2.0 < duration_beats else None
             )
 
-            # Cadence target in last 10% of phrase
+            # Cadence target — drama shapes cadence strength
             cadence_target = contour.cadence_target(
-                phrase_pos, chord, active_key, prev_pitch, low, high
+                phrase_pos, chord, active_key, prev_pitch, effective_low, effective_high
             )
 
+            # Drama-shaped leap probability
+            effective_steps_prob = 1.0 - drama.leap_probability(
+                event.onset, 1.0 - steps_prob
+            )
+            effective_steps_prob = max(0.3, min(0.95, effective_steps_prob))
+
+            # Motif strategy from drama arc
+            if self.drama_shape != "none":
+                motif_strategy = drama.motif_strategy(event.onset)
+                if motif_strategy == "full":
+                    motif_mgr._variation_idx = 0  # force original
+                elif motif_strategy == "fragment":
+                    motif_mgr._variation_idx = 4  # force fragment
+                elif motif_strategy == "invert":
+                    motif_mgr._variation_idx = 1  # force invert
+                elif motif_strategy == "return":
+                    motif_mgr._variation_idx = 0  # force original
+                    motif_mgr._motif_probability_boost = 0.3  # more likely to use motif
+
+            # Cadence strength from drama
+            cadence_str = drama.cadence_strength(event.onset)
+
             # ---- Pick pitch ----
-            pitch = motif_mgr.apply(prev_pitch, low, high, active_key, i)
+            pitch = motif_mgr.apply(prev_pitch, effective_low, effective_high, active_key, i)
             if pitch == prev_pitch:
                 if notes and random.random() < self.note_repetition_probability:
                     pitch = prev_pitch
                 elif is_last and self.last_note != "any":
                     pitch = self._pitch_selector.last_pitch(
-                        last_chord, active_key, prev_pitch, low, high
+                        last_chord, active_key, prev_pitch, effective_low, effective_high
                     )
                 else:
                     pitch = self._pitch_selector.pick_pitch(
                         chord,
                         active_key,
                         prev_pitch,
-                        low,
-                        high,
+                        effective_low,
+                        effective_high,
                         last_interval,
-                        steps_prob,
+                        effective_steps_prob,
                         is_downbeat,
                         is_on_beat,
                         is_penultimate,
@@ -326,22 +376,34 @@ class MelodyGenerator(PhraseGenerator):
                         climax_pitch=climax_pitch,
                         next_chord=next_chord,
                         register_center=register_center,
-                        range_span=range_span,
+                        range_span=effective_high - effective_low,
                         beat_strength=beat_str,
                         cadence_target=cadence_target,
                     )
 
-            pitch = snap_to_scale(max(low, min(high, pitch)), active_key)
+            pitch = snap_to_scale(max(effective_low, min(effective_high, pitch)), active_key)
 
-            # Velocity with beat strength
+            # Velocity: phrase contour + beat strength + dramatic arc
             base_vel = _velocity_from_density(self.params.density)
             vel = velocity_proc.apply(base_vel, event, phrase_pos, progress, beat_strength=beat_str)
+
+            # Drama velocity shaping
+            drama_vel_scale = drama.velocity_scale(event.onset)
+            vel = int(vel * drama_vel_scale)
+
+            # Interval accent: boost velocity on large leaps
+            if abs(pitch - prev_pitch) >= 7:
+                vel = min(127, int(vel * 1.2))
+
+            # Rhythm compression from drama
+            compression = drama.rhythm_compression(event.onset)
+            dur = max(0.1, event.duration * compression)
 
             notes.append(
                 types.NoteInfo(
                     pitch=pitch,
                     start=round(event.onset, 6),
-                    duration=event.duration,
+                    duration=dur,
                     velocity=max(0, min(types.MIDI_MAX, vel)),
                 )
             )
@@ -388,3 +450,37 @@ class MelodyGenerator(PhraseGenerator):
             self._last_context = None
 
         return notes
+
+    @staticmethod
+    def _apply_dramatic_pauses(
+        events: list, drama: DramaticArc, duration_beats: float
+    ) -> list:
+        """Insert dramatic pauses by removing events at key moments."""
+        if drama.shape == "none":
+            return events
+
+        result = []
+        total = len(events)
+        skip_until = -1.0
+
+        for i, event in enumerate(events):
+            if event.onset < skip_until:
+                continue
+
+            if i > 0:
+                prev_iv = result[-1].pitch if hasattr(result[-1], 'pitch') else 0
+            else:
+                prev_iv = 0
+
+            # Use the interval from the last event's pitch (approximation)
+            last_iv = 0
+            if i > 0 and i - 1 < len(events) - 1:
+                pass  # We don't have pitch info in events, use onset-based checks
+
+            if drama.is_dramatic_pause(event.onset, 0, i, total):
+                pause_dur = drama.pause_duration(event.onset)
+                skip_until = event.onset + pause_dur
+
+            result.append(event)
+
+        return result
