@@ -66,6 +66,8 @@ class DSPMasteringDesk:
         target_lufs: float = -14.0,
         sample_rate: int = 44100,
         true_peak_ceiling: float = -1.0,
+        stereo_width: float = 1.0,
+        mono_bass: bool = False,
     ) -> None:
         """
         Parameters
@@ -78,11 +80,17 @@ class DSPMasteringDesk:
             Audio sample rate (typically 44100 or 48000)
         true_peak_ceiling : float
             Max output peak in dBFS (e.g. -1.0 dB to prevent inter-sample clipping)
+        stereo_width : float
+            Multiplier for the Side channel (1.0 = normal, 1.2 = 20% wider, 0.0 = pure mono).
+        mono_bass : bool
+            If True, aggressively sums all low frequencies into the Mono (Mid) channel.
         """
         self.style = style.lower()
         self.target_lufs = target_lufs
         self.sample_rate = sample_rate
         self.ceiling = true_peak_ceiling
+        self.stereo_width = stereo_width
+        self.mono_bass = mono_bass
         
         if not PEDALBOARD_AVAILABLE:
             logger.warning(
@@ -235,7 +243,33 @@ class DSPMasteringDesk:
         board = Pedalboard(plugins)
         mastered = board(audio_scaled, sample_rate=self.sample_rate)
         
-        # 5. Final safety check: hard clip any extreme numerical overflow
+        # 5. Mid/Side Processing (Stereo Width and Mono Bass)
+        if self.mono_bass or self.stereo_width != 1.0:
+            mid = (mastered[0] + mastered[1]) / 2.0
+            side = (mastered[0] - mastered[1]) / 2.0
+            
+            # Apply stereo width multiplier to the side channel
+            side = side * self.stereo_width
+            
+            if self.mono_bass:
+                # To make bass mono, we need to filter out low frequencies from the Side channel
+                # For a highly robust zero-dependency method, we can apply a simple first-order highpass 
+                # to the Side channel at ~120Hz. (Using a very basic backward difference or RC filter logic)
+                # Let's use a one-pole IIR highpass filter on the side channel:
+                cutoff_hz = 120.0
+                try:
+                    import scipy.signal
+                    # 1st-order Butterworth Highpass
+                    b, a = scipy.signal.butter(1, cutoff_hz / (self.sample_rate / 2.0), btype='high')
+                    side = scipy.signal.lfilter(b, a, side).astype(np.float32)
+                except ImportError:
+                    logger.warning("scipy not installed. Skipping Mono Bass filtering for performance.")
+                
+            # Reconstruct Left and Right from Mid and Side
+            mastered[0] = mid + side
+            mastered[1] = mid - side
+            
+        # 6. Final safety check: hard clip any extreme numerical overflow
         ceiling_factor = 10 ** (self.ceiling / 20.0)
         np.clip(mastered, -ceiling_factor, ceiling_factor, out=mastered)
         
