@@ -16,8 +16,8 @@ def trace_calls(frame, event, arg):
     
     # Trace all melodica internal modules, but skip standard library or external packages
     if "/melodica/" in file_name and not "melodica/midi.py" in file_name:
-        # Exclude dunder methods to reduce noise
-        if func_name.startswith("__") and func_name != "__init__":
+        # Exclude internal functions, dunders, lambdas, and comprehensions
+        if func_name.startswith("_") or func_name.startswith("<"):
             return trace_calls
 
         line_no = frame.f_lineno
@@ -40,13 +40,16 @@ def run_traced_gen():
     print("   STARTING SYSTEM-WIDE TRACED GENERATION (UNDER THE HOOD)")
     print("="*70 + "\n")
     
+    from melodica.idea_tool import TrackConfig
     cfg = IdeaToolConfig(
         bars=4, 
         tempo=120,
-        melody_gen="MelodyGenerator",
-        chords_gen="ChordGenerator",
-        bass_gen="BassGenerator",
-        drums_gen="TrapDrumsGenerator",
+        tracks=[
+            TrackConfig(name="melody", generator_type="melody"),
+            TrackConfig(name="chords", generator_type="chord"),
+            TrackConfig(name="bass", generator_type="bass"),
+            TrackConfig(name="drums", generator_type="trap_drums"),
+        ],
         style="synthwave"
     )
     tool = IdeaTool(cfg)

@@ -71,62 +71,149 @@ class Scale:
 
     def parse_roman(self, roman: str) -> "ChordLabel":
         """
-        Parse a Roman numeral like 'Im7', 'V', 'bVIImaj7', 'Im7/VII', 'vdim'.
-        Always relative to this scale.
+        Parse a Roman numeral chord symbol relative to this scale.
+
+        Supported formats
+        -----------------
+        Triads      : I  ii  bVII  #IV  Idim  Iaug  Isus  Isus2  Isus4  I5
+        Sevenths    : Imaj7  Im7  I7  Idim7  Im7b5  IIdim7
+        Extensions  : Imaj9  Imaj11  Imaj13  I9  I11  I13
+                      Im9  Im11  Im6  I6  Iadd9  Iadd11
+        Slash chords: I/V  Im7/III  bVII/IV  (bass note supports b/# accidentals)
+
+        All accidentals (b / #) may precede the root numeral.
         """
         import re
 
-        pattern = r"^([#b])?([IViv]+)(m7b5|m|maj|dim|aug|sus2|sus4)?(7)?(?:/([IViv]+))?$"
+        # Quality tokens — ordered longest-first to avoid partial matches
+        _Q = (
+            r"maj13|maj11|maj9|maj7|maj"
+            r"|m7b5|m13|m11|m9|m6|m7|m"
+            r"|dim7|dim"
+            r"|aug"
+            r"|sus4|sus2|sus"
+            r"|add13|add11|add9"
+            r"|13|11|9|7|6"
+            r"|5"          # power chord
+        )
+        pattern = (
+            r"^([#b])?"                        # optional root accidental
+            r"([IViv]+)"                       # Roman numeral
+            rf"({_Q})?"                        # optional quality token
+            r"(?:/([#b]?[IViv]+))?$"          # optional slash bass (with accidental)
+        )
         match = re.match(pattern, roman)
         if not match:
             raise ValueError(f"Invalid Roman numeral: {roman!r}")
 
-        accidental, numeral, quality_str, has_7, inv_numeral = match.groups()
-        mapping = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8}
+        accidental, numeral, quality_str, inv_numeral = match.groups()
+        quality_str = quality_str or ""
+
+        mapping = {
+            "I": 1, "II": 2, "III": 3, "IV": 4,
+            "V": 5, "VI": 6, "VII": 7, "VIII": 8,
+        }
         degree = mapping.get(numeral.upper(), 1)
 
-        is_minor = numeral.islower() or quality_str == "m"
-        is_maj7 = quality_str == "maj"
-        is_dim = quality_str == "dim"
-        is_aug = quality_str == "aug"
-        is_half_dim = quality_str == "m7b5"
-        wants_seventh = has_7 is not None or is_maj7 or is_half_dim
+        # --- Decode quality token ---
+        q = quality_str
+        is_minor   = numeral.islower() or q.startswith("m") and not q.startswith("maj")
+        is_maj_ext = q.startswith("maj")
+        is_dim     = q in ("dim", "dim7")
+        is_aug     = q == "aug"
+        is_half_dim = q == "m7b5"
+        is_power   = q == "5"
+        is_sus2    = q == "sus2"
+        is_sus4    = q in ("sus4", "sus")
+        is_add9    = q == "add9"
+        is_add11   = q == "add11"
+        is_dom7    = q == "7"
+        is_maj7    = q in ("maj7", "maj")
+        is_min7    = q == "m7" or (q == "m" and False)   # bare 'm' => triad only
+        is_dom9    = q == "9"
+        is_dom11   = q == "11"
+        is_dom13   = q == "13"
+        is_maj9    = q == "maj9"
+        is_maj11   = q == "maj11"
+        is_maj13   = q == "maj13"
+        is_min9    = q == "m9"
+        is_min11   = q == "m11"
+        is_min6    = q == "m6"
+        is_6       = q == "6"
+        is_6add9   = q == "add13"   # reuse add13 slot as 6/9 proxy
 
-        # Get diatonic chord
+        # Whether to request a seventh from the diatonic builder
+        wants_seventh = any([
+            is_maj7, is_min7, is_half_dim, is_dom7,
+            is_dom9, is_dom11, is_dom13,
+            is_maj9, is_maj11, is_maj13,
+            is_min9, is_min11,
+            q == "m13",
+        ])
+
+        # --- Get diatonic base chord ---
         chord = self.diatonic_chord(degree, seventh=wants_seventh)
 
-        # Apply accidental to root if present
-        if accidental:
-            if accidental == 'b':
-                chord = dataclasses.replace(chord, root=(chord.root - 1) % 12)
-            elif accidental == '#':
-                chord = dataclasses.replace(chord, root=(chord.root + 1) % 12)
+        # --- Apply root accidental ---
+        if accidental == 'b':
+            chord = dataclasses.replace(chord, root=(chord.root - 1) % 12)
+        elif accidental == '#':
+            chord = dataclasses.replace(chord, root=(chord.root + 1) % 12)
 
-        # Explicit quality overrides
-        if is_half_dim:
+        # --- Quality override ---
+        if is_power:
+            chord = dataclasses.replace(chord, quality=Quality.POWER)
+        elif is_half_dim:
             chord = dataclasses.replace(chord, quality=Quality.HALF_DIM7)
-        elif is_maj7 and has_7:
-            chord = dataclasses.replace(chord, quality=Quality.MAJOR7)
-        elif is_minor and has_7:
-            chord = dataclasses.replace(chord, quality=Quality.MINOR7)
-        elif is_dim and has_7:
+        elif is_dim and q == "dim7":
             chord = dataclasses.replace(chord, quality=Quality.FULL_DIM7)
         elif is_dim:
             chord = dataclasses.replace(chord, quality=Quality.DIMINISHED)
         elif is_aug:
             chord = dataclasses.replace(chord, quality=Quality.AUGMENTED)
-        elif quality_str == "sus2":
+        elif is_sus2:
             chord = dataclasses.replace(chord, quality=Quality.SUS2)
-        elif quality_str == "sus4":
+        elif is_sus4:
             chord = dataclasses.replace(chord, quality=Quality.SUS4)
-        elif numeral.isupper() and not wants_seventh and not is_maj7:
-            chord = dataclasses.replace(chord, quality=Quality.MAJOR)
+        elif is_maj7 or is_maj9 or is_maj11 or is_maj13:
+            chord = dataclasses.replace(chord, quality=Quality.MAJOR7)
+        elif is_dom7 or is_dom9 or is_dom11 or is_dom13:
+            chord = dataclasses.replace(chord, quality=Quality.DOMINANT7)
+        elif is_min7 or is_min9 or is_min11 or q == "m13":
+            chord = dataclasses.replace(chord, quality=Quality.MINOR7)
         elif is_minor and not wants_seventh:
             chord = dataclasses.replace(chord, quality=Quality.MINOR)
+        elif numeral.isupper() and not is_minor and not wants_seventh:
+            chord = dataclasses.replace(chord, quality=Quality.MAJOR)
 
+        # --- Extension annotations (stored in ChordLabel.extensions) ---
+        exts: list[int] = []
+        root = chord.root
+        if is_add9 or is_dom9 or is_maj9 or is_min9:
+            exts.append((root + 14) % 12)   # 9th (M2 + octave)
+        if is_add11 or is_dom11 or is_maj11 or is_min11:
+            exts.append((root + 17) % 12)   # 11th (P4 + octave)
+        if is_dom13 or is_maj13 or q == "m13":
+            exts.append((root + 21) % 12)   # 13th (M6 + octave)
+        if is_6 or is_min6:
+            exts.append((root + 9) % 12)    # added 6th
+        if exts:
+            chord = dataclasses.replace(chord, extensions=sorted(set(exts)))
+
+        # --- Slash bass ---
         if inv_numeral:
-            inv_deg = mapping.get(inv_numeral.upper(), 1)
+            # Strip leading accidental from bass numeral
+            bass_acc = ""
+            bass_num = inv_numeral
+            if inv_numeral and inv_numeral[0] in ("#", "b"):
+                bass_acc = inv_numeral[0]
+                bass_num = inv_numeral[1:]
+            inv_deg = mapping.get(bass_num.upper(), 1)
             inv_pc = self.degrees()[inv_deg - 1]
+            if bass_acc == 'b':
+                inv_pc = (inv_pc - 1) % 12
+            elif bass_acc == '#':
+                inv_pc = (inv_pc + 1) % 12
             chord.bass = int(round(inv_pc))
 
         return chord
