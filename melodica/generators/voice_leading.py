@@ -153,7 +153,7 @@ class VoiceLeadingGenerator(PhraseGenerator):
         if not pcs:
             return [anchor]
 
-        candidates = self._generate_candidates(pcs, anchor, low, high)
+        candidates = self._generate_candidates(pcs, anchor, low, high, chord=chord)
         if not candidates:
             return [nearest_pitch(int(pcs[0]), anchor)]
 
@@ -178,30 +178,39 @@ class VoiceLeadingGenerator(PhraseGenerator):
         anchor: int,
         low: int,
         high: int,
+        chord: ChordLabel | None = None,
     ) -> list[list[int]]:
         n_voices = self.voices
         step = 12 if self.range_style == "close" else 24
-        bass = max(low, anchor - step // 2)
+        bass_register = max(low, anchor - step // 2)
 
+        bass_pc = chord.bass if (chord and chord.bass is not None) else None
         candidates: list[list[int]] = []
-        base_voicing = []
-        cur = bass
-        for i in range(n_voices):
-            pc = int(pcs[i % len(pcs)])
-            p = nearest_pitch_above(pc, cur)
-            p = max(low, min(high, p))
-            base_voicing.append(p)
-            cur = p + 2
 
         for inv_start in range(len(pcs)):
             voicing = []
-            cur = bass
-            for i in range(n_voices):
-                pc = int(pcs[(inv_start + i) % len(pcs)])
-                p = nearest_pitch_above(pc, cur)
+            cur = bass_register
+            if bass_pc is not None:
+                p = nearest_pitch_above(bass_pc, cur)
                 p = max(low, min(high, p))
                 voicing.append(p)
                 cur = p + 2
+                upper_pcs = [pc for pc in pcs if pc != bass_pc]
+                if not upper_pcs:
+                    upper_pcs = pcs
+                for i in range(1, n_voices):
+                    pc = int(upper_pcs[(inv_start + i - 1) % len(upper_pcs)])
+                    p = nearest_pitch_above(pc, cur)
+                    p = max(low, min(high, p))
+                    voicing.append(p)
+                    cur = p + 2
+            else:
+                for i in range(n_voices):
+                    pc = int(pcs[(inv_start + i) % len(pcs)])
+                    p = nearest_pitch_above(pc, cur)
+                    p = max(low, min(high, p))
+                    voicing.append(p)
+                    cur = p + 2
             candidates.append(sorted(voicing))
 
         if self.range_style == "spread":
