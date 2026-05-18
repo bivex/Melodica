@@ -43,14 +43,14 @@ def run_demo():
     
     # 1. Track WITHOUT Voice Leading (will jump wildly)
     phrase_jumpy = PhraseInstance(generator=gen)
-    notes_jumpy = phrase_jumpy.render(chords, key)
+    notes_jumpy = phrase_jumpy.render(chords, key, 16.0)
     
     # 2. Track WITH Voice Leading (will stay in a comfortable center)
     phrase_smooth = PhraseInstance(
         generator=gen,
         modifiers=[VoiceLeadingModifier(target_octave=5)] # Anchor around C5
     )
-    notes_smooth = phrase_smooth.render(chords, key)
+    notes_smooth = phrase_smooth.render(chords, key, 16.0)
 
     # Export
     out_dir = Path("output")

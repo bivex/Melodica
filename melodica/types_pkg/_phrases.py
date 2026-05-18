@@ -90,8 +90,21 @@ class PhraseInstance:
             timeline = MusicTimeline(chords=chords, keys=[KeyLabel(scale=timeline, start=0, duration=total_beats)])
 
         if self.generator:
-            return self.generator.render(chords, timeline, total_beats, context)
-        return list(self.static.notes) if self.static else []
+            notes = self.generator.render(chords, timeline, total_beats, context)
+        else:
+            notes = list(self.static.notes) if self.static else []
+
+        if self.modifiers:
+            from melodica.modifiers import ModifierContext
+            active_scale = timeline.get_key_at(0.0) if hasattr(timeline, "get_key_at") else timeline
+            mod_ctx = ModifierContext(
+                duration_beats=total_beats,
+                chords=chords,
+                timeline=timeline,
+                scale=active_scale,
+            )
+            notes = self.modify(notes, mod_ctx)
+        return notes
 
 @dataclass
 class ArrangementSlot:
