@@ -65,6 +65,9 @@ class TensionCurve:
 
     def generate(self) -> list[TensionPoint]:
         """Generate tension points along the curve."""
+        if hasattr(self, "_cached_points"):
+            return self._cached_points
+
         points = []
         steps = max(8, int(self.total_beats / 2.0))
 
@@ -86,6 +89,7 @@ class TensionCurve:
             phase = self._classify_phase(tension, t)
             points.append(TensionPoint(beat=round(beat, 6), tension=round(tension, 4), phase=phase))
 
+        self._cached_points = points
         return points
 
     def tension_at(self, beat: float) -> float:

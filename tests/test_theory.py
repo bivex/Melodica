@@ -68,7 +68,7 @@ class TestParseRoman:
     def test_V7(self):
         chord = C_MAJOR.parse_roman("V7")
         assert chord.root == 7
-        assert chord.quality == Quality.MAJOR
+        assert chord.quality == Quality.DOMINANT7
 
     def test_Im7(self):
         chord = C_MAJOR.parse_roman("Im7")
@@ -81,9 +81,9 @@ class TestParseRoman:
         assert chord.quality == Quality.MAJOR7
 
     def test_invalid_returns_tonic(self):
-        """Unparseable string falls back to tonic chord."""
-        chord = C_MAJOR.parse_roman("ZZZZ")
-        assert chord.root == 0
+        """Unparseable string raises ValueError."""
+        with pytest.raises(ValueError):
+            C_MAJOR.parse_roman("ZZZZ")
 
     def test_all_degrees(self):
         expected_roots = [0, 2, 4, 5, 7, 9, 11]
@@ -97,9 +97,9 @@ class TestParseRoman:
         assert chord.quality == Quality.MINOR
 
     def test_bVII(self):
-        """Flat VII should still parse (accidental captured but unused → uses VII)."""
+        """Flat VII should parse with flat root (Bb = 10)."""
         chord = C_MAJOR.parse_roman("bVII")
-        assert chord.root == 11  # VII of C major = B
+        assert chord.root == 10  # bVII of C major = Bb (10)
 
 
 # ===================================================================

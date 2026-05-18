@@ -55,8 +55,13 @@ class Scale:
 
     def degrees(self) -> list[float]:
         """Pitch classes of the scale tones (0-11.99), ordered by degree."""
-        ivls = self.intervals()
-        return [(self.root + i) % OCTAVE for i in ivls]
+        try:
+            return self._degrees_cache  # type: ignore
+        except AttributeError:
+            ivls = self.intervals()
+            val = [(self.root + i) % OCTAVE for i in ivls]
+            object.__setattr__(self, "_degrees_cache", val)
+            return val
 
     def contains(self, pc: float) -> bool:
         return any(abs(pc - d) < 0.01 for d in self.degrees())

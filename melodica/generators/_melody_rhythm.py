@@ -168,7 +168,7 @@ class RhythmBuilder:
             elif self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
                 advance = random.choice([base_step * 0.5, base_step, base_step, base_step * 1.5])
                 
-            t += advance
+            t = round(t + advance, 6)
 
             tile_idx += 1
 
@@ -227,7 +227,7 @@ class RhythmBuilder:
             events.append(
                 RhythmEvent(onset=round(onset, 6), duration=dur, velocity_factor=vel_factor)
             )
-            t += dur
+            t = round(t + dur, 6)
             motif_idx += 1
 
         return events
