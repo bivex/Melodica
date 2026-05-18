@@ -300,11 +300,74 @@ MODE_DATABASE: dict[Mode, ScaleDefinition] = {
 }
 
 # Fallback/Backward compat:
-def get_mode_intervals(mode: Mode) -> List[float]:
-    if mode in MODE_DATABASE:
+# --- Programmatic World Scale Engine ---
+MELAKARTA_NAMES = [
+    "kanakangi", "ratnangi", "ganamurti", "vanaspati", "manavati", "tanarupi",
+    "senavati", "hanumatodi", "dhenuka", "natakapriya", "kokilapriya", "rupavati",
+    "gayakapriya", "vakulabharanam", "mayamalavagowla", "chakravakam", "suryakantam", "hatakambari",
+    "jhankaradhwani", "natabhairavi", "keeravani", "kharaharapriya", "gourimanohari", "varunapriya",
+    "mararanjani", "charukesi", "sarasangi", "harikambhoji", "dhirasankarabharanam", "naganandini",
+    "yagapriya", "ragavardhini", "gangeyabhushani", "vagadhisvari", "shulini", "chalanata",
+    "salagam", "jalarnavam", "jhalavarali", "navaneetam", "pavani", "raghupriya",
+    "gavambodhi", "bhavapriya", "shubhapantuvarali", "shadvidhamargini", "suvarnangi", "divyamani",
+    "dhavalambari", "namanarayani", "kamavardhini", "ramapriya", "gamanashrama", "vishwambhari",
+    "syamalangi", "shanmukhapriya", "simhendramadhyamam", "hemavati", "dharmavati", "nitimati",
+    "kantamani", "rishabhapriya", "latangi", "vachaspati", "mechakalyani", "chitrambari",
+    "sucharitra", "jyotiswarupini", "dhatuvardani", "nasikabhushani", "kosalam", "rasikapriya"
+]
+
+def get_melakarta_intervals(index: int) -> List[float]:
+    """Dynamically generates the interval array of the 72 Carnatic Melakarta Ragas mathematically."""
+    idx = index - 1
+    m = 5.0 if idx < 36 else 6.0
+    
+    chakra = (idx % 36) // 6
+    rg_map = [
+        (1.0, 2.0), # R1, G1
+        (1.0, 3.0), # R1, G2
+        (1.0, 4.0), # R1, G3
+        (2.0, 3.0), # R2, G2
+        (2.0, 4.0), # R2, G3
+        (3.0, 4.0)  # R3, G3
+    ]
+    r, g = rg_map[chakra]
+    
+    scale_in_chakra = idx % 6
+    dn_map = [
+        (8.0, 9.0),  # D1, N1
+        (8.0, 10.0), # D1, N2
+        (8.0, 11.0), # D1, N3
+        (9.0, 10.0), # D2, N2
+        (9.0, 11.0), # D2, N3
+        (10.0, 11.0) # D3, N3
+    ]
+    d, n = dn_map[scale_in_chakra]
+    
+    return [0.0, r, g, m, 7.0, d, n]
+
+def get_mode_intervals(mode: Mode | str) -> List[float]:
+    """Resolves scale intervals, supporting both predefined Mode enums, raw strings, dynamic ragas, and exotic scales."""
+    mode_name = mode.value if hasattr(mode, "value") else str(mode)
+    mode_name_lower = mode_name.lower().replace("carnatic_", "")
+    
+    if hasattr(mode, "value") and mode in MODE_DATABASE:
         return MODE_DATABASE[mode].intervals
-    # Fallback to a plain list if not in DB (shouldn't happen with full enum mapping)
-    return [0, 2, 4, 5, 7, 9, 11] # C major
+        
+    for m, definition in MODE_DATABASE.items():
+        if m.value == mode_name:
+            return definition.intervals
+            
+    # Check exotic database
+    from melodica.theory.exotic_database import EXOTIC_SCALE_DATABASE
+    if mode_name_lower in EXOTIC_SCALE_DATABASE:
+        return EXOTIC_SCALE_DATABASE[mode_name_lower]
+            
+    if mode_name_lower in MELAKARTA_NAMES:
+        idx = MELAKARTA_NAMES.index(mode_name_lower) + 1
+        return get_melakarta_intervals(idx)
+        
+    return [0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 11.0] # Fallback: Major/Ionian
+
 
 def pick_modes(
     genre: str | None = None,

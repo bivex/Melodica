@@ -269,3 +269,40 @@ class TestModeAliases:
         assert aeolian_scale.degrees() == minor_scale.degrees()
 
 
+class TestCarnaticMelakarta:
+    def test_mayamalavagowla_resolution(self):
+        # Mayamalavagowla is melakarta index 15: [0, 1, 4, 5, 7, 8, 11]
+        scale = Scale(root=0, mode="mayamalavagowla")
+        assert scale.intervals() == [0.0, 1.0, 4.0, 5.0, 7.0, 8.0, 11.0]
+
+    def test_charukesi_resolution(self):
+        # Charukesi is melakarta index 26: [0, 2, 4, 5, 7, 8, 10]
+        scale = Scale(root=0, mode="charukesi")
+        assert scale.intervals() == [0.0, 2.0, 4.0, 5.0, 7.0, 8.0, 10.0]
+
+    def test_rasikapriya_resolution(self):
+        # Rasikapriya is the 72nd melakarta index: [0, 3, 4, 6, 7, 10, 11]
+        scale = Scale(root=0, mode="rasikapriya")
+        assert scale.intervals() == [0.0, 3.0, 4.0, 6.0, 7.0, 10.0, 11.0]
+
+
+class TestExoticScaleDatabase:
+    def test_drill_chromatic(self):
+        scale = Scale(root=0, mode="drill_chromatic")
+        assert scale.intervals() == [0.0, 1.0, 2.0, 5.0, 7.0, 8.0]
+
+    def test_segah_microtonal(self):
+        scale = Scale(root=0, mode="segah")
+        assert scale.intervals() == [0.0, 1.5, 3.5, 5.0, 7.0, 8.5, 10.5]
+
+    def test_prometheus_neapolitan(self):
+        scale = Scale(root=0, mode="prometheus_neapolitan")
+        assert scale.intervals() == [0.0, 1.0, 4.0, 6.0, 9.0, 10.0]
+
+    def test_bebop_minor_major(self):
+        scale = Scale(root=0, mode="bebop_minor_major")
+        assert scale.intervals() == [0.0, 2.0, 3.0, 5.0, 7.0, 8.0, 9.0, 11.0]
+
+
+
+
