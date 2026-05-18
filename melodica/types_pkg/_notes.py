@@ -54,7 +54,7 @@ class Note:
         return self.start + self.duration
 
 
-@dataclass
+@dataclass(slots=True)
 class NoteInfo:
     """Note with absolute/relative transposition flag (mirrors noteinfo in feDP blocks)."""
 

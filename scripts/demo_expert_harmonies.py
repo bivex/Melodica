@@ -71,8 +71,8 @@ def run_demo():
             if i == 0:
                 led_pitches = raw_pitches
             else:
-                # Let's voice lead dynamically!
-                led_pitches = voice_lead(chords[i-1], chord)
+                # Let's voice lead dynamically by passing the pre-calculated pitch lists!
+                led_pitches = voice_lead(led_pitches, raw_pitches)
 
             for p in led_pitches:
                 voice_led_notes.append(NoteInfo(pitch=p, start=onset, duration=beat_step, velocity=95))

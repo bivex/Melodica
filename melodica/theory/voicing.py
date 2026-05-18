@@ -96,15 +96,31 @@ def voice_motion_cost(prev: list[int], current: list[int]) -> float:
 
     return cost
 
-def voice_lead(prev: ChordLabel, next_chord: ChordLabel) -> list[int]:
+def voice_lead(prev: ChordLabel | list[int], next_chord: ChordLabel | list[int]) -> list[int]:
     """
     Voice-lead next_chord to minimize voice movement from prev.
+    Supports passing pre-calculated pitch lists or ChordLabels.
+    Optimized with early exit for cost == 0.0.
     """
-    prev_notes = chord_to_notes(prev)
-    next_notes = chord_to_notes(next_chord)
+    if isinstance(prev, list):
+        prev_notes = prev
+    else:
+        prev_notes = chord_to_notes(prev)
 
-    best = min(
-        inversions(next_notes),
-        key=lambda inv: voice_motion_cost(prev_notes, inv)
-    )
-    return best
+    if isinstance(next_chord, list):
+        next_notes = next_chord
+    else:
+        next_notes = chord_to_notes(next_chord)
+
+    best_cost = 999999.0
+    best_inv = next_notes
+
+    for inv in inversions(next_notes):
+        cost = voice_motion_cost(prev_notes, inv)
+        if cost == 0.0:
+            return inv
+        if cost < best_cost:
+            best_cost = cost
+            best_inv = inv
+
+    return best_inv
