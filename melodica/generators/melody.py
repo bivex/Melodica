@@ -279,20 +279,22 @@ class MelodyGenerator(PhraseGenerator):
         motif_notes: list[int] = []
         motif_durations: list[float] = []
 
-        # ---- Dramatic pauses: pre-scan events and insert gaps ----
-        drama_events = self._apply_dramatic_pauses(
-            events, drama, duration_beats
-        )
+        # Dramatic pause tracking
+        skip_until = -1.0
 
-        for i, event in enumerate(drama_events):
+        for i, event in enumerate(events):
+            # Skip events during dramatic pauses
+            if event.onset < skip_until:
+                continue
+
             chord = chord_at(chords, event.onset)
             last_chord = chord
-            is_last = i == len(drama_events) - 1
+            is_last = i == len(events) - 1
 
             beat_str = groove.beat_strength(event.onset)
             is_downbeat = beat_str > 0.85
             is_on_beat = beat_str > 0.5
-            is_penultimate = i == len(drama_events) - 2 and self.penultimate_step_above and not is_last
+            is_penultimate = i == len(events) - 2 and self.penultimate_step_above and not is_last
 
             progress = event.onset / duration_beats if duration_beats > 0 else 0.0
             phrase_pos = (event.onset % phrase_len) / phrase_len if phrase_len > 0 else 0.0
@@ -416,6 +418,12 @@ class MelodyGenerator(PhraseGenerator):
             last_interval = pitch - prev_pitch
             prev_pitch = pitch
 
+            # Post-note dramatic pause check (uses real interval)
+            if drama.shape != "none" and drama.is_dramatic_pause(
+                event.onset, last_interval, i, len(events)
+            ):
+                skip_until = event.onset + drama.pause_duration(event.onset)
+
         # Store motif for next call (with rhythm)
         if motif_notes and len(motif_notes) >= 3:
             motif_mgr.store_motif(motif_notes, motif_durations if motif_durations else None)
@@ -450,37 +458,3 @@ class MelodyGenerator(PhraseGenerator):
             self._last_context = None
 
         return notes
-
-    @staticmethod
-    def _apply_dramatic_pauses(
-        events: list, drama: DramaticArc, duration_beats: float
-    ) -> list:
-        """Insert dramatic pauses by removing events at key moments."""
-        if drama.shape == "none":
-            return events
-
-        result = []
-        total = len(events)
-        skip_until = -1.0
-
-        for i, event in enumerate(events):
-            if event.onset < skip_until:
-                continue
-
-            if i > 0:
-                prev_iv = result[-1].pitch if hasattr(result[-1], 'pitch') else 0
-            else:
-                prev_iv = 0
-
-            # Use the interval from the last event's pitch (approximation)
-            last_iv = 0
-            if i > 0 and i - 1 < len(events) - 1:
-                pass  # We don't have pitch info in events, use onset-based checks
-
-            if drama.is_dramatic_pause(event.onset, 0, i, total):
-                pause_dur = drama.pause_duration(event.onset)
-                skip_until = event.onset + pause_dur
-
-            result.append(event)
-
-        return result

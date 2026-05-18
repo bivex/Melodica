@@ -34,6 +34,10 @@ class MotifManager:
         self._stored_intervals: list[int] = []  # signed intervals between consecutive pitches
         self._stored_rhythm: list[float] = []   # relative durations
 
+        # Dramatic arc overrides (set externally by MelodyGenerator)
+        self._variation_idx: int = -1       # forced variation index, -1 = use motif_variation
+        self._motif_probability_boost: float = 0.0  # added to motif_probability
+
     def store_motif(self, motif: list[int], rhythm: list[float] | None = None) -> None:
         """Store a motif for future reuse."""
         if len(motif) >= 3:
@@ -57,17 +61,27 @@ class MotifManager:
         self, prev_pitch: int, low: int, high: int, key: Scale, motif_idx: int
     ) -> int:
         """Apply stored motif with variation, or return prev_pitch if not triggered."""
+        effective_prob = min(1.0, self.motif_probability + self._motif_probability_boost)
+        # Reset boost after use
+        self._motif_probability_boost = 0.0
+
         if (
-            self.motif_probability <= 0
+            effective_prob <= 0
             or len(self._stored_intervals) < 2
-            or random.random() >= self.motif_probability
+            or random.random() >= effective_prob
         ):
+            self._variation_idx = -1  # reset forced variation
             return prev_pitch
 
-        # Pick variation
-        variation = self.motif_variation
-        if variation == "any":
-            variation = random.choice(["transpose", "invert", "retrograde", "sequence", "fragment"])
+        # Pick variation: forced override from dramatic arc, or configured
+        _VARIATIONS = ["transpose", "invert", "retrograde", "sequence", "fragment"]
+        if self._variation_idx >= 0 and self._variation_idx < len(_VARIATIONS):
+            variation = _VARIATIONS[self._variation_idx]
+            self._variation_idx = -1  # reset after use
+        else:
+            variation = self.motif_variation
+            if variation == "any":
+                variation = random.choice(_VARIATIONS)
 
         intervals = self._stored_intervals
 
