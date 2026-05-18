@@ -602,7 +602,7 @@ def generate(tempo, seed):
             for m in mods:
                 try:
                     notes = m.modify(notes, mc)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if tn not in tracks:

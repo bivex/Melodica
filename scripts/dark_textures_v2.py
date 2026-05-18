@@ -877,7 +877,7 @@ def generate(duration_minutes, tempo, key_root, seed):
             for m in mods:
                 try:
                     notes = m.modify(notes, mctx)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if track_name not in tracks:

@@ -879,14 +879,14 @@ def generate(duration_minutes: float, tempo: int, key_root: int, seed: int | Non
             for m in mods:
                 try:
                     notes = m.modify(notes, mctx)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             # NCT for melodic tracks
             if track_name in ("melody", "dyads", "call_response", "arp"):
                 try:
                     notes = nct.add_non_chord_tones(notes, local_chords, scale)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             # Offset and store

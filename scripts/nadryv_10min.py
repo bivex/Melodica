@@ -983,13 +983,13 @@ def generate(duration_minutes, tempo, key_root, seed):
             for m in mods:
                 try:
                     notes = m.modify(notes, mctx)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if track_name in ("melody", "dyads", "arp"):
                 try:
                     notes = nct.add_non_chord_tones(notes, local_chords, scale)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             if track_name not in tracks:

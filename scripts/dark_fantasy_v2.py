@@ -471,7 +471,7 @@ def generate_dark_fantasy(
         if "chords" in section.tracks or "strum" in section.tracks:
             try:
                 voices = vl_engine.voicize_progression(local_chords[:4], scale)
-            except Exception:
+            except Exception as e:
                 warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110  # noqa: S110  # fallback to regular generation
 
         # Generate each track
@@ -497,14 +497,14 @@ def generate_dark_fantasy(
             for mod in mods:
                 try:
                     notes = mod.modify(notes, mod_ctx)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             # Apply NCT to melody tracks
             if track_name in ("melody", "dyads", "call_response"):
                 try:
                     notes = nct_gen.add_non_chord_tones(notes, local_chords, scale)
-                except Exception:
+                except Exception as e:
                     warnings.warn(f"Modifier error: {e}", stacklevel=2)  # noqa: S110
 
             # Offset to global time
