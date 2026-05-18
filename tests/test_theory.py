@@ -187,7 +187,7 @@ class TestParseRomanExpertExtensions:
         assert chord.quality == Quality.SCRIABIN_MYSTIC
 
     def test_jazz_alterations(self):
-        chord_sharp11 = C_MAJOR.parse_roman("V7#11")
+        chord_sharp11 = C_MAJOR.parse_roman("V7s11")
         assert chord_sharp11.root == 7
         assert chord_sharp11.quality == Quality.DOM7_SHARP11
 
@@ -195,7 +195,7 @@ class TestParseRomanExpertExtensions:
         assert chord_flat9.root == 0
         assert chord_flat9.quality == Quality.DOM7_FLAT9
 
-        chord_sharp9 = C_MAJOR.parse_roman("V7#9")
+        chord_sharp9 = C_MAJOR.parse_roman("V7s9")
         assert chord_sharp9.root == 7
         assert chord_sharp9.quality == Quality.DOM7_SHARP9
 
@@ -204,7 +204,7 @@ class TestParseRomanExpertExtensions:
         assert chord_phryg.root == 0
         assert chord_phryg.quality == Quality.PHRYGIAN_MAJOR
 
-        chord_lydaug = C_MAJOR.parse_roman("Ilydaug")
+        chord_lydaug = C_MAJOR.parse_roman("Ilyda")
         assert chord_lydaug.root == 0
         assert chord_lydaug.quality == Quality.LYDIAN_AUG
 

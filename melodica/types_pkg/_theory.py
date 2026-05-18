@@ -90,23 +90,7 @@ class Scale:
         All accidentals (b / #) may precede the root numeral.
         """
         import re
-
-        # Unified data-driven quality mapping registry
-        ROMAN_QUALITY_MAP: dict[str, Quality] = {
-            "mystic":  Quality.SCRIABIN_MYSTIC,
-            "poly":    Quality.POLY_CHORD_C_FM,
-            "cl2":     Quality.CLUSTER_MINOR_2,
-            "cm2":     Quality.CLUSTER_MINOR_2,
-            "cM2":     Quality.CLUSTER_MAJOR_2,
-            "b9":      Quality.MAJ_TRIAD_B9,
-            "7#11":    Quality.DOM7_SHARP11,
-            "7b9":     Quality.DOM7_FLAT9,
-            "7#9":     Quality.DOM7_SHARP9,
-            "phryg":   Quality.PHRYGIAN_MAJOR,
-            "lydaug":  Quality.LYDIAN_AUG,
-            "cl4":     Quality.CLUSTER_4TH,
-            "tonecl":  Quality.TONE_CLUSTER,
-        }
+        from melodica.theory.chord_registry import ROMAN_QUALITY_MAP
 
         # Dynamically build custom quality tokens pattern, sorted by length descending
         custom_tokens = sorted(ROMAN_QUALITY_MAP.keys(), key=len, reverse=True)
@@ -147,40 +131,38 @@ class Scale:
 
         # --- Decode quality token ---
         q = quality_str
-        is_minor   = numeral.islower() or q.startswith("m") and not q.startswith("maj")
-        is_maj_ext = q.startswith("maj")
-        is_dim     = q in ("dim", "dim7")
-        is_aug     = q == "aug"
-        is_half_dim = q == "m7b5"
-        is_power   = q == "5"
-        is_sus2    = q == "sus2"
-        is_sus4    = q in ("sus4", "sus")
-        is_add9    = q == "add9"
-        is_add11   = q == "add11"
-        is_dom7    = q == "7"
-        is_maj7    = q in ("maj7", "maj")
-        is_min7    = q == "m7" or (q == "m" and False)   # bare 'm' => triad only
-        is_dom9    = q == "9"
-        is_dom11   = q == "11"
-        is_dom13   = q == "13"
-        is_maj9    = q == "maj9"
-        is_maj11   = q == "maj11"
-        is_maj13   = q == "maj13"
-        is_min9    = q == "m9"
-        is_min11   = q == "m11"
-        is_min6    = q == "m6"
-        is_6       = q == "6"
-        is_6add9   = q == "add13"   # reuse add13 slot as 6/9 proxy
+
+        def _resolve_quality(token: str, is_upper: bool) -> Quality:
+            if token in ROMAN_QUALITY_MAP:
+                return ROMAN_QUALITY_MAP[token]
+            if token in ("maj7", "maj", "maj9", "maj11", "maj13"):
+                return Quality.MAJOR7
+            if token in ("m7", "m9", "m11", "m13"):
+                return Quality.MINOR7
+            if token in ("7", "9", "11", "13"):
+                return Quality.DOMINANT7
+            if token == "dim7":
+                return Quality.FULL_DIM7
+            if token == "m7b5":
+                return Quality.HALF_DIM7
+            if token == "dim":
+                return Quality.DIMINISHED
+            if token == "aug":
+                return Quality.AUGMENTED
+            if token in ("sus4", "sus"):
+                return Quality.SUS4
+            if token == "sus2":
+                return Quality.SUS2
+            if token == "5":
+                return Quality.POWER
+            # Default fallback based on numeral casing
+            return Quality.MAJOR if is_upper else Quality.MINOR
 
         # Whether to request a seventh from the diatonic builder
-        wants_seventh = any([
-            is_maj7, is_min7, is_half_dim, is_dom7,
-            is_dom9, is_dom11, is_dom13,
-            is_maj9, is_maj11, is_maj13,
-            is_min9, is_min11,
-            q == "m13",
-            q in ("7#11", "7b9", "7#9"),
-        ])
+        wants_seventh = (
+            q in ("maj7", "maj", "maj9", "maj11", "maj13", "m7", "m9", "m11", "m13", "m7b5", "dim7", "7", "9", "11", "13")
+            or q in ROMAN_QUALITY_MAP
+        )
 
         # --- Get diatonic base chord ---
         chord = self.diatonic_chord(degree, seventh=wants_seventh)
@@ -192,43 +174,18 @@ class Scale:
             chord = dataclasses.replace(chord, root=(chord.root + 1) % 12)
 
         # --- Quality override ---
-        if q in ROMAN_QUALITY_MAP:
-            chord = dataclasses.replace(chord, quality=ROMAN_QUALITY_MAP[q])
-        elif is_power:
-            chord = dataclasses.replace(chord, quality=Quality.POWER)
-        elif is_half_dim:
-            chord = dataclasses.replace(chord, quality=Quality.HALF_DIM7)
-        elif is_dim and q == "dim7":
-            chord = dataclasses.replace(chord, quality=Quality.FULL_DIM7)
-        elif is_dim:
-            chord = dataclasses.replace(chord, quality=Quality.DIMINISHED)
-        elif is_aug:
-            chord = dataclasses.replace(chord, quality=Quality.AUGMENTED)
-        elif is_sus2:
-            chord = dataclasses.replace(chord, quality=Quality.SUS2)
-        elif is_sus4:
-            chord = dataclasses.replace(chord, quality=Quality.SUS4)
-        elif is_maj7 or is_maj9 or is_maj11 or is_maj13:
-            chord = dataclasses.replace(chord, quality=Quality.MAJOR7)
-        elif is_dom7 or is_dom9 or is_dom11 or is_dom13:
-            chord = dataclasses.replace(chord, quality=Quality.DOMINANT7)
-        elif is_min7 or is_min9 or is_min11 or q == "m13":
-            chord = dataclasses.replace(chord, quality=Quality.MINOR7)
-        elif is_minor and not wants_seventh:
-            chord = dataclasses.replace(chord, quality=Quality.MINOR)
-        elif numeral.isupper() and not is_minor and not wants_seventh:
-            chord = dataclasses.replace(chord, quality=Quality.MAJOR)
+        chord = dataclasses.replace(chord, quality=_resolve_quality(q, numeral.isupper()))
 
         # --- Extension annotations (stored in ChordLabel.extensions) ---
         exts: list[int] = []
         root = chord.root
-        if is_add9 or is_dom9 or is_maj9 or is_min9:
-            exts.append((root + 14) % 12)   # 9th (M2 + octave)
-        if is_add11 or is_dom11 or is_maj11 or is_min11:
-            exts.append((root + 17) % 12)   # 11th (P4 + octave)
-        if is_dom13 or is_maj13 or q == "m13":
-            exts.append((root + 21) % 12)   # 13th (M6 + octave)
-        if is_6 or is_min6:
+        if q in ("add9", "9", "maj9", "m9"):
+            exts.append((root + 14) % 12)   # 9th
+        if q in ("add11", "11", "maj11", "m11"):
+            exts.append((root + 17) % 12)   # 11th
+        if q in ("add13", "13", "maj13", "m13"):
+            exts.append((root + 21) % 12)   # 13th
+        if q in ("6", "m6"):
             exts.append((root + 9) % 12)    # added 6th
         if exts:
             chord = dataclasses.replace(chord, extensions=sorted(set(exts)))
