@@ -109,6 +109,8 @@ class TestTensionGenerator:
         ],
     )
     def test_all_modes(self, params, dark_chords, a_minor, mode):
+        import random
+        random.seed(42)
         gen = TensionGenerator(params, mode=mode)
         notes = gen.render(dark_chords, a_minor, 8.0)
         assert len(notes) > 0

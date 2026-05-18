@@ -155,11 +155,12 @@ class RhythmBuilder:
             if intel.enable_micro_groove:
                 vel_factor *= (1.0 + random.uniform(-intel.velocity_humanization, intel.velocity_humanization))
 
-            events.append(
-                RhythmEvent(
-                    onset=round(onset, 6), duration=round(max(0.05, dur), 6), velocity_factor=vel_factor
+            if onset < duration_beats:
+                events.append(
+                    RhythmEvent(
+                        onset=round(onset, 6), duration=round(max(0.05, dur), 6), velocity_factor=vel_factor
+                    )
                 )
-            )
 
             # Advance time
             advance = base_step
@@ -224,9 +225,10 @@ class RhythmBuilder:
 
             vel_factor = 0.7 + 0.3 * self.groove.beat_strength(onset)
 
-            events.append(
-                RhythmEvent(onset=round(onset, 6), duration=dur, velocity_factor=vel_factor)
-            )
+            if onset < duration_beats:
+                events.append(
+                    RhythmEvent(onset=round(onset, 6), duration=dur, velocity_factor=vel_factor)
+                )
             t = round(t + dur, 6)
             motif_idx += 1
 

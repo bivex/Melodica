@@ -230,6 +230,8 @@ class TestMarkovGenerator:
             assert C_MAJOR.contains(n.pitch % 12)
 
     def test_direction_bias_up(self):
+        import random
+        random.seed(42)
         gen = MarkovMelodyGenerator(direction_bias=1.0)
         notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
         if len(notes) >= 2:
