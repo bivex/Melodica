@@ -76,7 +76,7 @@ class Scale:
         """
         import re
 
-        pattern = r"^([#b])?([IViv]+)(m|maj|dim|aug|sus2|sus4)?(7)?(?:/([IViv]+))?$"
+        pattern = r"^([#b])?([IViv]+)(m7b5|m|maj|dim|aug|sus2|sus4)?(7)?(?:/([IViv]+))?$"
         match = re.match(pattern, roman)
         if not match:
             raise ValueError(f"Invalid Roman numeral: {roman!r}")
@@ -89,16 +89,28 @@ class Scale:
         is_maj7 = quality_str == "maj"
         is_dim = quality_str == "dim"
         is_aug = quality_str == "aug"
-        wants_seventh = has_7 is not None or is_maj7
+        is_half_dim = quality_str == "m7b5"
+        wants_seventh = has_7 is not None or is_maj7 or is_half_dim
 
         # Get diatonic chord
         chord = self.diatonic_chord(degree, seventh=wants_seventh)
 
+        # Apply accidental to root if present
+        if accidental:
+            if accidental == 'b':
+                chord = dataclasses.replace(chord, root=(chord.root - 1) % 12)
+            elif accidental == '#':
+                chord = dataclasses.replace(chord, root=(chord.root + 1) % 12)
+
         # Explicit quality overrides
-        if is_maj7 and has_7:
+        if is_half_dim:
+            chord = dataclasses.replace(chord, quality=Quality.HALF_DIM7)
+        elif is_maj7 and has_7:
             chord = dataclasses.replace(chord, quality=Quality.MAJOR7)
         elif is_minor and has_7:
             chord = dataclasses.replace(chord, quality=Quality.MINOR7)
+        elif is_dim and has_7:
+            chord = dataclasses.replace(chord, quality=Quality.FULL_DIM7)
         elif is_dim:
             chord = dataclasses.replace(chord, quality=Quality.DIMINISHED)
         elif is_aug:
