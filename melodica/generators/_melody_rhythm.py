@@ -112,35 +112,48 @@ class RhythmBuilder:
             beat_str = self.groove.beat_strength(t)
 
             # Pick duration based on beat strength
+            intel = self.params.intel # The Brain
             if self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
                 dur = self._duration_for_beat(beat_str, base_step, tile_motif, tile_idx)
                 
-                # Tension-aware subdivisions: Triplets (1/12) or 32nd notes (1/8)
-                if drama:
+                # Tension-aware subdivisions
+                if drama and intel.tension_subdivision_boost > 0:
                     tension = drama.tension(t)
-                    if tension > 0.7 and random.random() < 0.3:
-                        # Triplets feel
-                        dur = 0.333333
-                    elif tension > 0.85 and random.random() < 0.4:
-                        # Speed burst (1/32)
-                        dur = 0.125
+                    if tension > 0.7 and random.random() < (0.3 * intel.tension_subdivision_boost):
+                        dur = 0.333333 # Triplets
+                    elif tension > 0.85 and random.random() < (0.4 * intel.tension_subdivision_boost):
+                        dur = 0.125 # 1/32 notes
             else:
                 dur = max(0.125, base_step - 0.01)
 
-            # Syncopation (increases with tension)
+            # Rhythmic phrasing (Accelerando/Ritardando within phrase)
+            if intel.enable_rhythmic_phrasing:
+                phrase_pos = (t % self.phrase_length) / self.phrase_length if self.phrase_length > 0 else 0
+                if phrase_pos > 0.8: # End of phrase: speed up slightly
+                    dur *= 0.9
+                elif phrase_pos < 0.2: # Beginning: slow down slightly
+                    dur *= 1.1
+
+            # Syncopation
             sync_prob = self.sync_prob_at(t, drama)
 
             onset = t
             if sync_prob > 0 and random.random() < sync_prob:
-                # Syncopated shifts
                 shift = random.choice([0.125, 0.25, 0.25, 0.375])
                 onset = t + shift
+                
+            # Micro-groove (Humanization)
+            if intel.enable_micro_groove:
+                onset += random.uniform(-intel.time_humanization, intel.time_humanization)
 
-            # Velocity factor from groove strength
+            # Velocity factor
             vel_factor = 0.7 + 0.3 * self.groove.beat_strength(onset)
             if drama:
-                # Accents on peak tension
                 vel_factor = min(1.2, vel_factor + drama.tension(t) * 0.2)
+            
+            # Velocity humanization
+            if intel.enable_micro_groove:
+                vel_factor *= (1.0 + random.uniform(-intel.velocity_humanization, intel.velocity_humanization))
 
             events.append(
                 RhythmEvent(
@@ -148,13 +161,14 @@ class RhythmBuilder:
                 )
             )
 
-            # Advance time: faster at high tension
+            # Advance time
+            advance = base_step
             if drama and drama.tension(t) > 0.6:
-                t += random.choice([0.125, 0.25, 0.25, 0.333333])
+                advance = random.choice([0.125, 0.25, 0.25, 0.333333])
             elif self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
-                t += random.choice([base_step * 0.5, base_step, base_step, base_step * 1.5])
-            else:
-                t += base_step
+                advance = random.choice([base_step * 0.5, base_step, base_step, base_step * 1.5])
+                
+            t += advance
 
             tile_idx += 1
 

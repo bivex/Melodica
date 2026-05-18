@@ -41,6 +41,26 @@ from melodica.render_context import RenderContext
 
 
 @dataclass
+class MelodicIntelligenceConfig:
+    """Advanced musical logic configuration — 'the brain' of the generator."""
+    
+    # Pitch logic
+    enable_interval_weights: bool = True
+    enable_leading_tone_resolution: bool = True
+    tonal_gravity_strength: float = 1.0     # 0-1: attraction to tonic/fifth
+    chord_tone_bias: float = 1.0            # 0-1: preference for chord tones
+    
+    # Rhythm logic
+    enable_rhythmic_phrasing: bool = True   # accelerando/ritardando within phrase
+    enable_micro_groove: bool = True       # humanization/swing
+    tension_subdivision_boost: float = 1.0  # 0-1: amount of triplets/32nds at peak tension
+    
+    # Humanization
+    time_humanization: float = 0.015        # random start offset (beats)
+    velocity_humanization: float = 0.15      # 0-1: random velocity variation
+
+
+@dataclass
 class GeneratorParams:
     """Parameters shared by all phrase generators (tc_p block fields)."""
 
@@ -49,6 +69,9 @@ class GeneratorParams:
     key_range_high: int = 84  # MIDI pitch upper bound
     complexity: float = 0.5  # 0–1: melodic complexity
     leap_probability: float = 0.2  # 0–1: chance of interval > one step
+    
+    # Intelligence (optional, defaults to standard professional settings)
+    intel: MelodicIntelligenceConfig = field(default_factory=MelodicIntelligenceConfig)
 
     def __post_init__(self) -> None:
         for name, val in [
