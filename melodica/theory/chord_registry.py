@@ -30,4 +30,9 @@ ROMAN_QUALITY_MAP: dict[str, Quality] = {
     # Clusters
     "cl4":     Quality.CLUSTER_4TH,
     "tc":      Quality.TONE_CLUSTER,
+    # Genre-Specific Extensions
+    "oct":     Quality.OCTATONIC_CLUSTER,
+    "7alt":    Quality.ALTERED_DOMINANT,
+    "q4":      Quality.STACK_OF_4THS,
+    "spec":    Quality.SPECTRAL_CHORD,
 }

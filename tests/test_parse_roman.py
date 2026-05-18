@@ -24,6 +24,10 @@ C_MAJOR = Scale(root=0, mode=Mode.MAJOR)
     ("bVIIphryg", Quality.PHRYGIAN_MAJOR),
     ("iitc",      Quality.TONE_CLUSTER),
     ("Icl4",      Quality.CLUSTER_4TH),
+    ("ioct",      Quality.OCTATONIC_CLUSTER),
+    ("V7alt",     Quality.ALTERED_DOMINANT),
+    ("ivq4",      Quality.STACK_OF_4THS),
+    ("Ispec",     Quality.SPECTRAL_CHORD),
 ])
 def test_custom_qualities(symbol, expected_quality):
     chord = C_MAJOR.parse_roman(symbol)

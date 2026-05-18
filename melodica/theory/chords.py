@@ -49,6 +49,12 @@ class Quality(IntEnum):
     CLUSTER_4TH = 22     # Quartal chord (Hindemith)
     TONE_CLUSTER = 23    # Tone cluster (Cowell)
 
+    # --- Genre-Specific Extensions ---
+    OCTATONIC_CLUSTER = 24  # Dark Fantasy: octatonic subset
+    ALTERED_DOMINANT = 25   # Jazz: 7alt
+    STACK_OF_4THS = 26      # Trap: q4 stack
+    SPECTRAL_CHORD = 27     # Cinematic: spectral series subset
+
 CHORD_TEMPLATES: dict[Quality, list[int]] = {
     Quality.MAJOR:      [0, 4, 7],
     Quality.MINOR:      [0, 3, 7],
@@ -82,4 +88,10 @@ CHORD_TEMPLATES: dict[Quality, list[int]] = {
     # Extended Clusters
     Quality.CLUSTER_4TH:    [0, 5, 10, 15],
     Quality.TONE_CLUSTER:   [0, 1, 2, 3, 4],
+
+    # Genre-Specific Extensions
+    Quality.OCTATONIC_CLUSTER: [0, 1, 3, 4, 6, 7],
+    Quality.ALTERED_DOMINANT:  [0, 4, 10, 13, 15],
+    Quality.STACK_OF_4THS:     [0, 5, 10, 15],
+    Quality.SPECTRAL_CHORD:    [0, 4, 7, 10, 14, 18],
 }
