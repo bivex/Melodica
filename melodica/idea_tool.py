@@ -224,6 +224,10 @@ class IdeaToolConfig:
     doctor_psycho: bool = True
     doctor_harmonic: bool = True
 
+    # Mixing & Mastering
+    use_mixing: bool = False
+    use_mastering: bool = False
+    target_lufs: float = -14.0
     # For "harmonize_melody" workflow: caller-supplied melody to harmonize
     seed_melody: list[NoteInfo] | None = None
 
@@ -259,6 +263,7 @@ class IdeaTool:
 
         # Phrase memory: stores generated phrases for recall in later sections
         self._phrase_memory = PhraseMemory()
+        self._pan_cc_events: dict[str, list[tuple[float, int, int]]] = {}
 
     def generate(self) -> dict[str, Any]:
         """
@@ -429,6 +434,7 @@ class IdeaTool:
                     report.notes_velocity_reduced,
                 )
 
+
         # ---- Psychoacoustic verification (perceptual masking check) ----
         if self.config.use_harmonic_verifier:
             from melodica.composer.psychoacoustic import psycho_verify, PsychoConfig
@@ -447,6 +453,33 @@ class IdeaTool:
                     psycho_report.notes_transposed,
                     psycho_report.notes_removed,
                 )
+
+        # ---- Mixing Desk (Gain staging & Section faders) ----
+        if self.config.use_mixing:
+            from melodica.shorts_mixing import MixingDesk
+            # Dynamically segment total bars into typical sections (Hook -> Dynamics -> Loop)
+            bars = self.config.bars
+            if bars <= 4:
+                sections = [("Dynamics", bars, [])]
+            elif bars <= 8:
+                sections = [("Hook", 4, []), ("Dynamics", bars - 4, [])]
+            else:
+                sections = [("Hook", 4, []), ("Dynamics", bars - 8, []), ("Loop", 4, [])]
+            
+            desk = MixingDesk(niche_cfg={})
+            result = desk.apply_mixing(result, sections, self.config.tempo)
+            
+            # Apply loop end fade-out if we have a loop section
+            if any(s[0] == "Loop" for s in sections):
+                loop_start_beat = (bars - 4) * self.config.time_signature[0]
+                result = desk.apply_fade_loop_end(result, loop_start_beat, fade_beats=2.0)
+
+        # ---- Mastering Desk (LUFS target, Multiband Comp, Imaging, Limiter) ----
+        if self.config.use_mastering:
+            from melodica.shorts_mastering import MasteringDesk
+            mastering_desk = MasteringDesk(target_lufs=self.config.target_lufs)
+            result, pan_cc_events = mastering_desk.apply_mastering(result)
+            self._pan_cc_events = pan_cc_events
 
         # ---- MIDI Doctor diagnostics (using existing scripts/midi_doctor.py) ----
         if self.config.run_doctor:
