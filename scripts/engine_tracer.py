@@ -6,34 +6,7 @@ from pathlib import Path
 from melodica import types
 from melodica.idea_tool import IdeaTool, IdeaToolConfig
 
-def trace_calls(frame, event, arg):
-    if event != 'call':
-        return
-    
-    code = frame.f_code
-    func_name = code.co_name
-    file_name = code.co_filename
-    
-    # Trace all melodica internal modules, but skip standard library or external packages
-    if "/melodica/" in file_name and not "melodica/midi.py" in file_name:
-        # Exclude internal functions, dunders, lambdas, and comprehensions
-        if func_name.startswith("_") or func_name.startswith("<"):
-            return trace_calls
-
-        line_no = frame.f_lineno
-        depth = 0
-        tmp_frame = frame
-        while tmp_frame:
-            depth += 1
-            tmp_frame = tmp_frame.f_back
-        
-        # Calculate clean module name
-        module_path = file_name.split("/melodica/")[-1]
-        
-        indent = "  " * (depth - 1)
-        print(f"{indent}--> CALL [{module_path}]: {func_name}()")
-    
-    return trace_calls
+from melodica.tracer import EngineTracer
 
 def run_traced_gen():
     print("\n" + "="*70)
@@ -54,12 +27,10 @@ def run_traced_gen():
     )
     tool = IdeaTool(cfg)
     
-    sys.settrace(trace_calls)
-    try:
+    # Use our unified, profiling, and colorized tracer!
+    with EngineTracer(show_duration=True, use_colors=True):
         # Generate a small 4-bar idea which triggers composer, harmonizer, generators, and modifiers
         result = tool.generate()
-    finally:
-        sys.settrace(None)
         
     print("\n" + "="*70)
     print(f"   TRACE COMPLETE. Generated tracks: {list(result.keys())}")

@@ -136,10 +136,11 @@ class ChordGenerator(PhraseGenerator):
             base_vel = self._velocity()
             vel = int(base_vel * event.velocity_factor)
 
+            active_key = key.get_key_at(event.onset) if hasattr(key, "get_key_at") else key
             for pitch in pitches:
                 notes.append(
                     NoteInfo(
-                        pitch=snap_to_scale(pitch, key),
+                        pitch=snap_to_scale(pitch, active_key),
                         start=round(event.onset, 6),
                         duration=event.duration,
                         velocity=max(0, min(127, vel)),

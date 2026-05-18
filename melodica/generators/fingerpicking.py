@@ -123,7 +123,8 @@ class FingerpickingGenerator(PhraseGenerator):
             string_idx = self.pattern[seq_idx % len(self.pattern)]
             string_idx = min(string_idx, len(filtered) - 1)
 
-            pitch = snap_to_scale(filtered[string_idx], key)
+            active_key = key.get_key_at(event.onset) if hasattr(key, "get_key_at") else key
+            pitch = snap_to_scale(filtered[string_idx], active_key)
 
             # Sustain logic
             is_bottom = string_idx == 0

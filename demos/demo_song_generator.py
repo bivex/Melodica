@@ -70,7 +70,7 @@ def create_demo_song():
         rhythm=SubdivisionGenerator(divisions_per_beat=2, tie_chance=0.8) # Syncopated block chords
     )
     pad_phrase = PhraseInstance(generator=chord_gen)
-    pad_notes = pad_phrase.render(chords, key)
+    pad_notes = pad_phrase.render(chords, key, 16.0)
 
     # ----------------------------------------------------
     # Track 2: Bass (Root-Fifth with Euclidean Rhythm)
@@ -85,7 +85,7 @@ def create_demo_song():
         generator=bass_gen,
         modifiers=[QuantizeModifier(grid_resolution=0.25)]
     )
-    bass_notes = bass_phrase.render(chords, key)
+    bass_notes = bass_phrase.render(chords, key, 16.0)
 
     # ----------------------------------------------------
     # Track 3: Lead Melody (Probabilistic + Swing + Humanize)
@@ -106,7 +106,7 @@ def create_demo_song():
             LimitNoteRangeModifier(low=65, high=88)
         ]
     )
-    lead_notes = lead_phrase.render(chords, key)
+    lead_notes = lead_phrase.render(chords, key, 16.0)
 
     # ----------------------------------------------------
     # Track 4: Fingerpicking Acoustic Guitar
@@ -117,7 +117,7 @@ def create_demo_song():
         rhythm=SubdivisionGenerator(divisions_per_beat=4) # 16th notes
     )
     guitar_phrase = PhraseInstance(generator=guitar_gen)
-    guitar_notes = guitar_phrase.render(chords, key)
+    guitar_notes = guitar_phrase.render(chords, key, 16.0)
 
     # ----------------------------------------------------
     # Export to multi-track MIDI
