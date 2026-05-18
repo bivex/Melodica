@@ -102,8 +102,8 @@ class MasteringDesk:
         (mastered_tracks, pan_cc_events)
             pan_cc_events: {track_name: [(time, cc10_value), ...]}
         """
-        # 1. RMS analysis per track
-        rms_by_track = {tn: self._compute_rms(notes) for tn, notes in tracks.items()}
+        # 1. RMS analysis per track (skip metadata channels starting with underscore)
+        rms_by_track = {tn: self._compute_rms(notes) for tn, notes in tracks.items() if not tn.startswith("_")}
 
         # 2. Gain factors to match target RMS
         target = self.target_rms_velocity
@@ -114,6 +114,9 @@ class MasteringDesk:
         # 3. Per-note processing: band compression → gain → limiter
         mastered: Dict[str, List[NoteInfo]] = {}
         for track_name, notes in tracks.items():
+            if track_name.startswith("_"):
+                mastered[track_name] = notes
+                continue
             gain = gain_factors.get(track_name, 1.0)
             band_factor_map = self.band_compression
             new_notes: List[NoteInfo] = []
@@ -143,9 +146,11 @@ class MasteringDesk:
             new_notes.sort(key=lambda n: n.start)
             mastered[track_name] = new_notes
 
-        # 4. Stereo imaging: generate CC10 pan events per track
+        # 4. Stereo imaging: generate CC10 pan events per track (skip metadata channels)
         pan_cc_events: Dict[str, List[Tuple[float, int, int]]] = {}
         for track_name, notes in mastered.items():
+            if track_name.startswith("_"):
+                continue
             pan_val = self.track_pan.get(track_name, 0.0)
             cc10_val = self._pan_to_cc10(pan_val)
             if notes:
@@ -166,7 +171,9 @@ class MasteringDesk:
             "target_lufs": self.target_lufs,
             "target_rms": self.target_rms_velocity,
         }
-        for notes in tracks.values():
+        for track_name, notes in tracks.items():
+            if track_name.startswith("_"):
+                continue
             for n in notes:
                 report["total_notes"] += 1
                 report["peak_velocity"] = max(report["peak_velocity"], n.velocity)

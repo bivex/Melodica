@@ -177,14 +177,14 @@ def handle_phrase_memory(
         transforms = ["retrograde", "inversion", "retrograde_inversion"]
         transform = random.choice(transforms)
         low = (
-            cfg.params.get("note_range_low", scale_root * 12 + 48)
+            cfg.params.get("note_range_low", scale_root + 48)
             if isinstance(cfg.params, dict)
-            else scale_root * 12 + 48
+            else scale_root + 48
         )
         high = (
-            cfg.params.get("note_range_high", scale_root * 12 + 84)
+            cfg.params.get("note_range_high", scale_root + 84)
             if isinstance(cfg.params, dict)
-            else scale_root * 12 + 84
+            else scale_root + 84
         )
         recalled = phrase_memory.recall(tag=mem_key, transform=transform, low=low, high=high)
         if recalled and len(recalled) >= 3:

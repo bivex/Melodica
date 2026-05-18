@@ -88,6 +88,9 @@ class MixingDesk:
 
         mixed = {}
         for track_name, notes in tracks.items():
+            if track_name.startswith("_"):
+                mixed[track_name] = notes
+                continue
             gain = self.track_gains.get(track_name, 1.0)
             new_notes = []
             for n in notes:
@@ -122,6 +125,9 @@ class MixingDesk:
         """Apply exponential fade-out for notes entering the loop transition."""
         faded = {}
         for track_name, notes in tracks.items():
+            if track_name.startswith("_"):
+                faded[track_name] = notes
+                continue
             new_notes = []
             for n in notes:
                 if n.start >= loop_start_beat:
