@@ -207,15 +207,25 @@ class MelodyGenerator(PhraseGenerator):
 
         # Components
         groove = GrooveProfile()
+
+        # Global position for section buildup
+        global_pos = context.phrase_position if context else 0.0
+
+        # Section-based density buildup: increase density in later sections
+        eff_density = self.params.density
+        if global_pos > 0.3:
+            eff_density = min(1.0, eff_density + (global_pos - 0.3) * 0.3)
+
         rhythm_builder = RhythmBuilder(
             self.params,
             self.phrase_length,
             self.phrase_rest_probability,
-            self.syncopation,
+            self.syncopation + (global_pos * 0.15),  # sync buildup
             self.rhythm_variety,
             self.rhythm_motif,
             self.rhythm,
             groove=groove,
+            density=eff_density,
         )
         contour = PhraseContour(
             phrase_contour=self.phrase_contour,
@@ -233,10 +243,10 @@ class MelodyGenerator(PhraseGenerator):
         ornament_proc = OrnamentProcessor(ornament_probability=self.ornament_probability)
         fill_proc = FillProcessor(self.note_range_low, self.note_range_high, self.params)
 
-        # Dramatic arc
-        drama = DramaticArc(self.drama_shape, duration_beats, self.drama_peak)
+        # Dramatic arc aware of global position
+        drama = DramaticArc(self.drama_shape, duration_beats, self.drama_peak, global_offset=global_pos)
 
-        events = rhythm_builder.build_events(duration_beats)
+        events = rhythm_builder.build_events(duration_beats, drama=drama)
         if not events:
             return []
 
@@ -313,11 +323,13 @@ class MelodyGenerator(PhraseGenerator):
             effective_climax = min(effective_high, base_climax + reg_shift)
 
             # Phrase climax (drama-enhanced)
+            # intensity builds up globally
+            climax_int = 0.3 + (global_pos * 0.4)
             if phrase_frac < 0.65:
-                climax_offset = int((effective_climax - effective_low) * 0.4 * (phrase_frac / 0.65))
+                climax_offset = int((effective_climax - effective_low) * climax_int * (phrase_frac / 0.65))
             else:
                 climax_offset = int(
-                    (effective_climax - effective_low) * 0.4 * (1.0 - (phrase_frac - 0.65) / 0.35) * 0.5
+                    (effective_climax - effective_low) * climax_int * (1.0 - (phrase_frac - 0.65) / 0.35) * 0.5
                 )
             climax_pitch = min(effective_high, effective_climax + climax_offset)
 
@@ -336,6 +348,12 @@ class MelodyGenerator(PhraseGenerator):
                 event.onset, 1.0 - steps_prob
             )
             effective_steps_prob = max(0.3, min(0.95, effective_steps_prob))
+
+            # Drama-shaped harmony preference (lower at high tension)
+            effective_harmony_prob = self.harmony_note_probability
+            if drama.shape != "none":
+                # Nudge toward more expressive (non-chord) tones at high tension
+                effective_harmony_prob *= (1.0 - tension * 0.4)
 
             # Motif strategy from drama arc
             if self.drama_shape != "none":
@@ -381,6 +399,8 @@ class MelodyGenerator(PhraseGenerator):
                         range_span=effective_high - effective_low,
                         beat_strength=beat_str,
                         cadence_target=cadence_target,
+                        cadence_strength=cadence_str,
+                        harmony_prob=effective_harmony_prob,
                     )
 
             pitch = snap_to_scale(max(effective_low, min(effective_high, pitch)), active_key)
@@ -432,8 +452,8 @@ class MelodyGenerator(PhraseGenerator):
         if self.harmony_note_probability < 1.0 and not hasattr(self.rhythm, "_coordinator"):
             notes = fill_proc.fill_leaps(notes, key)
 
-        if self.ornament_probability > 0:
-            notes = ornament_proc.add_ornaments(notes, key, low, high)
+        if self.ornament_probability > 0 or (drama and drama.shape != "none"):
+            notes = ornament_proc.add_ornaments(notes, key, low, high, drama=drama)
 
         # Phrase arch (only when velocity didn't already apply contour — flat phrase)
         if self.phrase_contour == "flat" or self.phrase_length <= 0:

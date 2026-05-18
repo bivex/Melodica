@@ -94,6 +94,8 @@ class MelodyPitchSelector:
         range_span: int = 20,
         beat_strength: float = 1.0,
         cadence_target: int | None = None,
+        cadence_strength: float = 0.7,
+        harmony_prob: float | None = None,
     ) -> int:
         gen = self._gen
 
@@ -108,7 +110,9 @@ class MelodyPitchSelector:
                 target_pc = scale_pcs[0] if scale_pcs else (root_pc + 2) % 12
             return nearest_pitch(target_pc, prev_pitch)
 
-        pool = self.get_pitch_pool(chord, key, is_downbeat, is_on_beat, beat_strength)
+        pool = self.get_pitch_pool(
+            chord, key, is_downbeat, is_on_beat, beat_strength, harmony_prob=harmony_prob
+        )
         if not pool:
             return prev_pitch
 
@@ -189,7 +193,7 @@ class MelodyPitchSelector:
         # Cadence target: strong attractor in last 10% of phrase
         if cadence_target is not None and progress > 0.85:
             by_cadence = sorted(candidates, key=lambda p: abs(p - cadence_target))
-            if random.random() < 0.7:  # strong pull toward cadence
+            if random.random() < cadence_strength:
                 return by_cadence[0]
 
         # Climax: occasionally snap toward climax pitch
@@ -368,6 +372,7 @@ class MelodyPitchSelector:
         is_downbeat: bool = False,
         is_on_beat: bool = False,
         beat_strength: float = 1.0,
+        harmony_prob: float | None = None,
     ) -> list[int]:
         gen = self._gen
         chord_pcs = chord.pitch_classes() if chord else []
@@ -392,6 +397,8 @@ class MelodyPitchSelector:
                 if seventh not in pool:
                     pool.append(seventh)
 
+        effective_prob = harmony_prob if harmony_prob is not None else gen.harmony_note_probability
+
         if gen.mode == "scale_only":
             return scale_pcs
         elif gen.mode == "chord_only":
@@ -399,19 +406,16 @@ class MelodyPitchSelector:
         elif gen.mode == "downbeat_chord":
             if beat_strength > 0.85:  # strong beat
                 return chord_pcs
-            effective_prob = gen.harmony_note_probability
             if random.random() < effective_prob:
                 return pool
             return scale_pcs
         elif gen.mode == "on_beat_chord":
             if beat_strength > 0.5:
                 return chord_pcs
-            effective_prob = gen.harmony_note_probability
             if random.random() < effective_prob:
                 return pool
             return scale_pcs
         else:  # "scale_and_chord"
-            effective_prob = gen.harmony_note_probability
             if random.random() < effective_prob:
                 return pool
             return scale_pcs

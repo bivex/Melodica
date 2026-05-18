@@ -30,6 +30,7 @@ class DramaticArc:
         shape: str = "dramatic",
         total_duration: float = 32.0,
         peak_position: float = 0.70,
+        global_offset: float = 0.0,
     ) -> None:
         if shape not in DRAMA_SHAPE_OPTIONS:
             raise ValueError(
@@ -38,25 +39,32 @@ class DramaticArc:
         self.shape = shape
         self.total_duration = max(1.0, total_duration)
         self.peak_position = max(0.3, min(0.9, peak_position))
+        self.global_offset = max(0.0, min(1.0, global_offset))
 
     def tension(self, onset: float) -> float:
         """Return tension level (0.0-1.0) at the given onset."""
         if self.shape == "none":
-            return 0.5
+            # Even with no shape, global position adds slight buildup
+            return min(1.0, 0.4 + self.global_offset * 0.3)
 
         t = min(1.0, onset / self.total_duration)
         pk = self.peak_position
 
         if self.shape == "crescendo":
-            return _crescendo_curve(t, pk)
+            local_tension = _crescendo_curve(t, pk)
         elif self.shape == "dramatic":
-            return _dramatic_curve(t, pk)
+            local_tension = _dramatic_curve(t, pk)
         elif self.shape == "tension_release":
-            return _two_peak_curve(t, pk)
+            local_tension = _two_peak_curve(t, pk)
         elif self.shape == "epic":
-            return _epic_curve(t, pk)
+            local_tension = _epic_curve(t, pk)
+        else:
+            local_tension = 0.5
 
-        return 0.5
+        # Global buildup: later sections are more intense
+        # We mix local section tension with global song progress
+        effective_tension = local_tension * (0.8 + 0.2 * self.global_offset) + (self.global_offset * 0.1)
+        return min(1.0, effective_tension)
 
     def register_shift(self, onset: float, range_span: int) -> int:
         """Extra register offset in semitones based on tension."""
@@ -65,9 +73,9 @@ class DramaticArc:
         return int(ten * range_span * 0.4)
 
     def velocity_scale(self, onset: float) -> float:
-        """Velocity multiplier from dramatic arc (0.6-1.3)."""
+        """Velocity multiplier from dramatic arc (0.8-1.4)."""
         ten = self.tension(onset)
-        return 0.6 + ten * 0.7
+        return 0.8 + ten * 0.6
 
     def density_mult(self, onset: float) -> float:
         """Density multiplier — more notes at higher tension."""

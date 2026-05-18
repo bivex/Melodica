@@ -56,6 +56,7 @@ class RhythmBuilder:
         rhythm_motif: list[float] | None,
         rhythm: RhythmGenerator | None = None,
         groove: GrooveProfile | None = None,
+        density: float | None = None,
     ) -> None:
         self.params = params
         self.phrase_length = phrase_length
@@ -65,35 +66,47 @@ class RhythmBuilder:
         self.rhythm_motif = rhythm_motif
         self.rhythm = rhythm
         self.groove = groove or GrooveProfile()
+        self.density = density if density is not None else params.density
 
-    def build_events(self, duration_beats: float) -> list[RhythmEvent]:
+    def build_events(self, duration_beats: float, drama: DramaticArc | None = None) -> list[RhythmEvent]:
         """Generate rhythm events for the given duration."""
         if self.rhythm is not None:
             return self.rhythm.generate(duration_beats)
 
         if self.rhythm_motif is not None and len(self.rhythm_motif) >= 2:
-            return self._build_motif_events(duration_beats)
+            return self._build_motif_events(duration_beats, drama=drama)
 
-        return self._build_groove_events(duration_beats)
+        return self._build_groove_events(duration_beats, drama=drama)
 
-    def _build_groove_events(self, duration_beats: float) -> list[RhythmEvent]:
+    def _build_groove_events(self, duration_beats: float, drama: DramaticArc | None = None) -> list[RhythmEvent]:
         """Groove-aware rhythm generation with beat strength."""
-        base_step = max(0.25, (1.0 - self.params.density) * 2.0)
         events: list[RhythmEvent] = []
         t = 0.0
 
         # Generate a short rhythmic motif to tile (3-5 events)
-        tile_motif = self._generate_tile_motif(base_step)
+        # We'll use a local base_step that can vary by drama
+        base_step_global = max(0.125, (1.0 - self.density) * 2.0)
+        tile_motif = self._generate_tile_motif(base_step_global)
 
         tile_idx = 0
 
         while t < duration_beats:
-            # Phrase gap
+            # Drama-aware local density (micro-buildup)
+            density_mult = drama.density_mult(t) if drama else 1.0
+            local_density = min(1.0, self.density * density_mult)
+            base_step = max(0.125, (1.0 - local_density) * 2.0)
+
+            # Phrase gap (chance decreases at high tension)
             if self.phrase_length > 0 and t > 0 and t % self.phrase_length < base_step:
-                if random.random() < self.phrase_rest_probability:
+                rest_prob = self.phrase_rest_probability
+                if drama:
+                    # Rhythmic urgency: fewer rests at peak tension
+                    rest_prob *= (1.0 - drama.tension(t) * 0.7)
+
+                if random.random() < rest_prob:
                     gap = random.choice([0.25, 0.5, 0.5, 1.0])
                     t += gap
-                    tile_idx = 0  # reset motif at phrase boundary
+                    tile_idx = 0
                     continue
 
             beat_str = self.groove.beat_strength(t)
@@ -104,9 +117,13 @@ class RhythmBuilder:
             else:
                 dur = max(0.125, base_step - 0.01)
 
-            # Syncopation
+            # Syncopation (increases with tension)
+            sync_prob = self.syncopation
+            if drama:
+                sync_prob = min(0.8, sync_prob + drama.tension(t) * 0.2)
+
             onset = t
-            if self.syncopation > 0 and random.random() < self.syncopation:
+            if sync_prob > 0 and random.random() < sync_prob:
                 shift = random.choice([0.125, 0.25, 0.25, 0.375])
                 onset = t + shift
 
@@ -119,9 +136,9 @@ class RhythmBuilder:
                 )
             )
 
-            # Advance time
+            # Advance time: faster at high tension
             if self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
-                t += random.choice([base_step * 0.5, base_step * 0.75, base_step, base_step, base_step * 1.5])
+                t += random.choice([base_step * 0.5, base_step, base_step, base_step * 1.5])
             else:
                 t += base_step
 
@@ -129,20 +146,27 @@ class RhythmBuilder:
 
         return events
 
-    def _build_motif_events(self, duration_beats: float) -> list[RhythmEvent]:
+    def _build_motif_events(self, duration_beats: float, drama: DramaticArc | None = None) -> list[RhythmEvent]:
         """Build events from a repeating rhythm_motif pattern."""
         motif = self.rhythm_motif
         assert motif is not None
-        base_step = max(0.25, (1.0 - self.params.density) * 2.0)
-
+        
         events: list[RhythmEvent] = []
         t = 0.0
         motif_idx = 0
 
         while t < duration_beats:
+            # Drama-aware local density
+            density_mult = drama.density_mult(t) if drama else 1.0
+            local_density = min(1.0, self.density * density_mult)
+            base_step = max(0.125, (1.0 - local_density) * 2.0)
+
             # Phrase gap
             if self.phrase_length > 0 and t > 0 and t % self.phrase_length < base_step:
-                if random.random() < self.phrase_rest_probability:
+                rest_prob = self.phrase_rest_probability
+                if drama:
+                    rest_prob *= (1.0 - drama.tension(t) * 0.7)
+                if random.random() < rest_prob:
                     gap = random.choice([0.25, 0.5, 0.5, 1.0])
                     t += gap
                     continue
@@ -151,7 +175,11 @@ class RhythmBuilder:
             dur = max(0.1, base_step * ratio)
 
             onset = t
-            if self.syncopation > 0 and random.random() < self.syncopation:
+            sync_prob = self.syncopation
+            if drama:
+                sync_prob = min(0.8, sync_prob + drama.tension(t) * 0.2)
+
+            if sync_prob > 0 and random.random() < sync_prob:
                 shift = random.choice([0.125, 0.25])
                 onset = t + shift
 
