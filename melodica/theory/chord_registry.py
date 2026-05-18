@@ -36,3 +36,7 @@ ROMAN_QUALITY_MAP: dict[str, Quality] = {
     "q4":      Quality.STACK_OF_4THS,
     "spec":    Quality.SPECTRAL_CHORD,
 }
+
+import re
+_SORTED_TOKENS = sorted(ROMAN_QUALITY_MAP.keys(), key=len, reverse=True)
+_CUSTOM_PATTERN = "|".join(re.escape(k) for k in _SORTED_TOKENS)

@@ -64,15 +64,36 @@ def inversions(pitches: list[int]) -> list[list[int]]:
 def voice_motion_cost(prev: list[int], current: list[int]) -> float:
     """
     Calculate the total voice movement cost between two chord voicings.
+    Optimized to completely eliminate nested generator expression overhead.
     """
-    if len(prev) == len(current):
-        return float(sum(abs(p - c) for p, c in zip(prev, current)))
+    n_prev = len(prev)
+    n_curr = len(current)
+    if n_prev == n_curr:
+        cost = 0
+        for i in range(n_prev):
+            diff = prev[i] - current[i]
+            cost += diff if diff >= 0 else -diff
+        return float(cost)
 
     cost = 0.0
     for p in prev:
-        cost += min(abs(p - c) for c in current)
+        min_diff = 9999
+        for c in current:
+            diff = p - c
+            abs_diff = diff if diff >= 0 else -diff
+            if abs_diff < min_diff:
+                min_diff = abs_diff
+        cost += min_diff
+
     for c in current:
-        cost += min(abs(p - c) for p in prev)
+        min_diff = 9999
+        for p in prev:
+            diff = p - c
+            abs_diff = diff if diff >= 0 else -diff
+            if abs_diff < min_diff:
+                min_diff = abs_diff
+        cost += min_diff
+
     return cost
 
 def voice_lead(prev: ChordLabel, next_chord: ChordLabel) -> list[int]:

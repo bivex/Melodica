@@ -16,12 +16,34 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, List
 
 from melodica.theory import Mode, Quality, CHORD_TEMPLATES, MODE_DATABASE, get_mode_intervals
+from melodica.theory.chord_registry import ROMAN_QUALITY_MAP, _CUSTOM_PATTERN
+
+# Compile the Roman numeral parser regex once at startup
+_Q = (
+    _CUSTOM_PATTERN + r"|"
+    r"maj13|maj11|maj9|maj7|maj"
+    r"|m7b5|m13|m11|m9|m6|m7|m"
+    r"|dim7|dim"
+    r"|aug"
+    r"|sus4|sus2|sus"
+    r"|add13|add11|add9"
+    r"|13|11|9|7|6"
+    r"|5"          # power chord
+)
+_ROMAN_REGEX = re.compile(
+    r"^([#b])?"                        # optional root accidental prefix
+    r"([IViv]+)"                       # Roman numeral
+    r"([#b])?"                        # optional root accidental suffix
+    rf"({_Q})?"                        # optional quality token
+    r"(?:/([#b]?[IViv\d]+))?$"         # optional slash bass (accidental/numeral/digit)
+)
 
 OCTAVE: int = 12
 
@@ -89,33 +111,7 @@ class Scale:
 
         All accidentals (b / #) may precede the root numeral.
         """
-        import re
-        from melodica.theory.chord_registry import ROMAN_QUALITY_MAP
-
-        # Dynamically build custom quality tokens pattern, sorted by length descending
-        custom_tokens = sorted(ROMAN_QUALITY_MAP.keys(), key=len, reverse=True)
-        custom_pattern = "|".join(re.escape(k) for k in custom_tokens)
-
-        # Quality tokens — ordered longest-first to avoid partial matches
-        _Q = (
-            custom_pattern + r"|"
-            r"maj13|maj11|maj9|maj7|maj"
-            r"|m7b5|m13|m11|m9|m6|m7|m"
-            r"|dim7|dim"
-            r"|aug"
-            r"|sus4|sus2|sus"
-            r"|add13|add11|add9"
-            r"|13|11|9|7|6"
-            r"|5"          # power chord
-        )
-        pattern = (
-            r"^([#b])?"                        # optional root accidental prefix
-            r"([IViv]+)"                       # Roman numeral
-            r"([#b])?"                        # optional root accidental suffix
-            rf"({_Q})?"                        # optional quality token
-            r"(?:/([#b]?[IViv\d]+))?$"         # optional slash bass (accidental/numeral/digit)
-        )
-        match = re.match(pattern, roman)
+        match = _ROMAN_REGEX.match(roman)
         if not match:
             raise ValueError(f"Invalid Roman numeral: {roman!r}")
 
