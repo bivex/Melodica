@@ -102,8 +102,9 @@ class Scale:
             r"|5"          # power chord
         )
         pattern = (
-            r"^([#b])?"                        # optional root accidental
+            r"^([#b])?"                        # optional root accidental prefix
             r"([IViv]+)"                       # Roman numeral
+            r"([#b])?"                        # optional root accidental suffix
             rf"({_Q})?"                        # optional quality token
             r"(?:/([#b]?[IViv]+))?$"          # optional slash bass (with accidental)
         )
@@ -111,7 +112,8 @@ class Scale:
         if not match:
             raise ValueError(f"Invalid Roman numeral: {roman!r}")
 
-        accidental, numeral, quality_str, inv_numeral = match.groups()
+        acc_pref, numeral, acc_suff, quality_str, inv_numeral = match.groups()
+        accidental = acc_pref or acc_suff
         quality_str = quality_str or ""
 
         mapping = {
