@@ -19,7 +19,7 @@ ACCENT_PATTERN_OPTIONS = frozenset({"natural", "strong_weak", "syncopated"})
 
 def _velocity_from_density(density: float) -> int:
     """Base velocity from overall density (0.0-1.0)."""
-    return int(50 + density * 50)
+    return int(70 + density * 40)
 
 
 class VelocityProcessor:
