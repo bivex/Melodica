@@ -229,3 +229,43 @@ class TestParseRomanExpertExtensions:
         assert chord_third.root == 7
         assert chord_third.bass == 5
 
+
+class TestPickModes:
+    def test_pick_by_genre_trap(self):
+        from melodica.theory import pick_modes
+        trap_modes = pick_modes(genre="trap")
+        assert Mode.PHRYGIAN_DOMINANT in trap_modes
+        assert Mode.DOUBLE_HARMONIC in trap_modes
+
+    def test_pick_by_genre_lofi(self):
+        from melodica.theory import pick_modes
+        lofi_modes = pick_modes(genre="lofi")
+        assert Mode.DORIAN_PENTATONIC in lofi_modes
+        assert Mode.MINOR_HEXATONIC in lofi_modes
+        assert Mode.SUSPENDED_PENTA in lofi_modes
+
+    def test_pick_by_bpm(self):
+        from melodica.theory import pick_modes
+        # 130 BPM should matches trap and epic, but not chill lofi modes
+        fast_modes = pick_modes(bpm=130, max_results=100)
+        assert Mode.PHRYGIAN_DOMINANT in fast_modes
+        assert Mode.DORIAN_PENTATONIC not in fast_modes
+
+    def test_pick_by_energy(self):
+        from melodica.theory import pick_modes
+        # Highly energetic modes
+        hi_energy = pick_modes(energy=0.95, max_results=3)
+        assert Mode.SUPER_LOCRIAN in hi_energy
+
+
+class TestModeAliases:
+    def test_ionian_aeolian_aliases(self):
+        ionian_scale = Scale(root=0, mode=Mode.IONIAN)
+        major_scale = Scale(root=0, mode=Mode.MAJOR)
+        assert ionian_scale.degrees() == major_scale.degrees()
+
+        aeolian_scale = Scale(root=9, mode=Mode.AEOLIAN)
+        minor_scale = Scale(root=9, mode=Mode.NATURAL_MINOR)
+        assert aeolian_scale.degrees() == minor_scale.degrees()
+
+

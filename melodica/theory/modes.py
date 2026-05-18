@@ -111,6 +111,19 @@ class Mode(Enum):
     QUARTER_TONE_MINOR = "quarter_tone_minor"
     ARABIC_SIKAH = "arabic_sikah"
 
+    # --- Streaming & Production Extensions ---
+    PHRYGIAN_DOMINANT = "phrygian_dominant"
+    DOUBLE_HARMONIC = "double_harmonic"
+    DORIAN_PENTATONIC = "dorian_pentatonic"
+    MINOR_HEXATONIC = "minor_hexatonic"
+    SUSPENDED_PENTA = "suspended_penta"
+    ACOUSTIC_MINOR = "acoustic_minor"
+    LYDIAN_MINOR = "lydian_minor"
+    SUPER_LOCRIAN = "super_locrian"
+    DOUBLE_HARM_MAJOR = "double_harmonic_major"
+    LYDIAN_AUG_MODE = "lydian_aug_mode"
+    ACOUSTIC_MAJOR = "acoustic_major"
+
 @dataclass
 class ScaleDefinition:
     intervals: List[float]
@@ -118,6 +131,9 @@ class ScaleDefinition:
     mood: List[str] = field(default_factory=list)
     recommended_instruments: List[str] = field(default_factory=list)
     microtonal_support: bool = False
+    bpm_range: tuple[int, int] = (60, 180)
+    genres: List[str] = field(default_factory=list)
+    energy: float = 0.5
 
 MODE_DATABASE: dict[Mode, ScaleDefinition] = {
     # Common
@@ -217,6 +233,70 @@ MODE_DATABASE: dict[Mode, ScaleDefinition] = {
     Mode.AUGMENTED_MODE_2:   ScaleDefinition([0, 1, 4, 5, 8, 9], "Symmetric", ["Augmented"]),
     Mode.ALT_BB3:            ScaleDefinition([0, 1, 3, 4, 6, 8, 10], "Jazz", ["Altered"]),
     Mode.ALT_BB3_BB7:        ScaleDefinition([0, 1, 3, 4, 6, 8, 9], "Jazz", ["Altered", "Dark"]),
+
+    # --- Streaming & Production Extensions ---
+    # Block 1 - Trap / Drill / Hip-hop
+    Mode.PHRYGIAN_DOMINANT: ScaleDefinition(
+        [0, 1, 4, 5, 7, 8, 10], "Trap",
+        ["Dark", "Arabic", "Drill"], ["808", "Piano"],
+        bpm_range=(120, 160), genres=["trap", "drill", "hiphop"], energy=0.85
+    ),
+    Mode.DOUBLE_HARMONIC: ScaleDefinition(
+        [0, 1, 4, 5, 7, 8, 11], "Trap",
+        ["Evil", "Middle-Eastern", "Dissonant"], ["Strings", "Piano"],
+        bpm_range=(110, 150), genres=["trap", "dark_trap"], energy=0.9
+    ),
+    
+    # Block 2 - Lo-Fi / Chillhop
+    Mode.DORIAN_PENTATONIC: ScaleDefinition(
+        [0, 2, 3, 7, 9], "Lo-Fi",
+        ["Chill", "Study", "Nostalgic"], ["Piano", "Rhodes", "Guitar"],
+        bpm_range=(70, 95), genres=["lofi", "chillhop"], energy=0.3
+    ),
+    Mode.MINOR_HEXATONIC: ScaleDefinition(
+        [0, 2, 3, 5, 7, 10], "Lo-Fi",
+        ["Smooth", "Mellow", "Dreamy"], ["Guitar", "Keys"],
+        bpm_range=(65, 90), genres=["lofi", "jazzhop"], energy=0.25
+    ),
+    Mode.SUSPENDED_PENTA: ScaleDefinition(
+        [0, 2, 5, 7, 10], "Lo-Fi",
+        ["Open", "Ambient", "Spacious"], ["Piano", "Synth Pad"],
+        bpm_range=(60, 100), genres=["lofi", "ambient"], energy=0.2
+    ),
+
+    # Block 3 - Cinematic / Epic
+    Mode.ACOUSTIC_MINOR: ScaleDefinition(
+        [0, 2, 3, 6, 7, 9, 10], "Cinematic",
+        ["Dorian #4", "Bartók", "Mysterious"], ["Strings", "Woodwinds"],
+        bpm_range=(80, 140), genres=["cinematic", "epic"], energy=0.6
+    ),
+    Mode.LYDIAN_MINOR: ScaleDefinition(
+        [0, 2, 4, 6, 7, 8, 10], "Cinematic",
+        ["Epic", "Bittersweet", "Zimmer"], ["Strings", "Brass", "Choir"],
+        bpm_range=(70, 130), genres=["cinematic", "epic"], energy=0.75
+    ),
+    Mode.SUPER_LOCRIAN: ScaleDefinition(
+        [0, 1, 3, 4, 6, 8, 10], "Cinematic",
+        ["Maximum Tension", "Climax"], ["Brass", "Percussion", "Synthesizer"],
+        bpm_range=(90, 160), genres=["cinematic", "industrial"], energy=0.95
+    ),
+    Mode.DOUBLE_HARM_MAJOR: ScaleDefinition(
+        [0, 1, 4, 5, 7, 8, 11], "Cinematic",
+        ["Epic", "Ancient", "Boss-Fight"], ["Orchestra", "Choir"],
+        bpm_range=(100, 150), genres=["cinematic", "epic"], energy=0.88
+    ),
+
+    # Block 4 - Ambient / Space
+    Mode.ACOUSTIC_MAJOR: ScaleDefinition(
+        [0, 2, 4, 6, 7, 9, 10], "Ambient",
+        ["Floating", "Overtone", "Debussy"], ["Piano", "Harp", "Strings"],
+        bpm_range=(50, 110), genres=["ambient", "impressionism"], energy=0.2
+    ),
+    Mode.LYDIAN_AUG_MODE: ScaleDefinition(
+        [0, 2, 4, 6, 8, 9, 11], "Ambient",
+        ["Ethereal", "Sci-Fi", "Floating"], ["Synth", "Piano", "Flute"],
+        bpm_range=(55, 115), genres=["ambient", "scifi"], energy=0.3
+    )
 }
 
 # Fallback/Backward compat:
@@ -225,3 +305,36 @@ def get_mode_intervals(mode: Mode) -> List[float]:
         return MODE_DATABASE[mode].intervals
     # Fallback to a plain list if not in DB (shouldn't happen with full enum mapping)
     return [0, 2, 4, 5, 7, 9, 11] # C major
+
+def pick_modes(
+    genre: str | None = None,
+    energy: float | None = None,
+    bpm: int | None = None,
+    max_results: int = 5
+) -> list[Mode]:
+    """
+    Search and filter modes in the database based on target genre, energy, and BPM.
+    Returns list of Modes matching the criteria sorted by distance to target energy level.
+    """
+    matches = []
+    
+    for m, definition in MODE_DATABASE.items():
+        # 1. Filter by genre (substring case-insensitive match)
+        if genre:
+            genre_lower = genre.lower()
+            if not any(genre_lower in g.lower() for g in definition.genres):
+                continue
+                
+        # 2. Filter by BPM range
+        if bpm:
+            min_bpm, max_bpm = definition.bpm_range
+            if not (min_bpm <= bpm <= max_bpm):
+                continue
+                
+        # Calculate energy difference if target energy is specified
+        energy_diff = abs(definition.energy - energy) if energy is not None else 0.0
+        matches.append((m, energy_diff))
+        
+    # Sort matches by closest energy
+    matches.sort(key=lambda x: x[1])
+    return [m for m, _ in matches[:max_results]]

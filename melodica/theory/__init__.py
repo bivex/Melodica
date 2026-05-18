@@ -11,6 +11,6 @@
 # Licensed under the MIT License.
 # Commercial licensing available upon request.
 
-from .modes import Mode, ScaleDefinition, MODE_DATABASE, get_mode_intervals
+from .modes import Mode, ScaleDefinition, MODE_DATABASE, get_mode_intervals, pick_modes
 from .chords import Quality, CHORD_TEMPLATES
 from .voicing import chord_to_notes, inversions, voice_motion_cost, voice_lead
