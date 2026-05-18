@@ -71,12 +71,12 @@ class Scale:
 
     def parse_roman(self, roman: str) -> "ChordLabel":
         """
-        Parse a Roman numeral like 'Im7', 'V', 'bVIImaj7', 'Im7/VII'.
+        Parse a Roman numeral like 'Im7', 'V', 'bVIImaj7', 'Im7/VII', 'vdim'.
         Always relative to this scale.
         """
         import re
 
-        pattern = r"^([#b])?([IViv]+)(m|maj)?(7)?(?:/([IViv]+))?$"
+        pattern = r"^([#b])?([IViv]+)(m|maj|dim|aug|sus2|sus4)?(7)?(?:/([IViv]+))?$"
         match = re.match(pattern, roman)
         if not match:
             raise ValueError(f"Invalid Roman numeral: {roman!r}")
@@ -87,16 +87,26 @@ class Scale:
 
         is_minor = numeral.islower() or quality_str == "m"
         is_maj7 = quality_str == "maj"
+        is_dim = quality_str == "dim"
+        is_aug = quality_str == "aug"
         wants_seventh = has_7 is not None or is_maj7
 
-        # Get diatonic chord (correctly handles 7th quality via fix #1)
+        # Get diatonic chord
         chord = self.diatonic_chord(degree, seventh=wants_seventh)
 
-        # Explicit quality overrides — only override triad quality, keep 7th from diatonic
+        # Explicit quality overrides
         if is_maj7 and has_7:
             chord = dataclasses.replace(chord, quality=Quality.MAJOR7)
         elif is_minor and has_7:
             chord = dataclasses.replace(chord, quality=Quality.MINOR7)
+        elif is_dim:
+            chord = dataclasses.replace(chord, quality=Quality.DIMINISHED)
+        elif is_aug:
+            chord = dataclasses.replace(chord, quality=Quality.AUGMENTED)
+        elif quality_str == "sus2":
+            chord = dataclasses.replace(chord, quality=Quality.SUS2)
+        elif quality_str == "sus4":
+            chord = dataclasses.replace(chord, quality=Quality.SUS4)
         elif numeral.isupper() and not wants_seventh and not is_maj7:
             chord = dataclasses.replace(chord, quality=Quality.MAJOR)
         elif is_minor and not wants_seventh:

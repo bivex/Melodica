@@ -172,6 +172,11 @@ class RhythmBuilder:
 
             tile_idx += 1
 
+        # CRITICAL BUG FIX: Ensure events are sorted by onset.
+        # High syncopation or humanization can cause out-of-order events, 
+        # which breaks melodic logic (prev_pitch refers to future notes).
+        events.sort(key=lambda e: e.onset)
+
         return events
 
     def sync_prob_at(self, t: float, drama: DramaticArc | None) -> float:
