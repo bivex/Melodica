@@ -19,7 +19,9 @@ from typing import List
 class Mode(Enum):
     """Scale modes supported by the engine."""
     MAJOR = "major"
+    IONIAN = "ionian"  # Alias for MAJOR
     NATURAL_MINOR = "natural_minor"
+    AEOLIAN = "aeolian"  # Alias for NATURAL_MINOR
     HARMONIC_MINOR = "harmonic_minor"
     MELODIC_MINOR = "melodic_minor"
     DORIAN = "dorian"
@@ -120,7 +122,9 @@ class ScaleDefinition:
 MODE_DATABASE: dict[Mode, ScaleDefinition] = {
     # Common
     Mode.MAJOR: ScaleDefinition([0, 2, 4, 5, 7, 9, 11], "Common", ["Happy", "Heroic", "Bright"]),
+    Mode.IONIAN: ScaleDefinition([0, 2, 4, 5, 7, 9, 11], "Common", ["Happy", "Heroic", "Bright"]),
     Mode.NATURAL_MINOR: ScaleDefinition([0, 2, 3, 5, 7, 8, 10], "Common", ["Sad", "Serious"]),
+    Mode.AEOLIAN: ScaleDefinition([0, 2, 3, 5, 7, 8, 10], "Common", ["Sad", "Serious"]),
     Mode.HARMONIC_MINOR: ScaleDefinition([0, 2, 3, 5, 7, 8, 11], "Common", ["Dramatic"]),
     Mode.MELODIC_MINOR: ScaleDefinition([0, 2, 3, 5, 7, 9, 11], "Common", ["Jazzy"]),
     
