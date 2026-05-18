@@ -48,6 +48,7 @@ class EngineTracer:
         max_depth: Optional[int] = None,
         package_name: str = "melodica",
         use_colors: bool = True,
+        skip_patterns: tuple[str, ...] = ("<genexpr>", "<listcomp>", "<dictcomp>", "<setcomp>"),
     ) -> None:
         self.output = output or sys.stdout
         self.output_path = Path(output_path) if output_path else None
@@ -56,7 +57,8 @@ class EngineTracer:
         self.max_depth = max_depth
         self.package_name = package_name
         self.use_colors = use_colors and self.output.isatty() and not self.output_path
-        
+        self.skip_patterns = skip_patterns
+
         self._file_handle: Optional[TextIO] = None
         self._stack: List[tuple[FrameType, float]] = []
         self._orig_trace: Optional[Callable] = None
@@ -103,9 +105,13 @@ class EngineTracer:
         if "melodica/midi.py" in file_name:
             return None
             
+        # Filter skipped patterns (e.g. genexpr, listcomp)
+        if func_name in self.skip_patterns:
+            return self._trace_callback
+
         # Filter private functions unless requested
         if not self.show_private:
-            if func_name.startswith("_") or func_name.startswith("<"):
+            if func_name.startswith("_"):
                 return self._trace_callback
                 
         # Depth calculation
