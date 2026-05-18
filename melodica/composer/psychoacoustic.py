@@ -503,9 +503,11 @@ def psycho_verify(
                     report.notes_velocity_reduced += 1
                 report.issues_fixed += 1
 
-    # Re-sort
+    # Re-sort using fast native C-level attribute getter in-place
+    from operator import attrgetter
+    start_getter = attrgetter("start")
     for k in fixed:
-        fixed[k] = sorted(fixed[k], key=lambda n: n.start)
+        fixed[k].sort(key=start_getter)
 
     # Merge back non-note tracks
     result = {**tracks}

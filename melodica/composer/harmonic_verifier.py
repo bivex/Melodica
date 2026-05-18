@@ -195,8 +195,10 @@ def detect_parallel_fifths(
     for i in range(len(track_names)):
         for j in range(i + 1, len(track_names)):
             ta, tb = track_names[i], track_names[j]
-            notes_a = sorted(valid_tracks[ta], key=lambda n: n.start)
-            notes_b = sorted(valid_tracks[tb], key=lambda n: n.start)
+            from operator import attrgetter
+            start_getter = attrgetter("start")
+            notes_a = sorted(valid_tracks[ta], key=start_getter)
+            notes_b = sorted(valid_tracks[tb], key=start_getter)
 
             # Check consecutive pairs
             for k in range(len(notes_a) - 1):
@@ -380,9 +382,11 @@ def verify_and_fix(
     # Phase 4: Polyphony check
     fixed = _reduce_polyphony(fixed, config.max_polyphony, report)
 
-    # Re-sort all tracks
+    # Re-sort all tracks in-place using fast native C-level attribute getter
+    from operator import attrgetter
+    start_getter = attrgetter("start")
     for k in fixed:
-        fixed[k] = sorted(fixed[k], key=lambda n: n.start)
+        fixed[k].sort(key=start_getter)
 
     return fixed, report
 
