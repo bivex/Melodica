@@ -85,13 +85,36 @@ class Scale:
         Extensions  : Imaj9  Imaj11  Imaj13  I9  I11  I13
                       Im9  Im11  Im6  I6  Iadd9  Iadd11
         Slash chords: I/V  Im7/III  bVII/IV  (bass note supports b/# accidentals)
+        Inversions  : I/3 (first inversion), I/5 (second inversion), I/7 (third inversion)
 
         All accidentals (b / #) may precede the root numeral.
         """
         import re
 
+        # Unified data-driven quality mapping registry
+        ROMAN_QUALITY_MAP: dict[str, Quality] = {
+            "mystic":  Quality.SCRIABIN_MYSTIC,
+            "poly":    Quality.POLY_CHORD_C_FM,
+            "cl2":     Quality.CLUSTER_MINOR_2,
+            "cm2":     Quality.CLUSTER_MINOR_2,
+            "cM2":     Quality.CLUSTER_MAJOR_2,
+            "b9":      Quality.MAJ_TRIAD_B9,
+            "7#11":    Quality.DOM7_SHARP11,
+            "7b9":     Quality.DOM7_FLAT9,
+            "7#9":     Quality.DOM7_SHARP9,
+            "phryg":   Quality.PHRYGIAN_MAJOR,
+            "lydaug":  Quality.LYDIAN_AUG,
+            "cl4":     Quality.CLUSTER_4TH,
+            "tonecl":  Quality.TONE_CLUSTER,
+        }
+
+        # Dynamically build custom quality tokens pattern, sorted by length descending
+        custom_tokens = sorted(ROMAN_QUALITY_MAP.keys(), key=len, reverse=True)
+        custom_pattern = "|".join(re.escape(k) for k in custom_tokens)
+
         # Quality tokens — ordered longest-first to avoid partial matches
         _Q = (
+            custom_pattern + r"|"
             r"maj13|maj11|maj9|maj7|maj"
             r"|m7b5|m13|m11|m9|m6|m7|m"
             r"|dim7|dim"
@@ -106,7 +129,7 @@ class Scale:
             r"([IViv]+)"                       # Roman numeral
             r"([#b])?"                        # optional root accidental suffix
             rf"({_Q})?"                        # optional quality token
-            r"(?:/([#b]?[IViv]+))?$"          # optional slash bass (with accidental)
+            r"(?:/([#b]?[IViv\d]+))?$"         # optional slash bass (accidental/numeral/digit)
         )
         match = re.match(pattern, roman)
         if not match:
@@ -156,6 +179,7 @@ class Scale:
             is_maj9, is_maj11, is_maj13,
             is_min9, is_min11,
             q == "m13",
+            q in ("7#11", "7b9", "7#9"),
         ])
 
         # --- Get diatonic base chord ---
@@ -168,7 +192,9 @@ class Scale:
             chord = dataclasses.replace(chord, root=(chord.root + 1) % 12)
 
         # --- Quality override ---
-        if is_power:
+        if q in ROMAN_QUALITY_MAP:
+            chord = dataclasses.replace(chord, quality=ROMAN_QUALITY_MAP[q])
+        elif is_power:
             chord = dataclasses.replace(chord, quality=Quality.POWER)
         elif is_half_dim:
             chord = dataclasses.replace(chord, quality=Quality.HALF_DIM7)
@@ -207,21 +233,39 @@ class Scale:
         if exts:
             chord = dataclasses.replace(chord, extensions=sorted(set(exts)))
 
-        # --- Slash bass ---
+        # --- Slash bass / Inversions ---
         if inv_numeral:
-            # Strip leading accidental from bass numeral
-            bass_acc = ""
-            bass_num = inv_numeral
-            if inv_numeral and inv_numeral[0] in ("#", "b"):
-                bass_acc = inv_numeral[0]
-                bass_num = inv_numeral[1:]
-            inv_deg = mapping.get(bass_num.upper(), 1)
-            inv_pc = self.degrees()[inv_deg - 1]
-            if bass_acc == 'b':
-                inv_pc = (inv_pc - 1) % 12
-            elif bass_acc == '#':
-                inv_pc = (inv_pc + 1) % 12
-            chord.bass = int(round(inv_pc))
+            if inv_numeral.isdigit():
+                # Chord inversion mode (3 = third of chord, 5 = fifth, 7 = seventh)
+                digit = int(inv_numeral)
+                if digit == 3:
+                    # First inversion (bass = third)
+                    # For major: +4 semitones; minor: +3 semitones; else default to minor
+                    ivl = 3 if chord.quality in (Quality.MINOR, Quality.MINOR7, Quality.HALF_DIM7, Quality.FULL_DIM7) else 4
+                    chord.bass = (chord.root + ivl) % 12
+                elif digit == 5:
+                    # Second inversion (bass = fifth)
+                    chord.bass = (chord.root + 7) % 12
+                elif digit == 7:
+                    # Third inversion (bass = seventh)
+                    ivl = 10 if chord.quality in (Quality.DOMINANT7, Quality.MINOR7, Quality.HALF_DIM7) else 11
+                    chord.bass = (chord.root + ivl) % 12
+                else:
+                    chord.bass = chord.root
+            else:
+                # Specific scale degree slash bass mode
+                bass_acc = ""
+                bass_num = inv_numeral
+                if inv_numeral and inv_numeral[0] in ("#", "b"):
+                    bass_acc = inv_numeral[0]
+                    bass_num = inv_numeral[1:]
+                inv_deg = mapping.get(bass_num.upper(), 1)
+                inv_pc = self.degrees()[inv_deg - 1]
+                if bass_acc == 'b':
+                    inv_pc = (inv_pc - 1) % 12
+                elif bass_acc == '#':
+                    inv_pc = (inv_pc + 1) % 12
+                chord.bass = int(round(inv_pc))
 
         return chord
 

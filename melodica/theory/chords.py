@@ -6,7 +6,7 @@
 # https://github.com/bivex
 #
 # Created: 2026-04-02 03:04
-# Last Updated: 2026-04-02 03:04
+# Last Updated: 2026-05-18 14:08
 #
 # Licensed under the MIT License.
 # Commercial licensing available upon request.
@@ -36,6 +36,19 @@ class Quality(IntEnum):
     SCRIABIN_MYSTIC = 15
     MAJ_TRIAD_B9 = 16  # Major triad with flat 9th for dissonance
 
+    # --- Jazz Alterations ---
+    DOM7_SHARP11 = 17    # V7#11 (Lydian dominant)
+    DOM7_FLAT9 = 18      # V7b9 (Spanish Phrygian)
+    DOM7_SHARP9 = 19     # V7#9 (Hendrix Chord)
+
+    # --- Modal Colors ---
+    PHRYGIAN_MAJOR = 20  # bII in Major key context
+    LYDIAN_AUG = 21      # Major #5 + Maj7 + #11
+
+    # --- Extended Clusters ---
+    CLUSTER_4TH = 22     # Quartal chord (Hindemith)
+    TONE_CLUSTER = 23    # Tone cluster (Cowell)
+
 CHORD_TEMPLATES: dict[Quality, list[int]] = {
     Quality.MAJOR:      [0, 4, 7],
     Quality.MINOR:      [0, 3, 7],
@@ -56,4 +69,17 @@ CHORD_TEMPLATES: dict[Quality, list[int]] = {
     Quality.POLY_CHORD_C_FM: [0, 4, 7, 10, 14],
     Quality.SCRIABIN_MYSTIC: [0, 4, 7, 10, 13, 16],
     Quality.MAJ_TRIAD_B9: [0, 4, 7, 13],
+
+    # Jazz Alterations
+    Quality.DOM7_SHARP11:   [0, 4, 7, 10, 18],  # V7#11
+    Quality.DOM7_FLAT9:     [0, 4, 7, 10, 13],  # V7b9
+    Quality.DOM7_SHARP9:    [0, 4, 7, 10, 15],  # V7#9
+
+    # Modal Colors
+    Quality.PHRYGIAN_MAJOR: [0, 1, 4, 7],
+    Quality.LYDIAN_AUG:     [0, 4, 8, 11, 18],
+
+    # Extended Clusters
+    Quality.CLUSTER_4TH:    [0, 5, 10, 15],
+    Quality.TONE_CLUSTER:   [0, 1, 2, 3, 4],
 }

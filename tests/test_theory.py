@@ -173,3 +173,59 @@ class TestParseProgression:
         chords = parse_progression("I", C_MAJOR)
         assert len(chords) == 1
         assert chords[0].start == 0.0
+
+
+# ===================================================================
+# §5 — Parse Roman Expert Extensions & Inversions
+# ===================================================================
+
+
+class TestParseRomanExpertExtensions:
+    def test_mystic_chord(self):
+        chord = C_MAJOR.parse_roman("Imystic")
+        assert chord.root == 0
+        assert chord.quality == Quality.SCRIABIN_MYSTIC
+
+    def test_jazz_alterations(self):
+        chord_sharp11 = C_MAJOR.parse_roman("V7#11")
+        assert chord_sharp11.root == 7
+        assert chord_sharp11.quality == Quality.DOM7_SHARP11
+
+        chord_flat9 = C_MAJOR.parse_roman("I7b9")
+        assert chord_flat9.root == 0
+        assert chord_flat9.quality == Quality.DOM7_FLAT9
+
+        chord_sharp9 = C_MAJOR.parse_roman("V7#9")
+        assert chord_sharp9.root == 7
+        assert chord_sharp9.quality == Quality.DOM7_SHARP9
+
+    def test_modal_colors(self):
+        chord_phryg = C_MAJOR.parse_roman("Iphryg")
+        assert chord_phryg.root == 0
+        assert chord_phryg.quality == Quality.PHRYGIAN_MAJOR
+
+        chord_lydaug = C_MAJOR.parse_roman("Ilydaug")
+        assert chord_lydaug.root == 0
+        assert chord_lydaug.quality == Quality.LYDIAN_AUG
+
+    def test_inversions(self):
+        # I/3 (first inversion) -> bass = 3rd (E = 4)
+        chord_first = C_MAJOR.parse_roman("I/3")
+        assert chord_first.root == 0
+        assert chord_first.bass == 4
+
+        # ii/3 (first inversion of minor) -> bass = minor 3rd of D (F = 5)
+        chord_first_min = C_MAJOR.parse_roman("ii/3")
+        assert chord_first_min.root == 2
+        assert chord_first_min.bass == 5
+
+        # I/5 (second inversion) -> bass = 5th (G = 7)
+        chord_second = C_MAJOR.parse_roman("I/5")
+        assert chord_second.root == 0
+        assert chord_second.bass == 7
+
+        # V7/7 (third inversion) -> bass = 7th of G7 (F = 5)
+        chord_third = C_MAJOR.parse_roman("V7/7")
+        assert chord_third.root == 7
+        assert chord_third.bass == 5
+
