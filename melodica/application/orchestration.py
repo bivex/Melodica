@@ -134,6 +134,13 @@ class OrchestralBalancer:
                 for n in track.notes:
                     n.pitch += shift
 
+            # Step 2: Ensure every individual note fits by octave shifting
+            for n in track.notes:
+                while n.pitch < profile.min_pitch and n.pitch + 12 <= 127:
+                    n.pitch += 12
+                while n.pitch > profile.max_pitch and n.pitch - 12 >= 0:
+                    n.pitch -= 12
+
         return tracks
 
     @staticmethod
