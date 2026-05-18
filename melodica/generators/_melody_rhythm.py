@@ -114,30 +114,44 @@ class RhythmBuilder:
             # Pick duration based on beat strength
             if self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
                 dur = self._duration_for_beat(beat_str, base_step, tile_motif, tile_idx)
+                
+                # Tension-aware subdivisions: Triplets (1/12) or 32nd notes (1/8)
+                if drama:
+                    tension = drama.tension(t)
+                    if tension > 0.7 and random.random() < 0.3:
+                        # Triplets feel
+                        dur = 0.333333
+                    elif tension > 0.85 and random.random() < 0.4:
+                        # Speed burst (1/32)
+                        dur = 0.125
             else:
                 dur = max(0.125, base_step - 0.01)
 
             # Syncopation (increases with tension)
-            sync_prob = self.syncopation
-            if drama:
-                sync_prob = min(0.8, sync_prob + drama.tension(t) * 0.2)
+            sync_prob = self.sync_prob_at(t, drama)
 
             onset = t
             if sync_prob > 0 and random.random() < sync_prob:
+                # Syncopated shifts
                 shift = random.choice([0.125, 0.25, 0.25, 0.375])
                 onset = t + shift
 
             # Velocity factor from groove strength
             vel_factor = 0.7 + 0.3 * self.groove.beat_strength(onset)
+            if drama:
+                # Accents on peak tension
+                vel_factor = min(1.2, vel_factor + drama.tension(t) * 0.2)
 
             events.append(
                 RhythmEvent(
-                    onset=round(onset, 6), duration=max(0.1, dur), velocity_factor=vel_factor
+                    onset=round(onset, 6), duration=round(max(0.05, dur), 6), velocity_factor=vel_factor
                 )
             )
 
             # Advance time: faster at high tension
-            if self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
+            if drama and drama.tension(t) > 0.6:
+                t += random.choice([0.125, 0.25, 0.25, 0.333333])
+            elif self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
                 t += random.choice([base_step * 0.5, base_step, base_step, base_step * 1.5])
             else:
                 t += base_step
@@ -145,6 +159,12 @@ class RhythmBuilder:
             tile_idx += 1
 
         return events
+
+    def sync_prob_at(self, t: float, drama: DramaticArc | None) -> float:
+        sync_prob = self.syncopation
+        if drama:
+            sync_prob = min(0.8, sync_prob + drama.tension(t) * 0.2)
+        return sync_prob
 
     def _build_motif_events(self, duration_beats: float, drama: DramaticArc | None = None) -> list[RhythmEvent]:
         """Build events from a repeating rhythm_motif pattern."""

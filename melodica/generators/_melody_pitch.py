@@ -241,35 +241,62 @@ class MelodyPitchSelector:
         chord_pcs = set(chord.pitch_classes()) if chord else set()
         scale_pcs = set(key.degrees())
         root_pc = key.root
+        
+        # Advanced interval weights (consonance/musicality)
+        # 1st/2st=steps, 3st/4st=m3/M3, 5st=P4, 7st=P5, 12st=Octave
+        interval_weights = {
+            1: 1.0, 2: 1.0,  # steps
+            3: 0.9, 4: 0.95, # thirds
+            5: 1.1, 7: 1.2,  # P4/P5 (strong leaps)
+            12: 1.1,         # Octave
+            6: 0.3,          # Tritone (avoid unless intentional)
+            10: 0.6, 11: 0.4  # sevenths (tense)
+        }
 
         weights: list[float] = []
         for c in candidates:
             w = 1.0
 
-            # 1. Intervallic smoothness: prefer closer pitches
+            # 1. Intervallic smoothness & specific interval affinity
             dist = abs(c - prev_pitch)
-            w *= math.exp(-dist * 0.15)
+            w *= math.exp(-dist * 0.12) # Slightly flatter than before
+            
+            ivl_semitones = dist % 12
+            w *= interval_weights.get(ivl_semitones, 0.5)
 
-            # 2. Chord tone bonus
-            if c % 12 in chord_pcs:
-                w *= 1.5
+            # 2. Chord tone bonus (weighted by beat strength)
+            pc = c % 12
+            if pc in chord_pcs:
+                w *= 1.6
+            elif pc in scale_pcs:
+                w *= 1.1
 
             # 3. Tonal gravity: boost tonic and fifth
-            pc = c % 12
             if pc == root_pc:
-                w *= 1.3
+                w *= 1.4
             elif pc == (root_pc + 7) % 12:  # fifth
-                w *= 1.15
+                w *= 1.2
+                
+            # Leading tone resolution (7 -> 1, 4 -> 3)
+            prev_pc = prev_pitch % 12
+            # 7th of the scale
+            if (prev_pc - root_pc) % 12 == 11 and pc == root_pc:
+                w *= 2.0
+            # 4th of the scale (to 3rd)
+            elif (prev_pc - root_pc) % 12 == 5:
+                # 3rd of the scale
+                if (pc - root_pc) % 12 in (3, 4):
+                    w *= 1.8
 
             # 4. Register proximity
             if register_center is not None and range_span > 0:
                 reg_dist = abs(c - register_center)
-                w *= max(0.3, 1.0 - reg_dist / range_span)
+                w *= max(0.2, 1.0 - reg_dist / (range_span * 1.2))
 
             # 5. Climax attraction (subtle)
             if climax_pitch is not None:
                 if c <= climax_pitch:
-                    w *= 1.0 + 0.1 * (1.0 - abs(c - climax_pitch) / max(1, range_span))
+                    w *= 1.0 + 0.15 * (1.0 - abs(c - climax_pitch) / max(1, range_span))
 
             weights.append(max(0.01, w))
 
