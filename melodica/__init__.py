@@ -84,6 +84,7 @@ __all__ = [
     # Shorts Audio Production
     "MixingDesk",
     "MasteringDesk",
+    "DSPMasteringDesk",
 ]
 
 # --- Domain types ---
@@ -141,6 +142,10 @@ except ImportError:
 # --- Shorts Audio Suite (mixing & mastering) ---
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
+try:
+    from melodica.dsp_mastering import DSPMasteringDesk
+except ImportError:
+    DSPMasteringDesk = None  # type: ignore[assignment,misc]
 
 # --- Melody Generators ---
 from melodica.generators.lead_synth import LeadSynthGenerator
