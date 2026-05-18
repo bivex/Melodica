@@ -85,6 +85,7 @@ __all__ = [
     "MixingDesk",
     "MasteringDesk",
     "DSPMasteringDesk",
+    "NewYorkCompressor",
 ]
 
 # --- Domain types ---
@@ -144,8 +145,10 @@ from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 try:
     from melodica.dsp_mastering import DSPMasteringDesk
+    from melodica.ny_compressor import NewYorkCompressor
 except ImportError:
     DSPMasteringDesk = None  # type: ignore[assignment,misc]
+    NewYorkCompressor = None  # type: ignore[assignment,misc]
 
 # --- Melody Generators ---
 from melodica.generators.lead_synth import LeadSynthGenerator
