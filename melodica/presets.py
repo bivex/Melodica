@@ -157,10 +157,19 @@ def _deserialize_rhythm(v: Any) -> Any:
 
 def serialize_preset(generator: Any, modifiers: list[Any]) -> str:
     """Converts a generator and its modifiers into a JSON string."""
+    import dataclasses
+    
+    params_dict = {}
+    for k, val in vars(generator.params).items():
+        if dataclasses.is_dataclass(val):
+            params_dict[k] = dataclasses.asdict(val)
+        else:
+            params_dict[k] = val
+
     data = {
         "generator": {
             "type": generator.__class__.__name__,
-            "params": vars(generator.params),
+            "params": params_dict,
             "config": {
                 k: _serialize_value(v)
                 for k, v in vars(generator).items()
@@ -180,11 +189,18 @@ def serialize_preset(generator: Any, modifiers: list[Any]) -> str:
 
 def deserialize_preset(json_str: str) -> tuple[Any, list[Any]]:
     """Reconstructs a generator and modifiers from a JSON string."""
+    from melodica.generators import MelodicIntelligenceConfig
+
     data = json.loads(json_str)
 
     gen_data = data["generator"]
     gen_cls = GENERATOR_CLASSES[gen_data["type"]]
-    params = GeneratorParams(**gen_data["params"])
+    
+    params_data = dict(gen_data["params"])
+    if "intel" in params_data and isinstance(params_data["intel"], dict):
+        params_data["intel"] = MelodicIntelligenceConfig(**params_data["intel"])
+
+    params = GeneratorParams(**params_data)
     config = {
         k: _deserialize_rhythm(v) if k == "rhythm" else v for k, v in gen_data["config"].items()
     }

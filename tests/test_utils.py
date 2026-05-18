@@ -56,7 +56,7 @@ def test_nearest_pitch_below():
     assert nearest_pitch_below(0, 60) == 60
     assert nearest_pitch_below(11, 60) == 59
     assert nearest_pitch_below(0, 5) == 0 # Truncated at 0 case, base = 0
-    assert nearest_pitch_below(11, 5) == 0 # Cannot be < 0, max(0, base) -> 0
+    assert nearest_pitch_below(11, 5) == -1 # Cannot be < 0, returns -1
 
 def test_nearest_pitch():
     # distance to 61 PC=0 (60) vs (72). 60 is closest

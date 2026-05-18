@@ -144,7 +144,7 @@ class RhythmBuilder:
                 
             # Micro-groove (Humanization)
             if intel.enable_micro_groove:
-                onset += random.uniform(-intel.time_humanization, intel.time_humanization)
+                onset = max(0.0, onset + random.uniform(-intel.time_humanization, intel.time_humanization))
 
             # Velocity factor
             vel_factor = 0.7 + 0.3 * self.groove.beat_strength(onset)
