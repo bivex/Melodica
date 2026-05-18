@@ -228,6 +228,7 @@ class IdeaToolConfig:
     use_mixing: bool = False
     use_mastering: bool = False
     target_lufs: float = -14.0
+
     # For "harmonize_melody" workflow: caller-supplied melody to harmonize
     seed_melody: list[NoteInfo] | None = None
 
