@@ -38,6 +38,10 @@ class MotifManager:
         self._variation_idx: int = -1       # forced variation index, -1 = use motif_variation
         self._motif_probability_boost: float = 0.0  # added to motif_probability
 
+        # Sequence state: one transposition per sequence cycle
+        self._seq_degree_shift: int | None = None
+        self._seq_motif_idx: int = 0
+
     def store_motif(self, motif: list[int], rhythm: list[float] | None = None) -> None:
         """Store a motif for future reuse."""
         if len(motif) >= 3:
@@ -132,16 +136,20 @@ class MotifManager:
         return snap_to_scale(max(low, min(high, pitch)), key)
 
     def _apply_sequence(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
-        """Replay interval pattern transposed by a scale degree."""
+        """Replay interval pattern transposed by a consistent scale degree."""
         intervals = self._stored_intervals
-        i = idx % len(intervals)
-        # Compute cumulative interval up to position i
+        motif_len = len(intervals)
+        i = idx % motif_len
+
+        # Start of a new sequence cycle: pick transposition once
+        if i == 0 or self._seq_degree_shift is None:
+            self._seq_degree_shift = random.choice(_SEQUENCE_DEGREES)
+            self._seq_motif_idx = idx
+
+        degree_shift = self._seq_degree_shift
         cumulative = sum(intervals[: i + 1])
-        # Transpose by a random scale degree
-        degree_shift = random.choice(_SEQUENCE_DEGREES)
         scale_pcs = key.degrees()
         if scale_pcs:
-            # Map degree shift to semitone shift
             base_pc = prev_pitch % 12
             base_idx = None
             for si, pc in enumerate(scale_pcs):
@@ -151,13 +159,12 @@ class MotifManager:
             if base_idx is not None:
                 target_idx = (base_idx + degree_shift) % len(scale_pcs)
                 semitone_shift = scale_pcs[target_idx] - scale_pcs[base_idx]
-                # Handle octave wrap
                 if degree_shift > 0 and semitone_shift < 0:
                     semitone_shift += 12
                 elif degree_shift < 0 and semitone_shift > 0:
                     semitone_shift -= 12
             else:
-                semitone_shift = degree_shift * 2  # fallback
+                semitone_shift = degree_shift * 2
         else:
             semitone_shift = degree_shift * 2
 
