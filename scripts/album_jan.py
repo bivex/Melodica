@@ -138,7 +138,8 @@ def produce_leyla():
 
     # Intro: ud taksim — медленная импровизация, исследует лад
     oud_a = MelodyGenerator(
-        GeneratorParams(density=0.15, leap_probability=0.25),
+        GeneratorParams(density=0.15, leap_probability=0.25,
+                        velocity_range=(45, 75)),
         drama_shape="crescendo", drama_peak=0.4,
         motif_probability=0.3, motif_variation="any",
         ornament_probability=0.15, harmony_note_probability=0.5,
@@ -150,7 +151,8 @@ def produce_leyla():
 
     # Verse 1: voice enters — без предупреждения
     voice_b = MelodyGenerator(
-        GeneratorParams(density=0.22, leap_probability=0.15),
+        GeneratorParams(density=0.22, leap_probability=0.15,
+                        velocity_range=(50, 70)),
         drama_shape="crescendo", drama_peak=0.65,
         motif_probability=0.45, motif_variation="any",
         ornament_probability=0.2, harmony_note_probability=0.6,
@@ -163,13 +165,15 @@ def produce_leyla():
     # Kanun: тихие арпеджио, высокий регистр
     kanun_b = ArpeggiatorGenerator(
         GeneratorParams(density=0.3, leap_probability=0.3,
-                        key_range_low=66, key_range_high=86),
+                        key_range_low=66, key_range_high=86,
+                        velocity_range=(35, 55)),
         pattern="up", note_duration=0.4,
     ).render(c_b, KEY, S2 - S1)
 
     # Verse 2: + riq enters
     voice_c = MelodyGenerator(
-        GeneratorParams(density=0.25, leap_probability=0.18),
+        GeneratorParams(density=0.25, leap_probability=0.18,
+                        velocity_range=(55, 80)),
         drama_shape="crescendo", drama_peak=0.7,
         motif_probability=0.5, motif_variation="any",
         ornament_probability=0.25, harmony_note_probability=0.6,
@@ -182,19 +186,22 @@ def produce_leyla():
 
     kanun_c = ArpeggiatorGenerator(
         GeneratorParams(density=0.3, leap_probability=0.3,
-                        key_range_low=66, key_range_high=86),
+                        key_range_low=66, key_range_high=86,
+                        velocity_range=(35, 55)),
         pattern="up", note_duration=0.4,
     ).render(c_c, KEY, S3 - S2)
 
     riq_c = ElectronicDrumsGenerator(
         GeneratorParams(density=0.2, leap_probability=0.0,
-                        key_range_low=60, key_range_high=61),
+                        key_range_low=60, key_range_high=61,
+                        velocity_range=(25, 48)),
         pattern="light",
     ).render(c_c, KEY, S3 - S2)
 
     # Bridge: voice upper register — нота держится без вибрато
     voice_d = MelodyGenerator(
-        GeneratorParams(density=0.12, leap_probability=0.1),
+        GeneratorParams(density=0.12, leap_probability=0.1,
+                        velocity_range=(65, 85)),
         drama_shape="crescendo", drama_peak=0.85,
         motif_probability=0.3, motif_variation="invert",
         ornament_probability=0.3, harmony_note_probability=0.5,
@@ -206,7 +213,8 @@ def produce_leyla():
 
     # Outro: ud returns — та же таксим, но звучит иначе
     oud_e = MelodyGenerator(
-        GeneratorParams(density=0.12, leap_probability=0.2),
+        GeneratorParams(density=0.12, leap_probability=0.2,
+                        velocity_range=(40, 60)),
         drama_shape="none", drama_peak=0.3,
         motif_probability=0.3, motif_variation="fragment",
         ornament_probability=0.1, harmony_note_probability=0.5,
@@ -225,6 +233,7 @@ def produce_leyla():
     # Drone — subtle, throughout
     drone = DroneGenerator(
         GeneratorParams(density=0.02, key_range_low=50, key_range_high=51),
+        velocity=28,
     ).render(c_a[:1], KEY, DUR)
 
     tracks = {
@@ -258,7 +267,8 @@ def produce_wajd():
 
     # Female voice — главная мелодия, мелизматика
     voice_f = MelodyGenerator(
-        GeneratorParams(density=0.2, leap_probability=0.12),
+        GeneratorParams(density=0.2, leap_probability=0.12,
+                        velocity_range=(45, 65)),
         drama_shape="crescendo", drama_peak=0.55,
         motif_probability=0.5, motif_variation="any",
         ornament_probability=0.2, harmony_note_probability=0.6,
@@ -279,7 +289,8 @@ def produce_wajd():
 
     # Oud — редкий, pizzicato, pp
     oud = MelodyGenerator(
-        GeneratorParams(density=0.08, leap_probability=0.12),
+        GeneratorParams(density=0.08, leap_probability=0.12,
+                        velocity_range=(30, 50)),
         drama_shape="none",
         motif_probability=0.2, motif_variation="fragment",
         ornament_probability=0.05, harmony_note_probability=0.5,
@@ -292,13 +303,15 @@ def produce_wajd():
     # Cello — длинные педальные тоны, дрон меняется каждые ~16 тактов
     cello = StringsEnsembleGenerator(
         GeneratorParams(density=0.06, leap_probability=0.02,
-                        key_range_low=38, key_range_high=55),
+                        key_range_low=38, key_range_high=55,
+                        velocity_range=(25, 45)),
     ).render(chords, KEY, dur)
 
     # Kanun — очень тихие арпеджио
     kanun = ArpeggiatorGenerator(
         GeneratorParams(density=0.12, leap_probability=0.2,
-                        key_range_low=62, key_range_high=78),
+                        key_range_low=62, key_range_high=78,
+                        velocity_range=(20, 40)),
         pattern="up", note_duration=0.5,
     ).render(chords, KEY, dur)
 
@@ -344,13 +357,15 @@ def produce_ghyra():
     # Darbuka intro — сольный ритмический брейк 8 тактов
     darbuka_a = ElectronicDrumsGenerator(
         GeneratorParams(density=0.7, leap_probability=0.0,
-                        key_range_low=36, key_range_high=42),
+                        key_range_low=36, key_range_high=42,
+                        velocity_range=(70, 95)),
         pattern="heavy",
     ).render(c_a, KEY, S1)
 
     # Main: oud — быстрые шестнадцатые, египетская школа
     oud_b = MelodyGenerator(
-        GeneratorParams(density=0.75, leap_probability=0.5),
+        GeneratorParams(density=0.75, leap_probability=0.5,
+                        velocity_range=(65, 95)),
         drama_shape="dramatic", drama_peak=0.8,
         motif_probability=0.7, motif_variation="any",
         ornament_probability=0.5, harmony_note_probability=0.35,
@@ -363,7 +378,8 @@ def produce_ghyra():
 
     # Voice: страстный, почти крик
     voice_b = MelodyGenerator(
-        GeneratorParams(density=0.55, leap_probability=0.45),
+        GeneratorParams(density=0.55, leap_probability=0.45,
+                        velocity_range=(75, 105)),
         drama_shape="dramatic", drama_peak=0.85,
         motif_probability=0.6, motif_variation="any",
         ornament_probability=0.45, harmony_note_probability=0.3,
@@ -377,13 +393,15 @@ def produce_ghyra():
     # Darbuka continues with main theme
     darbuka_b = ElectronicDrumsGenerator(
         GeneratorParams(density=0.6, leap_probability=0.0,
-                        key_range_low=36, key_range_high=42),
+                        key_range_low=36, key_range_high=42,
+                        velocity_range=(60, 85)),
         pattern="heavy",
     ).render(c_b, KEY, S2 - S1)
 
     # Bridge: 4 такта тишины, потом женский голос тихо
     voice_c = MelodyGenerator(
-        GeneratorParams(density=0.06, leap_probability=0.05),
+        GeneratorParams(density=0.06, leap_probability=0.05,
+                        velocity_range=(35, 55)),
         drama_shape="crescendo", drama_peak=0.2,
         motif_probability=0.3, motif_variation="fragment",
         ornament_probability=0.05, harmony_note_probability=0.7,
@@ -395,7 +413,8 @@ def produce_ghyra():
 
     # Full ensemble explosion
     oud_d = MelodyGenerator(
-        GeneratorParams(density=0.8, leap_probability=0.55),
+        GeneratorParams(density=0.8, leap_probability=0.55,
+                        velocity_range=(75, 110)),
         drama_shape="dramatic", drama_peak=0.9,
         motif_probability=0.65, motif_variation="any",
         ornament_probability=0.55, harmony_note_probability=0.3,
@@ -407,7 +426,8 @@ def produce_ghyra():
     ).render(c_d, KEY, DUR - S3)
 
     voice_d = MelodyGenerator(
-        GeneratorParams(density=0.7, leap_probability=0.5),
+        GeneratorParams(density=0.7, leap_probability=0.5,
+                        velocity_range=(85, 120)),
         drama_shape="dramatic", drama_peak=0.95,
         motif_probability=0.55, motif_variation="any",
         ornament_probability=0.5, harmony_note_probability=0.3,
@@ -420,13 +440,15 @@ def produce_ghyra():
 
     darbuka_d = ElectronicDrumsGenerator(
         GeneratorParams(density=0.7, leap_probability=0.0,
-                        key_range_low=36, key_range_high=42),
+                        key_range_low=36, key_range_high=42,
+                        velocity_range=(75, 115)),
         pattern="heavy",
     ).render(c_d, KEY, DUR - S3)
 
     kanun_d = ArpeggiatorGenerator(
         GeneratorParams(density=0.5, leap_probability=0.4,
-                        key_range_low=60, key_range_high=84),
+                        key_range_low=60, key_range_high=84,
+                        velocity_range=(55, 85)),
         pattern="up_down", note_duration=0.2,
     ).render(c_d, KEY, DUR - S3)
 
@@ -479,7 +501,8 @@ def produce_shawk():
 
     # Ney — хриплый, тёплый, много воздуха
     ney = MelodyGenerator(
-        GeneratorParams(density=0.15, leap_probability=0.1),
+        GeneratorParams(density=0.15, leap_probability=0.1,
+                        velocity_range=(35, 55)),
         drama_shape="crescendo", drama_peak=0.5,
         motif_probability=0.5, motif_variation="any",
         ornament_probability=0.15, harmony_note_probability=0.55,
@@ -491,7 +514,8 @@ def produce_shawk():
 
     # Oud — только pizz, редко. Очень редко.
     oud = MelodyGenerator(
-        GeneratorParams(density=0.05, leap_probability=0.08),
+        GeneratorParams(density=0.05, leap_probability=0.08,
+                        velocity_range=(25, 40)),
         drama_shape="none",
         motif_probability=0.2, motif_variation="fragment",
         ornament_probability=0.02, harmony_note_probability=0.5,
@@ -503,7 +527,8 @@ def produce_shawk():
 
     # Female voice — в унисон с нэй, но чуть позади (offset 0.3 beats)
     voice_base = MelodyGenerator(
-        GeneratorParams(density=0.14, leap_probability=0.1),
+        GeneratorParams(density=0.14, leap_probability=0.1,
+                        velocity_range=(38, 58)),
         drama_shape="crescendo", drama_peak=0.5,
         motif_probability=0.5, motif_variation="any",
         ornament_probability=0.15, harmony_note_probability=0.55,
@@ -521,6 +546,7 @@ def produce_shawk():
     # Drone — barely audible
     drone = DroneGenerator(
         GeneratorParams(density=0.02, key_range_low=50, key_range_high=51),
+        velocity=22,
     ).render(chords[:1], KEY, dur)
 
     tracks = {
@@ -568,7 +594,8 @@ def produce_hasrat():
 
     # ── Intro: full ensemble from beat 1 ──
     oud_a = MelodyGenerator(
-        GeneratorParams(density=0.3, leap_probability=0.2),
+        GeneratorParams(density=0.3, leap_probability=0.2,
+                        velocity_range=(55, 85)),
         drama_shape="crescendo", drama_peak=0.5,
         motif_probability=0.5, motif_variation="any",
         ornament_probability=0.1, harmony_note_probability=0.6,
@@ -579,7 +606,8 @@ def produce_hasrat():
     ).render(c_a, KEY, S1)
 
     voice_f_a = MelodyGenerator(
-        GeneratorParams(density=0.25, leap_probability=0.15),
+        GeneratorParams(density=0.25, leap_probability=0.15,
+                        velocity_range=(60, 80)),
         drama_shape="crescendo", drama_peak=0.55,
         motif_probability=0.5, motif_variation="any",
         ornament_probability=0.2, harmony_note_probability=0.6,
@@ -590,7 +618,8 @@ def produce_hasrat():
     ).render(c_a, KEY, S1)
 
     voice_m_a = MelodyGenerator(
-        GeneratorParams(density=0.2, leap_probability=0.15),
+        GeneratorParams(density=0.2, leap_probability=0.15,
+                        velocity_range=(55, 75)),
         drama_shape="crescendo", drama_peak=0.5,
         motif_probability=0.45, motif_variation="any",
         ornament_probability=0.15, harmony_note_probability=0.6,
@@ -602,18 +631,21 @@ def produce_hasrat():
 
     kanun_a = ArpeggiatorGenerator(
         GeneratorParams(density=0.3, leap_probability=0.25,
-                        key_range_low=62, key_range_high=82),
+                        key_range_low=62, key_range_high=82,
+                        velocity_range=(40, 60)),
         pattern="up", note_duration=0.35,
     ).render(c_a, KEY, S1)
 
     cello_a = StringsEnsembleGenerator(
         GeneratorParams(density=0.08, leap_probability=0.02,
-                        key_range_low=38, key_range_high=55),
+                        key_range_low=38, key_range_high=55,
+                        velocity_range=(35, 50)),
     ).render(c_a, KEY, S1)
 
     darbuka_a = ElectronicDrumsGenerator(
         GeneratorParams(density=0.4, leap_probability=0.0,
-                        key_range_low=36, key_range_high=42),
+                        key_range_low=36, key_range_high=42,
+                        velocity_range=(45, 70)),
         pattern="light",
     ).render(c_a, KEY, S1)
 
@@ -622,7 +654,8 @@ def produce_hasrat():
         return MelodyGenerator(gen_p, **kw).render(c_b, KEY, S2 - S1)
 
     oud_b = _verse(
-        GeneratorParams(density=0.35, leap_probability=0.25),
+        GeneratorParams(density=0.35, leap_probability=0.25,
+                        velocity_range=(60, 90)),
         drama_shape="crescendo", drama_peak=0.6,
         motif_probability=0.55, harmony_note_probability=0.55,
         note_range_low=55, note_range_high=76,
@@ -631,7 +664,8 @@ def produce_hasrat():
     )
 
     voice_f_b = _verse(
-        GeneratorParams(density=0.28, leap_probability=0.18),
+        GeneratorParams(density=0.28, leap_probability=0.18,
+                        velocity_range=(65, 85)),
         drama_shape="crescendo", drama_peak=0.65,
         motif_probability=0.5, ornament_probability=0.2,
         harmony_note_probability=0.55,
@@ -641,7 +675,8 @@ def produce_hasrat():
     )
 
     voice_m_b = _verse(
-        GeneratorParams(density=0.22, leap_probability=0.18),
+        GeneratorParams(density=0.22, leap_probability=0.18,
+                        velocity_range=(60, 80)),
         drama_shape="crescendo", drama_peak=0.55,
         motif_probability=0.45, ornament_probability=0.15,
         harmony_note_probability=0.6,
@@ -655,7 +690,8 @@ def produce_hasrat():
         return MelodyGenerator(gen_p, **kw).render(c_c, KEY, S3 - S2)
 
     oud_c = _chorus(
-        GeneratorParams(density=0.4, leap_probability=0.3),
+        GeneratorParams(density=0.4, leap_probability=0.3,
+                        velocity_range=(65, 100)),
         drama_shape="crescendo", drama_peak=0.7,
         motif_probability=0.6, ornament_probability=0.25,
         harmony_note_probability=0.45,
@@ -665,7 +701,8 @@ def produce_hasrat():
     )
 
     voice_f_c = _chorus(
-        GeneratorParams(density=0.35, leap_probability=0.22),
+        GeneratorParams(density=0.35, leap_probability=0.22,
+                        velocity_range=(70, 95)),
         drama_shape="crescendo", drama_peak=0.75,
         motif_probability=0.55, ornament_probability=0.25,
         harmony_note_probability=0.45,
@@ -675,7 +712,8 @@ def produce_hasrat():
     )
 
     voice_m_c = _chorus(
-        GeneratorParams(density=0.3, leap_probability=0.22),
+        GeneratorParams(density=0.3, leap_probability=0.22,
+                        velocity_range=(65, 90)),
         drama_shape="crescendo", drama_peak=0.65,
         motif_probability=0.5, ornament_probability=0.2,
         harmony_note_probability=0.5,
@@ -686,49 +724,54 @@ def produce_hasrat():
 
     kanun_c = ArpeggiatorGenerator(
         GeneratorParams(density=0.4, leap_probability=0.3,
-                        key_range_low=60, key_range_high=84),
+                        key_range_low=60, key_range_high=84,
+                        velocity_range=(45, 75)),
         pattern="up_down", note_duration=0.3,
     ).render(c_c, KEY, S3 - S2)
 
     # Second chorus: female choir ison (pedal tone)
     choir_ison = DroneGenerator(
-        GeneratorParams(density=0.03, key_range_low=62, key_range_high=63),
+        GeneratorParams(density=0.03, key_range_low=62, key_range_high=63,
+                        velocity_range=(40, 40)),
     ).render(c_e, KEY, S5 - S4)
 
     # ── Outro: instruments leave one by one ──
-    # Cello → Darbuka → Kanun → Ney → Oud → voices
-    # Each instrument plays only part of the outro
     fade_start = S5
 
     oud_out = MelodyGenerator(
-        GeneratorParams(density=0.2, leap_probability=0.15),
+        GeneratorParams(density=0.2, leap_probability=0.15,
+                        velocity_range=(40, 65)),
         drama_shape="none", drama_peak=0.3,
         motif_probability=0.3, harmony_note_probability=0.6,
         note_range_low=55, note_range_high=72,
         phrase_length=16.0, register_smoothness=0.7,
         after_leap="step_opposite", first_note="chord_root",
     ).render(c_out, KEY, DUR - S5)
-    oud_out = _cut_after(oud_out, 40.0)  # oud leaves at fade_start + 40
+    oud_out = _cut_after(oud_out, 40.0)
 
     cello_out = StringsEnsembleGenerator(
-        GeneratorParams(density=0.06, key_range_low=38, key_range_high=55),
-    ).render(c_out, KEY, 20.0)  # cello leaves at fade_start + 20
+        GeneratorParams(density=0.06, key_range_low=38, key_range_high=55,
+                        velocity_range=(30, 45)),
+    ).render(c_out, KEY, 20.0)
 
     darbuka_out = ElectronicDrumsGenerator(
         GeneratorParams(density=0.35, leap_probability=0.0,
-                        key_range_low=36, key_range_high=42),
+                        key_range_low=36, key_range_high=42,
+                        velocity_range=(35, 60)),
         pattern="light",
-    ).render(c_out, KEY, 30.0)  # darbuka leaves at fade_start + 30
+    ).render(c_out, KEY, 30.0)
 
     kanun_out = ArpeggiatorGenerator(
         GeneratorParams(density=0.25, leap_probability=0.2,
-                        key_range_low=62, key_range_high=78),
+                        key_range_low=62, key_range_high=78,
+                        velocity_range=(30, 50)),
         pattern="up", note_duration=0.4,
-    ).render(c_out, KEY, 35.0)  # kanun leaves at fade_start + 35
+    ).render(c_out, KEY, 35.0)
 
     # Voices continue to the end
     voice_f_out = MelodyGenerator(
-        GeneratorParams(density=0.18, leap_probability=0.1),
+        GeneratorParams(density=0.18, leap_probability=0.1,
+                        velocity_range=(45, 68)),
         drama_shape="none", drama_peak=0.2,
         motif_probability=0.4, ornament_probability=0.15,
         harmony_note_probability=0.6,
@@ -739,7 +782,8 @@ def produce_hasrat():
     ).render(c_out, KEY, DUR - S5)
 
     voice_m_out = MelodyGenerator(
-        GeneratorParams(density=0.14, leap_probability=0.1),
+        GeneratorParams(density=0.14, leap_probability=0.1,
+                        velocity_range=(40, 62)),
         drama_shape="none", drama_peak=0.15,
         motif_probability=0.35, ornament_probability=0.1,
         harmony_note_probability=0.6,
@@ -748,7 +792,7 @@ def produce_hasrat():
         steps_probability=0.8, after_leap="step_opposite",
         first_note="chord_root",
     ).render(c_out, KEY, DUR - S5)
-    voice_m_out = _cut_after(voice_m_out, (DUR - S5) - 12.0)  # male drops 12 beats before end
+    voice_m_out = _cut_after(voice_m_out, (DUR - S5) - 12.0)
 
     # ── Assemble all sections with offsets ──
     oud_all = oud_a + _off(oud_b, S1) + _off(oud_c, S2) + _off(oud_out, S5)
@@ -760,7 +804,8 @@ def produce_hasrat():
 
     # Second verse + chorus (repeat pattern)
     oud_d = MelodyGenerator(
-        GeneratorParams(density=0.35, leap_probability=0.25),
+        GeneratorParams(density=0.35, leap_probability=0.25,
+                        velocity_range=(65, 95)),
         drama_shape="crescendo", drama_peak=0.7,
         motif_probability=0.55, harmony_note_probability=0.5,
         note_range_low=55, note_range_high=76,
@@ -769,7 +814,8 @@ def produce_hasrat():
     ).render(c_d, KEY, S4 - S3)
 
     voice_f_d = MelodyGenerator(
-        GeneratorParams(density=0.3, leap_probability=0.2),
+        GeneratorParams(density=0.3, leap_probability=0.2,
+                        velocity_range=(70, 95)),
         drama_shape="crescendo", drama_peak=0.75,
         motif_probability=0.5, ornament_probability=0.25,
         harmony_note_probability=0.5,
@@ -779,7 +825,8 @@ def produce_hasrat():
     ).render(c_d, KEY, S4 - S3)
 
     voice_m_d = MelodyGenerator(
-        GeneratorParams(density=0.24, leap_probability=0.2),
+        GeneratorParams(density=0.24, leap_probability=0.2,
+                        velocity_range=(65, 88)),
         drama_shape="crescendo", drama_peak=0.6,
         motif_probability=0.45, ornament_probability=0.2,
         harmony_note_probability=0.55,
@@ -790,7 +837,8 @@ def produce_hasrat():
 
     # Second chorus: oud + voices + choir ison + kanun
     oud_e = MelodyGenerator(
-        GeneratorParams(density=0.4, leap_probability=0.3),
+        GeneratorParams(density=0.4, leap_probability=0.3,
+                        velocity_range=(75, 110)),
         drama_shape="crescendo", drama_peak=0.8,
         motif_probability=0.6, ornament_probability=0.3,
         harmony_note_probability=0.4,
@@ -800,7 +848,8 @@ def produce_hasrat():
     ).render(c_e, KEY, S5 - S4)
 
     voice_f_e = MelodyGenerator(
-        GeneratorParams(density=0.35, leap_probability=0.22),
+        GeneratorParams(density=0.35, leap_probability=0.22,
+                        velocity_range=(80, 115)),
         drama_shape="crescendo", drama_peak=0.85,
         motif_probability=0.55, ornament_probability=0.3,
         harmony_note_probability=0.4,
@@ -810,7 +859,8 @@ def produce_hasrat():
     ).render(c_e, KEY, S5 - S4)
 
     voice_m_e = MelodyGenerator(
-        GeneratorParams(density=0.3, leap_probability=0.22),
+        GeneratorParams(density=0.3, leap_probability=0.22,
+                        velocity_range=(75, 105)),
         drama_shape="crescendo", drama_peak=0.7,
         motif_probability=0.5, ornament_probability=0.25,
         harmony_note_probability=0.45,
@@ -821,7 +871,8 @@ def produce_hasrat():
 
     kanun_e = ArpeggiatorGenerator(
         GeneratorParams(density=0.4, leap_probability=0.3,
-                        key_range_low=60, key_range_high=84),
+                        key_range_low=60, key_range_high=84,
+                        velocity_range=(55, 85)),
         pattern="up_down", note_duration=0.3,
     ).render(c_e, KEY, S5 - S4)
 
@@ -837,6 +888,7 @@ def produce_hasrat():
     # Drone throughout
     drone = DroneGenerator(
         GeneratorParams(density=0.02, key_range_low=50, key_range_high=51),
+        velocity=25,
     ).render(c_a[:1], KEY, DUR)
 
     tracks = {
