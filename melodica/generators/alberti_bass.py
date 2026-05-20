@@ -224,4 +224,4 @@ class AlbertiBassGenerator(PhraseGenerator):
         return events
 
     def _velocity(self) -> int:
-        return int(55 + self.params.density * 25)
+        return self.base_velocity()

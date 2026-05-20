@@ -119,6 +119,13 @@ class PhraseGenerator(ABC):
         context: RenderContext | None = None,
     ) -> list[NoteInfo]: ...
 
+    def base_velocity(self) -> int:
+        """Standard velocity calculation for generators."""
+        if self.params.velocity_range:
+            v_min, v_max = self.params.velocity_range
+            return (v_min + v_max) // 2
+        return int(70 + self.params.density * 30)
+
 
 # ---------------------------------------------------------------------------
 # freeze() — application service (pure transformation)

@@ -93,6 +93,12 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
         self.dynamic_range = max(0.0, min(1.0, dynamic_range))
         self.rhythm = rhythm
 
+    def _velocity(self, vel_boost: int = 0) -> int:
+        base = self.base_velocity()
+        vel_var = int(self.dynamic_range * 15)
+        vel = base + vel_boost + random.randint(-vel_var, vel_var)
+        return max(1, min(127, vel))
+
     def render(
         self,
         chords: list[ChordLabel],
@@ -122,10 +128,7 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
                 pitch = snap_to_scale(pitch, key)
                 pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
 
-                base_vel = int(55 + self.params.density * 25) + vel_boost
-                vel_var = int(self.dynamic_range * 15)
-                vel = base_vel + random.randint(-vel_var, vel_var)
-                vel = max(1, min(127, vel))
+                vel = self._velocity(vel_boost)
 
                 onset = chord.start + random.uniform(0.0, 0.02 * self.dynamic_range)
                 note_dur = chord.duration * dur_factor

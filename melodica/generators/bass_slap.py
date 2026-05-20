@@ -42,12 +42,6 @@ _PATTERN_SEQ: dict[str, list[str]] = {
     "octave": ["S", "-", "P", "-", "S", "-", "P", "G"],
 }
 
-# Velocity base per technique
-_VEL_SLAP = 110
-_VEL_POP = 90
-_VEL_GHOST = 45
-
-
 @dataclass
 class BassSlapGenerator(PhraseGenerator):
     """
@@ -100,6 +94,7 @@ class BassSlapGenerator(PhraseGenerator):
         last_chord: ChordLabel | None = None
         pat_seq = _PATTERN_SEQ.get(self.slap_pattern, _PATTERN_SEQ["funky"])
         prev_pitch: int = self.params.key_range_low + 12
+        base_vel = self.base_velocity()
 
         for idx, event in enumerate(events):
             chord = chord_at(chords, event.onset)
@@ -119,7 +114,7 @@ class BassSlapGenerator(PhraseGenerator):
                 # Thumb slap: root or fifth, hard velocity
                 slap_pc = int(root_pc)
                 pitch = nearest_pitch(slap_pc, prev_pitch)
-                vel = int(_VEL_SLAP * event.velocity_factor)
+                vel = int(base_vel * 1.1 * event.velocity_factor)
                 dur = event.duration * 0.6
             elif technique == "P":
                 # Finger pop: third or octave, medium velocity
@@ -130,7 +125,7 @@ class BassSlapGenerator(PhraseGenerator):
                     pop_candidates = [int(pcs[0])] if pcs else [int(root_pc)]
                 pop_pc = random.choice(pop_candidates)
                 pitch = nearest_pitch(pop_pc, prev_pitch + 7)
-                vel = int(_VEL_POP * event.velocity_factor)
+                vel = int(base_vel * 0.9 * event.velocity_factor)
                 dur = event.duration * 0.5
             else:
                 # Ghost note: muted percussive, soft velocity
@@ -138,7 +133,7 @@ class BassSlapGenerator(PhraseGenerator):
                     continue
                 ghost_pc = int(root_pc)
                 pitch = nearest_pitch(ghost_pc, prev_pitch)
-                vel = int(_VEL_GHOST * event.velocity_factor)
+                vel = int(base_vel * 0.45 * event.velocity_factor)
                 dur = event.duration * 0.2
 
             pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
@@ -174,6 +169,3 @@ class BassSlapGenerator(PhraseGenerator):
             events.append(RhythmEvent(onset=round(t, 6), duration=0.2, velocity_factor=vel))
             t += 0.25
         return events
-
-    def _velocity(self) -> int:
-        return int(70 + self.params.density * 30)

@@ -235,11 +235,4 @@ class VocalMelodyAutoGenerator(PhraseGenerator):
             return random.choice([0.5, 1.0, 1.0, 1.5])
 
     def _pick_velocity(self) -> int:
-        if self.variant == "travis":
-            return 85 + random.randint(-8, 8)
-        elif self.variant == "tpain":
-            return 90 + random.randint(-5, 5)
-        elif self.variant == "future":
-            return 80 + random.randint(-10, 10)
-        else:
-            return 75 + random.randint(-5, 5)
+        return self.base_velocity()

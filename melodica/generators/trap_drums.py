@@ -96,6 +96,10 @@ class TrapDrumsGenerator(PhraseGenerator):
         self.clap_on_two = clap_on_two
         self.rhythm = rhythm
 
+    def _velocity(self, ratio: float = 1.0) -> int:
+        """Standard velocity for trap drums based on base_velocity."""
+        return int(self.base_velocity() * ratio)
+
     def render(
         self,
         chords: list[ChordLabel],
@@ -119,27 +123,27 @@ class TrapDrumsGenerator(PhraseGenerator):
 
             # 808/sub on beats 1 and (3)
             sub_pitch = max(low, nearest_pitch(chord.root, low + 12))
-            self._add_note(notes, sub_pitch, bar_start, 3.5, 100, duration_beats)
+            self._add_note(notes, sub_pitch, bar_start, 3.5, self._velocity(1.1), duration_beats)
             if self.kick_pattern != "sparse":
-                self._add_note(notes, sub_pitch, bar_start + 2, 1.5, 90, duration_beats)
+                self._add_note(notes, sub_pitch, bar_start + 2, 1.5, self._velocity(1.0), duration_beats)
 
             # Kick
             if self.kick_pattern == "standard":
-                self._add_note(notes, KICK, bar_start, 0.3, 110, duration_beats)
-                self._add_note(notes, KICK, bar_start + 2, 0.3, 100, duration_beats)
+                self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
+                self._add_note(notes, KICK, bar_start + 2, 0.3, self._velocity(1.1), duration_beats)
             elif self.kick_pattern == "syncopated":
-                self._add_note(notes, KICK, bar_start, 0.3, 110, duration_beats)
-                self._add_note(notes, KICK, bar_start + 2.5, 0.3, 95, duration_beats)
-                self._add_note(notes, KICK, bar_start + 3.5, 0.3, 85, duration_beats)
+                self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
+                self._add_note(notes, KICK, bar_start + 2.5, 0.3, self._velocity(1.05), duration_beats)
+                self._add_note(notes, KICK, bar_start + 3.5, 0.3, self._velocity(0.95), duration_beats)
             else:
-                self._add_note(notes, KICK, bar_start, 0.3, 110, duration_beats)
+                self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
 
             # Snare/Clap on 2 and 4
             clap_beat = 1 if self.clap_on_two else 2
-            self._add_note(notes, SNARE, bar_start + clap_beat, 0.3, 110, duration_beats)
-            self._add_note(notes, CLAP, bar_start + clap_beat, 0.3, 90, duration_beats)
-            self._add_note(notes, SNARE, bar_start + 3, 0.3, 110, duration_beats)
-            self._add_note(notes, CLAP, bar_start + 3, 0.3, 90, duration_beats)
+            self._add_note(notes, SNARE, bar_start + clap_beat, 0.3, self._velocity(1.2), duration_beats)
+            self._add_note(notes, CLAP, bar_start + clap_beat, 0.3, self._velocity(1.0), duration_beats)
+            self._add_note(notes, SNARE, bar_start + 3, 0.3, self._velocity(1.2), duration_beats)
+            self._add_note(notes, CLAP, bar_start + 3, 0.3, self._velocity(1.0), duration_beats)
 
             # Hi-hats
             if self.variant in ("standard", "drill"):
@@ -148,13 +152,13 @@ class TrapDrumsGenerator(PhraseGenerator):
                     onset = bar_start + i * 0.5
                     is_open = random.random() < self.open_hat_probability
                     hat = HH_OPEN if is_open else HH_CLOSED
-                    vel = 80 if i % 2 == 0 else 65
+                    vel = self._velocity(0.9) if i % 2 == 0 else self._velocity(0.7)
 
                     # Rolls: insert 32nd-note subdivisions
                     if random.random() < self.hat_roll_density and i < 7:
                         for r in range(3):
                             roll_onset = onset + r * 0.125
-                            self._add_note(notes, HH_CLOSED, roll_onset, 0.08, 60, duration_beats)
+                            self._add_note(notes, HH_CLOSED, roll_onset, 0.08, self._velocity(0.65), duration_beats)
 
                     self._add_note(notes, hat, onset, 0.15, vel, duration_beats)
 
@@ -163,16 +167,16 @@ class TrapDrumsGenerator(PhraseGenerator):
                 for i in range(16):
                     onset = bar_start + i * 0.25
                     if random.random() < 0.8:
-                        vel = 75 + random.randint(-10, 10)
+                        vel = self._velocity(0.8) + random.randint(-10, 10)
                         self._add_note(notes, HH_CLOSED, onset, 0.1, max(1, vel), duration_beats)
 
             elif self.variant == "minimal":
                 # Sparse hats
                 for beat in [0, 1, 2, 3]:
-                    self._add_note(notes, HH_CLOSED, bar_start + beat, 0.15, 70, duration_beats)
+                    self._add_note(notes, HH_CLOSED, bar_start + beat, 0.15, self._velocity(0.75), duration_beats)
                     if random.random() < 0.3:
                         self._add_note(
-                            notes, HH_CLOSED, bar_start + beat + 0.5, 0.1, 55, duration_beats
+                            notes, HH_CLOSED, bar_start + beat + 0.5, 0.1, self._velocity(0.6), duration_beats
                         )
 
             bar_start += 4.0

@@ -135,5 +135,4 @@ class ChoirAahsGenerator(PhraseGenerator):
         return notes
 
     def _velocity(self) -> int:
-        base = {"pp": 35, "mf": 65, "ff": 100}
-        return int(base.get(self.dynamics, 65) + self.params.density * 15)
+        return self.base_velocity()

@@ -62,6 +62,9 @@ class AmbientPadGenerator(PhraseGenerator):
         self.note_range_high = note_range_high
         self._last_context: RenderContext | None = None
 
+    def _velocity(self) -> int:
+        return self.base_velocity()
+
     def render(
         self,
         chords: list[types.ChordLabel],
@@ -75,8 +78,8 @@ class AmbientPadGenerator(PhraseGenerator):
         notes: list[types.NoteInfo] = []
         voicing_fn = chord_pitches_spread if self.voicing == "spread" else chord_pitches_open
 
-        # Base velocity for ambient (soft)
-        base_vel = int(40 + self.params.density * 20)
+        # Base velocity for ambient
+        base_vel = self._velocity()
 
         low = self.note_range_low if self.note_range_low is not None else self.params.key_range_low
         high = (

@@ -234,4 +234,4 @@ class BeatRepeatGenerator(PhraseGenerator):
         return events
 
     def _velocity(self) -> int:
-        return int(60 + self.params.density * 35)
+        return self.base_velocity()

@@ -122,6 +122,14 @@ class Bass808SlidingGenerator(PhraseGenerator):
         self.accent_velocity = max(1.0, min(1.3, accent_velocity))
         self.ghost_velocity_ratio = max(0.2, min(0.8, ghost_velocity_ratio))
 
+    def _velocity(self, note_type: str) -> int:
+        base = self.base_velocity()
+        if note_type == "ghost":
+            return int(base * self.ghost_velocity_ratio)
+        if note_type == "hold" and random.random() < 0.3:
+            return min(MIDI_MAX, int(base * self.accent_velocity))
+        return base
+
     def render(
         self,
         chords: list[ChordLabel],
@@ -167,12 +175,7 @@ class Bass808SlidingGenerator(PhraseGenerator):
                     pitch = snap_to_scale(pitch, key)
 
                 # Velocity
-                if note_type == "ghost":
-                    vel = int(80 * self.ghost_velocity_ratio)
-                elif note_type == "hold" and random.random() < 0.3:
-                    vel = min(MIDI_MAX, int(95 * self.accent_velocity))
-                else:
-                    vel = 95
+                vel = self._velocity(note_type)
 
                 # Slide: extend note and optionally create overlap
                 actual_dur = dur

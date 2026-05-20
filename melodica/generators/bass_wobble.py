@@ -176,7 +176,7 @@ class BassWobbleGenerator(PhraseGenerator):
 
     def _lfo_velocity(self, step_idx: int) -> int:
         """Compute velocity using LFO shape at the given step index."""
-        base = int(60 + self.params.density * 35)
+        base = self.base_velocity()
         cycle_len = 8  # steps per LFO cycle
         phase = (step_idx % cycle_len) / cycle_len
 
@@ -194,4 +194,4 @@ class BassWobbleGenerator(PhraseGenerator):
         return int(base * factor)
 
     def _velocity(self) -> int:
-        return int(70 + self.params.density * 30)
+        return self.base_velocity()

@@ -233,4 +233,4 @@ class AcciaccaturaGenerator(PhraseGenerator):
         return events
 
     def _velocity(self) -> int:
-        return int(55 + self.params.density * 35)
+        return self.base_velocity()
