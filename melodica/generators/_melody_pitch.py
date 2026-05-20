@@ -405,7 +405,7 @@ class MelodyPitchSelector:
     ) -> list[int]:
         gen = self._gen
         chord_pcs = chord.pitch_classes() if chord else []
-        scale_pcs = key.degrees()
+        scale_pcs = [int(round(d)) % 12 for d in key.degrees()]
 
         if not chord_pcs:
             return scale_pcs
