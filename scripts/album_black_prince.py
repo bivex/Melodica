@@ -28,9 +28,10 @@ from melodica.generators.drone import DroneGenerator
 from melodica.generators.bass import BassGenerator
 from melodica.generators.electronic_drums import ElectronicDrumsGenerator
 from melodica.midi import export_multitrack_midi
-from melodica.shorts_mixing import MixingDesk
-from melodica.shorts_mastering import MasteringDesk
 from melodica.composer.articulations import ArticulationEngine
+from melodica.composer.harmonic_verifier import verify_and_fix, VerifierConfig
+from melodica.composer.tension_curve import TensionCurve, TensionPhase
+from melodica.composer.voice_leading import VoiceLeadingEngine
 
 # KEY: E Hungarian Minor (E-F#-G-A#-B-C-D#) - standard "heavy" key
 KEY = types.Scale(root=4, mode=types.Mode.HUNGARIAN_MINOR)
@@ -71,28 +72,175 @@ def _art(tracks: dict, dur: float) -> dict:
         for name, notes in tracks.items()
     }
 
+def _smooth_voice_leading(tracks: dict, max_jump: int = 9) -> dict:
+    """Reduce large interval jumps in melodic tracks for smoother voice leading.
+    Drums excluded — percussion doesn't have voice leading.
+    """
+    drum_names = {"drums", "percussion", "kick", "snare", "hihat"}
+    result = {}
+    for name, notes in tracks.items():
+        if name in drum_names or not notes:
+            result[name] = notes
+            continue
+        sorted_notes = sorted(notes, key=lambda n: n.start)
+        smoothed = []
+        prev_pitch = sorted_notes[0].pitch
+        for n in sorted_notes:
+            jump = n.pitch - prev_pitch
+            if abs(jump) > max_jump:
+                # Snap to same pitch class within a gentler range
+                direction = 1 if jump > 0 else -1
+                # Try bringing the note closer by octaves
+                candidate = n.pitch
+                while abs(candidate - prev_pitch) > max_jump and 0 <= candidate - direction * 12 <= 127:
+                    candidate -= direction * 12
+                if abs(candidate - prev_pitch) <= max_jump:
+                    n = types.NoteInfo(
+                        pitch=candidate, start=n.start, duration=n.duration,
+                        velocity=n.velocity, articulation=n.articulation,
+                        expression=n.expression,
+                    )
+            smoothed.append(n)
+            prev_pitch = n.pitch
+        result[name] = smoothed
+    return result
+
+def _generate_satb_pad(chords: list, key, vel: int = 40) -> list:
+    """Generate a low-register SATB pad from chord progression.
+    Drops all voices into register 36-58 to avoid masking melody/guitar/organ.
+    """
+    engine = VoiceLeadingEngine(strict_mode=True)
+    voices = engine.voicize_progression(chords, key)
+    pad_notes = []
+    for voice_notes in voices.values():
+        for n in voice_notes:
+            pitch = n.pitch
+            # Drop into low register: 36 (C2) to 58 (A#3)
+            while pitch > 58:
+                pitch -= 12
+            while pitch < 36:
+                pitch += 12
+            pad_notes.append(types.NoteInfo(
+                pitch=pitch, start=n.start, duration=n.duration,
+                velocity=vel,
+            ))
+    return pad_notes
+
+# ---------------------------------------------------------------------------
+# Tension-aware velocity shaping (replaces fake LUFS mastering)
+# ---------------------------------------------------------------------------
+# Per-instrument weight: lower register perceived quieter → boost more
+_PERCEIVED_WEIGHT = {
+    "bass": 1.15, "drums": 1.10, "organ": 0.95,
+    "guitar_l": 0.90, "guitar_r": 0.90, "lead": 0.85,
+    "pad": 0.60, "fx": 0.65, "choir": 0.80,
+}
+
+def _apply_tension_velocity(tracks: dict, dur: float, curve: TensionCurve) -> dict:
+    """Shape velocity per-track based on tension curve and perceived loudness."""
+    result = {}
+    for name, notes in tracks.items():
+        weight = _PERCEIVED_WEIGHT.get(name, 0.90)
+        shaped = []
+        for n in notes:
+            tension = curve.tension_at(n.start)
+            # tension 0.0→quiet (vel×0.5), 1.0→loud (vel×1.0), shaped by weight
+            factor = (0.5 + 0.5 * tension) * weight
+            vel = max(15, min(127, int(n.velocity * factor)))
+            shaped.append(types.NoteInfo(
+                pitch=n.pitch, start=n.start, duration=n.duration,
+                velocity=vel, articulation=n.articulation,
+                expression=n.expression,
+            ))
+        result[name] = shaped
+    return result
+
+def _balance_tracks(tracks: dict) -> dict:
+    """Honest track balancing: RMS normalization + brickwall, no fake LUFS."""
+    result = {}
+    for name, notes in tracks.items():
+        if not notes:
+            result[name] = notes
+            continue
+        rms = math.sqrt(sum(n.velocity ** 2 for n in notes) / len(notes))
+        target_rms = 90  # comfortable MIDI velocity RMS
+        gain = target_rms / max(rms, 1)
+        balanced = []
+        for n in notes:
+            vel = int(round(n.velocity * gain))
+            # Soft-knee above 112
+            if vel > 112:
+                vel = int(112 + (vel - 112) * 0.4)
+            # Brickwall
+            vel = max(15, min(126, vel))
+            balanced.append(types.NoteInfo(
+                pitch=n.pitch, start=n.start, duration=n.duration,
+                velocity=vel, articulation=n.articulation,
+                expression=n.expression,
+            ))
+        result[name] = balanced
+    return result
+
+def _generate_pan_cc(tracks: dict) -> dict:
+    """Static pan CC10 per track (real stereo positioning)."""
+    PAN_MAP = {
+        "organ": 64, "lead": 58, "bass": 64, "drums": 64,
+        "guitar_l": 42, "guitar_r": 86, "pad": 50, "fx": 78, "choir": 60,
+    }
+    cc_events = {}
+    for name, notes in tracks.items():
+        if not notes:
+            continue
+        pan = PAN_MAP.get(name, 64)
+        cc_events[name] = [(notes[0].start, 10, pan)]
+    return cc_events
+
+# ---------------------------------------------------------------------------
+# Full pipeline: generate → articulate → verify → tension → balance → export
+# ---------------------------------------------------------------------------
+def _pipeline(tracks: dict, path: Path, bpm: float, instruments: dict,
+              chords: list = None, curve_type: str = "classical", peak_position: float = 0.7):
+    dur = max((n.start + n.duration for ns in tracks.values() for n in ns), default=0)
+
+    # 0. Add SATB pad from voice leading engine (if chords provided)
+    if chords:
+        pad = _generate_satb_pad(chords, KEY, vel=45)
+        if pad:
+            tracks = {**tracks, "pad": pad}
+            instruments = {**instruments, "pad": 88}  # New Age Pad
+
+    # 1. Smooth voice leading (reduce wild jumps)
+    tracks = _smooth_voice_leading(tracks)
+
+    # 2. Articulation (CC automation per instrument)
+    tracks = _art(tracks, dur)
+
+    # 3. Harmonic verification (detect + fix cross-track clashes)
+    tracks, report = verify_and_fix(tracks, VerifierConfig(dissonance_tolerance=0.4))
+    print(f"   Verifier: {report.clashes_detected} clashes, {report.clashes_fixed} fixed "
+          f"({report.notes_transposed} transposed, {report.notes_velocity_reduced} vel- reduced)")
+
+    # 4. Tension curve velocity shaping
+    curve = TensionCurve(total_beats=dur, curve_type=curve_type,
+                         peak_position=peak_position, peak_intensity=0.95)
+    tracks = _apply_tension_velocity(tracks, dur, curve)
+
+    # 5. Track balance (RMS normalization + brickwall)
+    tracks = _balance_tracks(tracks)
+
+    # 6. Pan CC events
+    cc_events = _generate_pan_cc(tracks)
+
+    # 7. Export
+    export_multitrack_midi(tracks, str(path), bpm=bpm, key=KEY,
+                           instruments=instruments, cc_events=cc_events)
+
 def _off(notes, offset):
     return [
         types.NoteInfo(pitch=n.pitch, start=n.start + offset,
                        duration=n.duration, velocity=n.velocity)
         for n in notes
     ]
-
-def _master(raw: dict, bpm: float, lufs: float = -10.0):
-    desk = MixingDesk(niche_cfg={})
-    desk.track_gains.update({
-        "lead": 0.95, "organ": 0.8, "guitar_l": 0.75, "guitar_r": 0.75,
-        "bass": 0.9, "drums": 1.1, "pad": 0.5, "fx": 0.6
-    })
-    # Prog rock needs more compression/limiting for energy
-    mixed = desk.apply_mixing(raw, [], int(bpm))
-    master = MasteringDesk(target_lufs=lufs)
-    return master.apply_mastering(mixed)
-
-def _export(tracks: dict, path: Path, bpm: float, instruments: dict):
-    final_notes, cc_events = _master(tracks, bpm)
-    export_multitrack_midi(final_notes, str(path), bpm=bpm, key=KEY,
-                           instruments=instruments, cc_events=cc_events)
 
 # =====================================================================
 # I. Coronation of Shadows — 11/8 (3+3+3+2)
@@ -141,9 +289,9 @@ def produce_coronation():
         drum_notes.append(types.NoteInfo(38, t + 3.0, 0.3, 100)) # Snare
         drum_notes.append(types.NoteInfo(42, t + 4.5, 0.2, 90)) # Hihat
 
-    tracks = _art({"organ": organ_riff, "guitar_l": guitar, "lead": _off(lead, 44.0), "bass": bass, "drums": drum_notes}, dur)
+    tracks = {"organ": organ_riff, "guitar_l": guitar, "lead": _off(lead, 44.0), "bass": bass, "drums": drum_notes}
     inst = {"organ": HAMMOND_ORGAN, "guitar_l": GUITAR_DISTORTION, "lead": MOOG_LEAD, "bass": BASS_PICK, "drums": 36}
-    _export(tracks, OUT / "01_Coronation.mid", bpm, inst)
+    _pipeline(tracks, OUT / "01_Coronation.mid", bpm, inst, chords=chords, curve_type="classical", peak_position=0.6)
 
 # =====================================================================
 # II. Alchemy of Blood — 96 BPM, 4/4
@@ -172,9 +320,9 @@ def produce_alchemy():
         note_range_low=28, note_range_high=45
     ).render(chords, KEY, dur)
 
-    tracks = _art({"lead": synth_poly, "guitar_l": guitar_riff, "bass": bass}, dur)
+    tracks = {"lead": synth_poly, "guitar_l": guitar_riff, "bass": bass}
     inst = {"lead": SAW_LEAD, "guitar_l": GUITAR_OVERDRIVE, "bass": BASS_SYNTH}
-    _export(tracks, OUT / "02_Alchemy.mid", bpm, inst)
+    _pipeline(tracks, OUT / "02_Alchemy.mid", bpm, inst, chords=chords, curve_type="build_release", peak_position=0.55)
 
 # =====================================================================
 # III. Mirror Throne — 128 BPM, 7/4
@@ -204,9 +352,9 @@ def produce_throne():
         note_range_low=33, note_range_high=57
     ).render(chords[16:20], KEY, 28.0)
 
-    tracks = _art({"organ": keys_arp, "guitar_r": guitar_arp, "bass": _off(bass_solo, 112.0)}, dur)
+    tracks = {"organ": keys_arp, "guitar_r": guitar_arp, "bass": _off(bass_solo, 112.0)}
     inst = {"organ": HAMMOND_ORGAN, "guitar_r": GUITAR_DISTORTION, "bass": BASS_PICK}
-    _export(tracks, OUT / "03_Throne.mid", bpm, inst)
+    _pipeline(tracks, OUT / "03_Throne.mid", bpm, inst, chords=chords, curve_type="edm", peak_position=0.75)
 
 # =====================================================================
 # IV. Eclipse of the Heart — 66 BPM, 5/4
@@ -235,9 +383,9 @@ def produce_eclipse():
         phrase_length=5.0, note_range_low=40, note_range_high=64
     ).render(c_metal, KEY, metal_dur)
 
-    tracks = _art({"lead": lead, "guitar_l": _off(guitar_metal, metal_start)}, dur)
+    tracks = {"lead": lead, "guitar_l": _off(guitar_metal, metal_start)}
     inst = {"lead": MOOG_LEAD, "guitar_l": GUITAR_DISTORTION}
-    _export(tracks, OUT / "04_Eclipse.mid", bpm, inst)
+    _pipeline(tracks, OUT / "04_Eclipse.mid", bpm, inst, chords=chords, curve_type="ambient", peak_position=0.6)
 
 # =====================================================================
 # V. The Final Stand — 160 BPM, Epic Finale
@@ -256,9 +404,9 @@ def produce_final():
         c.duration = 4.0
         chords.append(c)
 
-    # Wall of Sound Organ
+    # Wall of Sound Organ (reduced density to avoid 960-note clutter)
     organ = ArpeggiatorGenerator(
-        GeneratorParams(density=0.9, velocity_range=(100, 125)),
+        GeneratorParams(density=0.55, velocity_range=(100, 125)),
         pattern="chord", note_duration=1.0
     ).render(chords, KEY, dur)
 
@@ -271,20 +419,20 @@ def produce_final():
     for n in g2:
         n.pitch = snap_to_scale(n.pitch, KEY)
 
-    # Final Ascending Run
+    # Final Ascending Run (high register lead)
     climax = ArpeggiatorGenerator(
-        GeneratorParams(density=1.0, key_range_low=40, key_range_high=100, velocity_range=(120, 127)),
+        GeneratorParams(density=1.0, key_range_low=64, key_range_high=100, velocity_range=(120, 127)),
         pattern="up", note_duration=0.1
     ).render(chords[-8:], KEY, 32.0)
 
-    tracks = _art({
+    tracks = {
         "organ": organ,
         "guitar_l": g1 + _off(climax, dur-32.0),
         "guitar_r": g2 + _off(climax, dur-32.0),
         "lead": _off(climax, dur-32.0)
-    }, dur)
+    }
     inst = {"organ": HAMMOND_ORGAN, "guitar_l": GUITAR_DISTORTION, "guitar_r": GUITAR_OVERDRIVE, "lead": SAW_LEAD}
-    _export(tracks, OUT / "05_Final.mid", bpm, inst)
+    _pipeline(tracks, OUT / "05_Final.mid", bpm, inst, chords=chords, curve_type="classical", peak_position=0.85)
 
 # =====================================================================
 # EXECUTION

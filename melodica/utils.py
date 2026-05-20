@@ -136,7 +136,7 @@ def chord_pitches_open(
     # Drop every other upper voice down an octave to open up the voicing
     result = [closed[0]]
     for i, p in enumerate(closed[1:], 1):
-        result.append(p if i % 2 == 0 else p + 12)
+        result.append(p if i % 2 == 0 else p - 12)
     return sorted(result)
 
 
