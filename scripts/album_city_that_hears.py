@@ -72,13 +72,13 @@ def produce_track_1():
     return raw_tracks, notes, 60.0
 
 def produce_track_2():
-    """II. The Crack — Conflict. 
+    """II. The Crack — Conflict.
     Focus: Chaos, aggressive leaps, climbing tension, syncopation.
     """
     print("Producing II. The Crack...")
     key_minor = types.Scale(root=2, mode=types.Mode.NATURAL_MINOR)
     key_major = types.Scale(root=2, mode=types.Mode.MAJOR)
-    
+
     params = GeneratorParams(density=0.88, leap_probability=0.65)
     gen = MelodyGenerator(
         params,
@@ -97,23 +97,37 @@ def produce_track_2():
         allow_7th=True,
         allow_2nd=True
     )
-    
-    duration = 160.0 
-    progression = "i bII iv V i bII iv V" * 4 + "I IV V I I IV V I" 
+
+    duration = 160.0
+    progression = "i bII iv V i bII iv V" * 4 + "I IV V I I IV V I"
     chords = []
     prog_parts = progression.split()
     beats_per_chord = duration / len(prog_parts)
+    major_start = int(len(prog_parts) * 0.7)
     for i, p in enumerate(prog_parts):
-        k = key_minor if i < len(prog_parts) * 0.7 else key_major
+        k = key_major if i >= major_start else key_minor
         chord = k.parse_roman(p)
         chord.start = i * beats_per_chord
         chord.duration = beats_per_chord
         chords.append(chord)
-        
-    notes = gen.render(chords, key_minor, duration)
+
+    # Render minor section and major section separately, then combine
+    minor_chords = [c for c in chords if c.start < major_start * beats_per_chord]
+    major_chords = [c for c in chords if c.start >= major_start * beats_per_chord]
+
+    minor_notes = gen.render(minor_chords, key_minor, major_start * beats_per_chord)
+    major_notes = gen.render(major_chords, key_major, (len(prog_parts) - major_start) * beats_per_chord)
+
+    # Offset major section
+    offset = major_start * beats_per_chord
+    for n in major_notes:
+        n.start += offset
+
+    notes = minor_notes + major_notes
+
     # Aggressive brass hits on accents
     fanfare_notes = [types.NoteInfo(pitch=n.pitch, start=n.start, duration=0.2, velocity=127) for n in notes if n.velocity > 115]
-    
+
     raw_tracks = {"lead": notes, "fanfare": fanfare_notes}
     return raw_tracks, 118.0
 
