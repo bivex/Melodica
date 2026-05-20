@@ -25,7 +25,7 @@ def test_dsp_mastering_presets():
     desk_pop = DSPMasteringDesk(style="pop_synthwave")
     plugins_pop = desk_pop._get_preset_chain()
     assert len(plugins_pop) >= 3
-    plugin_names_pop = [p.name for p in plugins_pop]
+    plugin_names_pop = [type(p).__name__ for p in plugins_pop]
     assert any("Highpass" in name for name in plugin_names_pop)
     assert any("Compressor" in name for name in plugin_names_pop)
     assert any("Clipping" in name for name in plugin_names_pop)
@@ -33,13 +33,13 @@ def test_dsp_mastering_presets():
     # 2. Trap/Drill (deep sub preservation, hard clipping)
     desk_trap = DSPMasteringDesk(style="trap_drill")
     plugins_trap = desk_trap._get_preset_chain()
-    plugin_names_trap = [p.name for p in plugins_trap]
+    plugin_names_trap = [type(p).__name__ for p in plugins_trap]
     assert any("Clipping" in name for name in plugin_names_trap)
 
     # 3. Ambient/Classical (no saturation, wide premium space reverb)
     desk_ambient = DSPMasteringDesk(style="ambient_classical")
     plugins_ambient = desk_ambient._get_preset_chain()
-    plugin_names_ambient = [p.name for p in plugins_ambient]
+    plugin_names_ambient = [type(p).__name__ for p in plugins_ambient]
     assert any("Reverb" in name for name in plugin_names_ambient)
     assert not any("Clipping" in name for name in plugin_names_ambient)
     assert not any("Distortion" in name for name in plugin_names_ambient)
@@ -47,7 +47,7 @@ def test_dsp_mastering_presets():
     # 4. Lo-Fi (vintage roll-off, distortion, bitcrusher sampler grit)
     desk_lofi = DSPMasteringDesk(style="lofi")
     plugins_lofi = desk_lofi._get_preset_chain()
-    plugin_names_lofi = [p.name for p in plugins_lofi]
+    plugin_names_lofi = [type(p).__name__ for p in plugins_lofi]
     assert any("Bitcrush" in name for name in plugin_names_lofi)
     assert any("Distortion" in name for name in plugin_names_lofi)
 
