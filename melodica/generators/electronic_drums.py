@@ -163,24 +163,36 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         pattern_def = PATTERN_DEFS.get(self.pattern, PATTERN_DEFS["four_on_floor"])
 
         t = 0.0
+        # Determine global velocity scaling
+        if self.params.velocity_range:
+            v_min, v_max = self.params.velocity_range
+            # 100 is roughly average base_vel in kits; normalize to it
+            scale_factor = ((v_min + v_max) / 2) / 100.0
+        else:
+            # Scale by density: 0.5 density = 1.0 scale
+            scale_factor = 0.8 + self.params.density * 0.4
+
         while t < duration_beats:
             kick_onsets: set[float] = set()
             for pitch, offset, base_vel, dur in pattern_def:
                 onset = t + offset
                 if onset >= duration_beats:
                     continue
-                vel = base_vel
+                vel = int(base_vel * scale_factor)
                 # Kit character adjustments
                 if pitch == KICK:
-                    vel = char["kick_vel"]
+                    vel = int(char["kick_vel"] * scale_factor)
                     kick_onsets.add(round(offset, 2))
                 elif pitch == SNARE:
-                    vel = char["snare_vel"]
+                    vel = int(char["snare_vel"] * scale_factor)
                 elif pitch in (HH_CLOSED, HH_OPEN):
-                    vel = char["hat_vel"]
+                    vel = int(char["hat_vel"] * scale_factor)
                 elif pitch == CLAP and not char["use_clap"]:
                     pitch = SNARE
-                    vel = char["snare_vel"]
+                    vel = int(char["snare_vel"] * scale_factor)
+                else:
+                    # Apply scale factor to generic pattern base_vel
+                    vel = int(base_vel * scale_factor)
 
                 vel = max(1, min(127, vel + random.randint(-5, 5)))
 

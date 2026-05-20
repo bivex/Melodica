@@ -40,7 +40,7 @@ from melodica.generators._melody_pitch import MelodyPitchSelector
 # New submodules
 from melodica.generators._melody_rhythm import RhythmBuilder, GrooveProfile
 from melodica.generators._melody_phrase import PhraseContour
-from melodica.generators._melody_velocity import VelocityProcessor, _velocity_from_density
+from melodica.generators._melody_velocity import VelocityProcessor, _velocity_from_params
 from melodica.generators._melody_motif import MotifManager
 from melodica.generators._melody_ornament import OrnamentProcessor
 from melodica.generators._melody_fill import FillProcessor
@@ -406,7 +406,7 @@ class MelodyGenerator(PhraseGenerator):
             pitch = snap_to_scale(max(effective_low, min(effective_high, pitch)), active_key)
 
             # Velocity: phrase contour + beat strength + dramatic arc
-            base_vel = _velocity_from_density(self.params.density)
+            base_vel = _velocity_from_params(self.params)
             vel = velocity_proc.apply(base_vel, event, phrase_pos, progress, beat_strength=beat_str)
 
             # Drama velocity shaping

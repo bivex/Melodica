@@ -17,9 +17,12 @@ from melodica.rhythm import RhythmEvent
 ACCENT_PATTERN_OPTIONS = frozenset({"natural", "strong_weak", "syncopated"})
 
 
-def _velocity_from_density(density: float) -> int:
-    """Base velocity from overall density (0.0-1.0)."""
-    return int(70 + density * 40)
+def _velocity_from_params(params: any) -> int:
+    """Base velocity from overall density (0.0-1.0) or explicit range."""
+    if hasattr(params, "velocity_range") and params.velocity_range is not None:
+        v_min, v_max = params.velocity_range
+        return (v_min + v_max) // 2
+    return int(70 + params.density * 40)
 
 
 class VelocityProcessor:

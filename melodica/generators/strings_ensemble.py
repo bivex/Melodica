@@ -170,7 +170,12 @@ class StringsEnsembleGenerator(PhraseGenerator):
         return notes
 
     def _velocity(self, progress: float) -> int:
-        base = int(50 + self.params.density * 30)
+        if self.params.velocity_range:
+            v_min, v_max = self.params.velocity_range
+            base = (v_min + v_max) // 2
+        else:
+            base = int(50 + self.params.density * 30)
+
         if self.dynamic_curve == "crescendo":
             return int(base + progress * 30)
         elif self.dynamic_curve == "swell":

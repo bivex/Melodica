@@ -347,4 +347,7 @@ class OstinatoGenerator(PhraseGenerator):
         return max(0, min(127, new_pitch))
 
     def _velocity(self) -> int:
+        if self.params.velocity_range:
+            v_min, v_max = self.params.velocity_range
+            return (v_min + v_max) // 2
         return int(60 + self.params.density * 30)

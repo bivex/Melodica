@@ -101,10 +101,19 @@ class DynamicsCurveGenerator(PhraseGenerator):
         note_duration: float = 1.0,
         pitch_strategy: str = "chord_tone",
         strength: float = 1.0,
-        velocity_range: tuple[int, int] = (30, 110),
+        velocity_range: tuple[int, int] | None = None,
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
+        if velocity_range is not None:
+            self.params.velocity_range = velocity_range
+            
+        # Default if still None
+        if self.params.velocity_range is None:
+            self.params.velocity_range = (30, 110)
+
+        self.velocity_range = self.params.velocity_range # compat
+
         if curve_type not in (
             "crescendo",
             "decrescendo",
@@ -119,7 +128,6 @@ class DynamicsCurveGenerator(PhraseGenerator):
         self.note_duration = max(0.125, note_duration)
         self.pitch_strategy = pitch_strategy
         self.strength = max(0.1, min(2.0, strength))
-        self.velocity_range = velocity_range
         self.rhythm = rhythm
 
     def render(
@@ -134,13 +142,14 @@ class DynamicsCurveGenerator(PhraseGenerator):
 
         notes: list[NoteInfo] = []
         t = 0.0
+        
+        v_min, v_max = self.params.velocity_range
 
         while t < duration_beats:
             chord = chord_at(chords, t)
             position = t / max(0.1, duration_beats)
             factor = _curve_value(self.curve_type, position, self.strength)
-            vel_min, vel_max = self.velocity_range
-            vel = max(1, min(127, int(vel_min + (vel_max - vel_min) * factor)))
+            vel = max(1, min(127, int(v_min + (v_max - v_min) * factor)))
 
             pitch = self._pick_pitch(chord, key)
             dur = min(self.note_duration, duration_beats - t)

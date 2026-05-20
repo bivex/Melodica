@@ -331,6 +331,9 @@ class BassGenerator(PhraseGenerator):
         return events
 
     def _velocity(self) -> int:
+        if self.params.velocity_range:
+            v_min, v_max = self.params.velocity_range
+            return (v_min + v_max) // 2
         return int(70 + self.params.density * 30)
 
     # ------------------------------------------------------------------
@@ -428,7 +431,12 @@ class BassGenerator(PhraseGenerator):
             pitch += self.transpose_octaves * types.OCTAVE
             pitch = max(24, min(self.params.key_range_high, pitch))
 
-            base_vel = int(70 + self.params.density * 30)
+            if self.params.velocity_range:
+                v_min, v_max = self.params.velocity_range
+                base_vel = (v_min + v_max) // 2
+            else:
+                base_vel = int(70 + self.params.density * 30)
+
             if event.onset % 4.0 < 0.1:
                 base_vel = min(127, int(base_vel * 1.15))
 

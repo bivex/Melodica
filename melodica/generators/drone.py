@@ -87,8 +87,11 @@ class DroneGenerator(PhraseGenerator):
         fade_out: float = 0.0,
         retrigger_on_chord: bool = True,
         rhythm: RhythmGenerator | None = None,
+        velocity: int | None = None,
     ) -> None:
         super().__init__(params)
+        if velocity is not None:
+            self.params.velocity_range = (velocity, velocity)
         if variant not in VARIANT_PITCH_COUNTS:
             raise ValueError(
                 f"variant must be one of {sorted(VARIANT_PITCH_COUNTS)}; got {variant!r}"
@@ -214,7 +217,12 @@ class DroneGenerator(PhraseGenerator):
     # ------------------------------------------------------------------
 
     def _velocity_with_fade(self, onset: float, duration: float, total_duration: float) -> int:
-        base = int(40 + self.params.density * 30)
+        if self.params.velocity_range:
+            v_min, v_max = self.params.velocity_range
+            base = (v_min + v_max) // 2
+        else:
+            base = int(40 + self.params.density * 30)
+
         # Fade in
         if self.fade_in > 0 and onset < self.fade_in:
             factor = onset / self.fade_in

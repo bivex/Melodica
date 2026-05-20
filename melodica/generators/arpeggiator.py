@@ -497,4 +497,7 @@ class ArpeggiatorGenerator(PhraseGenerator):
         return min(range(len(new_seq)), key=lambda i: abs(new_seq[i] - last_pitch))
 
     def _velocity(self) -> int:
+        if self.params.velocity_range:
+            v_min, v_max = self.params.velocity_range
+            return (v_min + v_max) // 2
         return int(55 + self.params.density * 45)

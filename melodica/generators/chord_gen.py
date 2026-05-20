@@ -222,6 +222,9 @@ class ChordGenerator(PhraseGenerator):
         return best_inv
 
     def _velocity(self) -> int:
+        if self.params.velocity_range:
+            v_min, v_max = self.params.velocity_range
+            return (v_min + v_max) // 2
         return int(60 + self.params.density * 40)
 
     def _apply_phrase_arch(self, notes, duration_beats, phrase_position=0.0):

@@ -69,7 +69,8 @@ class GeneratorParams:
     key_range_high: int = 84  # MIDI pitch upper bound
     complexity: float = 0.5  # 0–1: melodic complexity
     leap_probability: float = 0.2  # 0–1: chance of interval > one step
-    
+    velocity_range: tuple[int, int] | None = None  # (min, max) velocity
+
     # Intelligence (optional, defaults to standard professional settings)
     intel: MelodicIntelligenceConfig = field(default_factory=MelodicIntelligenceConfig)
 
@@ -83,6 +84,12 @@ class GeneratorParams:
                 raise ValueError(f"{name} must be 0–1, got {val}")
         if self.key_range_low >= self.key_range_high:
             raise ValueError("key_range_low must be < key_range_high")
+        if self.velocity_range is not None:
+            v_min, v_max = self.velocity_range
+            if not (0 <= v_min <= 127) or not (0 <= v_max <= 127):
+                raise ValueError(f"velocity_range values must be 0-127, got {self.velocity_range}")
+            if v_min > v_max:
+                raise ValueError(f"velocity_range min must be <= max, got {self.velocity_range}")
 
 
 # ---------------------------------------------------------------------------

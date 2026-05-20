@@ -49,12 +49,19 @@ class RandomNoteGenerator(PhraseGenerator):
         self,
         params: GeneratorParams | None = None,
         *,
-        velocity_range: tuple[int, int] = (40, 100),
+        velocity_range: tuple[int, int] | None = None,
         note_range: tuple[int, int] = (36, 84),
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
-        self.velocity_range = velocity_range
+        if velocity_range is not None:
+            self.params.velocity_range = velocity_range
+        
+        # Default if still None
+        if self.params.velocity_range is None:
+            self.params.velocity_range = (40, 100)
+            
+        self.velocity_range = self.params.velocity_range # compat
         self.note_range = note_range
         self.rhythm = rhythm
         self._last_context: RenderContext | None = None
@@ -68,10 +75,12 @@ class RandomNoteGenerator(PhraseGenerator):
     ) -> list[NoteInfo]:
         events = self._build_events(duration_beats)
         notes: list[NoteInfo] = []
+        
+        v_min, v_max = self.params.velocity_range
 
         for event in events:
             pitch = snap_to_scale(random.randint(self.note_range[0], self.note_range[1]), key)
-            vel = random.randint(self.velocity_range[0], self.velocity_range[1])
+            vel = random.randint(v_min, v_max)
 
             notes.append(
                 NoteInfo(
