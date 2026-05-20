@@ -22,7 +22,7 @@ def test_notes_to_midi_and_from_midi(tmp_path: Path):
         NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=100),
         NoteInfo(pitch=64, start=1.0, duration=0.5, velocity=80),
     ]
-    notes_to_midi(notes, midi_file)
+    notes_to_midi(notes, midi_file, humanize=False)
     
     # Read back
     read_notes = from_midi(midi_file)

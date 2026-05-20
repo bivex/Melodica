@@ -267,11 +267,12 @@ def notes_to_midi(
     path: str | Path,
     *,
     bpm: float = 120.0,
+    humanize: bool = True,
 ) -> None:
     """
     Write a single list of NoteInfo objects to a single-track MIDI file.
     """
-    export_multitrack_midi({"Track 1": notes}, path, bpm=bpm)
+    export_multitrack_midi({"Track 1": notes}, path, bpm=bpm, humanize=humanize)
 
 
 def export_multitrack_midi(
@@ -285,6 +286,7 @@ def export_multitrack_midi(
     cc_events: "dict[str, list[tuple[float, int, int]]] | None" = None,
     instruments: "dict[str, int] | None" = None,
     diagnose: bool = False,
+    humanize: bool = True,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -372,6 +374,13 @@ def export_multitrack_midi(
         events: list[tuple[int, str, int, int]] = []
         for n in notes:
             onset = max(0.0, n.start)
+            
+            if humanize:
+                import random
+                import math
+                jitter_beats = random.uniform(-0.015, 0.015) * (bpm / 60.0)
+                onset = max(0.0, onset + jitter_beats)
+                
             on_tick = round(onset * tpb)
             off_tick = round((onset + n.duration) * tpb)
 
@@ -379,14 +388,26 @@ def export_multitrack_midi(
             events.append((on_tick, "note_on", n.pitch, n.velocity))
             events.append((off_tick, "note_off", n.pitch, 0))
 
+            has_cc11 = False
             # CC and pitchwheel events from note.expression
             if n.expression:
                 for cc_num, cc_val in n.expression.items():
+                    if cc_num == 11:
+                        has_cc11 = True
                     if isinstance(cc_num, int) and 0 <= cc_num <= 127:
                         events.append((on_tick, "control_change", cc_num, max(0, min(127, cc_val))))
                     elif cc_num == "pitch_bend":
                         bend = max(-8192, min(8191, int(cc_val)))
                         events.append((on_tick, "pitchwheel", bend, 0))
+
+            # Auto CC11 for long notes
+            if humanize and n.duration > 1.5 and not has_cc11:
+                cc_steps = max(3, int(n.duration / 0.25))
+                for i in range(cc_steps + 1):
+                    t_beat = onset + (i / cc_steps) * n.duration
+                    phase = (i / cc_steps) * math.pi
+                    val = 60 + int(math.sin(phase) * 60)
+                    events.append((round(t_beat * tpb), "control_change", 11, val))
 
         # Standalone CC events (e.g. sustain pedal boundaries)
         if cc_events and name in cc_events:
@@ -443,6 +464,7 @@ def export_midi(
     *,
     bpm: float = 120.0,
     timeline: MusicTimeline | None = None,
+    humanize: bool = True,
 ) -> None:
     """
     Write a list of high-level Track objects to a MIDI file.
@@ -577,11 +599,21 @@ def export_midi(
         events: list[tuple[int, str, int, int]] = []
         for n in t.notes:
             onset = max(0.0, n.start)
+            
+            if humanize:
+                import random
+                import math
+                jitter_beats = random.uniform(-0.015, 0.015) * (bpm / 60.0)
+                onset = max(0.0, onset + jitter_beats)
+
             on_tick = round(onset * tpb)
             off_tick = round((onset + n.duration) * tpb)
 
+            has_cc11 = False
             # Emit Expression (CC) data
             for cc_num, cc_val in n.expression.items():
+                if cc_num == 11:
+                    has_cc11 = True
                 if cc_num == "pitch_bend":
                     events.append((on_tick, "pitchwheel", cc_val, 0))  # val2 ignored for pitchwheel
                 else:
@@ -589,6 +621,15 @@ def export_midi(
 
             events.append((on_tick, "note_on", n.pitch, n.velocity))
             events.append((off_tick, "note_off", n.pitch, 0))
+
+            # Auto CC11 for long notes
+            if humanize and n.duration > 1.5 and not has_cc11:
+                cc_steps = max(3, int(n.duration / 0.25))
+                for i in range(cc_steps + 1):
+                    t_beat = onset + (i / cc_steps) * n.duration
+                    phase = (i / cc_steps) * math.pi
+                    val = 60 + int(math.sin(phase) * 60)
+                    events.append((round(t_beat * tpb), "control_change", 11, val))
 
         events.sort(key=lambda e: (e[0], 0 if e[1] == "note_off" else 1))
 
@@ -650,6 +691,7 @@ def chords_to_midi(
     bpm: float = 120.0,
     velocity: int = 80,
     voicing: str = "closed",
+    humanize: bool = True,
 ) -> None:
     """
     Write chord labels as block notes (all tones simultaneous) to a MIDI file.
@@ -674,4 +716,4 @@ def chords_to_midi(
                 )
             )
 
-    notes_to_midi(note_infos, path, bpm=bpm)
+    notes_to_midi(note_infos, path, bpm=bpm, humanize=humanize)

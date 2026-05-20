@@ -231,6 +231,16 @@ class DSPMasteringDesk:
         # 1. Build the preset chain
         plugins = self._get_preset_chain()
         
+        # 1.5 Dynamic Saturation ("Dirt") based on track average intensity
+        rms = np.sqrt(np.mean(audio ** 2))
+        if rms > 1e-5:
+            rms_db = 20 * np.log10(rms)
+            # Map RMS (-30 to -10) to Drive (0.0 to ~6.0 dB)
+            dynamic_drive = max(0.0, min(8.0, (rms_db + 24) * 0.4))
+            if dynamic_drive > 0.5:
+                logger.info(f"Adding {dynamic_drive:.1f}dB dynamic saturation (RMS: {rms_db:.1f}dB)")
+                plugins.append(Distortion(drive_db=dynamic_drive))
+        
         # 2. Add loudness makeup gain
         # We perform pre-limiting loudness matching
         audio_scaled = self._normalize_loudness(audio)
