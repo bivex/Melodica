@@ -239,10 +239,10 @@ class RhythmBuilder:
     # ------------------------------------------------------------------
 
     def _generate_tile_motif(self, base_step: float) -> list[float]:
-        """Generate a short rhythmic motif (3-5 relative durations) for tiling."""
+        """Generate a short rhythmic motif (3-5 relative durations) scaled to base_step."""
         length = random.choice([3, 4, 4, 5])
-        pool = [0.5, 0.75, 1.0, 1.0, 1.5, 2.0]
-        return [random.choice(pool) for _ in range(length)]
+        ratios = [0.5, 0.75, 1.0, 1.0, 1.5, 2.0]
+        return [max(0.1, random.choice(ratios) * base_step) for _ in range(length)]
 
     def _duration_for_beat(
         self, beat_strength: float, base_step: float, tile_motif: list[float], tile_idx: int
