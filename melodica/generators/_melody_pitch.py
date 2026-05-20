@@ -487,7 +487,7 @@ class MelodyPitchSelector:
                 below = [
                     p for p in _all_pitches_in_range_pc_list(scale_pcs, low, high) if p < tonic
                 ]
-                return max(below, key=lambda p: tonic - p) if below else tonic
+                return max(below) if below else tonic
             case _:  # "scale" or unknown
                 pcs = key.degrees()
                 return nearest_pitch(random.choice(pcs) if pcs else key.root, mid)
