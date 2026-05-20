@@ -44,12 +44,13 @@ class OrnamentProcessor:
                     if grace_pc in scale_pcs:
                         grace_pitch = note.pitch + offset * (1 if approach_above else -1)
                         if low <= grace_pitch <= high:
-                            grace_start = max(0, note.start - 0.125)
+                            grace_dur = 0.0625
+                            grace_start = max(0, note.start - grace_dur)
                             result.append(
                                 NoteInfo(
                                     pitch=grace_pitch,
                                     start=round(grace_start, 6),
-                                    duration=0.0625,
+                                    duration=grace_dur,
                                     velocity=max(1, int(note.velocity * 0.6)),
                                 )
                             )
