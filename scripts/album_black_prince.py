@@ -30,6 +30,7 @@ from melodica.generators.electronic_drums import ElectronicDrumsGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
+from melodica.composer.articulations import ArticulationEngine
 
 # KEY: E Hungarian Minor (E-F#-G-A#-B-C-D#) - standard "heavy" key
 KEY = types.Scale(root=4, mode=types.Mode.HUNGARIAN_MINOR)
@@ -48,6 +49,27 @@ DRUMS = 0 # Percussion
 random.seed(777)
 OUT = Path("output/album_black_prince")
 OUT.mkdir(parents=True, exist_ok=True)
+
+_ART = ArticulationEngine()
+
+# Instrument → articulation profile mapping
+_ART_MAP = {
+    "organ": "brass_legato",       # sustain, CC11 crescendo, pitch_bend slide-in
+    "guitar_l": "strings_melody",  # sustain, vibrato_in, swell
+    "guitar_r": "strings_melody",
+    "lead": "flute",               # sustain, vibrato_in, swell (synth lead)
+    "bass": "cello",               # sustain, vibrato_in, crescendo, pitch_bend slide
+    "drums": "snare",              # staccato, short duration
+    "pad": "strings_pad",          # fade_in, sustain pedal always
+    "fx": "strings_pad",
+}
+
+def _art(tracks: dict, dur: float) -> dict:
+    """Apply articulation profiles to all tracks."""
+    return {
+        name: _ART.apply(notes, _ART_MAP.get(name, "strings_melody"), dur)
+        for name, notes in tracks.items()
+    }
 
 def _off(notes, offset):
     return [
@@ -119,7 +141,7 @@ def produce_coronation():
         drum_notes.append(types.NoteInfo(38, t + 3.0, 0.3, 100)) # Snare
         drum_notes.append(types.NoteInfo(42, t + 4.5, 0.2, 90)) # Hihat
 
-    tracks = {"organ": organ_riff, "guitar_l": guitar, "lead": _off(lead, 44.0), "bass": bass, "drums": drum_notes}
+    tracks = _art({"organ": organ_riff, "guitar_l": guitar, "lead": _off(lead, 44.0), "bass": bass, "drums": drum_notes}, dur)
     inst = {"organ": HAMMOND_ORGAN, "guitar_l": GUITAR_DISTORTION, "lead": MOOG_LEAD, "bass": BASS_PICK, "drums": 36}
     _export(tracks, OUT / "01_Coronation.mid", bpm, inst)
 
@@ -150,7 +172,7 @@ def produce_alchemy():
         note_range_low=28, note_range_high=45
     ).render(chords, KEY, dur)
 
-    tracks = {"lead": synth_poly, "guitar_l": guitar_riff, "bass": bass}
+    tracks = _art({"lead": synth_poly, "guitar_l": guitar_riff, "bass": bass}, dur)
     inst = {"lead": SAW_LEAD, "guitar_l": GUITAR_OVERDRIVE, "bass": BASS_SYNTH}
     _export(tracks, OUT / "02_Alchemy.mid", bpm, inst)
 
@@ -182,7 +204,7 @@ def produce_throne():
         note_range_low=33, note_range_high=57
     ).render(chords[16:20], KEY, 28.0)
 
-    tracks = {"organ": keys_arp, "guitar_r": guitar_arp, "bass": _off(bass_solo, 112.0)}
+    tracks = _art({"organ": keys_arp, "guitar_r": guitar_arp, "bass": _off(bass_solo, 112.0)}, dur)
     inst = {"organ": HAMMOND_ORGAN, "guitar_r": GUITAR_DISTORTION, "bass": BASS_PICK}
     _export(tracks, OUT / "03_Throne.mid", bpm, inst)
 
@@ -213,7 +235,7 @@ def produce_eclipse():
         phrase_length=5.0, note_range_low=40, note_range_high=64
     ).render(c_metal, KEY, metal_dur)
 
-    tracks = {"lead": lead, "guitar_l": _off(guitar_metal, metal_start)}
+    tracks = _art({"lead": lead, "guitar_l": _off(guitar_metal, metal_start)}, dur)
     inst = {"lead": MOOG_LEAD, "guitar_l": GUITAR_DISTORTION}
     _export(tracks, OUT / "04_Eclipse.mid", bpm, inst)
 
@@ -255,12 +277,12 @@ def produce_final():
         pattern="up", note_duration=0.1
     ).render(chords[-8:], KEY, 32.0)
 
-    tracks = {
-        "organ": organ, 
+    tracks = _art({
+        "organ": organ,
         "guitar_l": g1 + _off(climax, dur-32.0),
         "guitar_r": g2 + _off(climax, dur-32.0),
         "lead": _off(climax, dur-32.0)
-    }
+    }, dur)
     inst = {"organ": HAMMOND_ORGAN, "guitar_l": GUITAR_DISTORTION, "guitar_r": GUITAR_OVERDRIVE, "lead": SAW_LEAD}
     _export(tracks, OUT / "05_Final.mid", bpm, inst)
 
