@@ -862,7 +862,7 @@ class HMM4Harmonizer:
             root_pc, quality, deg = catalog[idx]
             start = change_points[i]
             dur_c = (change_points[i+1]-start) if i+1 < len(change_points) else duration-start
-            result.append(ChordLabel(root=root_pc, quality=qual, start=round(start, 6), 
+            result.append(ChordLabel(root=root_pc, quality=quality, start=round(start, 6), 
                                      duration=round(dur_c, 6), degree=int(deg)))
         return result
 

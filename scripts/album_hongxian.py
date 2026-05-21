@@ -141,6 +141,16 @@ def track_02_petals_moss():
         mood=Mood.INTIMATE, key=KEY_D_HIROJOSHI, chords=chords, cc_events=cc_events,
     )
 
+def main():
+    print("Generating HONGXIAN album...")
+    track_01_moonlight_bridge()
+    track_02_petals_moss()
+    # Add other tracks as they are implemented or needed
+    print("HONGXIAN generation complete.")
+
+if __name__ == "__main__":
+    main()
+
 
 # =====================================================================
 # III. 长街孤城 — 72 BPM, B Byzantine

@@ -409,6 +409,7 @@ class MelodyGenerator(PhraseGenerator):
                         cadence_target=cadence_target,
                         cadence_strength=cadence_str,
                         harmony_prob=effective_harmony_prob,
+                        context=context,
                     )
 
             pitch = snap_to_scale(max(effective_low, min(effective_high, pitch)), active_key)

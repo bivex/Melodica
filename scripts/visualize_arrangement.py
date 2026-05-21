@@ -400,16 +400,20 @@ def run_script(script_path):
             
             if funcs:
                 print(f"Found {len(funcs)} entry functions. Executing...")
+                import inspect
                 for f_name in sorted(funcs):
                     func = getattr(module, f_name)
-                    import inspect
+                    # Check if it takes arguments
                     sig = inspect.signature(func)
                     # Call only if it's a parameterless factory/producer
                     if len(sig.parameters) == 0:
-                        res = func()
-                        # If it returned metadata but didn't export, manually trigger export capture
-                        if isinstance(res, dict) and "tracks" in res and "bpm" in res:
-                            mock_export_multitrack_midi(res["tracks"], f"{f_name}.mid", bpm=res["bpm"], key=res.get("key"))
+                        try:
+                            res = func()
+                            # If it returned metadata but didn't export, manually trigger export capture
+                            if isinstance(res, dict) and "tracks" in res and "bpm" in res:
+                                mock_export_multitrack_midi(res["tracks"], f"{f_name}.mid", bpm=res["bpm"], key=res.get("key"))
+                        except Exception as e:
+                            print(f"Error executing {f_name}: {e}")
             else:
                 print(f"Finished executing {module_name}. No main() or producer functions found.")
     except Exception as e: print(f"Execution Error: {e}")

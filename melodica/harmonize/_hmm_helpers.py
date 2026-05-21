@@ -469,6 +469,15 @@ STYLE_MATRICES: dict[str, dict[int, dict[int, float]]] = {
         0: {3: 0.30, 5: 0.30, 1: 0.40},          # I -> IV, vi, ii
         5: {1: 0.60, 3: 0.40},                   # vi -> ii or IV
         3: {1: 0.50, 4: 0.50},                   # IV -> ii or V
+    },
+    "academic": { # Kostka-Payne (Classical Harmony standard)
+        0: {1: 0.15, 2: 0.10, 3: 0.20, 4: 0.30, 5: 0.15, 6: 0.10}, # I -> all
+        1: {4: 0.70, 6: 0.30},                                      # ii -> V, vii°
+        2: {5: 1.0},                                                 # iii -> vi
+        3: {4: 0.40, 6: 0.20, 0: 0.20, 1: 0.20},                   # IV -> V, vii°, I, ii
+        4: {0: 0.80, 5: 0.20},                                      # V -> I, vi
+        5: {1: 0.50, 3: 0.50},                                      # vi -> ii, IV
+        6: {0: 0.90, 2: 0.10},                                      # vii° -> I, iii
     }
 }
 

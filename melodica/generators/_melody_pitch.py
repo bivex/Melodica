@@ -96,6 +96,7 @@ class MelodyPitchSelector:
         cadence_target: int | None = None,
         cadence_strength: float = 0.7,
         harmony_prob: float | None = None,
+        context: RenderContext | None = None,
     ) -> int:
         gen = self._gen
 
@@ -216,10 +217,10 @@ class MelodyPitchSelector:
         rm = gen.random_movement
         if rm < 0.01:
             # Fully weighted: pick best candidate
-            return self._weighted_choice(candidates, prev_pitch, chord, key, register_center, climax_pitch, range_span)
+            return self._weighted_choice(candidates, prev_pitch, chord, key, register_center, climax_pitch, range_span, context)
         elif random.random() > rm:
             # Weighted choice
-            return self._weighted_choice(candidates, prev_pitch, chord, key, register_center, climax_pitch, range_span)
+            return self._weighted_choice(candidates, prev_pitch, chord, key, register_center, climax_pitch, range_span, context)
         else:
             # Random choice from candidates
             return random.choice(candidates)
@@ -233,6 +234,7 @@ class MelodyPitchSelector:
         register_center: int | None,
         climax_pitch: int | None,
         range_span: int,
+        context: RenderContext | None = None,
     ) -> int:
         """Select candidate using melodic weighting (smoothness + register + tonal gravity)."""
         if len(candidates) == 1:
