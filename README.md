@@ -23,8 +23,9 @@ for c in chords:
     print(c)
 ```
 
-## Script example: DF Downtempo
+## Script Examples
 
+### I. DF Downtempo
 The `scripts/df_downtempo.py` script demonstrates a practical Melodica workflow:
 - Read melody / chord settings
 - Generate harmonization and phrase arrangements
@@ -35,6 +36,21 @@ Run:
 ```bash
 python scripts/df_downtempo.py
 ```
+
+### II. Production Battle Example: Catchy Pop-Epic Melody
+The `scratch/demo_catchy_melody.py` script demonstrates a production-grade Melodica workflow using the advanced `MelodyGenerator` and our automated MIDI CC expressiveness engine:
+- Build a classic, highly recognizable emotional pop progression (`Am - F - C - G`).
+- Generate a memorable melody using motivic development (`motif_probability=0.7`), phrase contour shaping (`phrase_contour="arch"`), and a dramatic energy curve with late peak intensity (`drama_shape="epic"`).
+- Automatically arrange multi-part arrangements including a warm synth pad, a vibraphone arpeggio backing track, and a moving finger bassline.
+- Automatically mix/master and inject high-fidelity MIDI CC automation: sustain pedal (**CC64**) for the arpeggios, breathing expression sweeps (**CC11**) on sustained notes, delayed vibrato LFO (**CC1**), and channel mixing levels (**CC7**).
+
+Run:
+
+```bash
+python3 scratch/demo_catchy_melody.py
+```
+
+The output MIDI is exported directly to `output/demo_catchy/demo_catchy_melody.mid`.
 
 ## Engines
 

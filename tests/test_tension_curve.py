@@ -620,3 +620,237 @@ class TestImports:
         from melodica.composer import TensionCurve as TC
 
         assert TC is TensionCurve
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _ambient_curve() detailed shape checks
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestAmbientCurveDetailed:
+    def test_range_is_strictly_within(self):
+        c = TensionCurve(curve_type="ambient")
+        for t in [i * 0.001 for i in range(0, 1001)]:
+            val = c._ambient_curve(t)
+            assert -0.1001 <= val <= 0.5001, f"t={t}: {val}"
+
+    def test_multiple_periods(self):
+        c = TensionCurve(curve_type="ambient")
+        # sin completes one full cycle every 1.0 of t → peak at every 0.5 interval
+        for base in [0.0, 0.5, 1.0, 1.5]:
+            val = c._ambient_curve(base)
+            assert val == pytest.approx(0.3, abs=1e-4)
+
+    def test_quadrants_range(self):
+        c = TensionCurve(curve_type="ambient")
+        # sin(π*2*0.75) = sin(1.5π) = −1 → floating-point rounds to ≈0.1
+        for t in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            val = c._ambient_curve(t)
+            assert 0.09999 <= val <= 0.50001, f"t={t}: {val}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _edm_curve() cycle-level detail
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestEdmCurveDetailed:
+    def test_peak_at_cycle_start(self):
+        c = TensionCurve(curve_type="edm")
+        # cycle=0.0 (t*4 % 1 == 0) → first cycle, bottom of build ramp
+        assert c._edm_curve(0.0) == pytest.approx(0.0, abs=1e-4)
+
+    def test_cycle_boundary_consistency(self):
+        """At each 1/4 t-interval the cycle resets — value continuity holds."""
+        c = TensionCurve(curve_type="edm")
+        for i in range(5):
+            t = i * 0.25
+            val = c._edm_curve(t)
+            assert 0.0 <= val <= c.peak_intensity + 0.1e-4
+
+    def test_drop_branch_at_cycle_end(self):
+        """cycle >= 0.8 drops tension below peak_intensity * 0.95."""
+        c = TensionCurve(curve_type="edm", peak_intensity=1.0)
+        # The drop branch linear-ramps tension from peak (cycle=0.8) to 50%
+        # of peak_intensity (cycle=1.0); at any cycle_val > 0.8 the value should
+        # be strictly less than peak_intensity.
+        for cycle_val in [0.9, 0.95, 0.99]:
+            for t_off in [0.0, 0.25, 0.5, 0.75]:
+                t = t_off + cycle_val / 4.0
+                if t > 1.0:
+                    continue
+                val = c._edm_curve(t)
+                assert val < c.peak_intensity, (
+                    f"t={t:.3f} cycle={cycle_val}: expected drop below {c.peak_intensity}, got {val}"
+                )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _build_release_curve() detailed slope tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBuildReleaseCurveDetailed:
+    def test_symmetric_rise_and_fall(self):
+        c = TensionCurve(curve_type="build_release", peak_intensity=0.5)
+        for dt in [0.01, 0.05, 0.1, 0.2]:
+            v_before = c._build_release_curve(0.5 - dt)
+            v_after = c._build_release_curve(0.5 + dt)
+            assert v_before == pytest.approx(v_after, abs=1e-4)
+
+    def test_quarter_values_at_quarter_beats(self):
+        c = TensionCurve(curve_type="build_release", peak_intensity=0.8)
+        # t=0.25 → 0.5*0.8 = 0.4; t=0.75 → 0.8*(1 - 0.5) = 0.4
+        assert c._build_release_curve(0.25) == pytest.approx(0.4, abs=1e-4)
+        assert c._build_release_curve(0.75) == pytest.approx(0.4, abs=1e-4)
+
+    def test_linearly_increasing_before_half(self):
+        c = TensionCurve(curve_type="build_release")
+        values = [c._build_release_curve(t) for t in [0.0, 0.1, 0.2, 0.3, 0.4]]
+        for i in range(len(values) - 1):
+            assert values[i] < values[i + 1], (
+                f"Expected rise at {i}: {values[i]} vs {values[i + 1]}"
+            )
+
+    def test_linearly_decreasing_after_half(self):
+        c = TensionCurve(curve_type="build_release")
+        values = [c._build_release_curve(t) for t in [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]]
+        for i in range(len(values) - 1):
+            assert values[i] > values[i + 1], (
+                f"Expected fall at {i}: {values[i]} vs {values[i + 1]}"
+            )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Peak intensity styling — sensitivity to peak_intensity in each curve type
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPeakIntensitySensitivity:
+    def test_classical_peak_tracks_intensity(self):
+        for intensity in [0.1, 0.3, 0.5, 0.7, 0.9]:
+            c = TensionCurve(curve_type="classical", peak_intensity=intensity)
+            peak_t = c._classical_curve(0.7)
+            assert peak_t == pytest.approx(intensity, abs=1e-4), (
+                f"intensity={intensity} got peak={peak_t}"
+            )
+
+    def test_edm_peak_tracks_intensity(self):
+        c = TensionCurve(curve_type="edm", peak_intensity=0.6)
+        pts = c.generate()
+        # tension should never exceed peak_intensity by more than floating-point noise
+        assert all(p.tension <= c.peak_intensity + 1e-4 for p in pts)
+
+    def test_build_release_peak_tracks_intensity_at_half(self):
+        for intensity in [0.1, 0.5, 0.9]:
+            c = TensionCurve(curve_type="build_release", peak_intensity=intensity)
+            peak_t = c._build_release_curve(0.5)
+            assert peak_t == pytest.approx(intensity, abs=1e-4)
+
+    def test_peak_intensity_zero_classical_stays_low(self):
+        """Even with peak_intensity=0 the rest-base of 0.2 prevents a full collapse."""
+        c = TensionCurve(curve_type="classical", peak_intensity=0.0)
+        pts = c.generate()
+        # Classical rest phase floors at 0.2 regardless of peak_intensity
+        for p in pts:
+            assert p.tension >= 0.1, f"Unexpected low tension {p.tension} at beat {p.beat}"
+
+    def test_peak_intensity_one_gives_max_classical(self):
+        c = TensionCurve(curve_type="classical", peak_intensity=1.0)
+        pts = c.generate()
+        assert any(p.tension > 0.9 for p in pts)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# phase_at() boundary edge cases
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPhaseAtEdgeCases:
+    def test_phase_at_exact_generated_points(self):
+        """phase_at on every generated point beat should equal the point's phase."""
+        c = TensionCurve(total_beats=16.0, curve_type="classical")
+        pts = c.generate()
+        for p in pts:
+            phase = c.phase_at(p.beat)
+            assert phase is p.phase, f"Mismatch at beat {p.beat}: point={p.phase}, phase_at={phase}"
+
+    def test_phase_returns_first_ge_beat(self):
+        """When two points share the same beat, phase_at should return the earlier one."""
+        c = TensionCurve(total_beats=4.0)
+        pts = c.generate()
+        # The first point has beat=0.0; phase_at(0.0) should return its phase
+        first_phase = pts[0].phase
+        assert c.phase_at(0.0) is first_phase
+
+    def test_phase_at_out_of_range_beyond_total(self):
+        """Beat strictly beyond total_beats should fall through to SUSTAIN."""
+        c = TensionCurve(total_beats=8.0)
+        assert c.phase_at(c.total_beats + 0.001) is TensionPhase.SUSTAIN
+
+    def test_phase_at_total_beats_exactly(self):
+        """At beat == total_beats the exact point's phase is returned."""
+        c = TensionCurve(total_beats=16.0)
+        pts = c.generate()
+        last = pts[-1]
+        assert c.phase_at(last.beat) == last.phase
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _classify_phase() boundary conditions
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestClassifyPhaseEdgeCases:
+    def test_rest_and_build_boundary_around_03(self):
+        """tension=0.3 is NOT < 0.3, so REST is skipped per PIL ordering → BUILD."""
+        c = TensionCurve()
+        # PIL chain: tension < 0.3? → 0.3 < 0.3 is False
+        # t < peak_position - 0.1?  0.0 < 0.6 is True → BUILD
+        assert c._classify_phase(0.3, 0.0) is TensionPhase.BUILD
+
+    def test_strictly_less_than_03_is_rest(self):
+        """tension=0.29 < 0.3 → REST wins even at t=0."""
+        c = TensionCurve()
+        assert c._classify_phase(0.29, 0.0) is TensionPhase.REST
+
+    def test_climax_boundary_at_peak_intensity_minus_02(self):
+        c = TensionCurve(peak_position=0.5, peak_intensity=1.0)
+        # tension = peak_intensity - 0.2 = 0.8; exactly at threshold
+        # PIL chain: tension>=0.3 ✓ not REST; t=0.5 not < 0.4 ✓ not BUILD
+        # tension > 0.8? No, it's ==. 0.8 > 0.8 is False → not CLIMAX
+        # t = 0.5 not > 0.6 → not RESOLUTION → SUSTAIN
+        assert c._classify_phase(0.8, 0.5) is TensionPhase.SUSTAIN
+
+    def test_climax_boundary_just_above_threshold_but_before_peak_position(self):
+        c = TensionCurve(peak_position=0.5, peak_intensity=1.0)
+        # PIL chain: tension>=0.3 ✓ not REST; t=0.1 < 0.4 ✓ BUILD first
+        assert c._classify_phase(0.81, 0.1) is TensionPhase.BUILD
+
+    def test_classical_peaks_must_exceed_70_percent_of_peak_intensity(self):
+        """The classical curve's peak tension should reach near peak_intensity."""
+        c = TensionCurve(total_beats=8.0)
+        pts = c.generate()
+        max_t = max(p.tension for p in pts)
+        assert max_t >= 0.7, f"max tension {max_t} below 70% of peak_intensity"
+
+    def test_classical_generated_always_reaches_climax_phase(self):
+        """Generated classical curve should include the CLIMAX phase."""
+        c = TensionCurve(total_beats=32.0)
+        pts = c.generate()
+        phases = {p.phase for p in pts}
+        assert TensionPhase.CLIMAX in phases
+
+    def test_edm_must_include_climax(self):
+        c = TensionCurve(total_beats=32.0, curve_type="edm")
+        pts = c.generate()
+        phases = {p.phase for p in pts}
+        assert TensionPhase.CLIMAX in phases
+
+    def test_build_release_must_include_build_and_rest(self):
+        """Default peak_position/peak_intensity produce REST and BUILD in 16-beat build_release."""
+        c = TensionCurve(total_beats=16.0, curve_type="build_release")
+        pts = c.generate()
+        phases = {p.phase for p in pts}
+        assert TensionPhase.REST in phases
+        assert TensionPhase.BUILD in phases

@@ -24,6 +24,7 @@ Usage:
 from __future__ import annotations
 
 import math
+import random
 from enum import Enum
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -89,10 +90,11 @@ class _TrackProfile:
     density: float  # notes per beat
     rms_velocity: float
     role: Role
+    entry_beat: float = 0.0   # [FIX 2] when this track first plays
+    note_count: int = 0
 
 
 _ROLE_HEURISTICS = {
-    # (avg_pitch_range, density_range, keyword_patterns) → Role
     "bass":   (lambda p, d: p < 48),
     "lead":   (lambda p, d: p > 60 and d > 0.15),
     "pad":    (lambda p, d: d < 0.1),
@@ -102,7 +104,6 @@ _ROLE_HEURISTICS = {
     "fx":     (lambda p, d: p > 80 and d < 0.05),
 }
 
-# Name-based role hints (substring match, case-insensitive)
 _NAME_HINTS: Dict[str, Role] = {
     "bass": Role.BASS, "kick": Role.PERC, "snare": Role.PERC,
     "hihat": Role.PERC, "hat": Role.PERC, "perc": Role.PERC,
@@ -116,7 +117,7 @@ _NAME_HINTS: Dict[str, Role] = {
 }
 
 
-def _analyze_track(name: str, notes: List[NoteInfo]) -> _TrackProfile:
+def _analyze_track(name: str, notes: List[NoteInfo], total_dur: float = 0.0) -> _TrackProfile:
     """Analyze a track's register, density, and assign a role."""
     if not notes:
         return _TrackProfile(60, 0, 0, 0, Role.PAD)
@@ -124,20 +125,19 @@ def _analyze_track(name: str, notes: List[NoteInfo]) -> _TrackProfile:
     avg_pitch = sum(n.pitch for n in notes) / len(notes)
     min_p = min(n.pitch for n in notes)
     max_p = max(n.pitch for n in notes)
-    total_dur = max(n.start + n.duration for n in notes) - notes[0].start
-    density = len(notes) / max(total_dur, 1.0)
+    span = max(n.start + n.duration for n in notes) - notes[0].start
+    total_dur = max(total_dur, span, 1.0)
+    density = len(notes) / total_dur
     rms = math.sqrt(sum(n.velocity ** 2 for n in notes) / len(notes))
+    entry = min(n.start for n in notes)
 
-    # Name hint first
     name_lower = name.lower()
+    role_final = Role.LEAD
     for hint, role in _NAME_HINTS.items():
         if hint in name_lower:
             role_final = role
             break
     else:
-        # Heuristic: pitch + density
-        for _, predicate in _ROLE_HEURISTICS.items():
-            pass
         if avg_pitch < 48:
             role_final = Role.BASS
         elif density < 0.08:
@@ -151,14 +151,14 @@ def _analyze_track(name: str, notes: List[NoteInfo]) -> _TrackProfile:
         else:
             role_final = Role.LEAD
 
-    return _TrackProfile(avg_pitch, max_p - min_p, density, rms, role_final)
+    return _TrackProfile(avg_pitch, max_p - min_p, density, rms, role_final,
+                         entry_beat=entry, note_count=len(notes))
 
 
 # ---------------------------------------------------------------------------
-# Auto-mixing: role-based gain, pan, and register shaping
+# Auto-mixing: role-based gain, density-adaptive, entry/exit, register shaping
 # ---------------------------------------------------------------------------
 
-# Role → default gain multiplier
 _ROLE_GAINS: Dict[Role, float] = {
     Role.LEAD:    0.85,
     Role.BASS:    0.55,
@@ -169,7 +169,6 @@ _ROLE_GAINS: Dict[Role, float] = {
     Role.FX:      0.50,
 }
 
-# Role → default pan (-1 to +1)
 _ROLE_PAN: Dict[Role, float] = {
     Role.LEAD:    0.0,
     Role.BASS:    0.0,
@@ -181,20 +180,46 @@ _ROLE_PAN: Dict[Role, float] = {
 }
 
 
+def _density_gain_factor(density: float) -> float:
+    """[FIX 6] Sparse tracks need boost, dense tracks need duck."""
+    if density < 0.05:
+        return 1.25
+    elif density < 0.15:
+        return 1.10
+    elif density < 0.5:
+        return 1.0
+    elif density < 2.0:
+        return 0.90
+    elif density < 10.0:
+        return 0.80
+    else:
+        return 0.70
+
+
 def _auto_mix(tracks: Dict[str, List[NoteInfo]], mood_profile: _MoodProfile
-              ) -> Tuple[Dict[str, List[NoteInfo]], Dict[str, _TrackProfile]]:
-    """Analyze tracks, assign gains by role, apply register shaping."""
+              ) -> Tuple[Dict[str, List[NoteInfo]], Dict[str, _TrackProfile], Dict[str, float]]:
+    """Analyze tracks, assign gains by role + density, apply register shaping."""
+    # Compute total duration from all tracks
+    total_dur = 0.0
+    for notes in tracks.values():
+        if notes and not tracks.keys():
+            continue
+        for n in notes:
+            total_dur = max(total_dur, n.start + n.duration)
+
     profiles = {}
     for name, notes in tracks.items():
         if not notes or name.startswith("_"):
             continue
-        profiles[name] = _analyze_track(name, notes)
+        profiles[name] = _analyze_track(name, notes, total_dur)
 
-    # Build gain map: role default × register tweak × mood bass boost
+    # Build gain map: role default × density × register tweak × mood bass boost
     gains: Dict[str, float] = {}
     for name, prof in profiles.items():
         base = _ROLE_GAINS.get(prof.role, 0.80)
-        # Register tweak: low reg needs perceived loudness boost
+        density_factor = _density_gain_factor(prof.density)
+
+        # Register tweak
         if prof.avg_pitch < 48:
             reg_tweak = 1.10 * mood_profile.bass_boost
         elif prof.avg_pitch < 60:
@@ -205,24 +230,319 @@ def _auto_mix(tracks: Dict[str, List[NoteInfo]], mood_profile: _MoodProfile
             reg_tweak = 0.92
         else:
             reg_tweak = 1.0
-        gains[name] = base * reg_tweak
 
-    # Detect register overlap: if two non-perc tracks share pitch space,
-    # attenuate the one with lower RMS
+        gains[name] = base * density_factor * reg_tweak
+
+    # [FIX 4 + FIX 5] Register overlap: same-register non-perc → pan apart + duck
     names = [n for n in profiles if profiles[n].role not in (Role.PERC, Role.FX)]
+    dialogue_pairs: List[Tuple[str, str]] = []
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
             a, b = profiles[names[i]], profiles[names[j]]
-            if abs(a.avg_pitch - b.avg_pitch) < 8:  # within ~half octave
+            if abs(a.avg_pitch - b.avg_pitch) < 8:
                 quieter = names[i] if a.rms_velocity < b.rms_velocity else names[j]
-                gains[quieter] *= 0.75  # duck the competing track
+                gains[quieter] *= 0.75
+                dialogue_pairs.append((names[i], names[j]))
+
+    # [FIX 5] Auto-pan dialogue pairs hard L/R
+    pan_overrides: Dict[str, float] = {}
+    for ai, (a_name, b_name) in enumerate(dialogue_pairs):
+        spread = 0.6 + min(0.35, ai * 0.05)  # vary spread to avoid stacking
+        pan_overrides[a_name] = -spread
+        pan_overrides[b_name] = spread
 
     # Apply MixingDesk
     desk = MixingDesk(niche_cfg={})
     desk.track_gains.update(gains)
-    mixed = desk.apply_mixing(tracks, [], 120)  # BPM irrelevant with empty sections
+    mixed = desk.apply_mixing(tracks, [], 120)
 
-    return mixed, profiles
+    # Store pan_overrides in profiles metadata for mastering to pick up
+    for name, pan in pan_overrides.items():
+        if name in profiles:
+            # Attach via a hack: store on the profile for _auto_master to read
+            pass
+
+    # Apply MixingDesk
+    desk = MixingDesk(niche_cfg={})
+    desk.track_gains.update(gains)
+    mixed = desk.apply_mixing(tracks, [], 120)
+
+    return mixed, profiles, pan_overrides
+
+
+# ---------------------------------------------------------------------------
+# [FIX 1] Sidechain ducking — bass/pad duck when perc hits
+# ---------------------------------------------------------------------------
+
+def _sidechain_duck(tracks: Dict[str, List[NoteInfo]],
+                    profiles: Dict[str, _TrackProfile],
+                    duck_amount: float = 0.45,
+                    window: float = 0.15) -> Dict[str, List[NoteInfo]]:
+    """Reduce velocity of bass/pad notes that overlap perc hits within window."""
+    perc_names = [n for n, p in profiles.items() if p.role == Role.PERC]
+    duck_names = [n for n, p in profiles.items() if p.role in (Role.BASS, Role.PAD)]
+
+    if not perc_names or not duck_names:
+        return tracks
+
+    # Collect perc hit times
+    hit_times: List[float] = []
+    for pn in perc_names:
+        for n in tracks.get(pn, []):
+            hit_times.append(n.start)
+
+    if not hit_times:
+        return tracks
+
+    hit_times.sort()
+    result = {}
+    for tname, notes in tracks.items():
+        if tname.startswith("_") or tname not in duck_names:
+            result[tname] = notes
+            continue
+
+        new_notes = []
+        for n in notes:
+            # Check if any perc hit falls within [n.start - window, n.start + window]
+            lo = n.start - window
+            hi = n.start + window
+            # Binary search for closest hit
+            import bisect
+            idx = bisect.bisect_left(hit_times, lo)
+            duck = False
+            while idx < len(hit_times) and hit_times[idx] <= hi:
+                duck = True
+                break
+
+            if duck:
+                new_vel = max(10, int(n.velocity * (1.0 - duck_amount)))
+                new_notes.append(NoteInfo(
+                    pitch=n.pitch, start=n.start, duration=n.duration,
+                    velocity=new_vel, articulation=n.articulation,
+                    expression=n.expression,
+                ))
+            else:
+                new_notes.append(n)
+        result[tname] = new_notes
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# [FIX 7] Swing / humanization — timing + velocity jitter for dense tracks
+# ---------------------------------------------------------------------------
+
+def _apply_humanization(tracks: Dict[str, List[NoteInfo]],
+                        profiles: Dict[str, _TrackProfile],
+                        swing_amount: float = 0.02,
+                        vel_jitter: int = 4) -> Dict[str, List[NoteInfo]]:
+    """Add subtle timing and velocity variation to dense / robotic tracks."""
+    result = {}
+    for tname, notes in tracks.items():
+        if tname.startswith("_"):
+            result[tname] = notes
+            continue
+
+        prof = profiles.get(tname)
+        if not prof or prof.role in (Role.PAD, Role.FX):
+            result[tname] = notes
+            continue
+
+        # Only humanize tracks with density > 0.3 or role is LEAD/STRINGS
+        if prof.density < 0.3 and prof.role not in (Role.LEAD, Role.STRINGS):
+            result[tname] = notes
+            continue
+
+        rng = random.Random(hash(tname) & 0xFFFFFFFF)
+        new_notes = []
+        for n in notes:
+            t_jitter = rng.uniform(-swing_amount, swing_amount)
+            v_jitter = rng.randint(-vel_jitter, vel_jitter)
+            new_notes.append(NoteInfo(
+                pitch=n.pitch,
+                start=max(0.0, n.start + t_jitter),
+                duration=n.duration,
+                velocity=max(10, min(127, n.velocity + v_jitter)),
+                articulation=n.articulation,
+                expression=n.expression,
+            ))
+        result[tname] = new_notes
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# [FIX 2] Instrument entry/exit — CC11 fade-in for late-entering tracks
+# ---------------------------------------------------------------------------
+
+def _generate_entry_fades(tracks: Dict[str, List[NoteInfo]],
+                          profiles: Dict[str, _TrackProfile],
+                          total_dur: float,
+                          fade_beats: float = 8.0) -> Dict[str, List[Tuple[float, int, int]]]:
+    """Generate CC11 expression events for tracks that enter late."""
+    cc_events: Dict[str, List[Tuple[float, int, int]]] = {}
+    threshold = total_dur * 0.1  # enter after 10% of track
+
+    for tname, prof in profiles.items():
+        if prof.entry_beat < threshold or prof.role in (Role.PERC, Role.FX):
+            continue
+
+        notes = tracks.get(tname, [])
+        if not notes:
+            continue
+
+        events = []
+        entry = prof.entry_beat
+        # Ramp CC11 from 20 → 100 over fade_beats
+        steps = max(4, int(fade_beats / 0.5))
+        for i in range(steps + 1):
+            t = entry - fade_beats + (i / steps) * fade_beats
+            if t < 0:
+                continue
+            val = int(20 + (80 * i / steps))
+            events.append((t, 11, val))
+
+        # Set full expression at entry
+        events.append((entry + 0.01, 11, 100))
+        cc_events[tname] = events
+
+    return cc_events
+
+
+# ---------------------------------------------------------------------------
+# [FIX 9] Reverb CC91 — role-based reverb send
+# ---------------------------------------------------------------------------
+
+_ROLE_REVERB: Dict[Role, int] = {
+    Role.LEAD:    50,
+    Role.BASS:    20,
+    Role.PAD:     70,
+    Role.PERC:    25,
+    Role.STRINGS: 55,
+    Role.CHOIR:   65,
+    Role.FX:      40,
+}
+
+
+def _generate_reverb_sends(tracks: Dict[str, List[NoteInfo]],
+                           profiles: Dict[str, _TrackProfile],
+                           mood_profile: _MoodProfile) -> Dict[str, List[Tuple[float, int, int]]]:
+    """Generate CC91 reverb send events per track."""
+    cc_events: Dict[str, List[Tuple[float, int, int]]] = {}
+
+    # Dense mixes need more reverb
+    total_notes = sum(p.note_count for p in profiles.values())
+    density_boost = min(20, total_notes // 200)
+
+    for tname, prof in profiles.items():
+        notes = tracks.get(tname, [])
+        if not notes:
+            continue
+
+        base_reverb = _ROLE_REVERB.get(prof.role, 40)
+        reverb = min(127, base_reverb + density_boost)
+
+        # Ambient moods get more reverb, aggressive gets less
+        if mood_profile.lufs < -18:
+            reverb = min(127, reverb + 15)
+        elif mood_profile.lufs > -13:
+            reverb = max(10, reverb - 10)
+
+        first_time = notes[0].start
+        cc_events[tname] = [(first_time, 91, reverb)]
+
+    return cc_events
+
+
+# ---------------------------------------------------------------------------
+# [FIX 10] Echo/delay CC93 — detect echo tracks and add delay send
+# ---------------------------------------------------------------------------
+
+def _generate_delay_sends(tracks: Dict[str, List[NoteInfo]],
+                          profiles: Dict[str, _TrackProfile]) -> Dict[str, List[Tuple[float, int, int]]]:
+    """Generate CC93 delay send for tracks with 'echo' or 'delay' in name."""
+    cc_events: Dict[str, List[Tuple[float, int, int]]] = {}
+
+    for tname, notes in tracks.items():
+        name_lower = tname.lower()
+        if "echo" not in name_lower and "delay" not in name_lower:
+            continue
+
+        if not notes:
+            continue
+
+        # Delay send level based on how different the track is from the source
+        delay_level = 60 if "far" in name_lower else 40
+        first_time = notes[0].start
+        cc_events[tname] = [(first_time, 93, delay_level)]
+
+    return cc_events
+
+
+# ---------------------------------------------------------------------------
+# [FIX 11] Harmonic tension tracking — detect chaos vs order in chords
+# ---------------------------------------------------------------------------
+
+_DISSONANT_INTERVALS = {1, 6}  # minor second, tritone — high tension
+_CONSONANT_INTERVALS = {3, 4, 5, 7, 8, 9, 12}  # thirds, fourths, fifths, sixths, octave
+
+
+def _compute_tension(chords: List) -> float:
+    """Analyze chord list and return tension 0.0 (calm) to 1.0 (chaotic)."""
+    if not chords:
+        return 0.5
+
+    dissonant = 0
+    total = 0
+    for ch in chords:
+        root = ch.root
+        quality = ch.quality
+        total += 1
+        # Minor, diminished, augmented = more tension
+        qname = quality.value if hasattr(quality, "value") else str(quality)
+        if "diminish" in qname or "augment" in qname:
+            dissonant += 2
+        elif "minor" in qname or "min" in qname:
+            dissonant += 1
+
+    if total == 0:
+        return 0.5
+    return min(1.0, dissonant / total)
+
+
+# ---------------------------------------------------------------------------
+# [FIX 12] Sparse normalization safeguard
+# ---------------------------------------------------------------------------
+
+_SPARSE_THRESHOLD = 10  # fewer than this many notes = sparse
+
+
+def _sparse_safeguard(tracks: Dict[str, List[NoteInfo]],
+                      profiles: Dict[str, _TrackProfile]) -> Dict[str, List[NoteInfo]]:
+    """For extremely sparse tracks, clamp velocity to avoid over-amplification."""
+    result = {}
+    for tname, notes in tracks.items():
+        if tname.startswith("_"):
+            result[tname] = notes
+            continue
+
+        prof = profiles.get(tname)
+        if prof and prof.note_count < _SPARSE_THRESHOLD and notes:
+            # Clamp max velocity to 90 to prevent RMS normalization explosion
+            clamped = []
+            for n in notes:
+                if n.velocity > 90:
+                    clamped.append(NoteInfo(
+                        pitch=n.pitch, start=n.start, duration=n.duration,
+                        velocity=90, articulation=n.articulation, expression=n.expression,
+                    ))
+                else:
+                    clamped.append(n)
+            result[tname] = clamped
+        else:
+            result[tname] = notes
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -230,13 +550,17 @@ def _auto_mix(tracks: Dict[str, List[NoteInfo]], mood_profile: _MoodProfile
 # ---------------------------------------------------------------------------
 
 def _auto_master(tracks: Dict[str, List[NoteInfo]], profiles: Dict[str, _TrackProfile],
-                 mood_profile: _MoodProfile
+                 mood_profile: _MoodProfile,
+                 pan_overrides: Dict[str, float] | None = None
                  ) -> Tuple[Dict[str, List[NoteInfo]], Dict[str, List[Tuple[float, int, int]]]]:
     """Master with mood-aware LUFS, role-based pan, and brightness ceiling."""
-    # Build pan map from role profiles
     pan_map = {}
     for name, prof in profiles.items():
-        pan_map[name] = _ROLE_PAN.get(prof.role, 0.0)
+        # [FIX 5] Apply dialogue pan overrides if available
+        if pan_overrides and name in pan_overrides:
+            pan_map[name] = pan_overrides[name]
+        else:
+            pan_map[name] = _ROLE_PAN.get(prof.role, 0.0)
 
     master = MasteringDesk(
         target_lufs=mood_profile.lufs,
@@ -269,7 +593,7 @@ def _shape_dynamics(tracks: Dict[str, List[NoteInfo]], mood_profile: _MoodProfil
     """Widen or compress velocity range based on mood dynamics setting."""
     rng = mood_profile.dynamics_range
     if rng >= 0.95:
-        return tracks  # nothing to do
+        return tracks
 
     result = {}
     for name, notes in tracks.items():
@@ -283,7 +607,6 @@ def _shape_dynamics(tracks: Dict[str, List[NoteInfo]], mood_profile: _MoodProfil
             continue
         center = (mn + mx) / 2
         half = (mx - mn) / 2
-        # Compress toward center by dynamics_range factor
         shaped = []
         for n in notes:
             offset = n.velocity - center
@@ -295,6 +618,25 @@ def _shape_dynamics(tracks: Dict[str, List[NoteInfo]], mood_profile: _MoodProfil
             ))
         result[name] = shaped
     return result
+
+
+# ---------------------------------------------------------------------------
+# Merge CC events from multiple sources
+# ---------------------------------------------------------------------------
+
+def _merge_cc_events(*sources: Dict[str, List[Tuple[float, int, int]]]
+                     ) -> Dict[str, List[Tuple[float, int, int]]]:
+    """Merge multiple CC event dicts into one, sorted by time."""
+    merged: Dict[str, List[Tuple[float, int, int]]] = {}
+    for src in sources:
+        for tname, events in src.items():
+            if tname not in merged:
+                merged[tname] = []
+            merged[tname].extend(events)
+    # Sort each track's events by time
+    for tname in merged:
+        merged[tname].sort(key=lambda e: e[0])
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +652,8 @@ def produce_track(
     key: Scale | None = None,
     psycho_verify_enabled: bool = True,
     verbose: bool = True,
+    sections: List[Tuple[float, Mood]] | None = None,
+    chords: List | None = None,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -332,6 +676,11 @@ def produce_track(
         Run psychoacoustic masking detection and fixes.
     verbose : bool
         Print processing report.
+    sections : list of (beat, Mood), optional
+        [FIX 3] Section-aware mood changes. Each tuple is (start_beat, mood).
+        Allows mood to change mid-track.
+    chords : list of ChordLabel, optional
+        [FIX 11] Chord progression for harmonic tension analysis.
 
     Returns
     -------
@@ -342,12 +691,32 @@ def produce_track(
     mood_profile = _MOOD_PROFILES[mood]
 
     # 1. Analyze + auto-mix
-    mixed, profiles = _auto_mix(tracks, mood_profile)
+    mixed, profiles, pan_overrides = _auto_mix(tracks, mood_profile)
 
     # 2. Dynamics shaping
     shaped = _shape_dynamics(mixed, mood_profile)
 
-    # 3. Psychoacoustic verification
+    # 3. [FIX 1] Sidechain ducking
+    shaped = _sidechain_duck(shaped, profiles)
+
+    # 4. [FIX 7] Humanization / swing
+    shaped = _apply_humanization(shaped, profiles)
+
+    # 5. [FIX 3] Section-aware mood: apply per-section dynamics shaping
+    if sections:
+        shaped = _apply_section_moods(shaped, sections, profiles)
+
+    # 6. [FIX 11] Harmonic tension: adjust dynamics based on chord analysis
+    if chords:
+        tension = _compute_tension(chords)
+        if tension > 0.7:
+            # High tension — boost velocity by 10%
+            shaped = _tension_boost(shaped, 1.10)
+        elif tension < 0.3:
+            # Low tension — gentle reduction
+            shaped = _tension_boost(shaped, 0.92)
+
+    # 7. Psychoacoustic verification
     if psycho_verify_enabled:
         config = PsychoConfig(aggressive_fix=mood_profile.psycho_aggressive)
         shaped, psycho_report = psycho_verify(shaped, config)
@@ -360,21 +729,33 @@ def produce_track(
     else:
         psycho_report = None
 
-    # 4. Auto-master
-    mastered, cc_events = _auto_master(shaped, profiles, mood_profile)
+    # 8. [FIX 12] Sparse normalization safeguard
+    shaped = _sparse_safeguard(shaped, profiles)
 
-    # 5. Export
+    # 9. Auto-master
+    mastered, master_cc = _auto_master(shaped, profiles, mood_profile, pan_overrides)
+
+    # 10. Generate CC events
+    total_dur = max((n.start + n.duration for ns in mastered.values() for n in ns), default=0.0)
+    entry_cc = _generate_entry_fades(mastered, profiles, total_dur)         # [FIX 2]
+    reverb_cc = _generate_reverb_sends(mastered, profiles, mood_profile)    # [FIX 9]
+    delay_cc = _generate_delay_sends(mastered, profiles)                    # [FIX 10]
+    all_cc = _merge_cc_events(master_cc, entry_cc, reverb_cc, delay_cc)
+
+    # 11. Export
     export_multitrack_midi(mastered, str(path), bpm=bpm, key=key,
-                           instruments=instruments, cc_events=cc_events)
+                           instruments=instruments, cc_events=all_cc)
 
-    # 6. Report
+    # 12. Report
     report = {
         "profiles": {name: {"role": p.role.value, "avg_pitch": round(p.avg_pitch, 1),
-                            "density": round(p.density, 3), "rms": round(p.rms_velocity, 1)}
+                            "density": round(p.density, 3), "rms": round(p.rms_velocity, 1),
+                            "entry": round(p.entry_beat, 1)}
                      for name, p in profiles.items()},
         "psycho": psycho_report,
         "mood": mood.value,
         "lufs": mood_profile.lufs,
+        "cc_events": {k: len(v) for k, v in all_cc.items()},
     }
 
     if verbose:
@@ -382,6 +763,68 @@ def produce_track(
         print(f"   Roles: {roles} | LUFS: {mood_profile.lufs}")
 
     return report
+
+
+# ---------------------------------------------------------------------------
+# [FIX 3] Section-aware mood changes
+# ---------------------------------------------------------------------------
+
+def _apply_section_moods(tracks: Dict[str, List[NoteInfo]],
+                         sections: List[Tuple[float, Mood]],
+                         profiles: Dict[str, _TrackProfile]) -> Dict[str, List[NoteInfo]]:
+    """Apply per-section dynamics shaping based on mood changes."""
+    if not sections:
+        return tracks
+
+    result = {}
+    for tname, notes in tracks.items():
+        if tname.startswith("_") or not notes:
+            result[tname] = notes
+            continue
+
+        new_notes = []
+        for n in notes:
+            # Find which section this note belongs to
+            section_mood = sections[0][1]  # default to first mood
+            for sec_start, sec_mood in sections:
+                if n.start >= sec_start:
+                    section_mood = sec_mood
+
+            mood_profile = _MOOD_PROFILES[section_mood]
+            # Apply dynamics compression based on section mood
+            center = 64
+            offset = n.velocity - center
+            new_vel = int(round(center + offset * mood_profile.dynamics_range))
+            new_vel = max(10, min(127, new_vel))
+
+            new_notes.append(NoteInfo(
+                pitch=n.pitch, start=n.start, duration=n.duration,
+                velocity=new_vel, articulation=n.articulation,
+                expression=n.expression,
+            ))
+        result[tname] = new_notes
+
+    return result
+
+
+def _tension_boost(tracks: Dict[str, List[NoteInfo]], factor: float
+                   ) -> Dict[str, List[NoteInfo]]:
+    """Apply velocity scaling based on harmonic tension."""
+    result = {}
+    for tname, notes in tracks.items():
+        if tname.startswith("_") or not notes:
+            result[tname] = notes
+            continue
+        new_notes = []
+        for n in notes:
+            new_vel = max(10, min(127, int(n.velocity * factor)))
+            new_notes.append(NoteInfo(
+                pitch=n.pitch, start=n.start, duration=n.duration,
+                velocity=new_vel, articulation=n.articulation,
+                expression=n.expression,
+            ))
+        result[tname] = new_notes
+    return result
 
 
 def produce_album(
