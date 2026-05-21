@@ -47,7 +47,7 @@ class VelocityProcessor:
         base_vel: int,
         event: RhythmEvent,
         phrase_pos: float,
-        global_progress: float,
+        _global_progress: float,
         beat_strength: float = 1.0,
     ) -> int:
         """Apply accents and contour to base velocity."""

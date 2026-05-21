@@ -248,9 +248,9 @@ class MotifDevelopmentGenerator(PhraseGenerator):
         self,
         pitches: list[int],
         durations: list[float],
-        xform_idx: int,
-        all_notes: list[NoteInfo],
-        t: float,
+        _xform_idx: int,
+        _all_notes: list[NoteInfo],
+        _t: float,
     ) -> tuple[list[int], list[float]]:
         style = self.development_style
         if style == "fragmented":

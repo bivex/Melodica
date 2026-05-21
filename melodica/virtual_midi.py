@@ -39,8 +39,6 @@ from __future__ import annotations
 
 import threading
 import time
-from contextlib import contextmanager
-from typing import Generator
 
 import mido
 
@@ -337,7 +335,7 @@ class VirtualMidiOut:
         self.open()
         return self
 
-    def __exit__(self, *args: object) -> None:
+    def __exit__(self, *_args: object) -> None:
         self.close()
 
 

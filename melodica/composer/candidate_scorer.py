@@ -247,9 +247,9 @@ def _score_contour(pitch: int, ctx: ScoringContext) -> float:
 
     diff = pitch - ctx.prev_pitch
     
-    if ctx.preferred_contour == "ascending":
+    if ctx.preferred_contour in ("ascending", "rising"):
         return 0.9 if diff > 0 else (0.2 if diff < 0 else 0.4)
-    if ctx.preferred_contour == "descending":
+    if ctx.preferred_contour in ("descending", "falling"):
         return 0.9 if diff < 0 else (0.2 if diff > 0 else 0.4)
     if ctx.preferred_contour == "arch":
         # First half: go up. Second half: go down.

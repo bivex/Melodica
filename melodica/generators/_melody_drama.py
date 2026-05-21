@@ -92,7 +92,7 @@ class DramaticArc:
         else:
             return 0.65 + (1.0 - ten) * 0.35
 
-    def is_dramatic_pause(self, onset: float, last_interval: int, event_idx: int, total_events: int) -> bool:
+    def is_dramatic_pause(self, onset: float, last_interval: int, _event_idx: int, _total_events: int) -> bool:
         """Should we insert a dramatic pause here?"""
         if self.shape == "none":
             return False

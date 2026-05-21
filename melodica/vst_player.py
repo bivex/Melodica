@@ -400,5 +400,5 @@ class VSTPlayer:
     def __enter__(self) -> VSTPlayer:
         return self
 
-    def __exit__(self, *args: object) -> None:
+    def __exit__(self, *_args: object) -> None:
         self.close()

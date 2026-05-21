@@ -133,7 +133,7 @@ class ReharmonizationGenerator(PhraseGenerator):
         return notes
 
     def _substitute(
-        self, chord: ChordLabel, key: Scale, all_chords: list[ChordLabel]
+        self, chord: ChordLabel, key: Scale, _all_chords: list[ChordLabel]
     ) -> ChordLabel:
         root = chord.root
 

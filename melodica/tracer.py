@@ -85,10 +85,10 @@ class EngineTracer:
         self.start()
         return self
         
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(self, _exc_type: Any, _exc_val: Any, _exc_tb: Any) -> None:
         self.stop()
         
-    def _trace_callback(self, frame: FrameType, event: str, arg: Any) -> Optional[Callable]:
+    def _trace_callback(self, frame: FrameType, event: str, _arg: Any) -> Optional[Callable]:
         if event not in ("call", "return"):
             return self._trace_callback
             

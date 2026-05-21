@@ -406,3 +406,27 @@ class TestModalInterchangeHarmonizer:
         for c in chords:
             assert 0 <= c.root <= 11
             assert c.quality in set(Quality)
+
+
+class TestModalAwareCadenceScoring:
+    def test_minor_scale_plagal_cadence_bonus(self):
+        from melodica.harmonize._hmm_helpers import _get_cadence_bonus
+        # iv -> i in natural minor scale (A minor)
+        # Degree iv = 4th degree (3 in 0-indexed), i = 1st degree (0 in 0-indexed)
+        scale_minor = Scale(root=9, mode=Mode.NATURAL_MINOR)
+        scale_major = Scale(root=0, mode=Mode.MAJOR)
+        
+        bonus_minor = _get_cadence_bonus(3, 0, scale_minor)
+        bonus_major = _get_cadence_bonus(3, 0, scale_major)
+        
+        # Plagal cadence iv -> i is boosted to 0.7 in minor scales, but is default 0.4 in major
+        assert bonus_minor == 0.7
+        assert bonus_major == 0.4
+
+    def test_minor_scale_authentic_cadence_bonus(self):
+        from melodica.harmonize._hmm_helpers import _get_cadence_bonus
+        scale_minor = Scale(root=9, mode=Mode.NATURAL_MINOR)
+        # V/v -> i is 4 -> 0
+        bonus_minor = _get_cadence_bonus(4, 0, scale_minor)
+        assert bonus_minor == 0.8
+

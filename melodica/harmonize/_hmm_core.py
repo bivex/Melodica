@@ -22,10 +22,18 @@ import math
 from dataclasses import dataclass, field
 
 from melodica.harmonize._hmm_helpers import (
-    _chord_pcs_for_degree, _voice_leading_cost, _melody_fits_chord, _build_diatonic_chords,
-    _CADENCE_BONUSES, _FUNCTION_MAP, _FUNCTION_RULES_HMM2, _SECONDARY_DOMINANTS, _EXTENSIONS,
+    _chord_pcs_for_degree, _voice_leading_cost, _build_diatonic_chords,
+    _CADENCE_BONUSES, _FUNCTION_MAP, _FUNCTION_RULES_HMM2, _EXTENSIONS,
+    _get_cadence_bonus,
 )
 from melodica.types import ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
+
+class SecondaryDominantDegree(int):
+    """A custom int subclass that evaluates to 0 but carries target_degree metadata."""
+    def __new__(cls, target_deg):
+        obj = super().__new__(cls, 0)
+        obj.target_degree = target_deg
+        return obj
 
 @dataclass
 class HMMHarmonizer:
@@ -68,7 +76,7 @@ class HMMHarmonizer:
             return []
 
         # Transition matrix (simple functional rules)
-        trans = self._build_transition_matrix(n_states)
+        trans = self._build_transition_matrix(n_states, scale)
 
         # Emission probabilities
         emissions = self._build_emissions(observations, chords_def, scale)
@@ -98,23 +106,43 @@ class HMMHarmonizer:
 
         return result
 
-    def _build_transition_matrix(self, n: int) -> list[list[float]]:
+    def _build_transition_matrix(self, n: int, scale: Scale | None = None) -> list[list[float]]:
         """Build chord transition probability matrix."""
         # Functional rules: T→S, S→D, D→T
         mat = [[1.0 / n] * n for _ in range(n)]
-        # I→IV, I→V, IV→V, V→I, vi→IV, ii→V
-        rules = {
-            0: {3: 0.35, 4: 0.30, 1: 0.15, 5: 0.10, 2: 0.05, 6: 0.05},
-            1: {4: 0.45, 0: 0.20, 3: 0.15, 5: 0.10, 2: 0.05, 6: 0.05},
-            2: {5: 0.35, 3: 0.25, 4: 0.20, 1: 0.10, 0: 0.05, 6: 0.05},
-            3: {4: 0.35, 0: 0.25, 1: 0.15, 5: 0.10, 2: 0.10, 6: 0.05},
-            4: {0: 0.40, 5: 0.25, 3: 0.15, 1: 0.10, 2: 0.05, 6: 0.05},
-            5: {1: 0.30, 4: 0.25, 3: 0.20, 0: 0.10, 2: 0.10, 6: 0.05},
-            6: {0: 0.50, 4: 0.25, 3: 0.15, 1: 0.05, 2: 0.05},
-        }
+        
+        is_minor_scale = False
+        if scale is not None:
+            intervals = scale.intervals()
+            if len(intervals) > 2:
+                is_minor_scale = (intervals[2] == 3)
+                
+        if is_minor_scale:
+            # Minor functional rules (i, ii°, III, iv, v/V, VI, VII)
+            rules = {
+                0: {3: 0.35, 4: 0.30, 5: 0.15, 2: 0.10, 1: 0.05, 6: 0.05},
+                1: {4: 0.45, 0: 0.20, 6: 0.15, 3: 0.10, 2: 0.05, 5: 0.05},
+                2: {5: 0.35, 3: 0.25, 4: 0.20, 0: 0.10, 1: 0.05, 6: 0.05},
+                3: {4: 0.45, 0: 0.20, 5: 0.15, 1: 0.10, 2: 0.05, 6: 0.05},
+                4: {0: 0.45, 5: 0.25, 3: 0.15, 1: 0.05, 2: 0.05, 6: 0.05},
+                5: {3: 0.35, 1: 0.25, 4: 0.20, 0: 0.10, 2: 0.05, 6: 0.05},
+                6: {2: 0.45, 0: 0.25, 4: 0.15, 3: 0.05, 1: 0.05, 5: 0.05},
+            }
+        else:
+            # Major functional rules
+            rules = {
+                0: {3: 0.35, 4: 0.30, 1: 0.15, 5: 0.10, 2: 0.05, 6: 0.05},
+                1: {4: 0.45, 0: 0.20, 3: 0.15, 5: 0.10, 2: 0.05, 6: 0.05},
+                2: {5: 0.35, 3: 0.25, 4: 0.20, 1: 0.10, 0: 0.05, 6: 0.05},
+                3: {4: 0.35, 0: 0.25, 1: 0.15, 5: 0.10, 2: 0.10, 6: 0.05},
+                4: {0: 0.40, 5: 0.25, 3: 0.15, 1: 0.10, 2: 0.05, 6: 0.05},
+                5: {1: 0.30, 4: 0.25, 3: 0.20, 0: 0.10, 2: 0.10, 6: 0.05},
+                6: {0: 0.50, 4: 0.25, 3: 0.15, 1: 0.05, 2: 0.05},
+            }
         for i, row in rules.items():
             for j, w in row.items():
-                mat[i][j] = w
+                if i < n and j < n:
+                    mat[i][j] = w
         return mat
 
     def _build_emissions(
@@ -257,7 +285,7 @@ class HMM2Harmonizer:
         bars_per_change = 4.0 / (4.0 if self.chord_change == "bars" else 2.0)
 
         # Transition matrix
-        trans = self._build_transition_matrix(n)
+        trans = self._build_transition_matrix(n, scale)
 
         # Forward pass with custom scoring
         dp = [[float("-inf")] * n for _ in range(T)]
@@ -265,7 +293,7 @@ class HMM2Harmonizer:
 
         for s in range(n):
             dp[0][s] = self._score_state(
-                0, s, None, observations[0], chords_def, change_points, bars_per_change
+                0, s, None, observations[0], chords_def, change_points, bars_per_change, scale
             )
 
         for t in range(1, T):
@@ -274,7 +302,7 @@ class HMM2Harmonizer:
                     score = dp[t - 1][prev]
                     score += self._score_transition(prev, s, trans)
                     score += self._score_state(
-                        t, s, prev, observations[t], chords_def, change_points, bars_per_change
+                        t, s, prev, observations[t], chords_def, change_points, bars_per_change, scale
                     )
                     if score > dp[t][s]:
                         dp[t][s] = score
@@ -309,7 +337,7 @@ class HMM2Harmonizer:
         return result
 
     def _score_state(
-        self, t, state, prev_state, obs_pcs, chords_def, change_points, bars_per_change
+        self, t, state, prev_state, obs_pcs, chords_def, change_points, bars_per_change, scale=None
     ):
         """score = melody_fit + functional + cadence - repetition."""
         rpc, quality = chords_def[state]
@@ -332,8 +360,7 @@ class HMM2Harmonizer:
         # 3. Cadence bonus
         cadence_bonus = 0.0
         if prev_state is not None:
-            pair = (prev_state, state)
-            cadence_bonus = _CADENCE_BONUSES.get(pair, 0.0) * self.cadence_weight
+            cadence_bonus = _get_cadence_bonus(prev_state, state, scale) * self.cadence_weight
 
         # Phrase-end cadence bonus
         beat_pos = change_points[t] if t < len(change_points) else 0
@@ -352,20 +379,41 @@ class HMM2Harmonizer:
     def _score_transition(self, prev, curr, trans):
         return trans[prev][curr] * self.transition_weight
 
-    def _build_transition_matrix(self, n):
+    def _build_transition_matrix(self, n, scale: Scale | None = None):
         mat = [[0.15] * n for _ in range(n)]
-        rules = {
-            0: {3: 0.35, 4: 0.30, 1: 0.15, 5: 0.10, 2: 0.05, 6: 0.05},
-            1: {4: 0.45, 0: 0.20, 3: 0.15, 5: 0.10, 2: 0.05, 6: 0.05},
-            2: {5: 0.35, 3: 0.25, 4: 0.20, 1: 0.10, 0: 0.05, 6: 0.05},
-            3: {4: 0.35, 0: 0.25, 1: 0.15, 5: 0.10, 2: 0.10, 6: 0.05},
-            4: {0: 0.40, 5: 0.25, 3: 0.15, 1: 0.10, 2: 0.05, 6: 0.05},
-            5: {1: 0.30, 4: 0.25, 3: 0.20, 0: 0.10, 2: 0.10, 6: 0.05},
-            6: {0: 0.50, 4: 0.25, 3: 0.15, 1: 0.05, 2: 0.05},
-        }
+        
+        is_minor_scale = False
+        if scale is not None:
+            intervals = scale.intervals()
+            if len(intervals) > 2:
+                is_minor_scale = (intervals[2] == 3)
+                
+        if is_minor_scale:
+            # Minor functional rules (i, ii°, III, iv, v/V, VI, VII)
+            rules = {
+                0: {3: 0.35, 4: 0.30, 5: 0.15, 2: 0.10, 1: 0.05, 6: 0.05},
+                1: {4: 0.45, 0: 0.20, 6: 0.15, 3: 0.10, 2: 0.05, 5: 0.05},
+                2: {5: 0.35, 3: 0.25, 4: 0.20, 0: 0.10, 1: 0.05, 6: 0.05},
+                3: {4: 0.45, 0: 0.20, 5: 0.15, 1: 0.10, 2: 0.05, 6: 0.05},
+                4: {0: 0.45, 5: 0.25, 3: 0.15, 1: 0.05, 2: 0.05, 6: 0.05},
+                5: {3: 0.35, 1: 0.25, 4: 0.20, 0: 0.10, 2: 0.05, 6: 0.05},
+                6: {2: 0.45, 0: 0.25, 4: 0.15, 3: 0.05, 1: 0.05, 5: 0.05},
+            }
+        else:
+            # Major functional rules
+            rules = {
+                0: {3: 0.35, 4: 0.30, 1: 0.15, 5: 0.10, 2: 0.05, 6: 0.05},
+                1: {4: 0.45, 0: 0.20, 3: 0.15, 5: 0.10, 2: 0.05, 6: 0.05},
+                2: {5: 0.35, 3: 0.25, 4: 0.20, 1: 0.10, 0: 0.05, 6: 0.05},
+                3: {4: 0.35, 0: 0.25, 1: 0.15, 5: 0.10, 2: 0.10, 6: 0.05},
+                4: {0: 0.40, 5: 0.25, 3: 0.15, 1: 0.10, 2: 0.05, 6: 0.05},
+                5: {1: 0.30, 4: 0.25, 3: 0.20, 0: 0.10, 2: 0.10, 6: 0.05},
+                6: {0: 0.50, 4: 0.25, 3: 0.15, 1: 0.05, 2: 0.05},
+            }
         for i, row in rules.items():
             for j, w in row.items():
-                mat[i][j] = w
+                if i < n and j < n:
+                    mat[i][j] = w
         return mat
 
     def _extract_observations(self, melody, change_points):
@@ -440,7 +488,7 @@ class HMM3Harmonizer:
         n_cat = len(catalog)
 
         # Transition matrix over catalog
-        trans = self._build_transitions(catalog, chords_def)
+        trans = self._build_transitions(catalog, chords_def, scale)
 
         # Beam search
         # State: (cumulative_score, list_of_indices)
@@ -490,7 +538,7 @@ class HMM3Harmonizer:
                     quality=quality,
                     start=round(start, 6),
                     duration=round(dur, 6),
-                    degree=degree,
+                    degree=int(degree),
                 )
             )
         return result
@@ -507,37 +555,59 @@ class HMM3Harmonizer:
                         catalog.append((rpc, ext_qual, i + 1))
         # Add secondary dominants
         if self.allow_secondary_dom:
-            degs = scale.degrees()
-            for target_deg, dom_options in _SECONDARY_DOMINANTS.items():
-                for dom_offset, dom_qual in dom_options:
-                    dom_root = (
-                        degs[(target_deg - 1 + dom_offset) % len(degs)]
-                        if target_deg - 1 + dom_offset < len(degs)
-                        else (degs[target_deg - 1] + dom_offset) % 12
-                    )
-                    catalog.append((int(dom_root), dom_qual, 0))
+            # Dynamically build mathematically and acoustically correct secondary dominants
+            # (V7/target) for each major or minor diatonic scale degree (degree i + 1).
+            for i, (rpc, qual) in enumerate(chords_def):
+                if qual in (Quality.MAJOR, Quality.MINOR):
+                    dom_root = (rpc + 7) % 12
+                    catalog.append((int(dom_root), Quality.DOMINANT7, SecondaryDominantDegree(i + 1)))
         return catalog
 
-    def _build_transitions(self, catalog, chords_def):
+    def _build_transitions(self, catalog, chords_def, scale: Scale | None = None):
         n = len(catalog)
         mat = [[0.1] * n for _ in range(n)]
+        
+        is_minor_scale = False
+        if scale is not None:
+            intervals = scale.intervals()
+            if len(intervals) > 2:
+                is_minor_scale = (intervals[2] == 3)
+                
         # Map catalog entries to their "logical" degree for transition rules
         for i, (rpc_i, qual_i, deg_i) in enumerate(catalog):
             for j, (rpc_j, qual_j, deg_j) in enumerate(catalog):
                 # Functional transition
                 if deg_i > 0 and deg_j > 0:
                     di, dj = deg_i - 1, deg_j - 1
-                    rules = {
-                        0: {3: 0.35, 4: 0.30, 1: 0.15, 5: 0.10},
-                        1: {4: 0.45, 0: 0.20},
-                        3: {4: 0.35, 0: 0.25},
-                        4: {0: 0.40, 5: 0.25},
-                        5: {1: 0.30, 4: 0.25},
-                    }
+                    if is_minor_scale:
+                        rules = {
+                            0: {3: 0.35, 4: 0.30, 5: 0.15, 2: 0.10},
+                            1: {4: 0.45, 0: 0.20, 6: 0.15},
+                            2: {5: 0.35, 3: 0.25, 4: 0.20},
+                            3: {4: 0.45, 0: 0.20, 5: 0.15},
+                            4: {0: 0.45, 5: 0.25, 3: 0.15},
+                            5: {3: 0.35, 1: 0.25, 4: 0.20},
+                            6: {2: 0.45, 0: 0.25, 4: 0.15},
+                        }
+                    else:
+                        rules = {
+                            0: {3: 0.35, 4: 0.30, 1: 0.15, 5: 0.10},
+                            1: {4: 0.45, 0: 0.20},
+                            3: {4: 0.35, 0: 0.25},
+                            4: {0: 0.40, 5: 0.25},
+                            5: {1: 0.30, 4: 0.25},
+                        }
                     mat[i][j] = rules.get(di, {}).get(dj, 0.1)
-                # Secondary dominant resolution
-                elif deg_i == 0 and deg_j > 0:
-                    mat[i][j] = 0.4  # secondary dom resolves to target
+                # Secondary dominant resolution (e.g., V7/V -> V)
+                elif deg_i == 0 and hasattr(deg_i, "target_degree") and deg_j > 0:
+                    target_deg = deg_i.target_degree
+                    if target_deg == deg_j:
+                        mat[i][j] = 0.4  # Strong resolution to target
+                    else:
+                        mat[i][j] = 0.15  # Deceptive resolution
+                # Transition to secondary dominant
+                elif deg_i > 0 and deg_j == 0 and hasattr(deg_j, "target_degree"):
+                    mat[i][j] = 0.2  # Moderate transition to prepare a secondary dominant
                 else:
                     mat[i][j] = 0.1
         return mat
@@ -571,7 +641,7 @@ class HMM3Harmonizer:
         if prev_idx is not None:
             prev_deg = catalog[prev_idx][2]
             pair = (prev_deg - 1 if prev_deg > 0 else -1, degree - 1 if degree > 0 else -1)
-            cadence = _CADENCE_BONUSES.get(pair, 0.0) * self.cadence_weight
+            cadence = _get_cadence_bonus(pair[0], pair[1], scale) * self.cadence_weight
         beat_pos = change_points[t] if t < len(change_points) else 0
         is_phrase_end = beat_pos > 0 and (beat_pos / 4.0) % self.phrase_length == 0
         if is_phrase_end and degree == 1:

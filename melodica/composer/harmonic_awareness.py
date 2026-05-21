@@ -238,7 +238,7 @@ def best_chord_tone(
 
 def guide_tone_resolution(
     current_pc: int,
-    current_root: int,
+    _current_root: int,
     next_root: int,
     next_quality: Quality,
 ) -> int:

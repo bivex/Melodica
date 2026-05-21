@@ -61,7 +61,7 @@ class PhraseContour:
         return min(high, first_pitch + offset)
 
     def register_target(
-        self, phrase_pos: float, global_progress: float, low: int, high: int, climax_pitch: int
+        self, phrase_pos: float, _global_progress: float, low: int, high: int, climax_pitch: int
     ) -> int:
         """Compute target register center at current phrase position using easing curves."""
         mid = (low + high) // 2

@@ -215,7 +215,7 @@ class MarkovRhythmGenerator(RhythmGenerator):
     def train_from_durations(
         cls,
         durations: list[float],
-        style_name: str = "custom",
+        _style_name: str = "custom",
     ) -> dict[float, dict[float, float]]:
         """
         Learn a transition matrix from observed duration sequences.

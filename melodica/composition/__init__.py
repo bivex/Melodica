@@ -384,3 +384,7 @@ def build_game_music_script():
         tracks={"Pad": "ambient_pad", "Arp": "fast_arp"},
     )
     return comp
+
+# Expose STYLES to avoid circular imports during initial import
+from .styles import STYLES
+

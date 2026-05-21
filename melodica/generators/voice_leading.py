@@ -31,7 +31,6 @@ Uses voice_leading_distance() from utils to evaluate candidate voicings.
 
 from __future__ import annotations
 
-import itertools
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator

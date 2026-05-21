@@ -108,3 +108,34 @@ _EXTENSIONS: dict[int, list[Quality]] = {
     5: [Quality.MINOR, Quality.MINOR7],  # vi
     6: [Quality.DIMINISHED, Quality.HALF_DIM7],  # vii°
 }
+
+def _get_cadence_bonus(prev_deg: int, curr_deg: int, scale: Scale | None = None) -> float:
+    """
+    Get the cadence bonus for transitioning from prev_deg to curr_deg (0-indexed).
+    Takes scale modal qualities into account.
+    """
+    is_minor = False
+    if scale is not None:
+        intervals = scale.intervals()
+        if len(intervals) > 2:
+            is_minor = (intervals[2] == 3)
+
+    if is_minor:
+        # Minor scale cadence rules:
+        # iv -> i (3 -> 0) is minor plagal cadence
+        # v/V -> i (4 -> 0) is authentic cadence
+        # VII -> i (6 -> 0) or VII -> III (6 -> 2)
+        # ii° -> V/v (1 -> 4)
+        minor_bonuses = {
+            (4, 0): 0.8,  # V/v → i (authentic cadence)
+            (3, 0): 0.7,  # iv → i (minor plagal cadence)
+            (1, 4): 0.6,  # ii° → V/v
+            (6, 0): 0.5,  # VII → i (modal cadence)
+            (6, 2): 0.4,  # VII → III (relative major resolution)
+            (5, 4): 0.4,  # VI → V
+        }
+        return minor_bonuses.get((prev_deg, curr_deg), 0.0)
+    else:
+        # Major scale cadence rules (default _CADENCE_BONUSES):
+        return _CADENCE_BONUSES.get((prev_deg, curr_deg), 0.0)
+

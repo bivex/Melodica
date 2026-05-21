@@ -20,7 +20,6 @@ from __future__ import annotations
 from melodica.harmonize._hmm_helpers import (
     _chord_pcs_for_degree,
     _voice_leading_cost,
-    _melody_fits_chord,
     _build_diatonic_chords,
 )
 from melodica.harmonize._hmm_core import (

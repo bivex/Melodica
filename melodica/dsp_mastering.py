@@ -25,10 +25,8 @@ try:
     from pedalboard import (
         Pedalboard,
         HighpassFilter,
-        LowpassFilter,
         PeakFilter,
         HighShelfFilter,
-        LowShelfFilter,
         Compressor,
         Limiter,
         Gain,

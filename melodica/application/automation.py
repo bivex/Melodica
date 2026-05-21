@@ -64,7 +64,7 @@ class ExpressionCurve:
             pts.append(AutomationPoint(t, v))
         return cls(target, pts)
 
-def apply_automation(notes: list[NoteInfo], curves: List[ExpressionCurve], track_volume: int = 100):
+def apply_automation(notes: list[NoteInfo], curves: List[ExpressionCurve], _track_volume: int = 100):
     """
     Embed expression data into NoteInfo objects and apply velocity modifications.
 

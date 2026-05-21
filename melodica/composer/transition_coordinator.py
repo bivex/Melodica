@@ -160,7 +160,7 @@ class TransitionCoordinator:
         cc_events: dict[str, list[tuple[float, int, int]]],
         boundary_beat: float,
         pre_duration: float = 4.0,
-        post_duration: float = 2.0,
+        _post_duration: float = 2.0,
         duck_tracks: list[str] | None = None,
         duck_factor: float = 0.0,
         sweep_tracks: list[str] | None = None,

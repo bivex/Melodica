@@ -90,13 +90,16 @@ def test_transition_coordinator_lead_in_fill():
     notes = tracks["violin"].notes
     assert len(notes) == 4
     assert notes[0].pitch == 60
-    assert notes[1].pitch == 62
+    assert notes[0].start == 0.0
     
-    assert notes[2].pitch == 70
-    assert notes[2].start == 6.0
+    assert notes[1].pitch == 70
+    assert notes[1].start == 6.0
     
-    assert notes[3].pitch == 72
-    assert notes[3].start == 7.0
+    assert notes[2].pitch == 72
+    assert notes[2].start == 7.0
+
+    assert notes[3].pitch == 64
+    assert notes[3].start == 8.0
 
 
 def test_modulation_bridge_generation():
