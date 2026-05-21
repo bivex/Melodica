@@ -153,6 +153,27 @@ class Track:
     # keyswitch_events: list of (beat_position, midi_note_pitch) emitted as 1-tick notes
     pitch_bend_range: int = 2  # semitones; sent as RPN 0x0000 at track start
 
+    def shift_time(self, offset: float) -> Track:
+        for note in self.notes:
+            note.shift_time(offset)
+        return self
+
+    def transpose(self, semitones: int) -> Track:
+        for note in self.notes:
+            note.transpose(semitones)
+        return self
+
+    def scale_velocity(self, factor: float) -> Track:
+        for note in self.notes:
+            note.scale_velocity(factor)
+        return self
+
+    def time_stretch(self, multiplier: float) -> Track:
+        for note in self.notes:
+            note.time_stretch(multiplier)
+        return self
+
+
 @dataclass
 class Arrangement:
     """

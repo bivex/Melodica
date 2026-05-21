@@ -658,6 +658,7 @@ def produce_track(
     verbose: bool = True,
     sections: List[Tuple[float, Mood]] | None = None,
     chords: List | None = None,
+    cc_events: Dict[str, List[Tuple[float, int, int]]] | None = None,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -744,7 +745,7 @@ def produce_track(
     entry_cc = _generate_entry_fades(mastered, profiles, total_dur)         # [FIX 2]
     reverb_cc = _generate_reverb_sends(mastered, profiles, mood_profile)    # [FIX 9]
     delay_cc = _generate_delay_sends(mastered, profiles)                    # [FIX 10]
-    all_cc = _merge_cc_events(master_cc, entry_cc, reverb_cc, delay_cc)
+    all_cc = _merge_cc_events(master_cc, entry_cc, reverb_cc, delay_cc, cc_events or {})
 
     # 11. Export
     export_multitrack_midi(mastered, str(path), bpm=bpm, key=key,

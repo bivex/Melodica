@@ -269,7 +269,7 @@ class Scale:
 
 
 def parse_progression(prog_str: str, key: Scale) -> list[ChordLabel]:
-    """Parses a Roman numeral progression like 'Im VII IIm Im'."""
+    """Parses a Roman numeral progression like 'Im VII IIm Im' or 'i:2.0 - iv:4.0 - V:2.0'."""
     parts = prog_str.split(" - ") if " - " in prog_str else prog_str.split()
     chords = []
     t = 0.0
@@ -277,12 +277,21 @@ def parse_progression(prog_str: str, key: Scale) -> list[ChordLabel]:
         p = p.strip()
         if not p:
             continue
+        duration = 4.0
+        if ":" in p:
+            chord_part, dur_part = p.split(":", 1)
+            try:
+                duration = float(dur_part)
+                p = chord_part
+            except ValueError:
+                pass
         chord = key.parse_roman(p)
         chord.start = t
-        chord.duration = 4.0  # Default 1 bar
+        chord.duration = duration
         chords.append(chord)
-        t += 4.0
+        t += duration
     return chords
+
 
 
 @dataclass

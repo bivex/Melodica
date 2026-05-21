@@ -155,6 +155,7 @@ def freeze(
 
 
 from melodica.generators.melody import MelodyGenerator
+from melodica.generators.accent import RhythmicAccentGenerator
 from melodica.generators.chord_gen import ChordGenerator
 from melodica.generators.arpeggiator import ArpeggiatorGenerator
 from melodica.generators.bass import BassGenerator
@@ -327,6 +328,7 @@ __all__ = [
     "RenderContext",
     "freeze",
     "MelodyGenerator",
+    "RhythmicAccentGenerator",
     "ChordGenerator",
     "ArpeggiatorGenerator",
     "BassGenerator",

@@ -105,6 +105,9 @@ class MelodyGenerator(PhraseGenerator):
         # dramatic arc
         drama_shape: str = "none",
         drama_peak: float = 0.70,
+        # shared motif injection
+        base_motif: list[int] | None = None,
+        base_motif_rhythm: list[float] | None = None,
     ) -> None:
         super().__init__(params)
         self.rhythm = rhythm
@@ -190,6 +193,9 @@ class MelodyGenerator(PhraseGenerator):
         self._pitch_selector = MelodyPitchSelector(self)
         self._last_context: RenderContext | None = None
         self._stored_motif: list[int] = []
+        self._stored_rhythm: list[float] = []
+        self.base_motif = base_motif
+        self.base_motif_rhythm = base_motif_rhythm
 
     # ------------------------------------------------------------------
     # Render
@@ -240,6 +246,10 @@ class MelodyGenerator(PhraseGenerator):
         motif_mgr = MotifManager(
             motif_probability=self.motif_probability, motif_variation=self.motif_variation
         )
+        if self.base_motif:
+            motif_mgr.store_motif(self.base_motif, self.base_motif_rhythm)
+        elif self._stored_motif:
+            motif_mgr.store_motif(self._stored_motif, self._stored_rhythm)
         ornament_proc = OrnamentProcessor(ornament_probability=self.ornament_probability)
         fill_proc = FillProcessor(self.note_range_low, self.note_range_high, self.params)
 
@@ -447,6 +457,8 @@ class MelodyGenerator(PhraseGenerator):
         # Store motif for next call (with rhythm)
         if motif_notes and len(motif_notes) >= 3:
             motif_mgr.store_motif(motif_notes, motif_durations if motif_durations else None)
+            self._stored_motif = list(motif_notes)
+            self._stored_rhythm = list(motif_durations) if motif_durations else []
 
         # Post-processing
         if self.harmony_note_probability < 1.0 and not hasattr(self.rhythm, "_coordinator"):

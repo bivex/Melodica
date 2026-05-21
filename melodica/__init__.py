@@ -77,6 +77,8 @@ __all__ = [
     "LeadSynthGenerator",
     "MelodyGenerator",
     "CountermelodyGenerator",
+    "RhythmicAccentGenerator",
+    "AutomationCurve",
     # VST Player (requires pedalboard)
     "VSTPlayer",
     # Live Loopback (requires [live])
@@ -154,6 +156,10 @@ except ImportError:
 from melodica.generators.lead_synth import LeadSynthGenerator
 from melodica.generators.melody import MelodyGenerator
 from melodica.generators.countermelody import CountermelodyGenerator
+from melodica.generators.accent import RhythmicAccentGenerator
+
+# --- Automation ---
+from melodica.composer.automation import AutomationCurve
 
 
 # ---------------------------------------------------------------------------

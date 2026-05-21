@@ -22,7 +22,9 @@ Rules:
 
 from __future__ import annotations
 
-from melodica.types import ChordLabel, NoteInfo, Quality, Scale
+from melodica.types_pkg._notes import NoteInfo
+from melodica.types_pkg._theory import ChordLabel, Scale
+from melodica.theory.chords import Quality
 
 
 # ---------------------------------------------------------------------------

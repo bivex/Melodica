@@ -71,3 +71,21 @@ class NoteInfo:
             raise ValueError(f"pitch must be 0–127, got {self.pitch}")
         if self.duration <= 0:
             raise ValueError(f"duration must be > 0, got {self.duration}")
+
+    def shift_time(self, offset: float) -> NoteInfo:
+        self.start += offset
+        return self
+
+    def transpose(self, semitones: int) -> NoteInfo:
+        self.pitch = max(0, min(127, self.pitch + semitones))
+        return self
+
+    def scale_velocity(self, factor: float) -> NoteInfo:
+        self.velocity = max(0, min(127, int(self.velocity * factor)))
+        return self
+
+    def time_stretch(self, multiplier: float) -> NoteInfo:
+        self.start *= multiplier
+        self.duration *= multiplier
+        return self
+
