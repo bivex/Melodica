@@ -492,17 +492,20 @@ def _compute_tension(chords: List) -> float:
     if not chords:
         return 0.5
 
+    from melodica.theory import Quality as Q
+
+    HIGH_TENSION = {Q.TONE_CLUSTER, Q.DIMINISHED, Q.AUGMENTED,
+                    Q.DIMINISHED_SEVENTH, Q.AUGMENTED_SEVENTH}
+    MID_TENSION = {Q.MINOR, Q.MINOR_SEVENTH, Q.MINOR_NINTH,
+                   Q.HALF_DIMINISHED, Q.SUS2, Q.SUS4}
+
     dissonant = 0
     total = 0
     for ch in chords:
-        root = ch.root
-        quality = ch.quality
         total += 1
-        # Minor, diminished, augmented = more tension
-        qname = quality.value if hasattr(quality, "value") else str(quality)
-        if "diminish" in qname or "augment" in qname:
+        if ch.quality in HIGH_TENSION:
             dissonant += 2
-        elif "minor" in qname or "min" in qname:
+        elif ch.quality in MID_TENSION:
             dissonant += 1
 
     if total == 0:
