@@ -248,8 +248,6 @@ class MelodyGenerator(PhraseGenerator):
         )
         if self.base_motif:
             motif_mgr.store_motif(self.base_motif, self.base_motif_rhythm)
-        elif self._stored_motif:
-            motif_mgr.store_motif(self._stored_motif, self._stored_rhythm)
         ornament_proc = OrnamentProcessor(ornament_probability=self.ornament_probability)
         fill_proc = FillProcessor(self.note_range_low, self.note_range_high, self.params)
 
