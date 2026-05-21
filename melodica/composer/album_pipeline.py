@@ -847,12 +847,22 @@ def produce_track(
     if psycho_verify_enabled:
         config = PsychoConfig(aggressive_fix=mood_profile.psycho_aggressive)
         shaped, psycho_report = psycho_verify(shaped, config, bpm=bpm)
-        if verbose and psycho_report.issues_detected > 0:
-            print(f"   Psycho: {psycho_report.issues_detected} issues, "
-                  f"{psycho_report.issues_fixed} fixed "
-                  f"({psycho_report.notes_velocity_reduced} vel-, "
-                  f"{psycho_report.notes_removed} removed, "
-                  f"{psycho_report.notes_transposed} transposed)")
+        
+        # Analyze orchestration
+        from melodica.composer.orchestrator import analyze_orchestration
+        alerts = analyze_orchestration(instruments)
+        
+        if verbose:
+            if psycho_report.issues_detected > 0:
+                print(f"   Psycho: {psycho_report.issues_detected} issues, "
+                      f"{psycho_report.issues_fixed} fixed "
+                      f"({psycho_report.notes_velocity_reduced} vel-, "
+                      f"{psycho_report.notes_removed} removed, "
+                      f"{psycho_report.notes_transposed} transposed)")
+            if alerts:
+                print("   Orchestration Alerts:")
+                for alert in alerts:
+                    print(f"     {alert}")
     else:
         psycho_report = None
 
