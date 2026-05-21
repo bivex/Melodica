@@ -139,6 +139,7 @@ def track_02_petals_moss():
         instruments={"piano": 0, "erhu": 110, "cello": 42, "bass": 32},
         path=OUT / "02_Petals_on_the_Moss.mid",
         mood=Mood.INTIMATE, key=KEY_D_HIROJOSHI, chords=chords, cc_events=cc_events,
+        engine="hmm", style="academic"
     )
 
 def main():

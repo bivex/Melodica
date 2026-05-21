@@ -943,6 +943,8 @@ def produce_track(
     cc_events: Dict[str, List[Tuple[float, int, int]]] | None = None,
     tempo_events: List[Tuple[float, float]] | None = None,
     pipeline: list | None = None,
+    engine: str = "hmm",
+    style: str = "academic",
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -971,6 +973,10 @@ def produce_track(
         [FIX 11] Chord progression for harmonic tension analysis.
     pipeline : list of Stage, optional
         Custom pipeline stages. If None, uses DEFAULT_PIPELINE.
+    engine : str
+        Harmonization engine to use (default "hmm").
+    style : str
+        Engine-specific style (default "academic").
 
     Returns
     -------
@@ -990,6 +996,7 @@ def produce_track(
         psycho_verify_enabled=psycho_verify_enabled,
         sections=sections, chords=chords, cc_events=cc_events or {},
         tempo_events=tempo_events,
+        engine=engine, style=style,
     )
 
     # Run stages sequentially
