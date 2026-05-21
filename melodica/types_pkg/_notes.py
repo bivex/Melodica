@@ -89,3 +89,76 @@ class NoteInfo:
         self.duration *= multiplier
         return self
 
+    def morph_scale(self, from_scale: Scale, to_scale: Scale, strategy: str = "degree") -> NoteInfo:
+        """
+        Morphs the note's pitch from from_scale to to_scale.
+        
+        Strategies:
+        - "degree": Maps the scale degree index directly if possible (preserves intervals).
+        - "nearest": Maps to the closest pitch class in to_scale (preserves pitch proximity).
+        """
+        if self.absolute:
+            return self
+
+        octave = self.pitch // 12
+        pc = self.pitch % 12
+
+        from_degs = from_scale.degrees()
+        to_degs = to_scale.degrees()
+
+        if strategy == "degree":
+            # Find closest degree index in from_scale
+            best_idx = 0
+            best_diff = 999.0
+            for i, d in enumerate(from_degs):
+                diff = abs(pc - d)
+                if diff < best_diff:
+                    best_diff = diff
+                    best_idx = i
+
+            # Map index to target scale
+            if len(from_degs) == len(to_degs):
+                target_idx = best_idx
+            else:
+                target_idx = round(best_idx * (len(to_degs) - 1) / (len(from_degs) - 1))
+
+            target_pc = to_degs[target_idx]
+            new_pitch = int(octave * 12 + target_pc)
+            self.pitch = max(0, min(127, new_pitch))
+        else:
+            # "nearest" strategy
+            best_pc = to_degs[0]
+            best_diff = 999.0
+            for d in to_degs:
+                diff = min(abs(pc - d), 12 - abs(pc - d))
+                if diff < best_diff:
+                    best_diff = diff
+                    best_pc = d
+            new_pitch = int(octave * 12 + best_pc)
+            self.pitch = max(0, min(127, new_pitch))
+
+        return self
+
+    def humanize(self, timing_std_beats: float = 0.01, velocity_std: float = 3.0) -> NoteInfo:
+        """Slightly randomize timing and velocity for a realistic acoustic feel."""
+        import random
+        if timing_std_beats > 0:
+            self.start = max(0.0, self.start + random.normalvariate(0, timing_std_beats))
+        if velocity_std > 0:
+            self.velocity = max(1, min(127, int(self.velocity + random.normalvariate(0, velocity_std))))
+        return self
+
+    def swing(self, factor: float = 0.1, grid: float = 0.25) -> NoteInfo:
+        """
+        Apply swing timing to notes on offbeats.
+        
+        factor: amount of swing delay (e.g. 0.1 beats)
+        grid: resolution grid (default 0.25 is 16th note swing)
+        """
+        position_in_grid = self.start / grid
+        if abs(round(position_in_grid) - position_in_grid) < 0.05:
+            if round(position_in_grid) % 2 != 0:
+                self.start += factor * grid
+        return self
+
+

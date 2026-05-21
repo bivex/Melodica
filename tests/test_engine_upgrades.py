@@ -172,3 +172,82 @@ def test_automation_curves():
     # t = 2.0 (ratio 0.5): 10 + 100 * (0.5^2) = 10 + 25 = 35
     assert expo[2][2] == 35
     assert expo[4] == (4.0, 74, 110)
+
+
+def test_track_morph_humanize_swing():
+    """Test morph_scale, humanize, and swing chainable methods on NoteInfo and Track."""
+    scale_c_major = Scale(root=0, mode=Mode.MAJOR)          # C, D, E, F, G, A, B (degrees: 0, 2, 4, 5, 7, 9, 11)
+    scale_c_minor = Scale(root=0, mode=Mode.NATURAL_MINOR)  # C, D, Eb, F, G, Ab, Bb (degrees: 0, 2, 3, 5, 7, 8, 10)
+
+    # 1. Morph Scale
+    note = NoteInfo(pitch=64, start=1.0, duration=1.0, velocity=64)  # E (pitch class 4, index 2 in C Major)
+    note.morph_scale(scale_c_major, scale_c_minor, strategy="degree")
+    # Should morph to Eb (pitch class 3, index 2 in C Minor -> pitch 63)
+    assert note.pitch == 63
+
+    note2 = NoteInfo(pitch=64, start=1.0, duration=1.0, velocity=64)
+    note2.morph_scale(scale_c_major, scale_c_minor, strategy="nearest")
+    # E (pitch class 4) is closest to Eb (3) or F (5). Nearest should resolve it.
+    assert note2.pitch in (63, 65)
+
+    # Track morph_scale
+    track = Track(name="Lead", notes=[NoteInfo(pitch=64, start=1.0, duration=1.0, velocity=64)])
+    track.morph_scale(scale_c_major, scale_c_minor, strategy="degree")
+    assert track.notes[0].pitch == 63
+
+    # 2. Humanize
+    track_h = Track(name="Acoustic", notes=[NoteInfo(pitch=60, start=1.0, duration=1.0, velocity=64)])
+    track_h.humanize(timing_std_beats=0.05, velocity_std=5.0)
+    # The timing and velocity should deviate but stay in valid bounds
+    assert track_h.notes[0].start != 1.0
+    assert 0 <= track_h.notes[0].velocity <= 127
+
+    # 3. Swing
+    # For a swing resolution of 0.25 beats, odd grid multiples like start=0.25 should be delayed
+    note_swing = NoteInfo(pitch=60, start=0.25, duration=0.25, velocity=64)
+    note_swing.swing(factor=0.1, grid=0.25)
+    assert note_swing.start == 0.25 + 0.1 * 0.25
+
+
+def test_dynamic_tempo_export(tmp_path):
+    """Test exporting multitrack MIDI with dynamic tempo events."""
+    from melodica.composer.album_pipeline import produce_track, Mood
+    import mido
+
+    notes = [
+        NoteInfo(pitch=60, start=0.0, duration=2.0, velocity=64),
+        NoteInfo(pitch=62, start=2.0, duration=2.0, velocity=64),
+    ]
+    tracks = {"lead": notes}
+    instruments = {"lead": 0}
+
+    # Generate custom tempo events representing dynamic accelerando
+    # Beat 0: 70 BPM, Beat 2: 120 BPM
+    tempo_events = [(0.0, 70.0), (2.0, 120.0)]
+    output_file = tmp_path / "test_tempo.mid"
+
+    produce_track(
+        tracks=tracks,
+        bpm=70.0,
+        instruments=instruments,
+        path=output_file,
+        mood=Mood.CHAMBER,
+        tempo_events=tempo_events,
+        verbose=False
+    )
+
+    # Read back MIDI file and inspect set_tempo events
+    mid = mido.MidiFile(output_file)
+    tempo_meta_msgs = []
+    for tr in mid.tracks:
+        for msg in tr:
+            if msg.type == "set_tempo":
+                tempo_meta_msgs.append(msg)
+
+    # There should be two set_tempo events (initial at beat 0, second at beat 2)
+    assert len(tempo_meta_msgs) == 2
+    # First should be 70 BPM
+    assert abs(mido.tempo2bpm(tempo_meta_msgs[0].tempo) - 70.0) < 0.01
+    # Second should be 120 BPM
+    assert abs(mido.tempo2bpm(tempo_meta_msgs[1].tempo) - 120.0) < 0.01
+

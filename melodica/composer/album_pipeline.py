@@ -659,6 +659,7 @@ def produce_track(
     sections: List[Tuple[float, Mood]] | None = None,
     chords: List | None = None,
     cc_events: Dict[str, List[Tuple[float, int, int]]] | None = None,
+    tempo_events: List[Tuple[float, float]] | None = None,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -749,7 +750,8 @@ def produce_track(
 
     # 11. Export
     export_multitrack_midi(mastered, str(path), bpm=bpm, key=key,
-                           instruments=instruments, cc_events=all_cc)
+                           instruments=instruments, cc_events=all_cc,
+                           tempo_events=tempo_events)
 
     # 12. Report
     report = {

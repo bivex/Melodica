@@ -173,6 +173,22 @@ class Track:
             note.time_stretch(multiplier)
         return self
 
+    def morph_scale(self, from_scale: Scale, to_scale: Scale, strategy: str = "degree") -> Track:
+        for note in self.notes:
+            note.morph_scale(from_scale, to_scale, strategy)
+        return self
+
+    def humanize(self, timing_std_beats: float = 0.01, velocity_std: float = 3.0) -> Track:
+        for note in self.notes:
+            note.humanize(timing_std_beats, velocity_std)
+        return self
+
+    def swing(self, factor: float = 0.1, grid: float = 0.25) -> Track:
+        for note in self.notes:
+            note.swing(factor, grid)
+        return self
+
+
 
 @dataclass
 class Arrangement:

@@ -289,6 +289,7 @@ def export_multitrack_midi(
     volumes: dict[str, int] | None = None,
     diagnose: bool = False,
     humanize: bool = True,
+    tempo_events: list[tuple[float, float]] | None = None,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -311,12 +312,24 @@ def export_multitrack_midi(
     # 1. Global Meta Track
     meta_track = mido.MidiTrack()
     mid.tracks.append(meta_track)
-    meta_track.append(mido.MetaMessage("set_tempo", tempo=tempo, time=0))
     meta_track.append(mido.MetaMessage("track_name", name="Global", time=0))
+
+    meta_events: list[tuple[int, mido.MetaMessage]] = []
+
+    # Initial tempo at beat 0
+    meta_events.append((0, mido.MetaMessage("set_tempo", tempo=tempo, time=0)))
+
+    # Additional tempo events
+    if tempo_events:
+        for beat, event_bpm in tempo_events:
+            if beat <= 0.0:
+                meta_events[0] = (0, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(event_bpm), time=0))
+            else:
+                tick = round(beat * tpb)
+                meta_events.append((tick, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(event_bpm), time=0)))
 
     if timeline is not None:
         # Full timeline: key changes, time-signature changes, markers
-        meta_events: list[tuple[int, mido.MetaMessage]] = []
         for kl in timeline.keys:
             tick = round(kl.start * tpb)
             key_str = _scale_to_key_sig(kl.scale)
@@ -337,25 +350,31 @@ def export_multitrack_midi(
         for m in timeline.markers:
             tick = round(m.start * tpb)
             meta_events.append((tick, mido.MetaMessage("marker", text=m.text, time=0)))
-        meta_events.sort(key=lambda x: x[0])
-        last_tick = 0
-        for tick, msg in meta_events:
-            msg.time = max(0, tick - last_tick)
-            meta_track.append(msg)
-            last_tick = tick
     else:
         # Simple key + time signature
         if key is not None:
             key_str = key if isinstance(key, str) else _scale_to_key_sig(key)
-            meta_track.append(mido.MetaMessage("key_signature", key=key_str, time=0))
-        meta_track.append(
-            mido.MetaMessage(
-                "time_signature",
-                numerator=time_sig[0],
-                denominator=time_sig[1],
-                time=0,
+            meta_events.append((0, mido.MetaMessage("key_signature", key=key_str, time=0)))
+        meta_events.append(
+            (
+                0,
+                mido.MetaMessage(
+                    "time_signature",
+                    numerator=time_sig[0],
+                    denominator=time_sig[1],
+                    time=0,
+                ),
             )
         )
+
+    # Sort all meta events by tick and append to meta track
+    meta_events.sort(key=lambda x: x[0])
+    last_tick = 0
+    for tick, msg in meta_events:
+        msg.time = max(0, tick - last_tick)
+        meta_track.append(msg)
+        last_tick = tick
+
 
     # 2. Add individual tracks
     for i, (name, notes) in enumerate(tracks_data.items()):
