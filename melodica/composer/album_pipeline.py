@@ -567,13 +567,20 @@ def _polyphony_limit(
     t_max = max(x[1] for x in all_notes)
     slot_dur = 1.0 / _POLY_SLOT_RESOLUTION
 
+    starts = [x[0] for x in all_notes]
+
     slot = t_min
     while slot < t_max:
         slot_end = slot + slot_dur
+        # Only look at notes that started before slot_end, and potentially extend into this slot.
+        # Most notes are shorter than 10 beats.
+        lo = bisect.bisect_left(starts, slot - 10.0)
+        hi = bisect.bisect_right(starts, slot_end)
+        
         # Active notes whose sounding range overlaps this slot
         active = [
             (tname, n)
-            for (ns, ne, tname, n) in all_notes
+            for (ns, ne, tname, n) in all_notes[lo:hi]
             if ns < slot_end and ne > slot and id(n) not in drop_ids
         ]
         if len(active) > max_voices:

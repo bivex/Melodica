@@ -355,21 +355,26 @@ def _retrograde(notes: list[NoteInfo]) -> list[NoteInfo]:
     """Reverse note order, re-time from start."""
     if not notes:
         return []
-    total_dur = max(n.start + n.duration for n in notes)
-    reversed_notes = list(reversed(notes))
-    # Re-time: first note starts at 0
-    offset = reversed_notes[0].start
-    return [
-        NoteInfo(
-            pitch=n.pitch,
-            start=round(n.start - offset, 6),
-            duration=n.duration,
-            velocity=n.velocity,
-            articulation=n.articulation,
-            expression=n.expression,
+    min_start = min(n.start for n in notes)
+    max_end = max(n.start + n.duration for n in notes)
+    phrase_dur = max_end - min_start
+
+    result = []
+    for n in notes:
+        rel_start = n.start - min_start
+        new_rel_start = phrase_dur - (rel_start + n.duration)
+        result.append(
+            NoteInfo(
+                pitch=n.pitch,
+                start=round(new_rel_start, 6),
+                duration=n.duration,
+                velocity=n.velocity,
+                articulation=n.articulation,
+                expression=n.expression,
+            )
         )
-        for n in reversed_notes
-    ]
+    result.sort(key=lambda x: x.start)
+    return result
 
 
 def _inversion(notes: list[NoteInfo]) -> list[NoteInfo]:

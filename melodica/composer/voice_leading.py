@@ -37,7 +37,7 @@ VOICE_RANGES: dict[str, tuple[int, int]] = {
 }
 
 # Voice order for processing (outside-in)
-VOICE_ORDER = ["bass", "soprano", "alto", "tenor"]
+VOICE_ORDER = ["soprano", "alto", "tenor", "bass"]
 
 
 def _pitch_class(pitch: int) -> int:
@@ -186,7 +186,7 @@ class VoiceLeadingEngine:
 
         # Generate all possible pitch assignments
         # For each voice, try all chord tones within range
-        for bass_pc in pcs:
+        for bass_pc in [chord.root]:
             bass = self._nearest_in_range(bass_pc, ranges[3])
             for sop_pc in pcs:
                 sop = self._nearest_in_range(sop_pc, ranges[0])
