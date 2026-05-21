@@ -246,18 +246,16 @@ def guide_tone_resolution(
     Resolve a guide tone from current chord to next chord.
     Guide tones (3rd, 7th) move by step to nearest chord tone.
     """
-    from melodica.utils import nearest_pitch
-
     next_chord_pcs = chord_tone_pcs(next_root, next_quality)
     if not next_chord_pcs:
         return current_pc
 
-    # Find nearest next-chord pitch class
-    best_pc = min(next_chord_pcs, key=lambda p: abs(p - current_pc))
-    # Wrap around octave
-    if abs(((best_pc - current_pc) % _OCTAVE)) < abs(best_pc - current_pc):
-        best_pc = best_pc if abs(((best_pc - current_pc) % _OCTAVE)) <= 6 else best_pc
+    # Find nearest next-chord pitch class using circular distance
+    def circular_dist(pc1, pc2):
+        dist = abs(pc1 - pc2) % _OCTAVE
+        return dist if dist <= 6 else _OCTAVE - dist
 
+    best_pc = min(next_chord_pcs, key=lambda p: circular_dist(p, current_pc))
     return best_pc
 
 

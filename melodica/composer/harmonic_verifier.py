@@ -115,6 +115,7 @@ def detect_clashes(
     """
     Detect simultaneous dissonant intervals across all track pairs.
     """
+    import bisect
     events: list[ClashEvent] = []
 
     # Filter to only tracks containing NoteInfo objects
@@ -131,9 +132,17 @@ def detect_clashes(
             ta, tb = track_names[i], track_names[j]
             notes_a = valid_tracks[ta]
             notes_b = valid_tracks[tb]
+            starts_b = [n.start for n in notes_b]
 
             for na in notes_a:
-                for nb in notes_b:
+                # Find all nb that could overlap with na
+                # na.start - window <= nb.end  =>  nb.start + nb.duration >= na.start - window
+                # This is hard to bisect exactly on start, but we can bound nb.start
+                # nb.start <= na.end + window
+                lo = bisect.bisect_left(starts_b, na.start - 10.0) # Conservative bound for duration
+                hi = bisect.bisect_right(starts_b, na.start + na.duration + config.window)
+                
+                for nb in notes_b[lo:hi]:
                     if not _notes_overlap(na, nb, config.window):
                         continue
 
@@ -188,6 +197,7 @@ def detect_parallel_fifths(
     """
     Detect parallel fifths/octaves between consecutive notes in adjacent tracks.
     """
+    import bisect
     events = []
     valid_tracks = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
     track_names = list(valid_tracks.keys())
@@ -199,30 +209,42 @@ def detect_parallel_fifths(
             start_getter = attrgetter("start")
             notes_a = sorted(valid_tracks[ta], key=start_getter)
             notes_b = sorted(valid_tracks[tb], key=start_getter)
+            starts_b = [n.start for n in notes_b]
 
             # Check consecutive pairs
             for k in range(len(notes_a) - 1):
-                for m in range(len(notes_b) - 1):
-                    if abs(notes_a[k].start - notes_b[m].start) > 0.25:
+                na1, na2 = notes_a[k], notes_a[k + 1]
+                # We need notes_b[m] starting near na1
+                lo = bisect.bisect_left(starts_b, na1.start - 0.25)
+                hi = bisect.bisect_right(starts_b, na1.start + 0.25)
+                
+                for m in range(lo, min(hi, len(notes_b) - 1)):
+                    nb1, nb2 = notes_b[m], notes_b[m + 1]
+                    
+                    if abs(na1.start - nb1.start) > 0.25:
                         continue
-                    if abs(notes_a[k + 1].start - notes_b[m + 1].start) > 0.25:
+                    if abs(na2.start - nb2.start) > 0.25:
                         continue
 
-                    iv1 = _interval(notes_a[k].pitch, notes_b[m].pitch)
-                    iv2 = _interval(notes_a[k + 1].pitch, notes_b[m + 1].pitch)
+                    iv1 = _interval(na1.pitch, nb1.pitch)
+                    iv2 = _interval(na2.pitch, nb2.pitch)
 
                     if (iv1, iv2) in ((0, 0), (7, 7)):
-                        events.append(
-                            ClashEvent(
-                                beat=notes_a[k + 1].start,
-                                note_a=notes_a[k + 1],
-                                track_a=ta,
-                                note_b=notes_b[m + 1],
-                                track_b=tb,
-                                interval=iv2,
-                                severity="mild",
+                        # Check direction
+                        dir_a = 1 if na2.pitch > na1.pitch else (-1 if na2.pitch < na1.pitch else 0)
+                        dir_b = 1 if nb2.pitch > nb1.pitch else (-1 if nb2.pitch < nb1.pitch else 0)
+                        if dir_a == dir_b and dir_a != 0:
+                            events.append(
+                                ClashEvent(
+                                    beat=na2.start,
+                                    note_a=na2,
+                                    track_a=ta,
+                                    note_b=nb2,
+                                    track_b=tb,
+                                    interval=iv2,
+                                    severity="mild",
+                                )
                             )
-                        )
 
     return events
 
