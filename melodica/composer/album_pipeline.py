@@ -495,9 +495,10 @@ def _compute_tension(chords: List) -> float:
     from melodica.theory import Quality as Q
 
     HIGH_TENSION = {Q.TONE_CLUSTER, Q.DIMINISHED, Q.AUGMENTED,
-                    Q.DIMINISHED_SEVENTH, Q.AUGMENTED_SEVENTH}
-    MID_TENSION = {Q.MINOR, Q.MINOR_SEVENTH, Q.MINOR_NINTH,
-                   Q.HALF_DIMINISHED, Q.SUS2, Q.SUS4}
+                    Q.FULL_DIM7, Q.HALF_DIM7,
+                    Q.CLUSTER_MINOR_2, Q.CLUSTER_MAJOR_2,
+                    Q.CLUSTER_4TH, Q.OCTATONIC_CLUSTER}
+    MID_TENSION = {Q.MINOR, Q.HALF_DIM7, Q.LYDIAN_AUG}
 
     dissonant = 0
     total = 0
