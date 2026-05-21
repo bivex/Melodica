@@ -123,6 +123,7 @@ class Mode(Enum):
     DOUBLE_HARM_MAJOR = "double_harmonic_major"
     LYDIAN_AUG_MODE = "lydian_aug_mode"
     ACOUSTIC_MAJOR = "acoustic_major"
+    LYRICAL_MAJOR = "lyrical_major"
 
 @dataclass
 class ScaleDefinition:
@@ -291,6 +292,11 @@ MODE_DATABASE: dict[Mode, ScaleDefinition] = {
         [0, 2, 4, 6, 7, 9, 10], "Ambient",
         ["Floating", "Overtone", "Debussy"], ["Piano", "Harp", "Strings"],
         bpm_range=(50, 110), genres=["ambient", "impressionism"], energy=0.2
+    ),
+    Mode.LYRICAL_MAJOR: ScaleDefinition(
+        [0, 2, 4, 5, 7, 8, 11], "Classical",
+        ["Bittersweet", "Romantic", "Russian"], ["Piano", "Strings", "Cello"],
+        bpm_range=(55, 120), genres=["romantic", "neoclassical"], energy=0.45
     ),
     Mode.LYDIAN_AUG_MODE: ScaleDefinition(
         [0, 2, 4, 6, 8, 9, 11], "Ambient",
