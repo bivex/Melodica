@@ -31,6 +31,7 @@ from melodica.composer.psychoacoustic import (
     _temporal_masked,
     _is_fusion,
     _is_blurry,
+    _MIN_AUDIBLE_DURATION_120,
 )
 
 
@@ -96,10 +97,10 @@ class TestFusion:
 
 class TestBlur:
     def test_blurry(self):
-        assert _is_blurry(_note(60, 0.0, 0.01))
+        assert _is_blurry(_note(60, 0.0, 0.01), min_dur=_MIN_AUDIBLE_DURATION_120)
 
     def test_audible(self):
-        assert not _is_blurry(_note(60, 0.0, 0.5))
+        assert not _is_blurry(_note(60, 0.0, 0.5), min_dur=_MIN_AUDIBLE_DURATION_120)
 
 
 # ---------------------------------------------------------------------------

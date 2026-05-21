@@ -52,11 +52,25 @@ _PRE_MASKING = 0.05  # 50ms before a loud sound
 _POST_MASKING = 0.10  # 100ms after a loud sound
 
 # Minimum audible duration (seconds) at typical tempos
-_MIN_AUDIBLE_DURATION = 0.03  # 30ms — below this, notes blur together
-
 # Velocity thresholds for masking
 _MASKING_VELOCITY_DIFF = 20  # loud note must be this much louder to mask
 _TEMPORAL_VELOCITY_DIFF = 30  # temporal masking needs bigger difference
+
+# Minimum audible duration at 120 BPM (half of a 1/32 note)
+# Recomputed at runtime from bpm via _min_audible_duration(bpm)
+_MIN_AUDIBLE_DURATION_120 = 0.03  # seconds at 120 BPM
+
+
+def _min_audible_duration(bpm: float) -> float:
+    """[FIX 2] BPM-adaptive blur threshold.
+
+    Returns half the duration of a 1/32 note at the given BPM in seconds.
+    At 120 BPM: 0.5 × (60/120) / 8 = 0.031s  ≈ original 0.03 constant.
+    At 160 BPM: 0.5 × (60/160) / 8 = 0.023s  → more notes detected as blur.
+    At  60 BPM: 0.5 × (60/ 60) / 8 = 0.062s  → threshold relaxed appropriately.
+    """
+    return max(0.015, 0.5 * (60.0 / max(bpm, 20.0)) / 8.0)
+
 
 # Fusion intervals (unison, octave, fifth)
 _FUSION_INTERVALS = {0, 7, 12}
@@ -143,15 +157,21 @@ def _is_fusion(a: NoteInfo, b: NoteInfo) -> bool:
     return interval in _FUSION_INTERVALS
 
 
-def _is_blurry(note: NoteInfo) -> bool:
-    """Check if note is too short to be individually perceived."""
-    return note.duration < _MIN_AUDIBLE_DURATION
+def _is_blurry(note: NoteInfo, min_dur: float) -> bool:
+    """[FIX 2] Check if note is too short to be individually perceived (BPM-aware)."""
+    return note.duration < min_dur
 
 
 def detect_frequency_masking(
     tracks: dict[str, list[NoteInfo]],
 ) -> list[PsychoEvent]:
-    """Detect frequency masking across track pairs."""
+    """Detect frequency masking across track pairs.
+
+    [FIX 6] Uses a time-sorted index + bisect for O(N log N) candidate
+    selection instead of the O(N²) full cross-product.
+    """
+    import bisect
+
     events = []
     valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
     names = list(valid.keys())
@@ -159,45 +179,44 @@ def detect_frequency_masking(
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
             ta, tb = names[i], names[j]
-            for na in valid[ta]:
-                for nb in valid[tb]:
-                    # Check overlap
-                    if not (
-                        na.start < nb.start + nb.duration and nb.start < na.start + na.duration
-                    ):
-                        continue
+            notes_b = valid[tb]
+            # Build start-time index for notes_b
+            starts_b = [n.start for n in notes_b]
 
+            for na in valid[ta]:
+                # Only check notes_b whose start overlaps na's sounding range
+                lo = bisect.bisect_left(starts_b, na.start - na.duration)
+                hi = bisect.bisect_right(starts_b, na.start + na.duration)
+                for nb in notes_b[lo:hi]:
+                    # Confirm actual overlap
+                    if not (na.start < nb.start + nb.duration and nb.start < na.start + na.duration):
+                        continue
                     if _freq_masked(na, nb):
-                        events.append(
-                            PsychoEvent(
-                                beat=nb.start,
-                                track_a=ta,
-                                note_a=na,
-                                track_b=tb,
-                                note_b=nb,
-                                issue="freq_mask",
-                                severity="strong",
-                            )
-                        )
+                        events.append(PsychoEvent(
+                            beat=nb.start, track_a=ta, note_a=na,
+                            track_b=tb, note_b=nb,
+                            issue="freq_mask", severity="strong",
+                        ))
                     elif _freq_masked(nb, na):
-                        events.append(
-                            PsychoEvent(
-                                beat=na.start,
-                                track_a=tb,
-                                note_a=nb,
-                                track_b=ta,
-                                note_b=na,
-                                issue="freq_mask",
-                                severity="strong",
-                            )
-                        )
+                        events.append(PsychoEvent(
+                            beat=na.start, track_a=tb, note_a=nb,
+                            track_b=ta, note_b=na,
+                            issue="freq_mask", severity="strong",
+                        ))
     return events
 
 
 def detect_temporal_masking(
     tracks: dict[str, list[NoteInfo]],
 ) -> list[PsychoEvent]:
-    """Detect temporal masking across track pairs."""
+    """Detect temporal masking across track pairs.
+
+    [FIX 6] bisect-based windowing: only compare notes within the temporal
+    masking window (pre + post = 0.15 s) rather than all N×M pairs.
+    """
+    import bisect
+
+    _WINDOW = _PRE_MASKING + _POST_MASKING  # total search radius in seconds
     events = []
     valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
     names = list(valid.keys())
@@ -205,32 +224,25 @@ def detect_temporal_masking(
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
             ta, tb = names[i], names[j]
+            notes_b = valid[tb]
+            starts_b = [n.start for n in notes_b]
+
             for na in valid[ta]:
-                for nb in valid[tb]:
+                lo = bisect.bisect_left(starts_b, na.start - _WINDOW)
+                hi = bisect.bisect_right(starts_b, na.start + na.duration + _WINDOW)
+                for nb in notes_b[lo:hi]:
                     if _temporal_masked(na, nb):
-                        events.append(
-                            PsychoEvent(
-                                beat=nb.start,
-                                track_a=ta,
-                                note_a=na,
-                                track_b=tb,
-                                note_b=nb,
-                                issue="temporal_mask",
-                                severity="mild",
-                            )
-                        )
+                        events.append(PsychoEvent(
+                            beat=nb.start, track_a=ta, note_a=na,
+                            track_b=tb, note_b=nb,
+                            issue="temporal_mask", severity="mild",
+                        ))
                     elif _temporal_masked(nb, na):
-                        events.append(
-                            PsychoEvent(
-                                beat=na.start,
-                                track_a=tb,
-                                note_a=nb,
-                                track_b=ta,
-                                note_b=na,
-                                issue="temporal_mask",
-                                severity="mild",
-                            )
-                        )
+                        events.append(PsychoEvent(
+                            beat=na.start, track_a=tb, note_a=nb,
+                            track_b=ta, note_b=na,
+                            issue="temporal_mask", severity="mild",
+                        ))
     return events
 
 
@@ -264,12 +276,13 @@ def detect_fusion(
 
 def detect_blur(
     tracks: dict[str, list[NoteInfo]],
+    min_dur: float = _MIN_AUDIBLE_DURATION_120,
 ) -> list[PsychoEvent]:
-    """Detect notes that are too short to perceive."""
+    """[FIX 2] Detect notes shorter than the BPM-adaptive minimum audible duration."""
     events = []
     for tname, notes in tracks.items():
         for n in notes:
-            if _is_blurry(n):
+            if _is_blurry(n, min_dur):
                 events.append(
                     PsychoEvent(
                         beat=n.start,
@@ -407,12 +420,25 @@ def _transpose_octave(note: NoteInfo) -> NoteInfo:
 def psycho_verify(
     tracks: dict[str, list[NoteInfo]],
     config: PsychoConfig | None = None,
+    bpm: float = 120.0,
 ) -> tuple[dict[str, list[NoteInfo]], PsychoReport]:
     """
     Run psychoacoustic verification and fix detected issues.
+
+    Parameters
+    ----------
+    tracks : dict
+        Multi-track note dictionary.
+    config : PsychoConfig, optional
+        Detection and fix configuration.
+    bpm : float
+        Tempo in BPM — used to compute the BPM-adaptive blur threshold [FIX 2].
     """
     if config is None:
         config = PsychoConfig()
+
+    # [FIX 2] BPM-adaptive minimum audible duration
+    min_dur = _min_audible_duration(bpm)
 
     report = PsychoReport()
 
@@ -428,7 +454,7 @@ def psycho_verify(
     if config.check_fusion:
         all_events.extend(detect_fusion(note_tracks))
     if config.check_blur:
-        all_events.extend(detect_blur(note_tracks))
+        all_events.extend(detect_blur(note_tracks, min_dur=min_dur))
     if config.check_register_masking:
         all_events.extend(detect_register_masking(note_tracks))
     if config.check_brightness:

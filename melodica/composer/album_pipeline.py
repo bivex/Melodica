@@ -251,18 +251,7 @@ def _auto_mix(tracks: Dict[str, List[NoteInfo]], mood_profile: _MoodProfile
         pan_overrides[a_name] = -spread
         pan_overrides[b_name] = spread
 
-    # Apply MixingDesk
-    desk = MixingDesk(niche_cfg={})
-    desk.track_gains.update(gains)
-    mixed = desk.apply_mixing(tracks, [], 120)
-
-    # Store pan_overrides in profiles metadata for mastering to pick up
-    for name, pan in pan_overrides.items():
-        if name in profiles:
-            # Attach via a hack: store on the profile for _auto_master to read
-            pass
-
-    # Apply MixingDesk
+    # [FIX 1] Single MixingDesk pass — was erroneously called twice (double compression bug)
     desk = MixingDesk(niche_cfg={})
     desk.track_gains.update(gains)
     mixed = desk.apply_mixing(tracks, [], 120)
@@ -336,7 +325,16 @@ def _apply_humanization(tracks: Dict[str, List[NoteInfo]],
                         profiles: Dict[str, _TrackProfile],
                         swing_amount: float = 0.02,
                         vel_jitter: int = 4) -> Dict[str, List[NoteInfo]]:
-    """Add subtle timing and velocity variation to dense / robotic tracks."""
+    """Add density-adaptive timing and velocity variation to tracks.
+
+    [FIX 3] At high note density the timing jitter is scaled DOWN to prevent
+    notes from overtaking each other, while velocity jitter is scaled UP to
+    preserve groove expressiveness through dynamics instead of timing.
+
+    density < 0.5  → full timing jitter, minimal velocity jitter
+    density 0.5–2  → linearly interpolated
+    density > 2    → minimal timing jitter (1/10th), maximum velocity jitter
+    """
     result = {}
     for tname, notes in tracks.items():
         if tname.startswith("_"):
@@ -353,16 +351,24 @@ def _apply_humanization(tracks: Dict[str, List[NoteInfo]],
             result[tname] = notes
             continue
 
+        # [FIX 3] Density-adaptive scaling
+        # At density >= 2.0 timing jitter drops to 10%; velocity jitter rises to 2.5×
+        density_factor = min(1.0, prof.density / 2.0)  # 0.0 at sparse, 1.0 at dense
+        t_scale = 1.0 - 0.9 * density_factor           # 1.0 → 0.10
+        v_scale = 1.0 + 1.5 * density_factor           # 1.0 → 2.50
+        effective_t = swing_amount * t_scale
+        effective_v = max(1, int(vel_jitter * v_scale))
+
         rng = random.Random(hash(tname) & 0xFFFFFFFF)
         new_notes = []
         for n in notes:
-            t_jitter = rng.uniform(-swing_amount, swing_amount)
-            v_jitter = rng.randint(-vel_jitter, vel_jitter)
+            t_jitter = rng.uniform(-effective_t, effective_t)
+            v_jit = rng.randint(-effective_v, effective_v)
             new_notes.append(NoteInfo(
                 pitch=n.pitch,
                 start=max(0.0, n.start + t_jitter),
                 duration=n.duration,
-                velocity=max(10, min(127, n.velocity + v_jitter)),
+                velocity=max(10, min(127, n.velocity + v_jit)),
                 articulation=n.articulation,
                 expression=n.expression,
             ))
@@ -521,6 +527,80 @@ def _compute_tension(chords: List) -> float:
 _SPARSE_THRESHOLD = 10  # fewer than this many notes = sparse
 
 
+# ---------------------------------------------------------------------------
+# [FIX 5] Polyphony limiter — cap simultaneous voices per track slot
+# ---------------------------------------------------------------------------
+
+_POLY_SLOT_RESOLUTION = 4.0  # subdivisions per beat for voice counting (1/16 at 4/4)
+
+
+def _polyphony_limit(
+    tracks: Dict[str, List[NoteInfo]],
+    profiles: Dict[str, _TrackProfile],
+    max_voices: int = 16,
+) -> Dict[str, List[NoteInfo]]:
+    """Cap the number of simultaneously sounding notes across all tracks.
+
+    [FIX 5] Builds a timeline of active notes per 1/16-beat slot. When more
+    than ``max_voices`` notes are active in a slot, the quietest ones are
+    silenced (velocity set to 0 then filtered). Priority order:
+    1. Higher velocity → kept
+    2. Lead/Strings role → kept over PAD/CHOIR in ties
+    """
+    import bisect
+
+    # Collect all notes with track context, sorted by start
+    all_notes: List[Tuple[float, float, str, NoteInfo]] = []
+    for tname, notes in tracks.items():
+        if tname.startswith("_") or not notes:
+            continue
+        for n in notes:
+            all_notes.append((n.start, n.start + n.duration, tname, n))
+    all_notes.sort(key=lambda x: x[0])
+
+    if not all_notes:
+        return tracks
+
+    # Build a set of note IDs to drop
+    drop_ids: set = set()
+    t_min = all_notes[0][0]
+    t_max = max(x[1] for x in all_notes)
+    slot_dur = 1.0 / _POLY_SLOT_RESOLUTION
+
+    slot = t_min
+    while slot < t_max:
+        slot_end = slot + slot_dur
+        # Active notes whose sounding range overlaps this slot
+        active = [
+            (tname, n)
+            for (ns, ne, tname, n) in all_notes
+            if ns < slot_end and ne > slot and id(n) not in drop_ids
+        ]
+        if len(active) > max_voices:
+            # Sort: keep loudest / highest-priority first
+            role_priority = {
+                Role.LEAD: 0, Role.STRINGS: 1, Role.PERC: 2,
+                Role.BASS: 3, Role.CHOIR: 4, Role.PAD: 5, Role.FX: 6,
+            }
+            active.sort(
+                key=lambda x: (
+                    -x[1].velocity,
+                    role_priority.get(profiles.get(x[0], _TrackProfile(60, 0, 0, 0, Role.PAD)).role, 5),
+                ),
+            )
+            for tname, n in active[max_voices:]:
+                drop_ids.add(id(n))
+        slot = slot_end
+
+    if not drop_ids:
+        return tracks
+
+    result = {}
+    for tname, notes in tracks.items():
+        result[tname] = [n for n in notes if id(n) not in drop_ids]
+    return result
+
+
 def _sparse_safeguard(tracks: Dict[str, List[NoteInfo]],
                       profiles: Dict[str, _TrackProfile]) -> Dict[str, List[NoteInfo]]:
     """For extremely sparse tracks, clamp velocity to avoid over-amplification."""
@@ -592,11 +672,21 @@ def _auto_master(tracks: Dict[str, List[NoteInfo]], profiles: Dict[str, _TrackPr
 # Dynamics shaping — mood-aware velocity range compression/expansion
 # ---------------------------------------------------------------------------
 
+_DYNAMICS_WINDOW_BEATS = 32.0  # sliding window size for local normalization
+
+
 def _shape_dynamics(tracks: Dict[str, List[NoteInfo]], mood_profile: _MoodProfile
                     ) -> Dict[str, List[NoteInfo]]:
-    """Widen or compress velocity range based on mood dynamics setting."""
-    rng = mood_profile.dynamics_range
-    if rng >= 0.95:
+    """Widen or compress velocity range based on mood dynamics setting.
+
+    [FIX 4] Uses a sliding window of 32 beats for computing the local velocity
+    center instead of the global min/max. This preserves crescendo and decrescendo
+    contours which would otherwise be flattened by a single global normalization.
+
+    For short tracks (< 2× window) falls back to the global approach.
+    """
+    dyn = mood_profile.dynamics_range
+    if dyn >= 0.95:
         return tracks
 
     result = {}
@@ -604,23 +694,51 @@ def _shape_dynamics(tracks: Dict[str, List[NoteInfo]], mood_profile: _MoodProfil
         if not notes or name.startswith("_"):
             result[name] = notes
             continue
+
         vels = [n.velocity for n in notes]
-        mn, mx = min(vels), max(vels)
-        if mx - mn < 5:
+        if max(vels) - min(vels) < 5:
             result[name] = notes
             continue
-        center = (mn + mx) / 2
-        half = (mx - mn) / 2
-        shaped = []
-        for n in notes:
-            offset = n.velocity - center
-            new_vel = int(round(center + offset * rng))
-            new_vel = max(10, min(127, new_vel))
-            shaped.append(NoteInfo(
-                pitch=n.pitch, start=n.start, duration=n.duration,
-                velocity=new_vel, articulation=n.articulation, expression=n.expression,
-            ))
-        result[name] = shaped
+
+        # Determine track span
+        t_start = notes[0].start
+        t_end   = notes[-1].start + notes[-1].duration
+        span    = t_end - t_start
+
+        # [FIX 4] Windowed normalization for long/dense tracks
+        if span > _DYNAMICS_WINDOW_BEATS * 2:
+            shaped = []
+            for n in notes:
+                # Gather notes within ±window/2 around this note
+                lo = n.start - _DYNAMICS_WINDOW_BEATS / 2
+                hi = n.start + _DYNAMICS_WINDOW_BEATS / 2
+                local_vels = [x.velocity for x in notes if lo <= x.start <= hi]
+                if not local_vels:
+                    shaped.append(n)
+                    continue
+                local_center = (min(local_vels) + max(local_vels)) / 2
+                offset = n.velocity - local_center
+                new_vel = int(round(local_center + offset * dyn))
+                new_vel = max(10, min(127, new_vel))
+                shaped.append(NoteInfo(
+                    pitch=n.pitch, start=n.start, duration=n.duration,
+                    velocity=new_vel, articulation=n.articulation, expression=n.expression,
+                ))
+            result[name] = shaped
+        else:
+            # Short track: global approach (original behaviour)
+            mn, mx = min(vels), max(vels)
+            center = (mn + mx) / 2
+            shaped = []
+            for n in notes:
+                offset = n.velocity - center
+                new_vel = int(round(center + offset * dyn))
+                new_vel = max(10, min(127, new_vel))
+                shaped.append(NoteInfo(
+                    pitch=n.pitch, start=n.start, duration=n.duration,
+                    velocity=new_vel, articulation=n.articulation, expression=n.expression,
+                ))
+            result[name] = shaped
     return result
 
 
@@ -722,10 +840,13 @@ def produce_track(
             # Low tension — gentle reduction
             shaped = _tension_boost(shaped, 0.92)
 
-    # 7. Psychoacoustic verification
+    # 7. [FIX 5] Polyphony limiter — drop quietest notes beyond 16 voices
+    shaped = _polyphony_limit(shaped, profiles, max_voices=16)
+
+    # 8. Psychoacoustic verification (bpm-aware for blur threshold)
     if psycho_verify_enabled:
         config = PsychoConfig(aggressive_fix=mood_profile.psycho_aggressive)
-        shaped, psycho_report = psycho_verify(shaped, config)
+        shaped, psycho_report = psycho_verify(shaped, config, bpm=bpm)
         if verbose and psycho_report.issues_detected > 0:
             print(f"   Psycho: {psycho_report.issues_detected} issues, "
                   f"{psycho_report.issues_fixed} fixed "
@@ -735,25 +856,25 @@ def produce_track(
     else:
         psycho_report = None
 
-    # 8. [FIX 12] Sparse normalization safeguard
+    # 9. [FIX 12] Sparse normalization safeguard
     shaped = _sparse_safeguard(shaped, profiles)
 
-    # 9. Auto-master
+    # 10. Auto-master
     mastered, master_cc = _auto_master(shaped, profiles, mood_profile, pan_overrides)
 
-    # 10. Generate CC events
+    # 11. Generate CC events
     total_dur = max((n.start + n.duration for ns in mastered.values() for n in ns), default=0.0)
-    entry_cc = _generate_entry_fades(mastered, profiles, total_dur)         # [FIX 2]
-    reverb_cc = _generate_reverb_sends(mastered, profiles, mood_profile)    # [FIX 9]
-    delay_cc = _generate_delay_sends(mastered, profiles)                    # [FIX 10]
+    entry_cc = _generate_entry_fades(mastered, profiles, total_dur)
+    reverb_cc = _generate_reverb_sends(mastered, profiles, mood_profile)
+    delay_cc = _generate_delay_sends(mastered, profiles)
     all_cc = _merge_cc_events(master_cc, entry_cc, reverb_cc, delay_cc, cc_events or {})
 
-    # 11. Export
+    # 12. Export
     export_multitrack_midi(mastered, str(path), bpm=bpm, key=key,
                            instruments=instruments, cc_events=all_cc,
                            tempo_events=tempo_events)
 
-    # 12. Report
+    # 13. Report
     report = {
         "profiles": {name: {"role": p.role.value, "avg_pitch": round(p.avg_pitch, 1),
                             "density": round(p.density, 3), "rms": round(p.rms_velocity, 1),
