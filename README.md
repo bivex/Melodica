@@ -18,7 +18,8 @@ melody = [
     Note(pitch=65, start=3.0, duration=1.0),  # F4
 ]
 
-chords = harmonize(melody, engine="adaptive", chord_rhythm=2.0)
+# Uses default 'hmm' engine
+chords = harmonize(melody, chord_rhythm=2.0)
 for c in chords:
     print(c)
 ```
@@ -59,6 +60,7 @@ The output MIDI is exported directly to `output/demo_catchy/demo_catchy_melody.m
 | 0  | `functional` | 18th-century functional harmony, cadential T→S→D→T |
 | 1  | `rules` | Viterbi search over a weighted chord-progression rule graph |
 | 2  | `adaptive` | Heuristic candidate search: simplicity + melody fit + look-ahead |
+| 3  | `hmm` | **Default.** Advanced HMM-based search with cadential and functional layers |
 
 ## Chord Detection
 
