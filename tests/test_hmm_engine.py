@@ -135,6 +135,11 @@ class TestHMMEngineHarmonize:
         roots_d = [c.root for c in chords_d]
         assert roots_c != roots_d, "Different keys should produce different chord roots"
 
+    def test_hmm_engine_uses_hmm3_by_default(self):
+        from melodica.harmonize import HMM3Harmonizer
+        engine = HMMEngine()
+        assert isinstance(engine._hmm, HMM3Harmonizer)
+
 
 # ===================================================================
 # §3 — Edge cases

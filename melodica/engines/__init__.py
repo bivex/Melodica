@@ -67,10 +67,18 @@ def build_engine(engine_id: int = 3, **kwargs: object) -> HarmonizerPort:
             engine_kwargs = {k: v for k, v in kwargs.items() if k in allowed}
             return AdaptiveEngine(**engine_kwargs)  # type: ignore[arg-type]
         case 3:
+            melody_weight = kwargs.get("melody_weight", 0.4)
+            voice_weight = kwargs.get("voice_weight", 0.3)
+            transition_weight = kwargs.get("transition_weight", 0.3)
+            engine_kwargs = {
+                k: v for k, v in kwargs.items()
+                if k not in ("melody_weight", "voice_weight", "transition_weight")
+            }
             return HMMEngine(
-                melody_weight=kwargs.get("melody_weight", 0.4),  # type: ignore[arg-type]
-                voice_weight=kwargs.get("voice_weight", 0.3),  # type: ignore[arg-type]
-                transition_weight=kwargs.get("transition_weight", 0.3),  # type: ignore[arg-type]
+                melody_weight=melody_weight,  # type: ignore[arg-type]
+                voice_weight=voice_weight,  # type: ignore[arg-type]
+                transition_weight=transition_weight,  # type: ignore[arg-type]
+                **engine_kwargs,
             )
         case _:
             raise ValueError(f"Unknown engine_id {engine_id}. Must be 0, 1, 2, or 3.")

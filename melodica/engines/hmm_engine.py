@@ -17,23 +17,25 @@ engines/hmm_engine.py — Adapter for HMMHarmonizer to engine protocol.
 
 from __future__ import annotations
 
-from melodica.harmonize.advanced import HMM2Harmonizer
+from melodica.harmonize.advanced import HMM3Harmonizer
 from melodica.types import ChordLabel, HarmonizationRequest, NoteInfo
 
 
 class HMMEngine:
-    """HMM-based harmonization engine (pro level with cadences and functional layer)."""
+    """HMM-based harmonization engine (pro level with beam search, secondary dominants, and extensions)."""
 
     def __init__(
         self,
         melody_weight: float = 0.30,
         voice_weight: float = 0.25,
         transition_weight: float = 0.25,
+        **kwargs: object,
     ) -> None:
-        self._hmm = HMM2Harmonizer(
+        self._hmm = HMM3Harmonizer(
             melody_weight=melody_weight,
             functional_weight=voice_weight,
             transition_weight=transition_weight,
+            **kwargs,
         )
 
     def harmonize(self, req: HarmonizationRequest) -> list[ChordLabel]:
