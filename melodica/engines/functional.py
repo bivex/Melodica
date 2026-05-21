@@ -146,6 +146,7 @@ def _select_chord(
     best_chord: types.ChordLabel | None = None
     best_weight = -1.0
 
+    # 1. Diatonic Search
     for degree in range(1, 8):
         chord = key.diatonic_chord(degree, seventh=allow_seventh)
         chord_pcs = chord.pitch_classes()
@@ -169,6 +170,31 @@ def _select_chord(
         if weight > best_weight:
             best_weight = weight
             best_chord = chord
+
+    # 2. Theory 2.0: Non-Diatonic Search (if melody note is chromatic or diatonic weight is low)
+    if best_weight < 0.8:
+        from melodica.theory.functional_plus import get_secondary_dominant, get_borrowed_chord
+        
+        # A. Try Secondary Dominants (V/x)
+        # Check all possible targets
+        for target in (1, 4, 5, 2, 6):
+            sec_dom = get_secondary_dominant(target, key)
+            if pc in sec_dom.pitch_classes():
+                # Prefer sec-dom if it highlights a chromatic note
+                weight = 0.95
+                if weight > best_weight:
+                    best_weight = weight
+                    best_chord = sec_dom
+        
+        # B. Try Borrowed Chords (Modal Mixture)
+        # Especially iv and bVI in Major
+        for degree in (4, 6, 2):
+            borrowed = get_borrowed_chord(degree, key)
+            if borrowed and pc in borrowed.pitch_classes():
+                weight = 0.9
+                if weight > best_weight:
+                    best_weight = weight
+                    best_chord = borrowed
 
     if best_chord is None:
         best_chord = key.diatonic_chord(1)

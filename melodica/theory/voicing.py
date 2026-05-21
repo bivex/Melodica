@@ -96,11 +96,31 @@ def voice_motion_cost(prev: list[int], current: list[int]) -> float:
 
     return cost
 
+def natural_spacing_cost(pitches: list[int]) -> float:
+    """
+    Calculate cost based on interval spacing.
+    Acoustic series rule: intervals should be wider at bottom, narrower at top.
+    Returns higher cost for 'top-heavy' or 'muddy' voicings.
+    """
+    if len(pitches) < 3: return 0.0
+    
+    cost = 0.0
+    intervals = [pitches[i+1] - pitches[i] for i in range(len(pitches)-1)]
+    
+    for i in range(len(intervals) - 1):
+        # If upper interval is wider than lower interval, penalty
+        if intervals[i+1] > intervals[i] + 2:
+            cost += (intervals[i+1] - intervals[i]) * 0.5
+            
+    # Muddy low end penalty (intervals < 5 semitones below MIDI 48)
+    if pitches[0] < 48 and intervals[0] < 5:
+        cost += 5.0
+        
+    return cost
+
 def voice_lead(prev: ChordLabel | list[int], next_chord: ChordLabel | list[int]) -> list[int]:
     """
-    Voice-lead next_chord to minimize voice movement from prev.
-    Supports passing pre-calculated pitch lists or ChordLabels.
-    Optimized with early exit for cost == 0.0.
+    Voice-lead next_chord to minimize voice movement and ensure natural spacing.
     """
     if isinstance(prev, list):
         prev_notes = prev
@@ -112,15 +132,18 @@ def voice_lead(prev: ChordLabel | list[int], next_chord: ChordLabel | list[int])
     else:
         next_notes = chord_to_notes(next_chord)
 
-    best_cost = 999999.0
+    best_total_cost = 999999.0
     best_inv = next_notes
 
     for inv in inversions(next_notes):
-        cost = voice_motion_cost(prev_notes, inv)
-        if cost == 0.0:
-            return inv
-        if cost < best_cost:
-            best_cost = cost
+        m_cost = voice_motion_cost(prev_notes, inv)
+        s_cost = natural_spacing_cost(inv)
+        
+        # Combine motion cost and spacing cost
+        total_cost = m_cost + s_cost * 2.0 
+        
+        if total_cost < best_total_cost:
+            best_total_cost = total_cost
             best_inv = inv
 
     return best_inv

@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from melodica.harmonize._hmm_helpers import (
     _chord_pcs_for_degree, _voice_leading_cost, _build_diatonic_chords,
     _CADENCE_BONUSES, _FUNCTION_MAP, _FUNCTION_RULES_HMM2, _EXTENSIONS,
-    _get_cadence_bonus, MODAL_GRAVITY,
+    _get_cadence_bonus, MODAL_GRAVITY, STYLE_MATRICES,
 )
 from melodica.types import ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
 
@@ -778,3 +778,141 @@ class HMM3Harmonizer:
             pts.append(t)
             t += step
         return pts
+
+@dataclass
+class HMM4Harmonizer:
+    """
+    HMM 4.0 — High-level music cognition engine.
+    
+    - 2nd-Order Markov Chains (Trigrams): Remembers 2 previous chords.
+    - Style-Specific Transition Matrices (Gothic, Cinematic, Jazz).
+    - Motif-Awareness (Penalizes dissonant repetition).
+    - Beam Search over state pairs.
+    """
+
+    beam_width: int = 8
+    style: str = "cinematic"
+    melody_weight: float = 0.30
+    transition_weight: float = 0.35
+    functional_weight: float = 0.20
+    repetition_penalty: float = 0.15
+    allow_secondary_dom: bool = True
+    allow_borrowed: bool = True
+    chord_change: str = "bars"
+
+    def harmonize(self, melody: list[NoteInfo], scale: Scale, duration: float) -> list[ChordLabel]:
+        if not melody: return []
+
+        # 1. Setup
+        chords_def = _build_diatonic_chords(scale)
+        catalog = self._build_catalog(chords_def, scale)
+        n_cat = len(catalog)
+        change_points = self._get_change_points(duration)
+        obs = self._extract_observations(melody, change_points)
+        T = len(obs)
+        if T == 0: return []
+
+        # Style matrix
+        style_mat = STYLE_MATRICES.get(self.style, STYLE_MATRICES["cinematic"])
+
+        # 2. Initialization (Step 0)
+        # Beams: (score, [chord_indices])
+        beams = []
+        for s in range(n_cat):
+            score = self._score_emission(0, s, obs, catalog, change_points, melody, scale)
+            beams.append((score, [s]))
+        beams.sort(key=lambda x: -x[0])
+        beams = beams[:self.beam_width]
+
+        # 3. Step 1 (Need two chords for 2nd order to start properly)
+        if T > 1:
+            new_beams = []
+            for score, path in beams:
+                prev = path[-1]
+                for s in range(n_cat):
+                    emit = self._score_emission(1, s, obs, catalog, change_points, melody, scale)
+                    trans = self._score_transition_1st(prev, s, catalog, style_mat, scale)
+                    new_beams.append((score + emit + trans, path + [s]))
+            new_beams.sort(key=lambda x: -x[0])
+            beams = new_beams[:self.beam_width]
+
+        # 4. Steps 2..T-1 (Full 2nd order)
+        for t in range(2, T):
+            new_beams = []
+            for score, path in beams:
+                prev_prev = path[-2]
+                prev = path[-1]
+                for s in range(n_cat):
+                    emit = self._score_emission(t, s, obs, catalog, change_points, melody, scale)
+                    # 2nd order transition: (p2, p1) -> current
+                    trans = self._score_transition_2nd(prev_prev, prev, s, catalog, style_mat, scale)
+                    
+                    # Motif/Repetition check
+                    rep = self.repetition_penalty if s == prev else 0.0
+                    if s == prev_prev: rep += self.repetition_penalty * 0.5
+                    
+                    new_beams.append((score + emit + trans - rep, path + [s]))
+            new_beams.sort(key=lambda x: -x[0])
+            beams = new_beams[:self.beam_width]
+
+        # 5. Result
+        best_path = beams[0][1]
+        result = []
+        for i, idx in enumerate(best_path):
+            root_pc, quality, deg = catalog[idx]
+            start = change_points[i]
+            dur_c = (change_points[i+1]-start) if i+1 < len(change_points) else duration-start
+            result.append(ChordLabel(root=root_pc, quality=qual, start=round(start, 6), 
+                                     duration=round(dur_c, 6), degree=int(deg)))
+        return result
+
+    def _score_emission(self, t, s_idx, obs, catalog, pts, melody, scale):
+        rpc, qual, deg = catalog[s_idx]
+        chord_pcs = _chord_pcs_for_degree(rpc, qual)
+        window_obs = obs[t]
+        if not window_obs: return 0.2 * self.melody_weight
+        
+        match_count = sum(1 for p in window_obs if p in chord_pcs)
+        fit = (match_count / len(window_obs)) * self.melody_weight
+        
+        # Beat 1 bonus
+        if (pts[t] % 4.0) < 0.1: fit *= 1.3
+        return fit
+
+    def _score_transition_1st(self, p, c, catalog, style_mat, scale):
+        deg_p = catalog[p][2]
+        deg_c = catalog[c][2]
+        
+        # Base transition from style matrix
+        prob = 0.1
+        if deg_p > 0 and deg_c > 0:
+            prob = style_mat.get(deg_p-1, {}).get(deg_c-1, 0.1)
+        
+        return prob * self.transition_weight
+
+    def _score_transition_2nd(self, p2, p1, c, catalog, style_mat, scale):
+        deg_p2 = catalog[p2][2]
+        deg_p1 = catalog[p1][2]
+        deg_c  = catalog[c][2]
+        
+        # 2nd Order Logic: ii-V-I awareness
+        # Check for standard cadential patterns (Trigrams)
+        score = 0.1
+        if deg_p2 == 2 and deg_p1 == 5 and deg_c == 1: score = 0.9
+        elif deg_p2 == 4 and deg_p1 == 5 and deg_c == 1: score = 0.85
+        elif deg_p2 == 6 and deg_p1 == 2 and deg_c == 5: score = 0.8
+        elif deg_p2 == 1 and deg_p1 == 4 and deg_c == 5: score = 0.75
+        else:
+            prob1 = style_mat.get(deg_p1-1 if deg_p1 > 0 else -1, {}).get(deg_c-1 if deg_c > 0 else -1, 0.1)
+            score = prob1
+            
+        return score * self.transition_weight
+
+    def _build_catalog(self, chords_def, scale):
+        return HMM3Harmonizer()._build_catalog(chords_def, scale)
+
+    def _extract_observations(self, melody, change_points):
+        return HMM3Harmonizer()._extract_observations(melody, change_points)
+
+    def _get_change_points(self, duration):
+        return HMM3Harmonizer(chord_change=self.chord_change)._get_change_points(duration)

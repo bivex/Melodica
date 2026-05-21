@@ -300,6 +300,17 @@ class MelodyPitchSelector:
                 if c <= climax_pitch:
                     w *= 1.0 + 0.15 * (1.0 - abs(c - climax_pitch) / max(1, range_span))
 
+            # 6. Theory 2.0: Counterpoint Scoring
+            if context and context.bass_pitch is not None:
+                from melodica.theory.functional_plus import score_counterpoint
+                cp_score = score_counterpoint(
+                    melody_note=c,
+                    bass_note=context.bass_pitch,
+                    prev_melody=prev_pitch,
+                    prev_bass=context.prev_bass_pitch if context.prev_bass_pitch is not None else context.bass_pitch
+                )
+                w *= cp_score
+
             weights.append(max(0.01, w))
 
         total = sum(weights)

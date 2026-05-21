@@ -26,6 +26,7 @@ from melodica.harmonize._hmm_core import (
     HMMHarmonizer,
     HMM2Harmonizer,
     HMM3Harmonizer,
+    HMM4Harmonizer,
 )
 from melodica.harmonize._specialized import (
     GraphSearchHarmonizer,
@@ -38,6 +39,7 @@ __all__ = [
     "HMMHarmonizer",
     "HMM2Harmonizer",
     "HMM3Harmonizer",
+    "HMM4Harmonizer",
     "GraphSearchHarmonizer",
     "GeneticHarmonizer",
     "ChromaticMediantHarmonizer",

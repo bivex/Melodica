@@ -446,6 +446,32 @@ MODAL_CADENCES: dict[Mode, dict[tuple[int, int], float]] = {
     },
 }
 
+# --- Style-Specific Transition Matrices (Functional weights) ---
+# Each matrix defines {current_degree: {next_degree: probability}}
+STYLE_MATRICES: dict[str, dict[int, dict[int, float]]] = {
+    "gothic": { # Heavy focus on i, iv, V, and bII (Neapolitan)
+        0: {1: 0.25, 3: 0.35, 4: 0.35, 5: 0.05}, # i -> bII, iv, V
+        1: {4: 0.60, 0: 0.40},                 # bII -> V or i
+        3: {4: 0.50, 0: 0.30, 1: 0.20},        # iv -> V, i, bII
+        4: {0: 0.70, 5: 0.20, 3: 0.10},        # V -> i, VI, iv
+        5: {3: 0.40, 4: 0.40, 0: 0.20},        # VI -> iv, V, i
+    },
+    "cinematic": { # Wide spread, emotional leaps (i, III, VI, bVII)
+        0: {2: 0.30, 5: 0.30, 6: 0.20, 3: 0.20}, # i -> III, VI, bVII, iv
+        2: {5: 0.40, 3: 0.30, 0: 0.30},          # III -> VI, iv, i
+        5: {3: 0.40, 6: 0.30, 0: 0.30},          # VI -> iv, bVII, i
+        6: {0: 0.60, 3: 0.40},                   # bVII -> i, iv
+        3: {4: 0.50, 0: 0.50},                   # iv -> V, i
+    },
+    "jazz": { # ii-V-I focused
+        1: {4: 0.70, 0: 0.10, 5: 0.20},          # ii -> V
+        4: {0: 0.60, 3: 0.30, 5: 0.10},          # V -> I or IV
+        0: {3: 0.30, 5: 0.30, 1: 0.40},          # I -> IV, vi, ii
+        5: {1: 0.60, 3: 0.40},                   # vi -> ii or IV
+        3: {1: 0.50, 4: 0.50},                   # IV -> ii or V
+    }
+}
+
 def _get_cadence_bonus(prev_deg: int, curr_deg: int, scale: Scale | None = None) -> float:
     """
     Get the cadence bonus for transitioning from prev_deg to curr_deg (0-indexed).
