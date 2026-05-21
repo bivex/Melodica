@@ -882,9 +882,12 @@ def compile_continuous_album(
     output_path: str | Path,
     overlap_beats: float = 8.0,
     mood: Mood = Mood.CINEMATIC,
+    modulation_strategy: str | None = None,
+    transition_instrument: int = 89,
 ) -> dict:
     """
-    Stitches multiple tracks into a single continuous arrangement with crossfades.
+    Stitches multiple tracks into a single continuous arrangement with crossfades
+    and optional diatonic modulation bridges at key transitions.
 
     Each metadata dict should have:
       - "tracks": dict[str, list[NoteInfo]]
@@ -893,9 +896,28 @@ def compile_continuous_album(
       - "cc_events": dict[str, list[tuple[float, int, int]]], optional
       - "tempo_events": list[tuple[float, float]], optional
       - "key": Scale, optional
+
+    Parameters
+    ----------
+    tracks_metadata : list[dict]
+        One dict per track in album order.
+    output_path : str or Path
+        Destination .mid file.
+    overlap_beats : float
+        How many beats of overlap/crossfade to use between tracks (default 8).
+    mood : Mood
+        Mixing and mastering preset applied to the compiled result.
+    modulation_strategy : str or None
+        If set ("pivot", "dominant", or "chromatic") and adjacent tracks have
+        different keys, a diatonic modulation bridge is automatically generated
+        and inserted as a ``_transition_pad`` track in the overlap zone.
+    transition_instrument : int
+        GM program number for the auto-generated modulation bridge track
+        (default 89 — Pad 2 Warm).
     """
     import copy
     from melodica.composer.automation import AutomationCurve
+    from melodica.theory.modulation import ModulationEngine
 
     combined_tracks: Dict[str, List[NoteInfo]] = {}
     combined_instruments: Dict[str, int] = {}
@@ -912,6 +934,7 @@ def compile_continuous_album(
         inst_dict = meta.get("instruments", {})
         cc_events = meta.get("cc_events", {})
         tempo_events = meta.get("tempo_events", [])
+        this_key = meta.get("key", None)
 
         # Calculate track duration in beats
         track_dur = 0.0
@@ -941,26 +964,83 @@ def compile_continuous_album(
                     combined_cc_events[name] = []
                 combined_cc_events[name].extend(shifted)
 
-        # Apply Crossfades in the overlap region
+        # Apply crossfades and optional diatonic modulation bridge in the overlap region
         if i > 0 and overlap_beats > 0.0:
             overlap_start = current_start_beat
             overlap_end = current_start_beat + overlap_beats
 
             # Fade-in incoming tracks on CC 7 (Volume) from 0 to 100
             for name in track_dict.keys():
-                fade_in = AutomationCurve.exponential(7, 0, 100, overlap_start, overlap_end, exponent=1.5, steps=10)
+                fade_in = AutomationCurve.exponential(
+                    7, 0, 100, overlap_start, overlap_end, exponent=1.5, steps=10
+                )
                 if name not in combined_cc_events:
                     combined_cc_events[name] = []
                 combined_cc_events[name].extend(fade_in)
 
             # Fade-out outgoing tracks from the PREVIOUS track on CC 7 (Volume) from 100 to 0
-            prev_meta = tracks_metadata[i-1]
+            prev_meta = tracks_metadata[i - 1]
             prev_track_dict = prev_meta.get("tracks", {})
             for name in prev_track_dict.keys():
-                fade_out = AutomationCurve.exponential(7, 100, 0, overlap_start, overlap_end, exponent=1.5, steps=10)
+                fade_out = AutomationCurve.exponential(
+                    7, 100, 0, overlap_start, overlap_end, exponent=1.5, steps=10
+                )
                 if name not in combined_cc_events:
                     combined_cc_events[name] = []
                 combined_cc_events[name].extend(fade_out)
+
+            # --- Diatonic modulation bridge ---
+            if modulation_strategy is not None:
+                prev_key = tracks_metadata[i - 1].get("key", None)
+                if prev_key is not None and this_key is not None and (
+                    prev_key.root != this_key.root or prev_key.mode != this_key.mode
+                ):
+                    bridge_chords = ModulationEngine.generate_modulation_bridge(
+                        from_scale=prev_key,
+                        to_scale=this_key,
+                        length_beats=overlap_beats,
+                        strategy=modulation_strategy,
+                        start_beat=overlap_start,
+                    )
+
+                    # Build pad notes for each bridge chord (root + third + fifth, 3 octaves up from 48)
+                    from melodica.theory import CHORD_TEMPLATES
+                    bridge_notes: List[NoteInfo] = []
+                    for chord in bridge_chords:
+                        template = CHORD_TEMPLATES.get(chord.quality, [0, 4, 7])
+                        base_midi = 48 + chord.root  # C3 + semitones
+                        for interval in template:
+                            pitch = base_midi + interval
+                            if 0 <= pitch <= 127:
+                                bridge_notes.append(NoteInfo(
+                                    pitch=pitch,
+                                    start=chord.start,
+                                    duration=chord.duration * 0.95,  # slight gap between chords
+                                    velocity=55,
+                                ))
+
+                    pad_track = "transition_pad"
+                    if pad_track not in combined_tracks:
+                        combined_tracks[pad_track] = []
+                        combined_instruments[pad_track] = transition_instrument
+                    combined_tracks[pad_track].extend(bridge_notes)
+
+                    # Fade the transition pad in and out smoothly within the overlap
+                    pad_fade_in = AutomationCurve.linear(
+                        7, 0, 80, overlap_start, overlap_start + overlap_beats * 0.5, steps=5
+                    )
+                    pad_fade_out = AutomationCurve.linear(
+                        7, 80, 0, overlap_start + overlap_beats * 0.5, overlap_end, steps=5
+                    )
+                    if pad_track not in combined_cc_events:
+                        combined_cc_events[pad_track] = []
+                    combined_cc_events[pad_track].extend(pad_fade_in)
+                    combined_cc_events[pad_track].extend(pad_fade_out)
+                    # Warm filter sweep on the transition pad
+                    pad_sweep = AutomationCurve.exponential(
+                        74, 35, 95, overlap_start, overlap_end, exponent=1.8, steps=8
+                    )
+                    combined_cc_events[pad_track].extend(pad_sweep)
 
         # Merge and shift tempo events
         if tempo_events:

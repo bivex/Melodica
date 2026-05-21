@@ -135,3 +135,90 @@ class TransitionCoordinator:
             track_obj.notes = retained_notes
         else:
             tracks[target_track] = retained_notes
+
+    @staticmethod
+    def orchestrate_transition(
+        tracks: dict[str, "Track | list[NoteInfo]"],
+        cc_events: dict[str, list[tuple[float, int, int]]],
+        boundary_beat: float,
+        pre_duration: float = 4.0,
+        post_duration: float = 2.0,
+        duck_tracks: list[str] | None = None,
+        duck_factor: float = 0.0,
+        sweep_tracks: list[str] | None = None,
+        sweep_cc: int = 74,
+        sweep_start_val: int = 40,
+        sweep_end_val: int = 110,
+        sweep_curve: str = "exponential",
+        fill_track: str | None = None,
+        fill_notes: "list[NoteInfo] | None" = None,
+    ) -> None:
+        """
+        Unified high-level transition coordinator.
+
+        Orchestrates all three transition effects in a single call at a section boundary:
+        1. Bass/drum **pre-drop ducking** over the window before the boundary.
+        2. **CC automation sweeps** (cutoff/volume) leading into the boundary.
+        3. **Lead-in fill** insertion starting at the boundary beat.
+
+        Parameters
+        ----------
+        tracks : dict
+            Multi-track note dictionary (Track objects or bare NoteInfo lists).
+        cc_events : dict
+            CC event dictionary to be mutated with sweep automation.
+        boundary_beat : float
+            The downbeat where the new section begins.
+        pre_duration : float
+            How many beats before the boundary to start ducking and sweeping (default 4).
+        post_duration : float
+            Reserved for future: post-boundary tail handling (default 2).
+        duck_tracks : list[str], optional
+            Track names to duck/silence before the boundary (e.g. ["bass", "kick"]).
+        duck_factor : float
+            0.0 = complete silence, 0.0–1.0 = scaled velocity during the duck window.
+        sweep_tracks : list[str], optional
+            Track names to apply an automation CC sweep to (e.g. ["pad", "strings"]).
+        sweep_cc : int
+            MIDI CC number for the sweep (74 = filter cutoff, 7 = volume).
+        sweep_start_val : int
+            Initial CC value at the start of the sweep window.
+        sweep_end_val : int
+            Final CC value at the boundary beat.
+        sweep_curve : str
+            Curve type: "exponential", "linear", or "sine".
+        fill_track : str, optional
+            Track name to inject the lead-in fill into.
+        fill_notes : list[NoteInfo], optional
+            Notes for the lead-in fill (relative to 0.0 — they will be shifted to boundary_beat).
+        """
+        duck_start = max(0.0, boundary_beat - pre_duration)
+        duck_end = boundary_beat
+
+        # 1. Pre-drop bass/drum ducking
+        if duck_tracks:
+            TransitionCoordinator.apply_ducking(
+                tracks, duck_tracks,
+                start_beat=duck_start,
+                end_beat=duck_end,
+                duck_factor=duck_factor,
+            )
+
+        # 2. Filter / volume sweep leading into the boundary
+        if sweep_tracks:
+            TransitionCoordinator.apply_sweeps(
+                tracks, cc_events, sweep_tracks,
+                cc_num=sweep_cc,
+                start_val=sweep_start_val,
+                end_val=sweep_end_val,
+                start_beat=duck_start,
+                end_beat=duck_end,
+                curve_type=sweep_curve,
+                steps=20,
+            )
+
+        # 3. Melodic / percussive lead-in fill
+        if fill_track and fill_notes:
+            TransitionCoordinator.apply_lead_in_fill(
+                tracks, fill_track, fill_notes, start_beat=boundary_beat
+            )

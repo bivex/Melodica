@@ -15,6 +15,7 @@ from melodica.types import (
 )
 from melodica.composer.transition_coordinator import TransitionCoordinator
 from melodica.composer.album_pipeline import compile_continuous_album, Mood
+from melodica.types import Mode
 
 
 def test_transition_coordinator_ducking():
@@ -165,3 +166,107 @@ def test_compile_continuous_album(tmp_path):
     assert out_file.exists()
     assert "profiles" in report
     assert "lead" in report["profiles"]
+
+
+def test_transition_coordinator_orchestrated():
+    """Verify orchestrate_transition coordinates ducking + sweep + fill in one call."""
+    from melodica.types import NoteInfo, Track
+    from melodica.composer.transition_coordinator import TransitionCoordinator
+
+    # Setup: bass track with notes before and after boundary, pad to be swept
+    bass_notes = [
+        NoteInfo(pitch=36, start=8.0, duration=1.0, velocity=100),   # inside duck window [12, 16]
+        NoteInfo(pitch=36, start=13.0, duration=1.0, velocity=100),  # inside duck window
+        NoteInfo(pitch=36, start=20.0, duration=1.0, velocity=100),  # after boundary
+    ]
+    pad_notes = [NoteInfo(pitch=60, start=0.0, duration=32.0, velocity=80)]
+    violin_notes = [
+        NoteInfo(pitch=64, start=0.0, duration=4.0, velocity=70),
+        NoteInfo(pitch=65, start=4.0, duration=4.0, velocity=70),
+        NoteInfo(pitch=67, start=16.0, duration=4.0, velocity=70),  # after boundary — will be replaced by fill
+    ]
+    fill_notes = [
+        NoteInfo(pitch=70, start=0.0, duration=1.0, velocity=90),
+        NoteInfo(pitch=72, start=1.0, duration=1.0, velocity=90),
+    ]
+
+    tracks = {
+        "bass": Track(name="bass", notes=bass_notes),
+        "pad": Track(name="pad", notes=pad_notes),
+        "violin": Track(name="violin", notes=violin_notes),
+    }
+    cc_events = {}
+
+    # Orchestrate all three effects at boundary_beat=16.0, pre_duration=4.0
+    TransitionCoordinator.orchestrate_transition(
+        tracks=tracks,
+        cc_events=cc_events,
+        boundary_beat=16.0,
+        pre_duration=4.0,
+        duck_tracks=["bass"],
+        duck_factor=0.0,          # full silence in duck window
+        sweep_tracks=["pad"],
+        sweep_cc=74,
+        sweep_start_val=30,
+        sweep_end_val=100,
+        sweep_curve="exponential",
+        fill_track="violin",
+        fill_notes=fill_notes,
+    )
+
+    # 1. Bass notes in [12.0, 16.0] should be removed, note at 8.0 and 20.0 kept
+    bass_pitches = [n.pitch for n in tracks["bass"].notes]
+    assert len(tracks["bass"].notes) == 2
+    assert all(n.start not in (13.0,) for n in tracks["bass"].notes)
+
+    # 2. CC sweep events should have been added for "pad"
+    assert "pad" in cc_events
+    assert len(cc_events["pad"]) >= 2
+    assert cc_events["pad"][0][1] == 74      # correct CC number
+    assert cc_events["pad"][0][2] == 30      # start value
+    assert cc_events["pad"][-1][2] == 100    # end value
+
+    # 3. Violin fill was injected at boundary_beat=16.0
+    violin_notes_out = tracks["violin"].notes
+    fill_starts = [n.start for n in violin_notes_out if n.pitch in (70, 72)]
+    assert 16.0 in fill_starts
+    assert 17.0 in fill_starts
+
+
+def test_compile_continuous_album_modulation(tmp_path):
+    """Verify compile_continuous_album generates a _transition_pad when keys differ."""
+    key_a = Scale(root=0, mode=Mode.MAJOR)          # C Major
+    key_b = Scale(root=11, mode=Mode.PHRYGIAN)      # B Phrygian
+
+    t1_notes = {"lead": [NoteInfo(pitch=60, start=0.0, duration=4.0, velocity=80)]}
+    t2_notes = {"lead": [NoteInfo(pitch=59, start=0.0, duration=4.0, velocity=80)]}
+
+    t1_meta = {
+        "tracks": t1_notes,
+        "bpm": 100.0,
+        "instruments": {"lead": 73},
+        "cc_events": {},
+        "key": key_a,
+    }
+    t2_meta = {
+        "tracks": t2_notes,
+        "bpm": 90.0,
+        "instruments": {"lead": 40},
+        "cc_events": {},
+        "key": key_b,
+    }
+
+    out_file = tmp_path / "modulation_album.mid"
+    report = compile_continuous_album(
+        [t1_meta, t2_meta],
+        output_path=out_file,
+        overlap_beats=4.0,
+        mood=Mood.CHAMBER,
+        modulation_strategy="dominant",
+        transition_instrument=89,
+    )
+
+    assert out_file.exists()
+    # The modulation pad track should appear in the profiles
+    assert "profiles" in report
+    assert "transition_pad" in report["profiles"]
