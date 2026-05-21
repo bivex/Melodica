@@ -285,6 +285,7 @@ def export_multitrack_midi(
     timeline: "MusicTimeline | None" = None,
     cc_events: "dict[str, list[tuple[float, int, int]]] | None" = None,
     instruments: "dict[str, int] | None" = None,
+    volumes: dict[str, int] | None = None,
     diagnose: bool = False,
     humanize: bool = True,
 ) -> None:
@@ -370,6 +371,17 @@ def export_multitrack_midi(
         program = (instruments or {}).get(name, 0)
         tr.append(mido.Message("program_change", program=program, channel=channel, time=0))
 
+        if volumes and name in volumes:
+            tr.append(
+                mido.Message(
+                    "control_change",
+                    control=7,
+                    value=max(0, min(127, volumes[name])),
+                    channel=channel,
+                    time=0,
+                )
+            )
+
         # Build all events: note_on, note_off, control_change, pitchwheel
         events: list[tuple[int, str, int, int]] = []
         for n in notes:
@@ -400,14 +412,65 @@ def export_multitrack_midi(
                         bend = max(-8192, min(8191, int(cc_val)))
                         events.append((on_tick, "pitchwheel", bend, 0))
 
-            # Auto CC11 for long notes
-            if humanize and n.duration > 1.5 and not has_cc11:
-                cc_steps = max(3, int(n.duration / 0.25))
-                for i in range(cc_steps + 1):
-                    t_beat = onset + (i / cc_steps) * n.duration
-                    phase = (i / cc_steps) * math.pi
-                    val = 60 + int(math.sin(phase) * 60)
-                    events.append((round(t_beat * tpb), "control_change", 11, val))
+            # Advanced humanized CC11 (Expression) and CC1 (Modulation) for long notes
+            if humanize and n.duration > 1.5:
+                if not has_cc11:
+                    cc_steps = max(3, int(n.duration / 0.125))  # Finer time steps
+                    for step in range(cc_steps + 1):
+                        t_beat = onset + (step / cc_steps) * n.duration
+                        # A breathing wave LFO at 0.5 Hz (approx 2 beats per cycle at default tempo) with random micro-jitter
+                        phase = (t_beat - onset) * math.pi / 2.0
+                        import random
+                        jitter = random.uniform(-4, 4)
+                        val = 75 + int(math.sin(phase) * 30) + int(jitter)
+                        events.append((round(t_beat * tpb), "control_change", 11, max(0, min(127, val))))
+
+                # Modulation / Vibrato / Filter sweeps LFO on CC1 for solo & pad instruments
+                is_expressive_solo = any(
+                    k in name.lower()
+                    for k in ["cello", "viola", "flute", "clarinet", "voice", "choir", "strings", "pad"]
+                )
+                if is_expressive_solo:
+                    cc_steps = max(3, int(n.duration / 0.125))
+                    for step in range(cc_steps + 1):
+                        t_beat = onset + (step / cc_steps) * n.duration
+                        time_since_start = t_beat - onset
+                        
+                        # Delayed vibrato LFO (ramps up over 1.0 beat)
+                        ramp = min(1.0, time_since_start / 1.0)
+                        
+                        import math
+                        if "pad" in name.lower() or "choir" in name.lower():
+                            # Evolving filter sweep LFO (slow, 0.1 Hz)
+                            phase = time_since_start * math.pi / 4.0  # 8 beats per cycle
+                            val = 45 + int(math.sin(phase) * 25)
+                        else:
+                            # 6 Hz acoustic vibrato LFO
+                            cycles_per_beat = 6.0 * (60.0 / bpm)
+                            phase = time_since_start * 2.0 * math.pi * cycles_per_beat
+                            val = int(ramp * (35 + int(math.sin(phase) * 15)))
+                            
+                        events.append((round(t_beat * tpb), "control_change", 1, max(0, min(127, val))))
+
+        # Auto sustain pedal (CC64) automation for piano, harp, arpeggios
+        is_pedal_inst = any(k in name.lower() for k in ["harp", "piano", "arp"])
+        if humanize and is_pedal_inst and notes:
+            max_end = max(n.start + n.duration for n in notes)
+            t_pedal = 0.0
+            # Check if there is already manual sustain pedal in cc_events
+            has_manual_pedal = False
+            if cc_events and name in cc_events:
+                if any(ev[1] == 64 for ev in cc_events[name]):
+                    has_manual_pedal = True
+            
+            if not has_manual_pedal:
+                while t_pedal < max_end:
+                    # Press pedal at the start of measure (t_pedal)
+                    events.append((round(t_pedal * tpb), "control_change", 64, 127))
+                    # Release pedal just before the next measure (t_pedal + 3.95)
+                    release_time = min(t_pedal + 3.95, max_end)
+                    events.append((round(release_time * tpb), "control_change", 64, 0))
+                    t_pedal += 4.0
 
         # Standalone CC events (e.g. sustain pedal boundaries)
         if cc_events and name in cc_events:

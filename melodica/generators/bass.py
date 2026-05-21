@@ -217,7 +217,7 @@ class BassGenerator(PhraseGenerator):
                 fourth_pc = (root_pc + 5) % types.OCTAVE
                 pool.append(self._nearest_in_range(fourth_pc, anchor))
             elif note_type == "sixth":
-                sixth_pc = (root_pc + 8) % types.OCTAVE
+                sixth_pc = (root_pc + 9) % types.OCTAVE
                 pool.append(self._nearest_in_range(sixth_pc, anchor))
             elif note_type == "lower_octave":
                 root_pitch = self._nearest_in_range(root_pc, anchor)

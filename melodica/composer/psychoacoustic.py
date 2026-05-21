@@ -440,70 +440,67 @@ def psycho_verify(
     if not all_events:
         return {**tracks, **note_tracks}, report
 
-    # Phase 2: Fix issues
-    fixed = {k: list(v) for k, v in note_tracks.items()}
-
-    # Build index for fast lookup
-    note_idx: dict[tuple[str, int], int] = {}
-    for tname, notes in note_tracks.items():
-        for idx, n in enumerate(notes):
-            note_idx[(tname, id(n))] = idx
+    # Phase 2: Fix issues — mark-and-sweep to avoid index invalidation
+    # Map (track, note_id) → action to apply
+    _REMOVE = object()
+    actions: dict[tuple[str, int], object] = {}  # (track_name, id(note)) → replacement NoteInfo or _REMOVE
 
     for evt in all_events:
         ta = evt.track_a
         tb = evt.track_b
 
         if evt.issue in ("freq_mask", "temporal_mask"):
-            # Reduce velocity of masked (quiet) note — it's note_b in track_b
-            if evt.note_b and tb and (tb, id(evt.note_b)) in note_idx:
-                idx = note_idx[(tb, id(evt.note_b))]
+            if evt.note_b and tb:
                 if config.aggressive_fix:
-                    del fixed[tb][idx]
+                    actions[(tb, id(evt.note_b))] = _REMOVE
                     report.notes_removed += 1
                 else:
-                    fixed[tb][idx] = _reduce_vel(evt.note_b, 0.3)
+                    actions[(tb, id(evt.note_b))] = _reduce_vel(evt.note_b, 0.3)
                     report.notes_velocity_reduced += 1
-                report.issues_fixed += 1
+            report.issues_fixed += 1
 
         elif evt.issue == "fusion":
-            # Transpose one note to different octave
-            tb = evt.track_b
-            if evt.note_b and (tb, id(evt.note_b)) in note_idx:
-                idx = note_idx[(tb, id(evt.note_b))]
-                fixed[tb][idx] = _transpose_octave(evt.note_b)
+            if evt.note_b and tb:
+                actions[(tb, id(evt.note_b))] = _transpose_octave(evt.note_b)
                 report.notes_transposed += 1
                 report.issues_fixed += 1
 
         elif evt.issue == "blur":
-            # Shorten to minimum audible duration
-            if (ta, id(evt.note_a)) in note_idx:
-                idx = note_idx[(ta, id(evt.note_a))]
-                fixed[ta][idx] = _shorten(evt.note_a, 0.05)
-                report.notes_shortened += 1
-                report.issues_fixed += 1
+            actions[(ta, id(evt.note_a))] = _shorten(evt.note_a, 0.05)
+            report.notes_shortened += 1
+            report.issues_fixed += 1
 
         elif evt.issue == "reg_mask":
-            # Reduce velocity of the quieter note
-            tb = evt.track_b
-            if evt.note_b and (tb, id(evt.note_b)) in note_idx:
-                idx = note_idx[(tb, id(evt.note_b))]
-                fixed[tb][idx] = _reduce_vel(evt.note_b, 0.4)
+            if evt.note_b and tb:
+                actions[(tb, id(evt.note_b))] = _reduce_vel(evt.note_b, 0.4)
                 report.notes_velocity_reduced += 1
                 report.issues_fixed += 1
 
         elif evt.issue == "brightness":
-            # Remove or reduce bright notes
-            if (ta, id(evt.note_a)) in note_idx:
-                idx = note_idx[(ta, id(evt.note_a))]
-                if config.aggressive_fix:
-                    del fixed[ta][idx]
-                    report.notes_removed += 1
-                else:
-                    fixed[ta][idx] = _reduce_vel(evt.note_a, 0.3)
-                    report.notes_velocity_reduced += 1
-                report.issues_fixed += 1
+            if config.aggressive_fix:
+                actions[(ta, id(evt.note_a))] = _REMOVE
+                report.notes_removed += 1
+            else:
+                actions[(ta, id(evt.note_a))] = _reduce_vel(evt.note_a, 0.3)
+                report.notes_velocity_reduced += 1
+            report.issues_fixed += 1
 
-    # Re-sort using fast native C-level attribute getter in-place
+    # Apply actions: single pass per track, no index corruption
+    fixed = {}
+    for tname, notes in note_tracks.items():
+        result_notes = []
+        for n in notes:
+            key = (tname, id(n))
+            if key in actions:
+                action = actions[key]
+                if action is _REMOVE:
+                    continue  # drop note
+                result_notes.append(action)  # replacement NoteInfo
+            else:
+                result_notes.append(n)
+        fixed[tname] = result_notes
+
+    # Re-sort
     from operator import attrgetter
     start_getter = attrgetter("start")
     for k in fixed:
