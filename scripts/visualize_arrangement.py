@@ -391,14 +391,27 @@ def run_script(script_path):
     module = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(module)
-        if hasattr(module, "main"): module.main()
+        if hasattr(module, "main"):
+            module.main()
         else:
-            funcs = [f for f in dir(module) if f.startswith("produce_") and callable(getattr(module, f))]
-            for f_name in sorted(funcs):
-                func = getattr(module, f_name)
-                import inspect
-                if len(inspect.signature(func).parameters) == 0:
-                    func()
+            # Search for common Melodica entry point prefixes
+            prefixes = ("produce_", "build_", "generate_")
+            funcs = [f for f in dir(module) if any(f.startswith(p) for p in prefixes) and callable(getattr(module, f))]
+            
+            if funcs:
+                print(f"Found {len(funcs)} entry functions. Executing...")
+                for f_name in sorted(funcs):
+                    func = getattr(module, f_name)
+                    import inspect
+                    sig = inspect.signature(func)
+                    # Call only if it's a parameterless factory/producer
+                    if len(sig.parameters) == 0:
+                        res = func()
+                        # If it returned metadata but didn't export, manually trigger export capture
+                        if isinstance(res, dict) and "tracks" in res and "bpm" in res:
+                            mock_export_multitrack_midi(res["tracks"], f"{f_name}.mid", bpm=res["bpm"], key=res.get("key"))
+            else:
+                print(f"Finished executing {module_name}. No main() or producer functions found.")
     except Exception as e: print(f"Execution Error: {e}")
 
 def main():
