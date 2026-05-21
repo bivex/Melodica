@@ -87,7 +87,7 @@ def produce_secret_correspondence():
             density=0.65, velocity_range=(60, 85),
             key_range_low=48, key_range_high=72
         ),
-        pattern="updown"
+        pattern="up_down"
     )
     guitar_notes = guitar_gen.render(full_chords, KEY_MINOR, dur)
     

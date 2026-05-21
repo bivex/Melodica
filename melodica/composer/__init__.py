@@ -57,8 +57,12 @@ from melodica.composer.unified_style import (
 from melodica.composer.psychoacoustic import PsychoEvent, PsychoConfig, PsychoReport
 from melodica.composer.harmonic_verifier import ClashEvent, VerifierConfig, VerifierReport
 from melodica.composer.diagnostics import diagnose_tracks, DiagnosticReport
+from melodica.composer.transition_coordinator import TransitionCoordinator
+from melodica.composer.album_pipeline import compile_continuous_album
 
 __all__ = [
+    "TransitionCoordinator",
+    "compile_continuous_album",
     "VoiceLeadingEngine",
     "VOICE_RANGES",
     "TensionCurve",

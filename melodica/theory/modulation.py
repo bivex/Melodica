@@ -15,7 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
 
-from melodica.types import Scale, Mode, ChordLabel, Quality, NoteInfo
+from melodica.types_pkg._notes import NoteInfo
+from melodica.types_pkg._theory import Scale, ChordLabel
+from melodica.theory import Mode, Quality
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +152,108 @@ class ModulationEngine:
         else:
             # Fallback to direct modulation via Dominant of B
             return "V I" # Relative to scale_B
+
+    @staticmethod
+    def generate_modulation_bridge(
+        from_scale: Scale,
+        to_scale: Scale,
+        length_beats: float,
+        strategy: str = "pivot",
+        start_beat: float = 0.0,
+    ) -> list[ChordLabel]:
+        """
+        Generates a list of ChordLabels representing a transition progression
+        from from_scale to to_scale.
+        """
+        import dataclasses
+        chords: list[ChordLabel] = []
+        
+        num_chords = 4
+        chord_dur = length_beats / num_chords
+
+        if strategy == "pivot":
+            chords = ModulationEngine._build_pivot_modulation(from_scale, to_scale)
+        elif strategy == "dominant":
+            chords = ModulationEngine._build_dominant_modulation(from_scale, to_scale)
+        elif strategy == "chromatic":
+            chords = ModulationEngine._build_chromatic_modulation(from_scale, to_scale)
+        else:
+            chords = ModulationEngine._build_dominant_modulation(from_scale, to_scale)
+
+        if len(chords) < num_chords:
+            while len(chords) < num_chords:
+                chords.append(to_scale.diatonic_chord(1))
+        elif len(chords) > num_chords:
+            chords = chords[:num_chords]
+
+        for i, chord in enumerate(chords):
+            chords[i] = dataclasses.replace(
+                chord,
+                start=round(start_beat + (i * chord_dur), 6),
+                duration=round(chord_dur, 6)
+            )
+
+        return chords
+
+    @staticmethod
+    def _build_pivot_modulation(from_scale: Scale, to_scale: Scale) -> list[ChordLabel]:
+        """
+        Builds a pivot chord modulation progression.
+        """
+        pivots = ModulationEngine.find_pivot_chords(from_scale, to_scale)
+        if not pivots:
+            return ModulationEngine._build_dominant_modulation(from_scale, to_scale)
+
+        # Use the first pivot chord
+        pivot = pivots[0][0]
+        return [
+            from_scale.diatonic_chord(1),
+            pivot,
+            to_scale.diatonic_chord(5, seventh=True),
+            to_scale.diatonic_chord(1)
+        ]
+
+    @staticmethod
+    def _build_dominant_modulation(from_scale: Scale, to_scale: Scale) -> list[ChordLabel]:
+        """
+        Builds secondary dominant modulation chain.
+        """
+        target_dom_root = to_scale.degrees()[4]
+        vv_root = int(round((target_dom_root + 7) % 12))
+
+        secondary_dominant = ChordLabel(
+            root=vv_root,
+            quality=Quality.DOMINANT7,
+            start=0.0,
+            duration=4.0
+        )
+
+        return [
+            from_scale.diatonic_chord(1),
+            secondary_dominant,
+            to_scale.diatonic_chord(5, seventh=True),
+            to_scale.diatonic_chord(1)
+        ]
+
+    @staticmethod
+    def _build_chromatic_modulation(from_scale: Scale, to_scale: Scale) -> list[ChordLabel]:
+        """
+        Builds chromatic slide / tritone substitution modulation.
+        """
+        bii_root = (to_scale.root + 1) % 12
+        bii7 = ChordLabel(
+            root=bii_root,
+            quality=Quality.DOMINANT7,
+            start=0.0,
+            duration=4.0
+        )
+
+        return [
+            from_scale.diatonic_chord(1),
+            bii7,
+            to_scale.diatonic_chord(5, seventh=True),
+            to_scale.diatonic_chord(1)
+        ]
 
 
 def _cc11_value(shape: str, progress: float) -> int:

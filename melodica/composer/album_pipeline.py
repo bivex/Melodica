@@ -875,3 +875,119 @@ def produce_album(
     print(f"   Files in: {out}")
     print("=" * 60)
     return reports
+
+
+def compile_continuous_album(
+    tracks_metadata: List[Dict],
+    output_path: str | Path,
+    overlap_beats: float = 8.0,
+    mood: Mood = Mood.CINEMATIC,
+) -> dict:
+    """
+    Stitches multiple tracks into a single continuous arrangement with crossfades.
+
+    Each metadata dict should have:
+      - "tracks": dict[str, list[NoteInfo]]
+      - "bpm": float
+      - "instruments": dict[str, int]
+      - "cc_events": dict[str, list[tuple[float, int, int]]], optional
+      - "tempo_events": list[tuple[float, float]], optional
+      - "key": Scale, optional
+    """
+    import copy
+    from melodica.composer.automation import AutomationCurve
+
+    combined_tracks: Dict[str, List[NoteInfo]] = {}
+    combined_instruments: Dict[str, int] = {}
+    combined_cc_events: Dict[str, List[Tuple[float, int, int]]] = {}
+    combined_tempo_events: List[Tuple[float, float]] = []
+
+    current_start_beat = 0.0
+    first_bpm = tracks_metadata[0].get("bpm", 120.0) if tracks_metadata else 120.0
+    first_key = tracks_metadata[0].get("key", None) if tracks_metadata else None
+
+    for i, meta in enumerate(tracks_metadata):
+        track_dict = meta.get("tracks", {})
+        bpm = meta.get("bpm", 120.0)
+        inst_dict = meta.get("instruments", {})
+        cc_events = meta.get("cc_events", {})
+        tempo_events = meta.get("tempo_events", [])
+
+        # Calculate track duration in beats
+        track_dur = 0.0
+        for name, notes in track_dict.items():
+            if notes:
+                end_beat = max(n.start + n.duration for n in notes)
+                if end_beat > track_dur:
+                    track_dur = end_beat
+
+        # Copy and shift notes
+        for name, notes in track_dict.items():
+            notes_copy = copy.deepcopy(notes)
+            for note in notes_copy:
+                note.shift_time(current_start_beat)
+            if name not in combined_tracks:
+                combined_tracks[name] = []
+            combined_tracks[name].extend(notes_copy)
+
+        # Merge instruments
+        combined_instruments.update(inst_dict)
+
+        # Merge and shift CC events
+        if cc_events:
+            for name, events in cc_events.items():
+                shifted = [(ev[0] + current_start_beat, ev[1], ev[2]) for ev in events]
+                if name not in combined_cc_events:
+                    combined_cc_events[name] = []
+                combined_cc_events[name].extend(shifted)
+
+        # Apply Crossfades in the overlap region
+        if i > 0 and overlap_beats > 0.0:
+            overlap_start = current_start_beat
+            overlap_end = current_start_beat + overlap_beats
+
+            # Fade-in incoming tracks on CC 7 (Volume) from 0 to 100
+            for name in track_dict.keys():
+                fade_in = AutomationCurve.exponential(7, 0, 100, overlap_start, overlap_end, exponent=1.5, steps=10)
+                if name not in combined_cc_events:
+                    combined_cc_events[name] = []
+                combined_cc_events[name].extend(fade_in)
+
+            # Fade-out outgoing tracks from the PREVIOUS track on CC 7 (Volume) from 100 to 0
+            prev_meta = tracks_metadata[i-1]
+            prev_track_dict = prev_meta.get("tracks", {})
+            for name in prev_track_dict.keys():
+                fade_out = AutomationCurve.exponential(7, 100, 0, overlap_start, overlap_end, exponent=1.5, steps=10)
+                if name not in combined_cc_events:
+                    combined_cc_events[name] = []
+                combined_cc_events[name].extend(fade_out)
+
+        # Merge and shift tempo events
+        if tempo_events:
+            for ev in tempo_events:
+                combined_tempo_events.append((ev[0] + current_start_beat, ev[1]))
+        else:
+            combined_tempo_events.append((current_start_beat, bpm))
+
+        # Advance timeline
+        next_start = current_start_beat + track_dur - (overlap_beats if i < len(tracks_metadata) - 1 else 0.0)
+        current_start_beat = max(0.0, next_start)
+
+    # Sort all notes and CC events
+    for name in combined_tracks.keys():
+        combined_tracks[name].sort(key=lambda note: note.start)
+    for name in combined_cc_events.keys():
+        combined_cc_events[name].sort(key=lambda ev: ev[0])
+    combined_tempo_events.sort(key=lambda ev: ev[0])
+
+    # Produce the continuous multi-track MIDI
+    return produce_track(
+        tracks=combined_tracks,
+        bpm=first_bpm,
+        instruments=combined_instruments,
+        path=output_path,
+        mood=mood,
+        key=first_key,
+        cc_events=combined_cc_events,
+        tempo_events=combined_tempo_events,
+    )

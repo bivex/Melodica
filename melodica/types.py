@@ -54,6 +54,7 @@ from melodica.types_pkg._phrases import (
 )
 
 from melodica.types_pkg._theory import parse_progression
+from melodica.theory.modulation import ModulationEngine
 
 # Re-export theory types that were historically in types.py
 from melodica.theory import Mode, Quality, CHORD_TEMPLATES
@@ -82,4 +83,5 @@ __all__ = [
     "Track",
     "Arrangement",
     "parse_progression",
+    "ModulationEngine",
 ]
