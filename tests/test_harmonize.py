@@ -306,6 +306,40 @@ class TestHMM3Harmonizer:
         assert len(chords) > 0
 
 
+class TestDorianProgressionIntegration:
+    def test_dorian_plagal_cadence_hmm3(self):
+        """
+        Verify that HMM3Harmonizer harmonizing a Dorian melody in D Dorian
+        produces Dorian-appropriate plagal cadence (IV chord, which is G major,
+        resolving to i chord, which is D minor).
+        """
+        # D Dorian melody emphasizing the Dorian major 6th (B4, pitch 71)
+        melody = [
+            NoteInfo(pitch=62, start=0.0, duration=1.0, velocity=80),  # D
+            NoteInfo(pitch=65, start=1.0, duration=1.0, velocity=80),  # F
+            NoteInfo(pitch=71, start=2.0, duration=1.0, velocity=80),  # B (characteristic major 6th)
+            NoteInfo(pitch=67, start=3.0, duration=1.0, velocity=80),  # G
+            NoteInfo(pitch=65, start=4.0, duration=1.0, velocity=80),  # F
+            NoteInfo(pitch=62, start=5.0, duration=1.0, velocity=80),  # D
+        ]
+        key = Scale(root=2, mode=Mode.DORIAN)  # D Dorian
+
+        # Harmonize with chord changes every bar (4 beats per chord)
+        h = HMM3Harmonizer(chord_change="bars")
+        chords = h.harmonize(melody, key, 8.0)
+
+        # Verify that we got chords back
+        assert len(chords) > 0
+
+        # Verify that the chords contain the i chord (D minor: degree=1)
+        # and/or the IV chord (G major: degree=4)
+        has_i = any(c.degree == 1 for c in chords)
+        has_iv = any(c.degree == 4 for c in chords)
+
+        assert has_i, "Dorian progression should contain the tonic i chord"
+        assert has_iv, "Dorian progression should contain the plagal IV chord"
+
+
 class TestGeneticHarmonizer:
     def test_produces_chords(self):
         h = GeneticHarmonizer()

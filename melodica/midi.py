@@ -290,6 +290,7 @@ def export_multitrack_midi(
     diagnose: bool = False,
     humanize: bool = True,
     tempo_events: list[tuple[float, float]] | None = None,
+    pitch_bend_range: int = 2,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -402,6 +403,20 @@ def export_multitrack_midi(
                 )
             )
 
+        # RPN 0x0000 — Pitch Bend Range (semitones)
+        # Protocol: CC101=0, CC100=0 selects the parameter; CC6=semitones, CC38=cents
+        tr.append(mido.Message("control_change", control=101, value=0, channel=channel, time=0))
+        tr.append(mido.Message("control_change", control=100, value=0, channel=channel, time=0))
+        tr.append(
+            mido.Message(
+                "control_change", control=6, value=pitch_bend_range, channel=channel, time=0
+            )
+        )
+        tr.append(mido.Message("control_change", control=38, value=0, channel=channel, time=0))
+        # Null RPN — deselect active parameter to prevent accidental CC6 overrides later
+        tr.append(mido.Message("control_change", control=101, value=127, channel=channel, time=0))
+        tr.append(mido.Message("control_change", control=100, value=127, channel=channel, time=0))
+
         # Build all events: note_on, note_off, control_change, pitchwheel
         events: list[tuple[int, str, int, int]] = []
 
@@ -443,21 +458,32 @@ def export_multitrack_midi(
             on_tick = round(onset * tpb)
             off_tick = round((onset + duration) * tpb)
 
+            rounded_pitch = int(round(n.pitch))
+            deviation = n.pitch - rounded_pitch
+            bend_value = int(deviation * (8192.0 / pitch_bend_range))
+
             # Note on/off
-            events.append((on_tick, "note_on", n.pitch, n.velocity))
-            events.append((off_tick, "note_off", n.pitch, 0))
+            events.append((on_tick, "note_on", rounded_pitch, n.velocity))
+            events.append((off_tick, "note_off", rounded_pitch, 0))
 
             has_cc11 = False
+            custom_bend = 0
+            has_custom_bend = False
             # CC and pitchwheel events from note.expression
-            if n.expression:
+            if getattr(n, "expression", None):
                 for cc_num, cc_val in n.expression.items():
                     if cc_num == 11:
                         has_cc11 = True
                     if isinstance(cc_num, int) and 0 <= cc_num <= 127:
                         events.append((on_tick, "control_change", cc_num, max(0, min(127, cc_val))))
                     elif cc_num == "pitch_bend":
-                        bend = max(-8192, min(8191, int(cc_val)))
-                        events.append((on_tick, "pitchwheel", bend, 0))
+                        custom_bend = int(cc_val)
+                        has_custom_bend = True
+
+            total_bend = max(-8192, min(8191, bend_value + custom_bend))
+            if bend_value != 0 or has_custom_bend:
+                events.append((on_tick, "pitchwheel", total_bend, 0))
+                events.append((off_tick, "pitchwheel_reset", 0, 0))
 
             # Advanced humanized CC11 (Expression) and CC1 (Modulation) for long notes
             if humanize and duration > 1.5:
@@ -524,9 +550,15 @@ def export_multitrack_midi(
                 tick = round(max(0.0, beat) * tpb)
                 events.append((tick, "control_change", cc_num, max(0, min(127, cc_val))))
 
-        # Sort: control_change before note_off before note_on at same tick; pitchwheel before note_on
-        type_order = {"pitchwheel": 0, "control_change": 1, "note_off": 2, "note_on": 3}
-        events.sort(key=lambda e: (e[0], type_order.get(e[1], 4)))
+        # Sort using type_order to prevent note start/end artifacts and tail-bend issues
+        type_order = {
+            "note_off": 0,
+            "pitchwheel_reset": 1,
+            "pitchwheel": 2,
+            "control_change": 3,
+            "note_on": 4,
+        }
+        events.sort(key=lambda e: (e[0], type_order.get(e[1], 5)))
 
         prev_tick = 0
         for tick, msg_type, data1, data2 in events:
@@ -541,7 +573,7 @@ def export_multitrack_midi(
                         channel=channel,
                     )
                 )
-            elif msg_type == "pitchwheel":
+            elif msg_type in ("pitchwheel", "pitchwheel_reset"):
                 tr.append(mido.Message("pitchwheel", pitch=int(data1), time=delta, channel=channel))
             else:
                 tr.append(
@@ -745,18 +777,31 @@ def export_midi(
             on_tick = round(onset * tpb)
             off_tick = round((onset + duration) * tpb)
 
+            # Round the note's pitch to the nearest semitone
+            rounded_pitch = int(round(n.pitch))
+            deviation = n.pitch - rounded_pitch
+            bend_value = int(deviation * (8192.0 / t.pitch_bend_range))
+
+            events.append((on_tick, "note_on", rounded_pitch, n.velocity))
+            events.append((off_tick, "note_off", rounded_pitch, 0))
+
             has_cc11 = False
+            custom_bend = 0
+            has_custom_bend = False
             # Emit Expression (CC) data
             for cc_num, cc_val in n.expression.items():
                 if cc_num == 11:
                     has_cc11 = True
                 if cc_num == "pitch_bend":
-                    events.append((on_tick, "pitchwheel", cc_val, 0))  # val2 ignored for pitchwheel
+                    custom_bend = int(cc_val)
+                    has_custom_bend = True
                 else:
                     events.append((on_tick, "control_change", cc_num, cc_val))
 
-            events.append((on_tick, "note_on", n.pitch, n.velocity))
-            events.append((off_tick, "note_off", n.pitch, 0))
+            total_bend = max(-8192, min(8191, bend_value + custom_bend))
+            if bend_value != 0 or has_custom_bend:
+                events.append((on_tick, "pitchwheel", total_bend, 0))
+                events.append((off_tick, "pitchwheel_reset", 0, 0))
 
             # Auto CC11 for long notes
             if humanize and duration > 1.5 and not has_cc11:
@@ -767,15 +812,21 @@ def export_midi(
                     val = 60 + int(math.sin(phase) * 60)
                     events.append((round(t_beat * tpb), "control_change", 11, val))
 
-        events.sort(key=lambda e: (e[0], 0 if e[1] == "note_off" else 1))
-
         # Keyswitch events: 1-tick note_on/note_off at the specified beat positions
         for ks_beat, ks_pitch in t.keyswitch_events:
             ks_tick = round(ks_beat * tpb)
             events.append((ks_tick, "note_on", ks_pitch, 64))
             events.append((ks_tick + 1, "note_off", ks_pitch, 0))
-        # Re-sort after adding keyswitches
-        events.sort(key=lambda e: (e[0], 0 if e[1] == "note_off" else 1))
+
+        # Sort using type_order to prevent note start/end artifacts and tail-bend issues
+        type_order = {
+            "note_off": 0,
+            "pitchwheel_reset": 1,
+            "pitchwheel": 2,
+            "control_change": 3,
+            "note_on": 4,
+        }
+        events.sort(key=lambda e: (e[0], type_order.get(e[1], 5)))
 
         prev_tick = 0
         for tick, msg_type, val1, val2 in events:
@@ -790,7 +841,7 @@ def export_midi(
                         channel=t.channel,
                     )
                 )
-            elif msg_type == "pitchwheel":
+            elif msg_type in ("pitchwheel", "pitchwheel_reset"):
                 tr.append(
                     mido.Message("pitchwheel", pitch=int(val1), time=delta, channel=t.channel)
                 )

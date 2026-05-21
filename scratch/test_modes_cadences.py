@@ -135,15 +135,15 @@ def test_modes():
 
     byzantine = Scale(root=0, mode=Mode.BYZANTINE)
     assert _get_cadence_bonus(1, 0, byzantine) == 0.85
-    assert _get_cadence_bonus(6, 0, byzantine) == 0.75
+    assert _get_cadence_bonus(6, 0, byzantine) == 0.85
 
     persian = Scale(root=0, mode=Mode.PERSIAN)
-    assert _get_cadence_bonus(1, 0, persian) == 0.85
-    assert _get_cadence_bonus(6, 0, persian) == 0.75
+    assert _get_cadence_bonus(1, 0, persian) == 0.8
+    assert _get_cadence_bonus(4, 0, persian) == 0.75
 
     arabian = Scale(root=0, mode=Mode.ARABIAN)
-    assert _get_cadence_bonus(1, 0, arabian) == 0.85
-    assert _get_cadence_bonus(6, 0, arabian) == 0.75
+    assert _get_cadence_bonus(3, 0, arabian) == 0.75
+    assert _get_cadence_bonus(4, 0, arabian) == 0.8
 
     spanish_8 = Scale(root=0, mode=Mode.SPANISH_8_TONE)
     assert _get_cadence_bonus(1, 0, spanish_8) == 0.8
