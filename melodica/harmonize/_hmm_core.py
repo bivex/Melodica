@@ -819,8 +819,10 @@ class HMM4Harmonizer:
         # Beams: (score, [chord_indices])
         beams = []
         for s in range(n_cat):
-            score = self._score_emission(0, s, obs, catalog, change_points, melody, scale)
-            beams.append((score, [s]))
+            emit = self._score_emission(0, s, obs, catalog, change_points, melody, scale)
+            # Phrase start bonus: strongly prefer Tonic (degree 1)
+            start_bonus = 1.0 if catalog[s][2] == 1 else 0.0
+            beams.append((emit + start_bonus, [s]))
         beams.sort(key=lambda x: -x[0])
         beams = beams[:self.beam_width]
 
@@ -839,6 +841,9 @@ class HMM4Harmonizer:
         # 4. Steps 2..T-1 (Full 2nd order)
         for t in range(2, T):
             new_beams = []
+            is_last = (t == T - 1)
+            is_penultimate = (t == T - 2)
+            
             for score, path in beams:
                 prev_prev = path[-2]
                 prev = path[-1]
@@ -847,13 +852,22 @@ class HMM4Harmonizer:
                     # 2nd order transition: (p2, p1) -> current
                     trans = self._score_transition_2nd(prev_prev, prev, s, catalog, style_mat, scale)
                     
+                    # Boundary Bonuses
+                    boundary_bonus = 0.0
+                    # Phrase end: strongly prefer Tonic (degree 1)
+                    if is_last and catalog[s][2] == 1:
+                        boundary_bonus += 2.5
+                    # Penultimate: strongly prefer Dominant (degree 5) to set up V-I
+                    if is_penultimate and catalog[s][2] == 5:
+                        boundary_bonus += 1.5
+                    
                     # Motif/Repetition check
                     rep = self.repetition_penalty if s == prev else 0.0
                     if s == prev_prev: rep += self.repetition_penalty * 0.5
                     
-                    new_beams.append((score + emit + trans - rep, path + [s]))
+                    new_beams.append((score + emit + trans + boundary_bonus - rep, path + [s]))
             new_beams.sort(key=lambda x: -x[0])
-            beams = new_beams[:self.beam_width]
+            beams = new_beams[: self.beam_width]
 
         # 5. Result
         best_path = beams[0][1]
@@ -895,18 +909,28 @@ class HMM4Harmonizer:
         deg_p1 = catalog[p1][2]
         deg_c  = catalog[c][2]
         
-        # 2nd Order Logic: ii-V-I awareness
-        # Check for standard cadential patterns (Trigrams)
+        # 2nd Order Logic: Functional attraction
         score = 0.1
-        if deg_p2 == 2 and deg_p1 == 5 and deg_c == 1: score = 0.9
-        elif deg_p2 == 4 and deg_p1 == 5 and deg_c == 1: score = 0.85
-        elif deg_p2 == 6 and deg_p1 == 2 and deg_c == 5: score = 0.8
-        elif deg_p2 == 1 and deg_p1 == 4 and deg_c == 5: score = 0.75
-        else:
-            prob1 = style_mat.get(deg_p1-1 if deg_p1 > 0 else -1, {}).get(deg_c-1 if deg_c > 0 else -1, 0.1)
-            score = prob1
-            
-        return score * self.transition_weight
+        
+        # Check for standard cadential patterns (Trigrams)
+        # ii -> V -> I (2 -> 5 -> 1)
+        if deg_p2 == 2 and deg_p1 == 5 and deg_c == 1: score = 2.0
+        # IV -> V -> I (4 -> 5 -> 1)
+        elif deg_p2 == 4 and deg_p1 == 5 and deg_c == 1: score = 1.8
+        # V -> V -> I (5 -> 5 -> 1) - Strong resolution
+        elif deg_p1 == 5 and deg_c == 1: score = 1.5
+        # vi -> ii -> V (6 -> 2 -> 5)
+        elif deg_p2 == 6 and deg_p1 == 2 and deg_c == 5: score = 1.2
+        # I -> IV -> V (1 -> 4 -> 5)
+        elif deg_p2 == 1 and deg_p1 == 4 and deg_c == 5: score = 1.0
+        
+        # General Tonic resolution bonus
+        if deg_c == 1 and deg_p1 != 1:
+            score += 0.5
+        
+        # Fallback to style matrix
+        prob1 = style_mat.get(deg_p1-1 if deg_p1 > 0 else -1, {}).get(deg_c-1 if deg_c > 0 else -1, 0.1)
+        return (score + prob1) * self.transition_weight
 
     def _build_catalog(self, chords_def, scale):
         return HMM3Harmonizer()._build_catalog(chords_def, scale)
