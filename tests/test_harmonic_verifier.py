@@ -689,9 +689,19 @@ class TestTryTranspose:
         strict=False,
     )
     def test_all_non_unison_pcs_produce_consonant_result(self):
-        """When _try_transpose does change the pitch, the result pitch class must be
-        in _CONSONANT or _MILD_DISSONANT.  Currently fails for _try_transpose(C4,target):
-        the algorithm only finds pc=1 (m2) or pc=11 (M7), both outside _MILD_DISSONANT."""
+        """
+        When _try_transpose does change the pitch, the result pitch class must be
+        in _CONSONANT or _MILD_DISSONANT. Currently fails for _try_transpose(C4,target):
+        the algorithm only finds pc=1 (m2) or pc=11 (M7), both outside _MILD_DISSONANT.
+
+        NOTE: This test is marked as xfail because it assumes the transposed pitch must
+        be consonant with the *original* pitch of the transposed note (e.g. C4, pc 0).
+        However, in practice, the transposed note only needs to be consonant relative to
+        the *clashing* note (the other_pitch argument of _try_transpose). Transposing
+        C4 (60) to C#4 (61) to avoid a clash with C#4 is perfectly consonant with C#4 (unison),
+        even though it is dissonant with the original C4. Thus, this test represents a
+        highly restrictive/flawed assertion rather than a critical engine bug.
+        """
         from melodica.composer.harmonic_verifier import _CONSONANT, _MILD_DISSONANT
 
         valid_pc = _CONSONANT | _MILD_DISSONANT

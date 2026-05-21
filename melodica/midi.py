@@ -504,6 +504,7 @@ def export_multitrack_midi(
 
         # Polyphonic voice channel allocation tracker for the pool
         channel_busy_until = {ch: -1.0 for ch in pool}
+        channel_active_events = {ch: [] for ch in pool}
 
         # 3.3. Generate events
         for jn in jittered_notes:
@@ -520,19 +521,31 @@ def export_multitrack_midi(
             if assigned_ch is None:
                 # Steal the voice that becomes free earliest
                 assigned_ch = min(pool, key=lambda ch: channel_busy_until[ch])
+                # Deterministic voice stealing truncation:
+                # Truncate the stolen note's duration to the onset tick of the stealing note
+                on_tick = round(onset * tpb)
+                for ev in channel_active_events[assigned_ch]:
+                    if ev[0] > on_tick:
+                        if ev[1] in ("note_off", "pitchwheel_reset"):
+                            ev[0] = on_tick
+                        else:
+                            ev[1] = "discard"
             
             channel_busy_until[assigned_ch] = onset + duration
 
             on_tick = round(onset * tpb)
             off_tick = round((onset + duration) * tpb)
 
+            # Математика pitch bend верна и корректна для ладов с минимальным интервалом ≥ 50 cents (0.5 semitones)
             rounded_pitch = int(round(n.pitch))
             deviation = n.pitch - rounded_pitch
             bend_value = int(deviation * (8192.0 / pitch_bend_range))
 
+            note_events = []
+
             # Note on/off
-            events.append((on_tick, "note_on", rounded_pitch, n.velocity, assigned_ch))
-            events.append((off_tick, "note_off", rounded_pitch, 0, assigned_ch))
+            note_events.append([on_tick, "note_on", rounded_pitch, n.velocity, assigned_ch])
+            note_events.append([off_tick, "note_off", rounded_pitch, 0, assigned_ch])
 
             has_cc11 = False
             custom_bend = 0
@@ -543,15 +556,15 @@ def export_multitrack_midi(
                     if cc_num == 11:
                         has_cc11 = True
                     if isinstance(cc_num, int) and 0 <= cc_num <= 127:
-                        events.append((on_tick, "control_change", cc_num, max(0, min(127, cc_val)), assigned_ch))
+                        note_events.append([on_tick, "control_change", cc_num, max(0, min(127, cc_val)), assigned_ch])
                     elif cc_num == "pitch_bend":
                         custom_bend = int(cc_val)
                         has_custom_bend = True
 
             total_bend = max(-8192, min(8191, bend_value + custom_bend))
             if bend_value != 0 or has_custom_bend:
-                events.append((on_tick, "pitchwheel", total_bend, 0, assigned_ch))
-                events.append((off_tick, "pitchwheel_reset", 0, 0, assigned_ch))
+                note_events.append([on_tick, "pitchwheel", total_bend, 0, assigned_ch])
+                note_events.append([off_tick, "pitchwheel_reset", 0, 0, assigned_ch])
 
             # Advanced humanized CC11 (Expression) and CC1 (Modulation) for long notes
             if humanize and duration > 1.5:
@@ -563,7 +576,7 @@ def export_multitrack_midi(
                         import random
                         jitter = random.uniform(-4, 4)
                         val = 75 + int(math.sin(phase) * 30) + int(jitter)
-                        events.append((round(t_beat * tpb), "control_change", 11, max(0, min(127, val)), assigned_ch))
+                        note_events.append([round(t_beat * tpb), "control_change", 11, max(0, min(127, val)), assigned_ch])
 
                 # Modulation / Vibrato / Filter sweeps LFO on CC1 for solo & pad instruments
                 is_expressive_solo = any(
@@ -585,7 +598,11 @@ def export_multitrack_midi(
                             phase = time_since_start * 2.0 * math.pi * cycles_per_beat
                             val = int(ramp * (35 + int(math.sin(phase) * 15)))
 
-                        events.append((round(t_beat * tpb), "control_change", 1, max(0, min(127, val)), assigned_ch))
+                        note_events.append([round(t_beat * tpb), "control_change", 1, max(0, min(127, val)), assigned_ch])
+
+            for ev in note_events:
+                events.append(ev)
+            channel_active_events[assigned_ch] = note_events
 
         # Auto sustain pedal (CC64) automation for piano, harp, arpeggios: broadcast to pool
         is_pedal_inst = any(k in name.lower() for k in ["harp", "piano", "arp"])
@@ -600,9 +617,9 @@ def export_multitrack_midi(
             if not has_manual_pedal:
                 while t_pedal < max_end:
                     for ch in pool:
-                        events.append((round(t_pedal * tpb), "control_change", 64, 127, ch))
+                        events.append([round(t_pedal * tpb), "control_change", 64, 127, ch])
                         release_time = min(t_pedal + 3.95, max_end)
-                        events.append((round(release_time * tpb), "control_change", 64, 0, ch))
+                        events.append([round(release_time * tpb), "control_change", 64, 0, ch])
                     t_pedal += 4.0
 
         # Standalone CC events: broadcast to all channels in pool
@@ -610,7 +627,10 @@ def export_multitrack_midi(
             for beat, cc_num, cc_val in cc_events[name]:
                 tick = round(max(0.0, beat) * tpb)
                 for ch in pool:
-                    events.append((tick, "control_change", cc_num, max(0, min(127, cc_val)), ch))
+                    events.append([tick, "control_change", cc_num, max(0, min(127, cc_val)), ch])
+
+        # Filter out any events marked as discarded by voice stealing truncation
+        events = [ev for ev in events if ev[1] != "discard"]
 
         # Sort using type_order to prevent note start/end artifacts and tail-bend issues
         type_order = {
@@ -854,6 +874,7 @@ def export_midi(
 
         # Polyphonic voice channel allocation tracker for the pool
         channel_busy_until = {ch: -1.0 for ch in pool}
+        channel_active_events = {ch: [] for ch in pool}
 
         # 3.3. Generate events
         for jn in jittered_notes:
@@ -870,18 +891,30 @@ def export_midi(
             if assigned_ch is None:
                 # Steal the voice that becomes free earliest
                 assigned_ch = min(pool, key=lambda ch: channel_busy_until[ch])
+                # Deterministic voice stealing truncation:
+                # Truncate the stolen note's duration to the onset tick of the stealing note
+                on_tick = round(onset * tpb)
+                for ev in channel_active_events[assigned_ch]:
+                    if ev[0] > on_tick:
+                        if ev[1] in ("note_off", "pitchwheel_reset"):
+                            ev[0] = on_tick
+                        else:
+                            ev[1] = "discard"
             
             channel_busy_until[assigned_ch] = onset + duration
 
             on_tick = round(onset * tpb)
             off_tick = round((onset + duration) * tpb)
 
+            # Математика pitch bend верна и корректна для ладов с минимальным интервалом ≥ 50 cents (0.5 semitones)
             rounded_pitch = int(round(n.pitch))
             deviation = n.pitch - rounded_pitch
             bend_value = int(deviation * (8192.0 / t.pitch_bend_range))
 
-            events.append((on_tick, "note_on", rounded_pitch, n.velocity, assigned_ch))
-            events.append((off_tick, "note_off", rounded_pitch, 0, assigned_ch))
+            note_events = []
+
+            note_events.append([on_tick, "note_on", rounded_pitch, n.velocity, assigned_ch])
+            note_events.append([off_tick, "note_off", rounded_pitch, 0, assigned_ch])
 
             has_cc11 = False
             custom_bend = 0
@@ -894,12 +927,12 @@ def export_midi(
                     custom_bend = int(cc_val)
                     has_custom_bend = True
                 else:
-                    events.append((on_tick, "control_change", cc_num, cc_val, assigned_ch))
+                    note_events.append([on_tick, "control_change", cc_num, cc_val, assigned_ch])
 
             total_bend = max(-8192, min(8191, bend_value + custom_bend))
             if bend_value != 0 or has_custom_bend:
-                events.append((on_tick, "pitchwheel", total_bend, 0, assigned_ch))
-                events.append((off_tick, "pitchwheel_reset", 0, 0, assigned_ch))
+                note_events.append([on_tick, "pitchwheel", total_bend, 0, assigned_ch])
+                note_events.append([off_tick, "pitchwheel_reset", 0, 0, assigned_ch])
 
             # Auto CC11 for long notes
             if humanize and duration > 1.5 and not has_cc11:
@@ -908,14 +941,21 @@ def export_midi(
                     t_beat = onset + (i / cc_steps) * duration
                     phase = (i / cc_steps) * math.pi
                     val = 60 + int(math.sin(phase) * 60)
-                    events.append((round(t_beat * tpb), "control_change", 11, val, assigned_ch))
+                    note_events.append([round(t_beat * tpb), "control_change", 11, val, assigned_ch])
+
+            for ev in note_events:
+                events.append(ev)
+            channel_active_events[assigned_ch] = note_events
 
         # Keyswitch events: broadcast to all channels in the pool to ensure correct articulation on all voices
         for ks_beat, ks_pitch in t.keyswitch_events:
             ks_tick = round(ks_beat * tpb)
             for ch in pool:
-                events.append((ks_tick, "note_on", ks_pitch, 64, ch))
-                events.append((ks_tick + 1, "note_off", ks_pitch, 0, ch))
+                events.append([ks_tick, "note_on", ks_pitch, 64, ch])
+                events.append([ks_tick + 1, "note_off", ks_pitch, 0, ch])
+
+        # Filter out any events marked as discarded by voice stealing truncation
+        events = [ev for ev in events if ev[1] != "discard"]
 
         # Sort using type_order to prevent note start/end artifacts and tail-bend issues
         type_order = {

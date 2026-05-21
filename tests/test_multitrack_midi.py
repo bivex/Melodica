@@ -286,3 +286,37 @@ class TestExportMidi:
                     ks_pitches.add(msg.note)
         assert 36 in ks_pitches
         assert 37 in ks_pitches
+
+    def test_voice_stealing_truncation(self, tmp_path):
+        path = tmp_path / "voice_stealing_test.mid"
+        notes = [
+            NoteInfo(pitch=60.1, start=0.0, duration=4.0, velocity=80),
+            NoteInfo(pitch=62.1, start=1.0, duration=4.0, velocity=80),
+            NoteInfo(pitch=64.1, start=2.0, duration=4.0, velocity=80),
+            NoteInfo(pitch=66.1, start=3.0, duration=4.0, velocity=80),
+        ]
+        
+        export_multitrack_midi({"MicroTrack": notes}, path, humanize=False)
+        assert path.exists()
+
+        mid = mido.MidiFile(filename=str(path))
+        micro_track = None
+        for track in mid.tracks:
+            for msg in track:
+                if msg.type == "track_name" and msg.name == "MicroTrack":
+                    micro_track = track
+                    break
+        
+        assert micro_track is not None
+        
+        note_offs = []
+        current_tick = 0
+        for msg in micro_track:
+            current_tick += msg.time
+            if msg.type == "note_off":
+                note_offs.append((msg.note, current_tick))
+                
+        note_offs_dict = dict(note_offs)
+        assert 60 in note_offs_dict
+        # 3 beats * 480 ticks/beat = 1440
+        assert note_offs_dict[60] == 1440

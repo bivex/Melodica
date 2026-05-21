@@ -85,6 +85,19 @@ class TestScale:
         chord = s.diatonic_chord(7)
         assert chord.quality == Quality.DIMINISHED
 
+    def test_scale_min_interval_validation(self):
+        from melodica.theory.exotic_database import EXOTIC_SCALE_DATABASE
+        EXOTIC_SCALE_DATABASE["microtonal_clash"] = [0.0, 0.3, 1.0, 2.0]
+        try:
+            with pytest.raises(AssertionError):
+                Scale(root=0, mode="microtonal_clash")
+        finally:
+            EXOTIC_SCALE_DATABASE.pop("microtonal_clash", None)
+
+    def test_scale_partch_bypass_validation(self):
+        s = Scale(root=0, mode="partch_43_tone")
+        assert len(s.intervals()) == 41
+
 
 # ---------------------------------------------------------------------------
 # ChordLabel

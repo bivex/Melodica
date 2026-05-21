@@ -70,6 +70,20 @@ class Scale:
     def __post_init__(self) -> None:
         if not (0 <= self.root <= 11):
             raise ValueError(f"root must be 0–11, got {self.root}")
+        
+        # Validation for non-Partch scale steps >= 50 cents (0.5 semitones)
+        mode_str = self.mode.value if hasattr(self.mode, "value") else str(self.mode)
+        if "partch" not in mode_str.lower():
+            ivs = self.intervals()
+            if ivs and len(ivs) > 1:
+                # Calculate steps between adjacent intervals
+                steps = [ivs[i] - ivs[i-1] for i in range(1, len(ivs))]
+                # Also include wrapping around the octave
+                steps.append(12.0 - ivs[-1])
+                assert min(steps) >= 0.5, (
+                    f"Scale {mode_str} has step interval < 0.5 semitones (50 cents), "
+                    f"which is unsupported for standard pitch bend calculations."
+                )
 
     def intervals(self) -> list[float]:
         """Raw intervals above root (now supporting floats for microtonality)."""

@@ -85,6 +85,15 @@ chords = harmonize(melody)
 chords_to_midi(chords, "chords.mid", voicing="open")
 ```
 
+### Channel Pool Isolation (MIDI Track Isolation)
+
+To prevent pitch bend cross-talk in multitrack MIDI files (since standard MIDI pitch bend affects the entire channel rather than individual notes), Melodica isolates channel pools:
+- **Disjoint Pools**: Every track gets a disjoint pool of 3 MIDI channels (e.g., Track 1 gets `[0, 1, 2]`, Track 2 gets `[3, 4, 5]`, etc.).
+- **Drums Protection**: Channel 9 (the 10th channel) is reserved exclusively for drums and is bypassed by tonal instruments.
+- **Cross-Talk Elimination**: Microtonal pitch bends applied to notes on one track are kept strictly within that track's isolated channels and will never affect other tracks.
+
+
+
 ## Generators & Idea Tool
 
 ```python

@@ -389,6 +389,122 @@ class TestModalProgressionIntegration:
         assert has_i, "Lydian progression should contain the tonic I chord"
         assert has_modal, "Lydian progression should contain a characteristic Lydian chord (II, IV, or VII)"
 
+    def test_byzantine_persian_cadence_hmm3(self):
+        """
+        Verify that HMM3Harmonizer harmonizing a Byzantine melody (with augmented seconds)
+        produces valid chords and resolves properly.
+        """
+        melody = [
+            NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80),  # C
+            NoteInfo(pitch=61, start=1.0, duration=1.0, velocity=80),  # Db
+            NoteInfo(pitch=64, start=2.0, duration=1.0, velocity=80),  # E
+            NoteInfo(pitch=65, start=3.0, duration=1.0, velocity=80),  # F
+            NoteInfo(pitch=67, start=4.0, duration=1.0, velocity=80),  # G
+            NoteInfo(pitch=68, start=5.0, duration=1.0, velocity=80),  # Ab
+            NoteInfo(pitch=71, start=6.0, duration=1.0, velocity=80),  # B
+            NoteInfo(pitch=72, start=7.0, duration=1.0, velocity=80),  # C
+        ]
+        key = Scale(root=0, mode=Mode.BYZANTINE)
+
+        h = HMM3Harmonizer(chord_change="bars")
+        chords = h.harmonize(melody, key, 8.0)
+
+        assert len(chords) > 0
+        has_i = any(c.degree == 1 for c in chords)
+        assert has_i, "Byzantine progression should contain the tonic I chord"
+
+    def test_hirojoshi_pentatonic_cadence_hmm3(self):
+        """
+        Verify that HMM3Harmonizer harmonizing a pentatonic Hirojoshi melody (with fewer chord options)
+        successfully generates a progression containing the tonic.
+        """
+        melody = [
+            NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80),  # C
+            NoteInfo(pitch=62, start=1.0, duration=1.0, velocity=80),  # D
+            NoteInfo(pitch=63, start=2.0, duration=1.0, velocity=80),  # Eb
+            NoteInfo(pitch=67, start=3.0, duration=1.0, velocity=80),  # G
+            NoteInfo(pitch=68, start=4.0, duration=1.0, velocity=80),  # Ab
+            NoteInfo(pitch=67, start=5.0, duration=1.0, velocity=80),  # G
+            NoteInfo(pitch=60, start=6.0, duration=2.0, velocity=80),  # C
+        ]
+        key = Scale(root=0, mode=Mode.HIROJOSHI)
+
+        h = HMM3Harmonizer(chord_change="bars")
+        chords = h.harmonize(melody, key, 8.0)
+
+        assert len(chords) > 0
+        has_i = any(c.degree == 1 for c in chords)
+        assert has_i, "Hirojoshi progression should contain the tonic chord"
+
+    def test_whole_tone_symmetric_cadence_hmm3(self):
+        """
+        Verify that HMM3Harmonizer harmonizing a symmetric Whole Tone melody
+        successfully generates chords and resolves.
+        """
+        melody = [
+            NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80),  # C
+            NoteInfo(pitch=62, start=1.0, duration=1.0, velocity=80),  # D
+            NoteInfo(pitch=64, start=2.0, duration=1.0, velocity=80),  # E
+            NoteInfo(pitch=66, start=3.0, duration=1.0, velocity=80),  # F#
+            NoteInfo(pitch=68, start=4.0, duration=1.0, velocity=80),  # G#
+            NoteInfo(pitch=70, start=5.0, duration=1.0, velocity=80),  # Bb
+            NoteInfo(pitch=60, start=6.0, duration=2.0, velocity=80),  # C
+        ]
+        key = Scale(root=0, mode=Mode.WHOLE_TONE)
+
+        h = HMM3Harmonizer(chord_change="bars")
+        chords = h.harmonize(melody, key, 8.0)
+
+        assert len(chords) > 0
+        has_i = any(c.degree == 1 for c in chords)
+        assert has_i, "Whole Tone progression should contain the tonic chord"
+
+    def test_arabic_sikah_microtonal_cadence_hmm3(self, tmp_path):
+        """
+        Verify that HMM3Harmonizer harmonizing an Arabic Sikah melody (which is microtonal)
+        produces valid chords, and when exported via export_multitrack_midi,
+        generates the correct pitch bend messages for the microtonal notes.
+        """
+        melody = [
+            NoteInfo(pitch=60.0, start=0.0, duration=1.0, velocity=80),   # C
+            NoteInfo(pitch=61.5, start=1.0, duration=1.0, velocity=80),   # Dd
+            NoteInfo(pitch=63.5, start=2.0, duration=1.0, velocity=80),   # Ed
+            NoteInfo(pitch=65.0, start=3.0, duration=1.0, velocity=80),   # F
+            NoteInfo(pitch=67.0, start=4.0, duration=1.0, velocity=80),   # G
+            NoteInfo(pitch=68.5, start=5.0, duration=1.0, velocity=80),   # Ad
+            NoteInfo(pitch=70.5, start=6.0, duration=1.0, velocity=80),   # Bd
+            NoteInfo(pitch=72.0, start=7.0, duration=1.0, velocity=80),   # C
+        ]
+        key = Scale(root=0, mode=Mode.ARABIC_SIKAH)
+
+        h = HMM3Harmonizer(chord_change="bars")
+        chords = h.harmonize(melody, key, 8.0)
+
+        assert len(chords) > 0
+        has_i = any(c.degree == 1 for c in chords)
+        assert has_i, "Arabic Sikah progression should contain the tonic chord"
+
+        from melodica.midi import export_multitrack_midi
+        import mido
+
+        path = tmp_path / "arabic_sikah.mid"
+        export_multitrack_midi(
+            tracks_data={"Melody": melody},
+            path=path,
+            bpm=120,
+            key=key,
+        )
+        assert path.exists()
+
+        mid = mido.MidiFile(filename=str(path))
+        pitchwheel_msgs = []
+        for track in mid.tracks:
+            for msg in track:
+                if msg.type == "pitchwheel":
+                    pitchwheel_msgs.append(msg.pitch)
+        
+        assert any(p != 0 for p in pitchwheel_msgs), "Exported microtonal MIDI should contain non-zero pitch bend messages"
+
 
 class TestGeneticHarmonizer:
     def test_produces_chords(self):
