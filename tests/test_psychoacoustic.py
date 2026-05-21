@@ -190,7 +190,7 @@ class TestPsychoVerify:
     def test_no_issues_no_changes(self):
         tracks = {
             "melody": [_note(72, 0.0, 2.0, 80)],
-            "bass": [_note(36, 0.0, 2.0, 80)],
+            "bass": [_note(40, 0.0, 2.0, 80)], # 40 vs 72 is an interval of 32 (8 semitones, not an octave or fifth)
         }
         result, report = psycho_verify(tracks)
         assert report.issues_detected == 0
