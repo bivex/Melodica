@@ -409,3 +409,4 @@ output/shorts_mids/*.wav
 output/**/*.mid
 output/**/*.wav
 output/**/*.mp3
+/.antigravitycli
