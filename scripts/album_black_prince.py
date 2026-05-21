@@ -253,16 +253,17 @@ def produce_coronation():
     
     chords = [types.ChordLabel(root=4, quality=types.Quality.MINOR, start=float(i*bpc), duration=bpc) for i in range(int(dur/bpc))]
 
-    # Organ Intro Riff
+    # Organ: mid-register (48-67) — below lead, above bass
     organ_riff = MelodyGenerator(
         GeneratorParams(density=0.7, complexity=0.9, velocity_range=(90, 115)),
-        phrase_length=bpc, note_range_low=40, note_range_high=64,
+        phrase_length=bpc, note_range_low=48, note_range_high=67,
         syncopation=0.4
     ).render(chords, KEY, dur)
 
-    # Heavy Guitar Chords
+    # Guitar: lower-mid (36-55) — below organ, above bass
     guitar = ArpeggiatorGenerator(
-        GeneratorParams(density=0.4, velocity_range=(100, 120)),
+        GeneratorParams(density=0.4, velocity_range=(100, 120),
+                        key_range_low=36, key_range_high=55),
         pattern="power", note_duration=0.5
     ).render(chords, KEY, dur)
 
@@ -302,22 +303,23 @@ def produce_alchemy():
     dur = 160.0
     chords = [types.ChordLabel(root=4, quality=types.Quality.MINOR, start=0, duration=dur)]
 
-    # Polyrhythmic Synth (3 against 4)
+    # Polyrhythmic Synth: mid-high (60-79)
     synth_poly = ArpeggiatorGenerator(
-        GeneratorParams(density=0.6, velocity_range=(60, 85)),
-        pattern="up_down", note_duration=0.333 # Triplet feel
+        GeneratorParams(density=0.6, velocity_range=(60, 85),
+                        key_range_low=60, key_range_high=79),
+        pattern="up_down", note_duration=0.333
     ).render(chords, KEY, dur)
 
-    # Heavy Slow Guitar Riff
+    # Guitar: lower-mid (36-55)
     guitar_riff = MelodyGenerator(
         GeneratorParams(density=0.3, complexity=0.6, velocity_range=(95, 120)),
-        phrase_length=4.0, note_range_low=40, note_range_high=55
+        phrase_length=4.0, note_range_low=36, note_range_high=55
     ).render(chords, KEY, dur)
 
-    # Melodic Bass
+    # Bass: low register (28-43)
     bass = MelodyGenerator(
         GeneratorParams(density=0.45, complexity=0.7),
-        note_range_low=28, note_range_high=45
+        note_range_low=28, note_range_high=43
     ).render(chords, KEY, dur)
 
     tracks = {"lead": synth_poly, "guitar_l": guitar_riff, "bass": bass}
@@ -334,22 +336,24 @@ def produce_throne():
     dur = 196.0
     chords = [types.ChordLabel(root=4, quality=types.Quality.MINOR, start=float(i*bpc), duration=bpc) for i in range(int(dur/bpc))]
 
-    # Complex Arpeggio across keys and guitar
+    # Keys: mid-register (53-72)
     keys_arp = ArpeggiatorGenerator(
-        GeneratorParams(density=0.7, velocity_range=(75, 100)),
+        GeneratorParams(density=0.7, velocity_range=(75, 100),
+                        key_range_low=53, key_range_high=72),
         pattern="converge", note_duration=0.25
     ).render(chords, KEY, dur)
 
-    # Guitar response
+    # Guitar: lower-mid (40-58)
     guitar_arp = ArpeggiatorGenerator(
-        GeneratorParams(density=0.55, velocity_range=(85, 110)),
+        GeneratorParams(density=0.55, velocity_range=(85, 110),
+                        key_range_low=40, key_range_high=58),
         pattern="diverge", note_duration=0.5
     ).render(chords, KEY, dur)
 
-    # Bass Solo section (beat 112)
+    # Bass Solo: low register (28-48) — below guitar
     bass_solo = MelodyGenerator(
         GeneratorParams(density=0.75, complexity=1.0, velocity_range=(100, 127)),
-        note_range_low=33, note_range_high=57
+        note_range_low=28, note_range_high=48
     ).render(chords[16:20], KEY, 28.0)
 
     tracks = {"organ": keys_arp, "guitar_r": guitar_arp, "bass": _off(bass_solo, 112.0)}
@@ -366,21 +370,21 @@ def produce_eclipse():
     dur = 150.0
     chords = [types.ChordLabel(root=4, quality=types.Quality.MINOR, start=0, duration=dur)]
 
-    # Melancholic Lead
+    # Melancholic Lead: high (64-81)
     lead = MelodyGenerator(
         GeneratorParams(density=0.15, complexity=0.5),
         phrase_length=10.0, note_range_low=64, note_range_high=81,
         ornament_probability=0.2
     ).render(chords, KEY, dur)
 
-    # Explosive Metal Section (middle)
+    # Metal Guitar: mid (36-58)
     metal_dur = 40.0
     metal_start = 60.0
     c_metal = [types.ChordLabel(root=4, quality=types.Quality.MINOR, start=0, duration=metal_dur)]
-    
+
     guitar_metal = MelodyGenerator(
         GeneratorParams(density=0.8, velocity_range=(110, 127)),
-        phrase_length=5.0, note_range_low=40, note_range_high=64
+        phrase_length=5.0, note_range_low=36, note_range_high=58
     ).render(c_metal, KEY, metal_dur)
 
     tracks = {"lead": lead, "guitar_l": _off(guitar_metal, metal_start)}
@@ -404,14 +408,16 @@ def produce_final():
         c.duration = 4.0
         chords.append(c)
 
-    # Wall of Sound Organ (reduced density to avoid 960-note clutter)
+    # Organ: mid-register (48-67), longer notes to reduce note count
     organ = ArpeggiatorGenerator(
-        GeneratorParams(density=0.55, velocity_range=(100, 125)),
-        pattern="chord", note_duration=1.0
+        GeneratorParams(density=0.35, velocity_range=(100, 125),
+                        key_range_low=48, key_range_high=67),
+        pattern="chord", note_duration=2.0
     ).render(chords, KEY, dur)
 
-    # Dual Guitar Attack (Harmony)
-    g_gen = MelodyGenerator(GeneratorParams(density=0.6, complexity=0.8))
+    # Dual Guitar: lower-mid (36-55)
+    g_gen = MelodyGenerator(GeneratorParams(density=0.6, complexity=0.8,
+                                            key_range_low=36, key_range_high=55))
     g1 = g_gen.render(chords, KEY, dur)
     g2 = [types.NoteInfo(n.pitch + 7, n.start, n.duration, n.velocity) for n in g1] # 5th harmony
     # Re-snap g2
