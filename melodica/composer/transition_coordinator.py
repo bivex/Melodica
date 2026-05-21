@@ -107,28 +107,46 @@ class TransitionCoordinator:
         start_beat: float,
     ) -> None:
         """
-        Overwrites or appends a percussive roll or melodic lead-in run to the target track
-        starting at the transition boundary.
-        Any existing notes in the target track starting after start_beat are replaced
-        by the fill_notes.
+        Overwrites a window in the target track with fill_notes.
+        
+        The fill_notes should be relative to 0.0, and they will be 
+        placed starting at start_beat. Any existing notes that overlap
+        the range [start_beat, start_beat + fill_duration] are removed.
         """
-        if target_track not in tracks:
+        if target_track not in tracks or not fill_notes:
             return
 
         track_obj = tracks[target_track]
         is_track = isinstance(track_obj, Track)
         notes = track_obj.notes if is_track else track_obj
 
-        # Filter out any notes in the track that start at or after start_beat
-        retained_notes = [note for note in notes if note.start < start_beat]
-        
-        # Adjust fill note starts relative to start_beat if necessary
-        for fn in fill_notes:
-            # If the fill notes are relative to 0.0, shift them by start_beat
-            if fn.start < start_beat:
-                fn.shift_time(start_beat)
+        # Calculate fill window
+        fill_duration = max(fn.start + fn.duration for fn in fill_notes)
+        end_beat = start_beat + fill_duration
 
-        retained_notes.extend(fill_notes)
+        # Carve out space: keep only notes that don't overlap the fill window
+        retained_notes = []
+        for note in notes:
+            note_end = note.start + note.duration
+            # Check for overlap
+            overlaps = max(0.0, min(end_beat, note_end) - max(start_beat, note.start))
+            if overlaps <= 0.0:
+                retained_notes.append(note)
+        
+        # Shift and add fill notes
+        shifted_fill = []
+        for fn in fill_notes:
+            new_note = NoteInfo(
+                pitch=fn.pitch,
+                start=round(start_beat + fn.start, 6),
+                duration=fn.duration,
+                velocity=fn.velocity,
+                articulation=fn.articulation,
+                expression=fn.expression,
+            )
+            shifted_fill.append(new_note)
+
+        retained_notes.extend(shifted_fill)
         retained_notes.sort(key=lambda note: note.start)
 
         if is_track:

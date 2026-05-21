@@ -68,22 +68,37 @@ class TextureController:
     ) -> dict[str, list[NoteInfo]]:
         """
         Apply texture dynamics to voice tracks.
-
-        all_notes: dict with keys "soprano", "alto", "tenor", "bass"
-        Returns filtered dict with only active voices.
         """
         if self.tension_curve is None:
             return all_notes
 
         result: dict[str, list[NoteInfo]] = {v: [] for v in all_notes}
-        curve_points = self.tension_curve.generate()
+        
+        # Track role detection based on name
+        roles = {}
+        for name in all_notes:
+            name_lower = name.lower()
+            if any(x in name_lower for x in ("bass", "cello", "low")):
+                roles[name] = "bass"
+            elif any(x in name_lower for x in ("soprano", "lead", "melody", "flute")):
+                roles[name] = "soprano"
+            elif any(x in name_lower for x in ("alto", "viola")):
+                roles[name] = "alto"
+            else:
+                roles[name] = "tenor"
 
         for voice_name, notes in all_notes.items():
+            role = roles.get(voice_name, "tenor")
             for note in notes:
                 tension = self.tension_curve.tension_at(note.start)
                 level = self._tension_to_texture(tension)
 
-                if self._voice_is_active(voice_name, level):
+                # Rule: never silence the bass root during BASS_ONLY or higher
+                if level != TextureLevel.SILENCE and role == "bass":
+                    result[voice_name].append(note)
+                    continue
+
+                if self._voice_is_active(role, level):
                     result[voice_name].append(note)
 
         return result

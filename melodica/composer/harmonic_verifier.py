@@ -413,6 +413,80 @@ def verify_and_fix(
     return fixed, report
 
 
+def detect_voice_crossing(
+    tracks: dict[str, list[NoteInfo]],
+) -> list[ClashEvent]:
+    """Detect when a lower voice goes above a higher voice (e.g. Alto > Soprano)."""
+    import bisect
+    events = []
+    # Standard SATB order for crossing check
+    names = ["soprano", "alto", "tenor", "bass"]
+    valid = {n: tracks[n] for n in names if n in tracks and tracks[n]}
+    
+    # We only check adjacent pairs in the hierarchy
+    check_pairs = []
+    if "soprano" in valid and "alto" in valid: check_pairs.append(("soprano", "alto"))
+    if "alto" in valid and "tenor" in valid: check_pairs.append(("alto", "tenor"))
+    if "tenor" in valid and "bass" in valid: check_pairs.append(("tenor", "bass"))
+
+    for upper_name, lower_name in check_pairs:
+        notes_u = valid[upper_name]
+        notes_l = valid[lower_name]
+        starts_l = [n.start for n in notes_l]
+
+        for nu in notes_u:
+            lo = bisect.bisect_left(starts_l, nu.start - 1.0)
+            hi = bisect.bisect_right(starts_l, nu.start + nu.duration)
+            for nl in notes_l[lo:hi]:
+                if not _notes_overlap(nu, nl):
+                    continue
+                if nl.pitch > nu.pitch:
+                    events.append(ClashEvent(
+                        beat=max(nu.start, nl.start),
+                        note_a=nu, track_a=upper_name,
+                        note_b=nl, track_b=lower_name,
+                        interval=nl.pitch - nu.pitch,
+                        severity="mild"
+                    ))
+    return events
+
+
+def detect_spacing_errors(
+    tracks: dict[str, list[NoteInfo]],
+    max_gap: int = 12
+) -> list[ClashEvent]:
+    """Detect when voices (except bass/tenor) are too far apart (> octave)."""
+    import bisect
+    events = []
+    valid = {n: tracks[n] for n in ["soprano", "alto", "tenor"] if n in tracks and tracks[n]}
+    
+    check_pairs = []
+    if "soprano" in valid and "alto" in valid: check_pairs.append(("soprano", "alto"))
+    if "alto" in valid and "tenor" in valid: check_pairs.append(("alto", "tenor"))
+
+    for upper_name, lower_name in check_pairs:
+        notes_u = valid[upper_name]
+        notes_l = valid[lower_name]
+        starts_l = [n.start for n in notes_l]
+
+        for nu in notes_u:
+            lo = bisect.bisect_left(starts_l, nu.start - 1.0)
+            hi = bisect.bisect_right(starts_l, nu.start + nu.duration)
+            for nl in notes_l[lo:hi]:
+                if not _notes_overlap(nu, nl):
+                    continue
+                gap = nu.pitch - nl.pitch
+                if gap > max_gap:
+                    events.append(ClashEvent(
+                        beat=max(nu.start, nl.start),
+                        note_a=nu, track_a=upper_name,
+                        note_b=nl, track_b=lower_name,
+                        interval=gap,
+                        severity="mild"
+                    ))
+    return events
+
+
 def _reduce_polyphony(
     tracks: dict[str, list[NoteInfo]],
     max_poly: int,

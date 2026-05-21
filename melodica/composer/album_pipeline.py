@@ -292,16 +292,17 @@ def _sidechain_duck(tracks: Dict[str, List[NoteInfo]],
 
         new_notes = []
         for n in notes:
-            # Check if any perc hit falls within [n.start - window, n.start + window]
+            # Check if any perc hit falls within the sounding range of the note [n.start, n.start + n.duration]
+            # [FIX] Also account for a small look-ahead/look-behind window
             lo = n.start - window
-            hi = n.start + window
+            hi = n.start + n.duration + window
+            
             # Binary search for closest hit
             import bisect
             idx = bisect.bisect_left(hit_times, lo)
             duck = False
-            while idx < len(hit_times) and hit_times[idx] <= hi:
+            if idx < len(hit_times) and hit_times[idx] <= hi:
                 duck = True
-                break
 
             if duck:
                 new_vel = max(10, int(n.velocity * (1.0 - duck_amount)))

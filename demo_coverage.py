@@ -17,7 +17,7 @@ from melodica.composer.phrase_memory import PhraseMemory, Phrase, Transform
 from melodica.composer.tension_curve import TensionCurve
 from melodica.composer.voice_leading import VoiceLeadingEngine
 from melodica.composer.harmonic_awareness import guide_tone_resolution, weight_pitch, chord_tone_pcs, best_chord_tone
-from melodica.composer.harmonic_verifier import detect_clashes, detect_parallel_fifths, verify_and_fix, VerifierConfig
+from melodica.composer.harmonic_verifier import detect_clashes, detect_parallel_fifths, verify_and_fix, VerifierConfig, detect_voice_crossing, detect_spacing_errors
 from melodica.composer.transition_coordinator import TransitionCoordinator
 from melodica.composer.style_profiles import StyleProfile
 from melodica.composer.candidate_scorer import CandidateScorer, ScoringContext
@@ -85,6 +85,8 @@ def run_demo():
     print("Testing HarmonicVerifier...")
     clashes = detect_clashes({"soprano": soprano_with_nct, "bass": voiced_tracks["bass"]}, VerifierConfig())
     parallels = detect_parallel_fifths(voiced_tracks)
+    detect_voice_crossing(voiced_tracks)
+    detect_spacing_errors(voiced_tracks)
     fixed_tracks, report = verify_and_fix({"soprano": soprano_with_nct, "bass": voiced_tracks["bass"]}, VerifierConfig())
 
     # 8. Harmonic Awareness
