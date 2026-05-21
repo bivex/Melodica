@@ -123,10 +123,18 @@ from melodica.rhythm.rhythm_lab import RhythmLab
 from melodica.rhythm.polyrhythm import PolyrhythmGenerator
 from melodica.rhythm.smooth import SmoothRhythmGenerator
 from melodica.rhythm.bass_rhythm import BassRhythmGenerator
-from melodica.rhythm.markov_rhythm import MarkovRhythmGenerator
+from melodica.rhythm.markov_rhythm import (
+    MarkovRhythmGenerator,
+    STYLE_MATRICES,
+    TRANSITION_STRAIGHT, TRANSITION_SWING, TRANSITION_BALLAD, TRANSITION_DRIVING,
+    TRANSITION_FUNK, TRANSITION_LATIN, TRANSITION_WALTZ,
+    TRANSITION_HIP_HOP, TRANSITION_DNB, TRANSITION_AFRO,
+)
 from melodica.rhythm.groove_template import (
     GrooveSlot, GrooveTemplate, GROOVE_PRESETS,
     STRAIGHT, SWING_60, HARD_SWING, SHUFFLE, LAID_BACK,
+    PUSH, REGGAE, BOSSA_NOVA, HIP_HOP, DRUM_AND_BASS,
+    WALTZ_RUBATO, MAZURKA, BOLERO, SAMBA, FUNK, AFRO_6_8,
 )
 
 __all__ = [
@@ -148,6 +156,17 @@ __all__ = [
     "SmoothRhythmGenerator",
     "BassRhythmGenerator",
     "MarkovRhythmGenerator",
+    "STYLE_MATRICES",
+    "TRANSITION_STRAIGHT",
+    "TRANSITION_SWING",
+    "TRANSITION_BALLAD",
+    "TRANSITION_DRIVING",
+    "TRANSITION_FUNK",
+    "TRANSITION_LATIN",
+    "TRANSITION_WALTZ",
+    "TRANSITION_HIP_HOP",
+    "TRANSITION_DNB",
+    "TRANSITION_AFRO",
     "GrooveSlot",
     "GrooveTemplate",
     "GROOVE_PRESETS",
@@ -156,4 +175,15 @@ __all__ = [
     "HARD_SWING",
     "SHUFFLE",
     "LAID_BACK",
+    "PUSH",
+    "REGGAE",
+    "BOSSA_NOVA",
+    "HIP_HOP",
+    "DRUM_AND_BASS",
+    "WALTZ_RUBATO",
+    "MAZURKA",
+    "BOLERO",
+    "SAMBA",
+    "FUNK",
+    "AFRO_6_8",
 ]

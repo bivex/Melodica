@@ -88,9 +88,20 @@ class TestGroovePresets:
         assert "hard_swing" in GROOVE_PRESETS
         assert "shuffle" in GROOVE_PRESETS
         assert "laid_back" in GROOVE_PRESETS
+        assert "push" in GROOVE_PRESETS
+        assert "reggae" in GROOVE_PRESETS
+        assert "bossa" in GROOVE_PRESETS
+        assert "hip_hop" in GROOVE_PRESETS
+        assert "dnb" in GROOVE_PRESETS
+        assert "waltz_rubato" in GROOVE_PRESETS
+        assert "mazurka" in GROOVE_PRESETS
+        assert "bolero" in GROOVE_PRESETS
+        assert "samba" in GROOVE_PRESETS
+        assert "funk" in GROOVE_PRESETS
+        assert "afro_6_8" in GROOVE_PRESETS
 
     def test_preset_count(self):
-        assert len(GROOVE_PRESETS) == 5
+        assert len(GROOVE_PRESETS) >= 16
 
     def test_straight_has_no_slots(self):
         assert len(STRAIGHT.slots) == 0

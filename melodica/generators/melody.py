@@ -108,6 +108,10 @@ class MelodyGenerator(PhraseGenerator):
         # shared motif injection
         base_motif: list[int] | None = None,
         base_motif_rhythm: list[float] | None = None,
+        # groove template & meter
+        groove_template=None,
+        beats_per_bar: int = 4,
+        denominator: int = 4,
     ) -> None:
         super().__init__(params)
         self.rhythm = rhythm
@@ -197,6 +201,11 @@ class MelodyGenerator(PhraseGenerator):
         self.base_motif = base_motif
         self.base_motif_rhythm = base_motif_rhythm
 
+        # Groove template & meter
+        self.groove_template = groove_template
+        self.beats_per_bar = beats_per_bar
+        self.denominator = denominator
+
     @classmethod
     def from_style(cls, style, **overrides):
         """Create a MelodyGenerator pre-configured from a UnifiedStyle."""
@@ -225,7 +234,7 @@ class MelodyGenerator(PhraseGenerator):
     def _build_groove(self):
         """Build a GrooveProfile matching this generator's meter settings."""
         from melodica.generators._melody_rhythm import GrooveProfile
-        return GrooveProfile()
+        return GrooveProfile(beats_per_bar=self.beats_per_bar, denominator=self.denominator)
 
     # ------------------------------------------------------------------
     # Render
@@ -262,6 +271,7 @@ class MelodyGenerator(PhraseGenerator):
             self.rhythm,
             groove=groove,
             density=eff_density,
+            groove_template=self.groove_template,
         )
         contour = PhraseContour(
             phrase_contour=self.phrase_contour,

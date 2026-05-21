@@ -19,14 +19,17 @@ Scale: [0, 2, 4, 5, 7, 8, 11] — major with lowered 6th degree.
 Root: D (2) — warm, cello-rich register.
 
 Movements:
-  I.  Утренний свет (Morning Light)       — gentle, ascending, hopeful
-  II. Танец теней (Dance of Shadows)       — restless, syncopated, passionate
-  III. Возвращение (Return)                 — resolution, warmth, canon closure
+  I.  Утренний свет (Morning Light)       — gentle, ascending, hopeful — 3/4 waltz
+  II. Танец теней (Dance of Shadows)       — restless, syncopated, passionate — 4/4 swing
+  III. Возвращение (Return)                 — resolution, warmth, canon closure — 4/4 laid-back
 
 Uses newly ported features:
   - spiceup() for melodic ornamentation
   - PredictiveHarmonizer for chord refinement
   - serialize_canon() for the finale
+  - Meter-aware GrooveProfile (3/4, 4/4)
+  - GrooveTemplate (swing, laid_back)
+  - Tuplet model replacing magic numbers
 """
 
 import random
@@ -41,6 +44,7 @@ from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 from melodica.composer.transformers import spiceup, serialize_canon, Identity, OneToThree
 from melodica.harmonize.predictive import PredictiveHarmonizer
+from melodica.rhythm.groove_template import SWING_60, LAID_BACK
 
 # Key: D Lyrical Major (D, E, F#, G, A, Bb, C#)
 KEY = Scale(root=2, mode=Mode.LYRICAL_MAJOR)
@@ -64,8 +68,8 @@ def _build_chords(progression: str, duration: float) -> list[ChordLabel]:
 # ---------------------------------------------------------------------------
 
 def produce_track_1():
-    """Gentle awakening. Stepwise melodies, low density, warm pad."""
-    print("Producing I. Утренний свет...")
+    """Gentle awakening. 3/4 waltz feel, stepwise melodies, warm pad."""
+    print("Producing I. Утренний свет (3/4 waltz)...")
 
     params = GeneratorParams(density=0.22, leap_probability=0.12)
     gen = MelodyGenerator(
@@ -76,11 +80,13 @@ def produce_track_1():
         harmony_note_probability=0.85,
         note_range_low=50,
         note_range_high=74,
-        phrase_length=10.0,
+        phrase_length=9.0,       # 3 bars of 3/4 = 9 beats
         register_smoothness=0.95,
         steps_probability=0.88,
         first_note="tonic",
         last_note="scale",
+        beats_per_bar=3,
+        denominator=4,
     )
 
     duration = 96.0
@@ -123,8 +129,8 @@ def produce_track_1():
 # ---------------------------------------------------------------------------
 
 def produce_track_2():
-    """Restless dance. Higher density, syncopation, dramatic leaps."""
-    print("Producing II. Танец теней...")
+    """Restless dance. 4/4 swing groove, syncopation, dramatic leaps."""
+    print("Producing II. Танец теней (4/4 swing)...")
 
     params = GeneratorParams(density=0.65, leap_probability=0.5)
     gen = MelodyGenerator(
@@ -141,6 +147,9 @@ def produce_track_2():
         after_leap="step_any",
         direction_bias=0.4,
         allow_7th=True,
+        groove_template=SWING_60,
+        beats_per_bar=4,
+        denominator=4,
     )
 
     duration = 120.0
@@ -183,8 +192,8 @@ def produce_track_2():
 # ---------------------------------------------------------------------------
 
 def produce_track_3(theme_notes):
-    """Resolution. Canon between two voices, warmth, thematic return."""
-    print("Producing III. Возвращение...")
+    """Resolution. 4/4 laid-back groove, canon between two voices, warmth."""
+    print("Producing III. Возвращение (4/4 laid-back)...")
 
     params = GeneratorParams(density=0.4, leap_probability=0.25)
     gen = MelodyGenerator(
@@ -200,6 +209,9 @@ def produce_track_3(theme_notes):
         penultimate_step_above=True,
         first_note="tonic",
         last_note="scale",
+        groove_template=LAID_BACK,
+        beats_per_bar=4,
+        denominator=4,
     )
 
     duration = 112.0

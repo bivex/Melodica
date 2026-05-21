@@ -58,49 +58,217 @@ class StaticRhythmGenerator(RhythmGenerator):
 # ---------------------------------------------------------------------------
 
 RHYTHM_LIBRARY = {
-    # 4/4 Duplet / Straight
+    # ── 4/4 Duplet / Straight ──────────────────────────────────────────────
     "straight_quarters": [RhythmEvent(i, 1.0) for i in range(4)],
     "straight_8ths": [RhythmEvent(i * 0.5, 0.5) for i in range(8)],
     "straight_16ths": [RhythmEvent(i * 0.25, 0.25) for i in range(16)],
     "whole_note": [RhythmEvent(0.0, 4.0)],
     "2_half_notes": [RhythmEvent(0.0, 2.0), RhythmEvent(2.0, 2.0)],
-    
-    # Dotted (4/4)
+
+    # ── 4/4 Dotted ────────────────────────────────────────────────────────
     "dotted_8_16th": [
         RhythmEvent(0.0, 0.75), RhythmEvent(0.75, 0.25),
         RhythmEvent(1.0, 0.75), RhythmEvent(1.75, 0.25),
         RhythmEvent(2.0, 0.75), RhythmEvent(2.75, 0.25),
         RhythmEvent(3.0, 0.75), RhythmEvent(3.75, 0.25),
     ],
-    
-    # Triplets (4/4)
+
+    # ── 4/4 Triplets ──────────────────────────────────────────────────────
     "straight_8_triplets": [RhythmEvent(i * (1/3), 1 / 3) for i in range(12)],
     "half_note_triplets": [RhythmEvent(0.0, 4 / 3), RhythmEvent(4 / 3, 4 / 3), RhythmEvent(8 / 3, 4 / 3)],
     "triplet_half_3_triplets": [RhythmEvent(0.0, 4 / 3), RhythmEvent(4 / 3, 2 / 3), RhythmEvent(2.0, 2 / 3), RhythmEvent(8 / 3, 2 / 3), RhythmEvent(10 / 3, 2 / 3)],
 
-    # 4/4 with 32nds / 64ths
+    # ── 4/4 32nds / 64ths ─────────────────────────────────────────────────
     "straight_32nds": [RhythmEvent(i * 0.125, 0.125) for i in range(32)],
     "straight_64ths": [RhythmEvent(i * 0.0625, 0.0625) for i in range(64)],
     "8th_16th_2_32nds": [RhythmEvent(0.0, 0.5), RhythmEvent(0.5, 0.25), RhythmEvent(0.75, 0.125), RhythmEvent(0.875, 0.125)],
 
-    # 4/4 with Rests / Classics
+    # ── 4/4 with Rests / Classics ──────────────────────────────────────────
     "Handel_001": [RhythmEvent(0.0, 0.5), RhythmEvent(0.75, 0.25), RhythmEvent(1.0, 1.0)],
     "q_q_rest_pop": [RhythmEvent(0.0, 1.0), RhythmEvent(2.0, 1.0)],
     "8th_8th_rest_loop": [RhythmEvent(0.0, 0.5), RhythmEvent(1.0, 0.5), RhythmEvent(2.0, 0.5), RhythmEvent(3.0, 0.5)],
 
-    # Complex Syncopations & Duplets
+    # ── 4/4 Complex Syncopations & Duplets ─────────────────────────────────
     "16th_8th_16th_syncopation": [RhythmEvent(0.0, 0.25), RhythmEvent(0.25, 0.5), RhythmEvent(0.75, 0.25)],
     "six_8ths_q": [RhythmEvent(i * 0.5, 0.5) for i in range(6)] + [RhythmEvent(3.0, 1.0)],
     "q_2_8ths_half": [RhythmEvent(0.0, 1.0), RhythmEvent(1.0, 0.5), RhythmEvent(1.5, 0.5), RhythmEvent(2.0, 2.0)],
     "8th_2_16ths_3_qs": [RhythmEvent(0.0, 0.5), RhythmEvent(0.5, 0.25), RhythmEvent(0.75, 0.25), RhythmEvent(1.0, 1.0), RhythmEvent(2.0, 1.0), RhythmEvent(3.0, 1.0)],
     "dotted_8_3_16ths": [RhythmEvent(0.0, 0.75), RhythmEvent(0.75, 0.25), RhythmEvent(1.0, 0.25), RhythmEvent(1.25, 0.25), RhythmEvent(1.5, 0.25)],
-    
-    # Rest of user patterns
     "16th_unaccented_dotted_8th": [RhythmEvent(0.0, 0.25), RhythmEvent(0.25, 0.75)],
     "2_16ths_q_loop": [RhythmEvent(0.0, 0.25), RhythmEvent(0.25, 0.25), RhythmEvent(0.5, 1.0)],
-    "8_2_16ths_4_16ths_2_qs": [RhythmEvent(0.0, 0.5), RhythmEvent(0.5, 0.25), RhythmEvent(0.75, 0.25), 
+    "8_2_16ths_4_16ths_2_qs": [RhythmEvent(0.0, 0.5), RhythmEvent(0.5, 0.25), RhythmEvent(0.75, 0.25),
                                RhythmEvent(1.0, 0.25), RhythmEvent(1.25, 0.25), RhythmEvent(1.5, 0.25), RhythmEvent(1.75, 0.25),
                                RhythmEvent(2.0, 1.0), RhythmEvent(3.0, 1.0)],
+
+    # ── 3/4 (Waltz) ───────────────────────────────────────────────────────
+    "waltz_basic": [RhythmEvent(0.0, 1.0), RhythmEvent(1.0, 1.0), RhythmEvent(2.0, 1.0)],
+    "waltz_oom_pah_pah": [
+        RhythmEvent(0.0, 1.0, 1.0), RhythmEvent(1.0, 0.5, 0.7), RhythmEvent(1.5, 0.5, 0.7), RhythmEvent(2.0, 1.0, 0.85),
+    ],
+    "waltz_spielend": [
+        RhythmEvent(0.0, 0.5), RhythmEvent(0.5, 0.5), RhythmEvent(1.0, 0.5), RhythmEvent(1.5, 0.5), RhythmEvent(2.0, 1.0),
+    ],
+    "waltz_dotted": [
+        RhythmEvent(0.0, 0.75), RhythmEvent(0.75, 0.25), RhythmEvent(1.0, 0.5), RhythmEvent(1.5, 0.5), RhythmEvent(2.0, 1.0),
+    ],
+    "waltz_hemiola": [
+        RhythmEvent(0.0, 1.0), RhythmEvent(1.0, 1.0), RhythmEvent(2.0, 1.0),
+        RhythmEvent(3.0, 1.0), RhythmEvent(4.0, 1.0), RhythmEvent(5.0, 1.0),
+        RhythmEvent(6.0, 2.0), RhythmEvent(8.0, 1.0),
+    ],
+    "mazurka_accent": [
+        RhythmEvent(0.0, 0.5, 0.7), RhythmEvent(0.5, 0.5, 1.0), RhythmEvent(1.0, 1.0, 0.8), RhythmEvent(2.0, 1.0, 0.9),
+    ],
+    "minuet": [
+        RhythmEvent(0.0, 0.5), RhythmEvent(0.5, 0.5), RhythmEvent(1.0, 0.5), RhythmEvent(1.5, 0.5),
+        RhythmEvent(2.0, 0.5), RhythmEvent(2.5, 0.5),
+    ],
+
+    # ── 6/8 ───────────────────────────────────────────────────────────────
+    "six_eight_basic": [
+        RhythmEvent(0.0, 1.0, 1.0), RhythmEvent(1.0, 1.0, 0.7), RhythmEvent(2.0, 1.0, 0.85),
+        RhythmEvent(3.0, 1.0, 1.0), RhythmEvent(4.0, 1.0, 0.7), RhythmEvent(5.0, 1.0, 0.85),
+    ],
+    "six_eight_compound": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.5, 0.7), RhythmEvent(1.0, 0.5, 0.6),
+        RhythmEvent(1.5, 0.5, 0.85), RhythmEvent(2.0, 0.5, 0.7), RhythmEvent(2.5, 0.5, 0.6),
+        RhythmEvent(3.0, 0.5, 1.0), RhythmEvent(3.5, 0.5, 0.7), RhythmEvent(4.0, 0.5, 0.6),
+        RhythmEvent(4.5, 0.5, 0.85), RhythmEvent(5.0, 0.5, 0.7), RhythmEvent(5.5, 0.5, 0.6),
+    ],
+    "six_eight_siciliana": [
+        RhythmEvent(0.0, 0.75, 1.0), RhythmEvent(0.75, 0.25, 0.75), RhythmEvent(1.0, 0.75, 0.85),
+        RhythmEvent(1.75, 0.25, 0.70), RhythmEvent(2.0, 1.0, 0.9),
+        RhythmEvent(3.0, 0.75, 1.0), RhythmEvent(3.75, 0.25, 0.75), RhythmEvent(4.0, 0.75, 0.85),
+        RhythmEvent(4.75, 0.25, 0.70), RhythmEvent(5.0, 1.0, 0.9),
+    ],
+    "jig_simple": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.5, 0.75), RhythmEvent(1.0, 0.5, 0.85),
+        RhythmEvent(1.5, 0.5, 0.70), RhythmEvent(2.0, 0.5, 0.90),
+        RhythmEvent(2.5, 0.5, 0.70), RhythmEvent(3.0, 0.5, 1.0), RhythmEvent(3.5, 0.5, 0.75),
+        RhythmEvent(4.0, 0.5, 0.85), RhythmEvent(4.5, 0.5, 0.70), RhythmEvent(5.0, 0.5, 0.90),
+        RhythmEvent(5.5, 0.5, 0.70),
+    ],
+
+    # ── 5/4 ───────────────────────────────────────────────────────────────
+    "five_four_take_five": [
+        RhythmEvent(0.0, 1.0, 1.0), RhythmEvent(1.0, 1.0, 0.7), RhythmEvent(2.0, 1.0, 0.9),
+        RhythmEvent(3.0, 0.5, 0.65), RhythmEvent(3.5, 0.5, 0.65), RhythmEvent(4.0, 1.0, 0.8),
+    ],
+    "five_four_asymmetric": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.5, 0.8), RhythmEvent(1.0, 0.5, 0.9),
+        RhythmEvent(1.5, 0.5, 0.7), RhythmEvent(2.0, 1.0, 1.0), RhythmEvent(3.0, 0.5, 0.85),
+        RhythmEvent(3.5, 0.5, 0.75), RhythmEvent(4.0, 1.0, 0.9),
+    ],
+    "five_four_largo": [
+        RhythmEvent(0.0, 2.0, 1.0), RhythmEvent(2.0, 1.5, 0.85), RhythmEvent(3.5, 1.5, 0.9),
+    ],
+
+    # ── 7/8 ───────────────────────────────────────────────────────────────
+    "seven_eight_balkan": [
+        RhythmEvent(0.0, 1.0, 1.0), RhythmEvent(1.0, 0.5, 0.8), RhythmEvent(1.5, 1.0, 0.9),
+        RhythmEvent(2.5, 0.5, 0.7), RhythmEvent(3.0, 1.0, 0.95), RhythmEvent(4.0, 0.5, 0.75),
+        RhythmEvent(4.5, 1.0, 0.85),
+    ],
+    "seven_eight_322": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.5, 0.8), RhythmEvent(1.0, 0.5, 0.9),
+        RhythmEvent(1.5, 0.5, 0.7), RhythmEvent(2.0, 0.5, 0.85), RhythmEvent(2.5, 0.5, 0.75),
+        RhythmEvent(3.0, 1.0, 1.0), RhythmEvent(4.0, 1.0, 0.9), RhythmEvent(5.0, 1.0, 0.85),
+        RhythmEvent(6.0, 1.0, 0.8),
+    ],
+
+    # ── 4/4 Genre Patterns ────────────────────────────────────────────────
+    "reggae_one_drop": [
+        RhythmEvent(0.0, 0.5, 0.6), RhythmEvent(0.5, 0.5, 0.5), RhythmEvent(1.0, 0.25, 0.7),
+        RhythmEvent(1.25, 0.25, 0.65), RhythmEvent(2.0, 0.5, 0.6), RhythmEvent(2.5, 0.5, 0.5),
+        RhythmEvent(3.0, 1.0, 1.0),
+    ],
+    "bossa_nova": [
+        RhythmEvent(0.0, 0.5, 0.9), RhythmEvent(0.5, 0.25, 0.65), RhythmEvent(0.75, 0.25, 0.70),
+        RhythmEvent(1.0, 0.5, 0.85), RhythmEvent(1.5, 0.5, 0.75), RhythmEvent(2.0, 0.5, 0.90),
+        RhythmEvent(2.5, 0.5, 0.70), RhythmEvent(3.0, 0.25, 0.80), RhythmEvent(3.25, 0.25, 0.65),
+        RhythmEvent(3.5, 0.25, 0.70), RhythmEvent(3.75, 0.25, 0.75),
+    ],
+    "samba": [
+        RhythmEvent(0.0, 0.25, 1.0), RhythmEvent(0.25, 0.25, 0.70), RhythmEvent(0.5, 0.25, 0.85),
+        RhythmEvent(0.75, 0.25, 0.75), RhythmEvent(1.0, 0.25, 0.90), RhythmEvent(1.25, 0.25, 0.65),
+        RhythmEvent(1.5, 0.25, 0.80), RhythmEvent(1.75, 0.25, 0.75),
+        RhythmEvent(2.0, 0.25, 1.0), RhythmEvent(2.25, 0.25, 0.70), RhythmEvent(2.5, 0.25, 0.85),
+        RhythmEvent(2.75, 0.25, 0.75), RhythmEvent(3.0, 0.25, 0.90), RhythmEvent(3.25, 0.25, 0.65),
+        RhythmEvent(3.5, 0.25, 0.80), RhythmEvent(3.75, 0.25, 0.75),
+    ],
+    "tango_argentino": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.5, 0.85), RhythmEvent(1.0, 0.25, 0.95),
+        RhythmEvent(1.25, 0.25, 0.70), RhythmEvent(1.5, 0.25, 0.90), RhythmEvent(1.75, 0.25, 0.65),
+        RhythmEvent(2.0, 0.5, 1.0), RhythmEvent(2.5, 0.5, 0.85), RhythmEvent(3.0, 1.0, 0.95),
+    ],
+    "rhumba": [
+        RhythmEvent(0.0, 0.25, 0.8), RhythmEvent(0.25, 0.25, 0.7), RhythmEvent(0.5, 0.5, 0.9),
+        RhythmEvent(1.0, 0.5, 0.85), RhythmEvent(1.5, 0.25, 0.75), RhythmEvent(1.75, 0.25, 0.70),
+        RhythmEvent(2.0, 0.25, 0.80), RhythmEvent(2.25, 0.25, 0.70), RhythmEvent(2.5, 0.5, 0.90),
+        RhythmEvent(3.0, 0.5, 0.85), RhythmEvent(3.5, 0.5, 0.80),
+    ],
+    "hip_hop Boom bap": [
+        RhythmEvent(0.0, 1.0, 1.0), RhythmEvent(1.0, 0.5, 0.65), RhythmEvent(1.5, 0.5, 0.75),
+        RhythmEvent(2.0, 0.5, 0.90), RhythmEvent(2.5, 0.5, 0.70), RhythmEvent(3.0, 1.0, 0.95),
+    ],
+    "dnb_amen": [
+        RhythmEvent(0.0, 0.25, 1.0), RhythmEvent(0.25, 0.25, 0.70), RhythmEvent(0.5, 0.25, 0.85),
+        RhythmEvent(0.75, 0.125, 0.65), RhythmEvent(0.875, 0.125, 0.60),
+        RhythmEvent(1.0, 0.25, 0.75), RhythmEvent(1.25, 0.25, 0.80), RhythmEvent(1.5, 0.25, 0.90),
+        RhythmEvent(1.75, 0.25, 0.65),
+        RhythmEvent(2.0, 0.25, 1.0), RhythmEvent(2.25, 0.25, 0.70), RhythmEvent(2.5, 0.125, 0.85),
+        RhythmEvent(2.625, 0.125, 0.65), RhythmEvent(2.75, 0.125, 0.80), RhythmEvent(2.875, 0.125, 0.60),
+        RhythmEvent(3.0, 0.25, 0.90), RhythmEvent(3.25, 0.25, 0.70), RhythmEvent(3.5, 0.25, 0.85),
+        RhythmEvent(3.75, 0.25, 0.65),
+    ],
+    "dubstep_wobble": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.5, 0.80), RhythmEvent(1.0, 0.25, 0.95),
+        RhythmEvent(1.25, 0.25, 0.60), RhythmEvent(1.5, 0.25, 0.90), RhythmEvent(1.75, 0.25, 0.55),
+        RhythmEvent(2.0, 0.5, 1.0), RhythmEvent(2.5, 0.5, 0.80), RhythmEvent(3.0, 0.5, 0.90),
+        RhythmEvent(3.5, 0.25, 0.75), RhythmEvent(3.75, 0.25, 0.85),
+    ],
+    "funk_sixteenth": [
+        RhythmEvent(0.0, 0.25, 1.0), RhythmEvent(0.25, 0.25, 0.60), RhythmEvent(0.5, 0.25, 0.85),
+        RhythmEvent(0.75, 0.25, 0.70), RhythmEvent(1.0, 0.25, 0.90), RhythmEvent(1.25, 0.25, 0.55),
+        RhythmEvent(1.5, 0.25, 0.80), RhythmEvent(1.75, 0.25, 0.95),
+        RhythmEvent(2.0, 0.25, 1.0), RhythmEvent(2.25, 0.25, 0.60), RhythmEvent(2.5, 0.25, 0.85),
+        RhythmEvent(2.75, 0.25, 0.70), RhythmEvent(3.0, 0.25, 0.90), RhythmEvent(3.25, 0.25, 0.55),
+        RhythmEvent(3.5, 0.25, 0.80), RhythmEvent(3.75, 0.25, 0.95),
+    ],
+    "disco_four_floor": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.5, 0.80), RhythmEvent(1.0, 0.5, 0.85),
+        RhythmEvent(1.5, 0.5, 0.80), RhythmEvent(2.0, 0.5, 1.0), RhythmEvent(2.5, 0.5, 0.80),
+        RhythmEvent(3.0, 0.5, 0.85), RhythmEvent(3.5, 0.5, 0.80),
+    ],
+    "edm_four_floor": [
+        RhythmEvent(0.0, 0.25, 1.0), RhythmEvent(0.25, 0.25, 0.65), RhythmEvent(0.5, 0.25, 0.80),
+        RhythmEvent(0.75, 0.25, 0.60), RhythmEvent(1.0, 0.25, 1.0), RhythmEvent(1.25, 0.25, 0.65),
+        RhythmEvent(1.5, 0.25, 0.80), RhythmEvent(1.75, 0.25, 0.60),
+        RhythmEvent(2.0, 0.25, 1.0), RhythmEvent(2.25, 0.25, 0.65), RhythmEvent(2.5, 0.25, 0.80),
+        RhythmEvent(2.75, 0.25, 0.60), RhythmEvent(3.0, 0.25, 1.0), RhythmEvent(3.25, 0.25, 0.65),
+        RhythmEvent(3.5, 0.25, 0.80), RhythmEvent(3.75, 0.25, 0.60),
+    ],
+    "afrobeat": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.25, 0.75), RhythmEvent(0.75, 0.25, 0.65),
+        RhythmEvent(1.0, 0.25, 0.90), RhythmEvent(1.25, 0.25, 0.70), RhythmEvent(1.5, 0.5, 0.85),
+        RhythmEvent(2.0, 0.5, 1.0), RhythmEvent(2.5, 0.25, 0.75), RhythmEvent(2.75, 0.25, 0.65),
+        RhythmEvent(3.0, 0.25, 0.90), RhythmEvent(3.25, 0.25, 0.70), RhythmEvent(3.5, 0.5, 0.85),
+    ],
+    "malague a": [
+        RhythmEvent(0.0, 0.25, 0.85), RhythmEvent(0.25, 0.25, 0.70), RhythmEvent(0.5, 0.25, 0.90),
+        RhythmEvent(0.75, 0.25, 0.70), RhythmEvent(1.0, 0.5, 1.0), RhythmEvent(1.5, 0.5, 0.80),
+        RhythmEvent(2.0, 0.25, 0.90), RhythmEvent(2.25, 0.25, 0.70), RhythmEvent(2.5, 0.5, 1.0),
+        RhythmEvent(3.0, 1.0, 0.85),
+    ],
+    "bolero_cubano": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.5, 0.80), RhythmEvent(1.0, 0.5, 0.90),
+        RhythmEvent(1.5, 0.25, 0.70), RhythmEvent(1.75, 0.25, 0.75),
+        RhythmEvent(2.0, 0.5, 1.0), RhythmEvent(2.5, 0.5, 0.80), RhythmEvent(3.0, 1.0, 0.90),
+    ],
+    "waltz_jazz": [
+        RhythmEvent(0.0, 0.5, 1.0), RhythmEvent(0.5, 0.5, 0.70), RhythmEvent(1.0, 0.5, 0.85),
+        RhythmEvent(1.5, 0.5, 0.65), RhythmEvent(2.0, 0.75, 0.90), RhythmEvent(2.75, 0.25, 0.75),
+    ],
 }
 
 
