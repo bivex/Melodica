@@ -307,6 +307,44 @@ def parse_progression(prog_str: str, key: Scale) -> list[ChordLabel]:
     return chords
 
 
+@dataclass
+class RomanNumeral:
+    """Structured representation of a single Roman-numeral chord token."""
+
+    numeral: str          # e.g. "VII", "iv", "bVI", "#iv"
+    quality_suffix: str = ""   # e.g. "m", "dim", "aug", "7", "m7"
+    duration: float = 4.0
+    slash_bass: str | None = None  # e.g. "IV/V" → bass="V"
+
+    @property
+    def roman_str(self) -> str:
+        s = self.numeral + self.quality_suffix
+        if self.slash_bass:
+            s += "/" + self.slash_bass
+        return s
+
+
+def parse_progression_structured(
+    romans: list[RomanNumeral],
+    key: Scale,
+) -> list[ChordLabel]:
+    """Build a chord progression from structured :class:`RomanNumeral` tokens.
+
+    Unlike :func:`parse_progression` which parses a DSL string, this accepts
+    pre-tokenised :class:`RomanNumeral` objects — useful when the caller has
+    already split / validated the input (e.g. interactive editors, tests).
+    """
+    chords: list[ChordLabel] = []
+    t = 0.0
+    for rn in romans:
+        chord = key.parse_roman(rn.roman_str)
+        chord.start = t
+        chord.duration = rn.duration
+        chords.append(chord)
+        t += rn.duration
+    return chords
+
+
 
 @dataclass
 class ChordLabel:

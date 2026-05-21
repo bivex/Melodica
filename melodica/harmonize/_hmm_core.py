@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from melodica.harmonize._hmm_helpers import (
     _chord_pcs_for_degree, _voice_leading_cost, _build_diatonic_chords,
     _CADENCE_BONUSES, _FUNCTION_MAP, _FUNCTION_RULES_HMM2, _EXTENSIONS,
-    _get_cadence_bonus,
+    _get_cadence_bonus, MODAL_GRAVITY,
 )
 from melodica.types import ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
 
@@ -33,6 +33,23 @@ class SecondaryDominantDegree(int):
     def __new__(cls, target_deg):
         obj = super().__new__(cls, 0)
         obj.target_degree = target_deg
+        return obj
+
+
+class BorrowedChordDegree(int):
+    """Degree from the parallel mode. Evaluates to -1."""
+    def __new__(cls, source_mode: Mode, degree: int):
+        obj = super().__new__(cls, -1)
+        obj.source_mode = source_mode
+        obj.degree = degree
+        return obj
+
+
+class ChromaticMediantDegree(int):
+    """Chromatic mediant (M3 or m3 relationship to tonic). Evaluates to -2."""
+    def __new__(cls, interval: int):
+        obj = super().__new__(cls, -2)
+        obj.interval = interval
         return obj
 
 @dataclass
@@ -464,6 +481,8 @@ class HMM3Harmonizer:
     rhythm_aware: bool = True
     allow_secondary_dom: bool = True
     allow_extensions: bool = True
+    allow_borrowed: bool = True
+    allow_chromatic_mediants: bool = True
     phrase_length: int = 4
     chord_change: str = "bars"
 
@@ -544,7 +563,7 @@ class HMM3Harmonizer:
         return result
 
     def _build_catalog(self, chords_def, scale):
-        """Build full chord catalog: diatonic + secondary dominants."""
+        """Build full chord catalog: diatonic + secondary dominants + borrowed + chromatic mediants."""
         catalog = []
         for i, (rpc, qual) in enumerate(chords_def):
             catalog.append((rpc, qual, i + 1))
@@ -555,12 +574,35 @@ class HMM3Harmonizer:
                         catalog.append((rpc, ext_qual, i + 1))
         # Add secondary dominants
         if self.allow_secondary_dom:
-            # Dynamically build mathematically and acoustically correct secondary dominants
-            # (V7/target) for each major or minor diatonic scale degree (degree i + 1).
             for i, (rpc, qual) in enumerate(chords_def):
                 if qual in (Quality.MAJOR, Quality.MINOR):
                     dom_root = (rpc + 7) % 12
                     catalog.append((int(dom_root), Quality.DOMINANT7, SecondaryDominantDegree(i + 1)))
+        # Add borrowed chords from parallel mode
+        if self.allow_borrowed:
+            is_minor = len(scale.intervals()) > 2 and scale.intervals()[2] == 3
+            parallel_mode = Mode.MAJOR if is_minor else Mode.NATURAL_MINOR
+            try:
+                parallel_scale = Scale(root=scale.root, mode=parallel_mode)
+                parallel_chords = _build_diatonic_chords(parallel_scale)
+                # Only add chords whose root isn't already diatonic
+                diatonic_roots = {rpc for rpc, _ in chords_def}
+                for i, (rpc, qual) in enumerate(parallel_chords):
+                    if rpc not in diatonic_roots:
+                        catalog.append((rpc, qual, BorrowedChordDegree(parallel_mode, i + 1)))
+            except (ValueError, KeyError):
+                pass
+        # Add chromatic mediants (M3/m3 above and below tonic)
+        if self.allow_chromatic_mediants:
+            tonic = scale.root
+            for interval in (3, 4, 8, 9):  # m3↑, M3↑, m3↓(=M3↑+12), M3↓(=m3↑+12)
+                mediant_pc = (tonic + interval) % 12
+                # Determine quality: major if interval is M3(4) or m6(8), minor if m3(3) or M6(9)
+                qual = Quality.MAJOR if interval in (4, 8) else Quality.MINOR
+                # Don't add if already diatonic
+                diatonic_roots = {rpc for rpc, _ in chords_def}
+                if mediant_pc not in diatonic_roots:
+                    catalog.append((mediant_pc, qual, ChromaticMediantDegree(interval)))
         return catalog
 
     def _build_transitions(self, catalog, chords_def, scale: Scale | None = None):
@@ -608,6 +650,34 @@ class HMM3Harmonizer:
                 # Transition to secondary dominant
                 elif deg_i > 0 and deg_j == 0 and hasattr(deg_j, "target_degree"):
                     mat[i][j] = 0.2  # Moderate transition to prepare a secondary dominant
+                # Borrowed chord transitions
+                elif isinstance(deg_j, BorrowedChordDegree):
+                    # Borrowed chords resolve to tonic or predominant
+                    if deg_i > 0 and deg_i in (1, 4):
+                        mat[i][j] = 0.15
+                    elif deg_i > 0:
+                        mat[i][j] = 0.10
+                    else:
+                        mat[i][j] = 0.08
+                elif isinstance(deg_i, BorrowedChordDegree):
+                    # Borrowed chord → diatonic resolution
+                    if deg_j > 0 and deg_j in (1, 5):
+                        mat[i][j] = 0.20
+                    else:
+                        mat[i][j] = 0.12
+                # Chromatic mediant transitions
+                elif isinstance(deg_j, ChromaticMediantDegree):
+                    # Chromatic mediants connect well from I, IV, V
+                    if deg_i > 0 and deg_i in (1, 4, 5):
+                        mat[i][j] = 0.20
+                    else:
+                        mat[i][j] = 0.12
+                elif isinstance(deg_i, ChromaticMediantDegree):
+                    # Chromatic mediant → diatonic resolution
+                    if deg_j > 0 and deg_j in (1, 4):
+                        mat[i][j] = 0.25
+                    else:
+                        mat[i][j] = 0.12
                 else:
                     mat[i][j] = 0.1
         return mat
@@ -657,12 +727,24 @@ class HMM3Harmonizer:
         if quality in (Quality.MAJOR7, Quality.DOMINANT7, Quality.MINOR7, Quality.HALF_DIM7):
             ext_bonus = 0.3 * self.extension_weight
 
-        # 6. Repetition penalty
+        # 6. Modal gravity bonus
+        gravity_bonus = 0.0
+        if degree > 0 and scale is not None:
+            gravity_degrees = MODAL_GRAVITY.get(scale.mode, ())
+            if (degree - 1) in gravity_degrees:
+                gravity_bonus = 0.3 * self.functional_weight
+
+        # 7. Borrowed / chromatic mediant bonus
+        borrow_bonus = 0.0
+        if isinstance(degree, (BorrowedChordDegree, ChromaticMediantDegree)):
+            borrow_bonus = 0.15 * self.functional_weight
+
+        # 8. Repetition penalty
         rep = 0.0
         if prev_idx is not None and cat_idx == prev_idx:
             rep = self.repetition_penalty
 
-        return melody_fit + func_score + cadence + sd_bonus + ext_bonus - rep
+        return melody_fit + func_score + cadence + sd_bonus + ext_bonus + gravity_bonus + borrow_bonus - rep
 
     def _beat_strength(self, t, change_points, melody):
         """Rhythm-aware: strong beats get higher melody weight."""

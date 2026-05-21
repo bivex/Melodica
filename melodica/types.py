@@ -33,6 +33,8 @@ from melodica.types_pkg._theory import (
     HarmonicFunction,
     Scale,
     ChordLabel,
+    RomanNumeral,
+    parse_progression_structured,
 )
 
 from melodica.types_pkg._timeline import (
@@ -83,5 +85,7 @@ __all__ = [
     "Track",
     "Arrangement",
     "parse_progression",
+    "RomanNumeral",
+    "parse_progression_structured",
     "ModulationEngine",
 ]

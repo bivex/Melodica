@@ -431,6 +431,7 @@ def psycho_verify(
     tracks: dict[str, list[NoteInfo]],
     config: PsychoConfig | None = None,
     bpm: float = 120.0,
+    destructive: bool = False,
 ) -> tuple[dict[str, list[NoteInfo]], PsychoReport]:
     """
     Run psychoacoustic verification and fix detected issues.
@@ -443,6 +444,10 @@ def psycho_verify(
         Detection and fix configuration.
     bpm : float
         Tempo in BPM — used to compute the BPM-adaptive blur threshold [FIX 2].
+    destructive : bool
+        If False (default), pitch transposition and note removal are prohibited —
+        only velocity reductions and duration shortening are applied.
+        If True, the original aggressive behaviour is restored.
     """
     if config is None:
         config = PsychoConfig()
@@ -487,7 +492,7 @@ def psycho_verify(
 
         if evt.issue in ("freq_mask", "temporal_mask"):
             if evt.note_b and tb:
-                if config.aggressive_fix:
+                if config.aggressive_fix and destructive:
                     actions[(tb, id(evt.note_b))] = _REMOVE
                     report.notes_removed += 1
                 else:
@@ -497,8 +502,12 @@ def psycho_verify(
 
         elif evt.issue == "fusion":
             if evt.note_b and tb:
-                actions[(tb, id(evt.note_b))] = _transpose_octave(evt.note_b)
-                report.notes_transposed += 1
+                if destructive:
+                    actions[(tb, id(evt.note_b))] = _transpose_octave(evt.note_b)
+                    report.notes_transposed += 1
+                else:
+                    actions[(tb, id(evt.note_b))] = _reduce_vel(evt.note_b, 0.35)
+                    report.notes_velocity_reduced += 1
                 report.issues_fixed += 1
 
         elif evt.issue == "blur":
@@ -513,7 +522,7 @@ def psycho_verify(
                 report.issues_fixed += 1
 
         elif evt.issue == "brightness":
-            if config.aggressive_fix:
+            if config.aggressive_fix and destructive:
                 actions[(ta, id(evt.note_a))] = _REMOVE
                 report.notes_removed += 1
             else:

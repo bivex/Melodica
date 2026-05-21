@@ -1337,8 +1337,8 @@ class TestHMM3MutationKillers:
 
     def test_extensions_exact_count(self):
         """Конкретное количество entries с extensions."""
-        h_ext = HMM3Harmonizer(allow_extensions=True, allow_secondary_dom=False)
-        h_no = HMM3Harmonizer(allow_extensions=False, allow_secondary_dom=False)
+        h_ext = HMM3Harmonizer(allow_extensions=True, allow_secondary_dom=False, allow_borrowed=False, allow_chromatic_mediants=False)
+        h_no = HMM3Harmonizer(allow_extensions=False, allow_secondary_dom=False, allow_borrowed=False, allow_chromatic_mediants=False)
         from melodica.harmonize._hmm_helpers import _build_diatonic_chords
 
         chords_def = _build_diatonic_chords(C_MAJOR)

@@ -23,8 +23,11 @@ from melodica.types import (
     NoteInfo,
     PhraseInstance,
     Quality,
+    RomanNumeral,
     Scale,
     StaticPhrase,
+    parse_progression,
+    parse_progression_structured,
 )
 
 
@@ -160,3 +163,67 @@ class TestHarmonizationRequest:
                 key=Scale(root=0, mode=Mode.MAJOR),
                 engine=5,
             )
+
+
+class TestRomanNumeral:
+    def test_basic_major(self):
+        key = Scale(root=0, mode=Mode.MAJOR)
+        romans = [
+            RomanNumeral("I", duration=4.0),
+            RomanNumeral("V", duration=4.0),
+        ]
+        chords = parse_progression_structured(romans, key)
+        assert len(chords) == 2
+        assert chords[0].root == 0  # C
+        assert chords[1].root == 7  # G
+
+    def test_quality_suffix(self):
+        key = Scale(root=0, mode=Mode.MAJOR)
+        romans = [
+            RomanNumeral("ii", quality_suffix="m", duration=2.0),
+        ]
+        chords = parse_progression_structured(romans, key)
+        assert len(chords) == 1
+        assert chords[0].root == 2  # D
+
+    def test_backward_compat_string_parser(self):
+        key = Scale(root=0, mode=Mode.MAJOR)
+        structured = parse_progression_structured(
+            [RomanNumeral("I"), RomanNumeral("IV"), RomanNumeral("V")],
+            key,
+        )
+        string_parsed = parse_progression("I IV V", key)
+        assert [c.root for c in structured] == [c.root for c in string_parsed]
+
+    def test_roman_str_property(self):
+        rn = RomanNumeral("iv", quality_suffix="m", duration=4.0, slash_bass="V")
+        assert rn.roman_str == "ivm/V"
+
+    def test_staggered_start_times(self):
+        key = Scale(root=0, mode=Mode.MAJOR)
+        romans = [
+            RomanNumeral("I", duration=2.0),
+            RomanNumeral("IV", duration=3.0),
+            RomanNumeral("V", duration=1.0),
+        ]
+        chords = parse_progression_structured(romans, key)
+        assert chords[0].start == 0.0
+        assert chords[1].start == 2.0
+        assert chords[2].start == 5.0
+
+
+class TestModeDatabaseValidation:
+    def test_all_modes_start_at_zero(self):
+        from melodica.theory.modes import MODE_DATABASE
+        for mode, defn in MODE_DATABASE.items():
+            assert defn.intervals[0] == 0, f"{mode.name} doesn't start at 0"
+
+    def test_intervals_sorted_ascending(self):
+        from melodica.theory.modes import MODE_DATABASE
+        for mode, defn in MODE_DATABASE.items():
+            assert defn.intervals == sorted(defn.intervals), f"{mode.name} intervals not sorted"
+
+    def test_no_unintentional_duplicates(self):
+        from melodica.theory.modes import _validate_mode_database
+        warnings = _validate_mode_database()
+        assert warnings == [], "Unintentional duplicates found:\n" + "\n".join(warnings)

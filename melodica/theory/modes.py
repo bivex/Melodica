@@ -228,7 +228,7 @@ MODE_DATABASE: dict[Mode, ScaleDefinition] = {
     Mode.NEAPOLITAN_MINOR:   ScaleDefinition([0, 1, 3, 5, 7, 8, 11], "Classical", ["Neapolitan", "Dark"]),
 
     # Other theoretical
-    Mode.AEOLIAN_BB7:        ScaleDefinition([0, 2, 3, 5, 7, 8, 10], "Theoretical", ["Minor variant"]),
+    Mode.AEOLIAN_BB7:        ScaleDefinition([0, 2, 3, 5, 7, 8, 9], "Theoretical", ["Minor variant"]),
     Mode.AUGMENTED:          ScaleDefinition([0, 3, 4, 7, 8, 11], "Symmetric", ["Augmented", "Alien"]),
     Mode.AUGMENTED_MODE_2:   ScaleDefinition([0, 1, 4, 5, 8, 9], "Symmetric", ["Augmented"]),
     Mode.ALT_BB3:            ScaleDefinition([0, 1, 3, 4, 6, 8, 10], "Jazz", ["Altered"]),
@@ -298,6 +298,57 @@ MODE_DATABASE: dict[Mode, ScaleDefinition] = {
         bpm_range=(55, 115), genres=["ambient", "scifi"], energy=0.3
     )
 }
+
+# Known intentional interval-set aliases (different names, same scale by design)
+_INTENTIONAL_ALIASES: set[frozenset[Mode]] = {
+    frozenset({Mode.MAJOR, Mode.IONIAN}),
+    frozenset({Mode.NATURAL_MINOR, Mode.AEOLIAN, Mode.QUARTER_TONE_MINOR}),
+    frozenset({Mode.WHOLE_TONE, Mode.MESSIAEN_1}),
+    frozenset({Mode.MESSIAEN_2, Mode.HALF_WHOLE_DIMINISHED}),
+    frozenset({Mode.MESSIAEN_3, Mode.AUGMENTED_MODE_2}),
+    frozenset({Mode.DOUBLE_HARMONIC, Mode.DOUBLE_HARM_MAJOR, Mode.BYZANTINE, Mode.GYPSY, Mode.SUSPENSE}),
+    frozenset({Mode.ALTERED, Mode.ALT_BB3, Mode.SUPER_LOCRIAN}),
+    frozenset({Mode.DIMINISHED, Mode.WHOLE_HALF_DIMINISHED}),
+    frozenset({Mode.ENIGMATIC, Mode.DORIAN_B2}),
+    frozenset({Mode.HUNGARIAN_MINOR, Mode.ARABIAN}),
+    frozenset({Mode.KUMOI, Mode.SUSPENDED_PENTA}),
+    frozenset({Mode.LYDIAN_DOMINANT, Mode.ACOUSTIC_MAJOR}),
+    frozenset({Mode.LYDIAN, Mode.YAMAN}),
+    frozenset({Mode.MIXOLYDIAN, Mode.BEBOP_DOM_6}),
+    frozenset({Mode.SLENDRO_APPROX, Mode.BHUPALI, Mode.MAJOR_PENTATONIC}),
+}
+
+
+def _validate_mode_database() -> list[str]:
+    """Validate MODE_DATABASE for structural errors. Returns list of warnings."""
+    warnings: list[str] = []
+    for mode, defn in MODE_DATABASE.items():
+        ivs = defn.intervals
+        if ivs[0] != 0:
+            warnings.append(f"{mode.name}: intervals do not start with 0: {ivs}")
+        if ivs != sorted(ivs):
+            warnings.append(f"{mode.name}: intervals not sorted ascending: {ivs}")
+        for i in range(1, len(ivs)):
+            if ivs[i] - ivs[i - 1] <= 0:
+                warnings.append(f"{mode.name}: non-positive gap at index {i}: {ivs}")
+
+    seen: dict[tuple[float, ...], list[Mode]] = {}
+    for mode, defn in MODE_DATABASE.items():
+        key = tuple(defn.intervals)
+        seen.setdefault(key, []).append(mode)
+    for key, modes in seen.items():
+        if len(modes) > 1:
+            group = frozenset(modes)
+            if not any(group <= alias for alias in _INTENTIONAL_ALIASES):
+                names = ", ".join(m.name for m in modes)
+                warnings.append(f"Unintentional duplicate intervals {key}: {names}")
+    return warnings
+
+
+_MODE_WARNINGS = _validate_mode_database()
+assert not _MODE_WARNINGS, (
+    "MODE_DATABASE validation failed:\n" + "\n".join(_MODE_WARNINGS)
+)
 
 # Fallback/Backward compat:
 # --- Programmatic World Scale Engine ---

@@ -34,7 +34,31 @@ from melodica.types import NoteInfo, Scale
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
-from melodica.composer.psychoacoustic import psycho_verify, PsychoConfig
+from melodica.composer.psychoacoustic import psycho_verify, PsychoConfig, PsychoReport
+
+
+# ---------------------------------------------------------------------------
+# Pipeline infrastructure — pluggable stage architecture
+# ---------------------------------------------------------------------------
+
+@dataclass
+class TrackState:
+    """Mutable state passed between pipeline stages."""
+    tracks: Dict[str, List[NoteInfo]]
+    profiles: Dict = field(default_factory=dict)
+    mood_profile: _MoodProfile | None = None
+    pan_overrides: Dict = field(default_factory=dict)
+    psycho_report: PsychoReport | None = None
+    mastered: Dict[str, List[NoteInfo]] | None = None
+    cc_events: Dict[str, List[Tuple[float, int, int]]] = field(default_factory=dict)
+
+
+@dataclass
+class Stage:
+    """A single pipeline stage."""
+    name: str
+    fn: 'callable'
+    enabled: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -592,8 +616,8 @@ def _polyphony_limit(
             }
             active.sort(
                 key=lambda x: (
-                    -x[1].velocity,
                     role_priority.get(profiles.get(x[0], _TrackProfile(60, 0, 0, 0, Role.PAD)).role, 5),
+                    -x[1].velocity,
                 ),
             )
             for tname, n in active[max_voices:]:
@@ -770,6 +794,138 @@ def _merge_cc_events(*sources: Dict[str, List[Tuple[float, int, int]]]
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Pipeline stages — thin wrappers over existing functions
+# ---------------------------------------------------------------------------
+
+def _stage_auto_mix(kw):
+    mixed, profiles, pan_overrides = _auto_mix(kw["tracks"], kw["mood_profile"])
+    kw["tracks"] = mixed
+    kw["_profiles"] = profiles
+    kw["_pan_overrides"] = pan_overrides
+    return kw
+
+def _stage_dynamics(kw):
+    kw["tracks"] = _shape_dynamics(kw["tracks"], kw["mood_profile"])
+    return kw
+
+def _stage_sidechain(kw):
+    kw["tracks"] = _sidechain_duck(kw["tracks"], kw["_profiles"])
+    return kw
+
+def _stage_humanize(kw):
+    kw["tracks"] = _apply_humanization(kw["tracks"], kw["_profiles"])
+    return kw
+
+def _stage_sections(kw):
+    if kw.get("sections"):
+        kw["tracks"] = _apply_section_moods(kw["tracks"], kw["sections"], kw["_profiles"])
+    return kw
+
+def _stage_tension(kw):
+    chords = kw.get("chords")
+    if chords:
+        tension = _compute_tension(chords)
+        if tension > 0.7:
+            kw["tracks"] = _tension_boost(kw["tracks"], 1.10)
+        elif tension < 0.3:
+            kw["tracks"] = _tension_boost(kw["tracks"], 0.92)
+    return kw
+
+def _stage_polyphony(kw):
+    kw["tracks"] = _polyphony_limit(kw["tracks"], kw["_profiles"], max_voices=16)
+    return kw
+
+def _stage_psycho(kw):
+    if kw.get("psycho_verify_enabled", True):
+        config = PsychoConfig(aggressive_fix=kw["mood_profile"].psycho_aggressive)
+        kw["tracks"], psycho_report = psycho_verify(kw["tracks"], config, bpm=kw["bpm"])
+        kw["_psycho_report"] = psycho_report
+
+        from melodica.composer.orchestrator import analyze_orchestration
+        alerts = analyze_orchestration(kw["instruments"], tracks=kw["tracks"], chords=kw.get("chords"))
+
+        if kw.get("verbose"):
+            if psycho_report.issues_detected > 0:
+                print(f"   Psycho: {psycho_report.issues_detected} issues, "
+                      f"{psycho_report.issues_fixed} fixed "
+                      f"({psycho_report.notes_velocity_reduced} vel-, "
+                      f"{psycho_report.notes_removed} removed, "
+                      f"{psycho_report.notes_transposed} transposed)")
+            if alerts:
+                print("   Orchestration Alerts:")
+                for alert in alerts:
+                    print(f"     {alert}")
+    else:
+        kw["_psycho_report"] = None
+    return kw
+
+def _stage_sparse_safeguard(kw):
+    kw["tracks"] = _sparse_safeguard(kw["tracks"], kw["_profiles"])
+    return kw
+
+def _stage_master(kw):
+    mastered, master_cc = _auto_master(kw["tracks"], kw["_profiles"], kw["mood_profile"], kw["_pan_overrides"])
+    total_dur = max((n.start + n.duration for ns in mastered.values() for n in ns), default=0.0)
+    entry_cc = _generate_entry_fades(mastered, kw["_profiles"], total_dur)
+    reverb_cc = _generate_reverb_sends(mastered, kw["_profiles"], kw["mood_profile"])
+    delay_cc = _generate_delay_sends(mastered, kw["_profiles"])
+    all_cc = _merge_cc_events(master_cc, entry_cc, reverb_cc, delay_cc, kw.get("cc_events", {}))
+
+    kw["_mastered"] = mastered
+    kw["_all_cc"] = all_cc
+    return kw
+
+def _stage_export(kw):
+    export_multitrack_midi(
+        kw["_mastered"], str(kw["path"]), bpm=kw["bpm"], key=kw.get("key"),
+        instruments=kw["instruments"], cc_events=kw["_all_cc"],
+        tempo_events=kw.get("tempo_events"),
+    )
+    return kw
+
+def _stage_report(kw):
+    profiles = kw["_profiles"]
+    psycho_report = kw.get("_psycho_report")
+    mood = kw["mood"]
+    mood_profile = kw["mood_profile"]
+    all_cc = kw.get("_all_cc", {})
+
+    report = {
+        "profiles": {name: {"role": p.role.value, "avg_pitch": round(p.avg_pitch, 1),
+                            "density": round(p.density, 3), "rms": round(p.rms_velocity, 1),
+                            "entry": round(p.entry_beat, 1)}
+                     for name, p in profiles.items()},
+        "psycho": psycho_report,
+        "mood": mood.value,
+        "lufs": mood_profile.lufs,
+        "cc_events": {k: len(v) for k, v in all_cc.items()},
+    }
+
+    if kw.get("verbose"):
+        roles = {name: p.role.value for name, p in profiles.items()}
+        print(f"   Roles: {roles} | LUFS: {mood_profile.lufs}")
+
+    kw["_report"] = report
+    return kw
+
+
+DEFAULT_PIPELINE: list[Stage] = [
+    Stage("auto_mix",         _stage_auto_mix),
+    Stage("dynamics",         _stage_dynamics),
+    Stage("sidechain",        _stage_sidechain),
+    Stage("humanize",         _stage_humanize),
+    Stage("sections",         _stage_sections),
+    Stage("tension",          _stage_tension),
+    Stage("polyphony",        _stage_polyphony),
+    Stage("psycho",           _stage_psycho),
+    Stage("sparse_safeguard", _stage_sparse_safeguard),
+    Stage("master",           _stage_master),
+    Stage("export",           _stage_export),
+    Stage("report",           _stage_report),
+]
+
+
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -786,6 +942,7 @@ def produce_track(
     chords: List | None = None,
     cc_events: Dict[str, List[Tuple[float, int, int]]] | None = None,
     tempo_events: List[Tuple[float, float]] | None = None,
+    pipeline: list | None = None,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -810,9 +967,10 @@ def produce_track(
         Print processing report.
     sections : list of (beat, Mood), optional
         [FIX 3] Section-aware mood changes. Each tuple is (start_beat, mood).
-        Allows mood to change mid-track.
     chords : list of ChordLabel, optional
         [FIX 11] Chord progression for harmonic tension analysis.
+    pipeline : list of Stage, optional
+        Custom pipeline stages. If None, uses DEFAULT_PIPELINE.
 
     Returns
     -------
@@ -822,93 +980,25 @@ def produce_track(
     path.parent.mkdir(parents=True, exist_ok=True)
     mood_profile = _MOOD_PROFILES[mood]
 
-    # 1. Analyze + auto-mix
-    mixed, profiles, pan_overrides = _auto_mix(tracks, mood_profile)
+    # Build pipeline
+    stages = pipeline if pipeline is not None else DEFAULT_PIPELINE
 
-    # 2. Dynamics shaping
-    shaped = _shape_dynamics(mixed, mood_profile)
+    # Common kwargs passed to every stage
+    kw = dict(
+        tracks=tracks, bpm=bpm, instruments=instruments, path=path, mood=mood,
+        mood_profile=mood_profile, key=key, verbose=verbose,
+        psycho_verify_enabled=psycho_verify_enabled,
+        sections=sections, chords=chords, cc_events=cc_events or {},
+        tempo_events=tempo_events,
+    )
 
-    # 3. [FIX 1] Sidechain ducking
-    shaped = _sidechain_duck(shaped, profiles)
+    # Run stages sequentially
+    for stage in stages:
+        if not stage.enabled:
+            continue
+        kw = stage.fn(kw)
 
-    # 4. [FIX 7] Humanization / swing
-    shaped = _apply_humanization(shaped, profiles)
-
-    # 5. [FIX 3] Section-aware mood: apply per-section dynamics shaping
-    if sections:
-        shaped = _apply_section_moods(shaped, sections, profiles)
-
-    # 6. [FIX 11] Harmonic tension: adjust dynamics based on chord analysis
-    if chords:
-        tension = _compute_tension(chords)
-        if tension > 0.7:
-            # High tension — boost velocity by 10%
-            shaped = _tension_boost(shaped, 1.10)
-        elif tension < 0.3:
-            # Low tension — gentle reduction
-            shaped = _tension_boost(shaped, 0.92)
-
-    # 7. [FIX 5] Polyphony limiter — drop quietest notes beyond 16 voices
-    shaped = _polyphony_limit(shaped, profiles, max_voices=16)
-
-    # 8. Psychoacoustic verification (bpm-aware for blur threshold)
-    if psycho_verify_enabled:
-        config = PsychoConfig(aggressive_fix=mood_profile.psycho_aggressive)
-        shaped, psycho_report = psycho_verify(shaped, config, bpm=bpm)
-        
-        # Analyze orchestration
-        from melodica.composer.orchestrator import analyze_orchestration
-        alerts = analyze_orchestration(instruments, tracks=shaped, chords=chords)
-        
-        if verbose:
-            if psycho_report.issues_detected > 0:
-                print(f"   Psycho: {psycho_report.issues_detected} issues, "
-                      f"{psycho_report.issues_fixed} fixed "
-                      f"({psycho_report.notes_velocity_reduced} vel-, "
-                      f"{psycho_report.notes_removed} removed, "
-                      f"{psycho_report.notes_transposed} transposed)")
-            if alerts:
-                print("   Orchestration Alerts:")
-                for alert in alerts:
-                    print(f"     {alert}")
-    else:
-        psycho_report = None
-
-    # 9. [FIX 12] Sparse normalization safeguard
-    shaped = _sparse_safeguard(shaped, profiles)
-
-    # 10. Auto-master
-    mastered, master_cc = _auto_master(shaped, profiles, mood_profile, pan_overrides)
-
-    # 11. Generate CC events
-    total_dur = max((n.start + n.duration for ns in mastered.values() for n in ns), default=0.0)
-    entry_cc = _generate_entry_fades(mastered, profiles, total_dur)
-    reverb_cc = _generate_reverb_sends(mastered, profiles, mood_profile)
-    delay_cc = _generate_delay_sends(mastered, profiles)
-    all_cc = _merge_cc_events(master_cc, entry_cc, reverb_cc, delay_cc, cc_events or {})
-
-    # 12. Export
-    export_multitrack_midi(mastered, str(path), bpm=bpm, key=key,
-                           instruments=instruments, cc_events=all_cc,
-                           tempo_events=tempo_events)
-
-    # 13. Report
-    report = {
-        "profiles": {name: {"role": p.role.value, "avg_pitch": round(p.avg_pitch, 1),
-                            "density": round(p.density, 3), "rms": round(p.rms_velocity, 1),
-                            "entry": round(p.entry_beat, 1)}
-                     for name, p in profiles.items()},
-        "psycho": psycho_report,
-        "mood": mood.value,
-        "lufs": mood_profile.lufs,
-        "cc_events": {k: len(v) for k, v in all_cc.items()},
-    }
-
-    if verbose:
-        roles = {name: p.role.value for name, p in profiles.items()}
-        print(f"   Roles: {roles} | LUFS: {mood_profile.lufs}")
-
-    return report
+    return kw.get("_report", {})
 
 
 # ---------------------------------------------------------------------------

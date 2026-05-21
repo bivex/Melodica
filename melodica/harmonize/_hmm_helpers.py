@@ -457,7 +457,7 @@ def _get_cadence_bonus(prev_deg: int, curr_deg: int, scale: Scale | None = None)
             bonuses = MODAL_CADENCES[mode]
             if (prev_deg, curr_deg) in bonuses:
                 return bonuses[(prev_deg, curr_deg)]
-        
+
         # Generic interval-based minor check (fallback for exotic minor scales)
         intervals = scale.intervals()
         if len(intervals) > 2 and intervals[2] == 3:
@@ -474,4 +474,39 @@ def _get_cadence_bonus(prev_deg: int, curr_deg: int, scale: Scale | None = None)
 
     # Default to major scale bonuses (handles major / ionian and fallback)
     return _CADENCE_BONUSES.get((prev_deg, curr_deg), 0.0)
+
+
+# Modal gravity: characteristic scale degrees (0-indexed) for each mode.
+# Degrees listed here receive a scoring bonus, guiding the harmonizer toward
+# the most "characteristic" chords of the mode.
+MODAL_GRAVITY: dict[Mode, list[int]] = {
+    # Church / diatonic
+    Mode.DORIAN: [0, 3, 4],            # raised 6th (Dorian 6th), IV and I
+    Mode.PHRYGIAN: [0, 1, 5],          # flat 2nd (Neapolitan), i and vi
+    Mode.LYDIAN: [0, 1, 3],            # raised 4th (#11), II and IV
+    Mode.MIXOLYDIAN: [0, 4, 6],        # flat 7th (bVII), V and I
+    Mode.LOCRIAN: [0, 1, 3],           # flat 2nd, diminished i
+    # Minor variants
+    Mode.NATURAL_MINOR: [0, 4, 5],     # i, v, VI
+    Mode.AEOLIAN: [0, 4, 5],
+    Mode.HARMONIC_MINOR: [0, 4, 6],    # i, V (raised 7th), vii°
+    Mode.MELODIC_MINOR: [0, 3, 4],     # i, IV, V (ascending form)
+    # Blues
+    Mode.BLUES: [0, 3, 4],             # I, iv, v (blue notes)
+    # Pentatonic / Japanese
+    Mode.MINOR_PENTATONIC: [0, 2, 4],  # i, III, v
+    Mode.MAJOR_PENTATONIC: [0, 3, 4],  # I, IV, V
+    Mode.KUMOI: [0, 2, 3],
+    Mode.HIROJOSHI: [0, 2, 4],
+    # Exotic
+    Mode.BYZANTINE: [0, 1, 5],         # flat 2nd, i, vi
+    Mode.DOUBLE_HARMONIC: [0, 1, 5],
+    Mode.HUNGARIAN_MINOR: [0, 1, 4],
+    Mode.PERSIAN: [0, 1, 4],
+    Mode.PELOG_APPROX: [0, 1, 3],
+    # Symmetric
+    Mode.WHOLE_TONE: [0, 2, 4],        # every other degree
+    Mode.DIMINISHED: [0, 2, 4],
+    Mode.HALF_WHOLE_DIMINISHED: [0, 2, 4],
+}
 

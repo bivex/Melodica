@@ -160,6 +160,12 @@ def _select_chord(
         if is_cadence and degree in (1, 4, 5):
             weight += 0.3
 
+        # Modal gravity bonus
+        from melodica.harmonize._hmm_helpers import MODAL_GRAVITY
+        gravity_degrees = MODAL_GRAVITY.get(key.mode, ())
+        if (degree - 1) in gravity_degrees:
+            weight += 0.25
+
         if weight > best_weight:
             best_weight = weight
             best_chord = chord

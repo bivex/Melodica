@@ -89,10 +89,15 @@ class VoiceLeadingEngine:
 
     Takes chord progressions and produces 4-voice voicings with proper
     voice leading: no parallel fifths/octaves, minimal motion, proper ranges.
+
+    beam_width: number of beam candidates to keep per step.
+        beam_width=1 reproduces the old pairwise greedy behaviour.
+        beam_width>1 enables proper beam search for globally better voice leading.
     """
 
     strict_mode: bool = True  # if True, reject parallel fifths/octaves
     max_voice_gap: int = 12  # max interval between adjacent voices
+    beam_width: int = 3
 
     def voicize_progression(
         self,
@@ -102,30 +107,96 @@ class VoiceLeadingEngine:
         """
         Convert chord progression to 4-voice SATB voicing.
 
+        Uses beam search when beam_width > 1 for globally optimal voice leading.
         Returns dict with keys: "soprano", "alto", "tenor", "bass"
         Each value is a list of NoteInfo for that voice.
         """
         if not chords:
             return {v: [] for v in VOICE_ORDER}
 
-        # Initialize voices with first chord
+        voice_names = ["soprano", "alto", "tenor", "bass"]
+
+        if self.beam_width <= 1:
+            # Legacy pairwise greedy path
+            return self._voicize_greedy(chords, scale, voice_names)
+
+        # Beam search path
+        first_voicing = self._best_initial_voicing(chords[0], scale)
+        # Each beam: (cumulative_score, [voicing_per_chord])
+        beams: list[tuple[float, list[list[int]]]] = [(0.0, [first_voicing])]
+
+        for i in range(1, len(chords)):
+            new_beams: list[tuple[float, list[list[int]]]] = []
+            for score, path in beams:
+                prev_v = path[-1]
+                candidates = self._generate_candidates(chords[i], scale, prev_v)
+                for cand in candidates:
+                    if self.strict_mode and self._has_parallels(prev_v, cand):
+                        continue
+                    step_score = self._score_voicing(prev_v, cand)
+                    new_beams.append((score + step_score, path + [cand]))
+            if not new_beams:
+                # Fallback: accept all candidates even with parallels
+                for score, path in beams:
+                    prev_v = path[-1]
+                    candidates = self._generate_candidates(chords[i], scale, prev_v)
+                    for cand in candidates:
+                        step_score = self._score_voicing(prev_v, cand)
+                        new_beams.append((score + step_score, path + [cand]))
+            new_beams.sort(key=lambda x: -x[0])
+            beams = new_beams[: self.beam_width]
+
+        if not beams:
+            return self._voicize_greedy(chords, scale, voice_names)
+
+        best_voicings = beams[0][1]
+
+        # Convert to NoteInfo
+        result: dict[str, list[NoteInfo]] = {}
+        for vi, voice in enumerate(voice_names):
+            notes = []
+            for ci, chord in enumerate(chords):
+                pitch = best_voicings[ci][vi]
+                notes.append(
+                    NoteInfo(
+                        pitch=pitch,
+                        start=round(chord.start, 6),
+                        duration=chord.duration,
+                        velocity=80,
+                    )
+                )
+            result[voice] = notes
+        return result
+
+    def _has_parallels(self, prev: list[int], curr: list[int]) -> bool:
+        """Check all voice pairs for parallel fifths/octaves."""
+        for i in range(4):
+            for j in range(i + 1, 4):
+                if _is_parallel_fifth(prev[i], prev[j], curr[i], curr[j]):
+                    return True
+                if _is_parallel_octave(prev[i], prev[j], curr[i], curr[j]):
+                    return True
+        return False
+
+    def _voicize_greedy(
+        self,
+        chords: list[ChordLabel],
+        scale: Scale,
+        voice_names: list[str],
+    ) -> dict[str, list[NoteInfo]]:
+        """Legacy pairwise greedy voicize (beam_width=1 equivalent)."""
         voices: dict[str, list[int]] = {}
         first_voicing = self._best_initial_voicing(chords[0], scale)
-        # first_voicing is [sop, alt, ten, bass]
-        voice_names = ["soprano", "alto", "tenor", "bass"]
         for i, vn in enumerate(voice_names):
             voices[vn] = [first_voicing[i]]
 
-        # Progress through chords
         for i in range(1, len(chords)):
             prev_voicing = [voices[vn][-1] for vn in voice_names]
-            chord = chords[i]
-            candidates = self._generate_candidates(chord, scale, prev_voicing)
+            candidates = self._generate_candidates(chords[i], scale, prev_voicing)
             best = self._select_best(prev_voicing, candidates)
             for j, vn in enumerate(voice_names):
                 voices[vn].append(best[j])
 
-        # Convert to NoteInfo
         result: dict[str, list[NoteInfo]] = {}
         for voice in voice_names:
             notes = []
@@ -140,7 +211,6 @@ class VoiceLeadingEngine:
                     )
                 )
             result[voice] = notes
-
         return result
 
     def _best_initial_voicing(self, chord: ChordLabel, scale: Scale) -> list[int]:

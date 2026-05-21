@@ -176,7 +176,7 @@ class TestPsychoVerify:
             "melody": [_note(60, 0.0, 2.0)],
             "counter": [_note(72, 0.0, 2.0)],
         }
-        result, report = psycho_verify(tracks)
+        result, report = psycho_verify(tracks, destructive=True)
         assert report.notes_transposed >= 1
 
     def test_shortens_blurry(self):
