@@ -259,6 +259,27 @@ def _extract_notes(mid: mido.MidiFile, track_index: int) -> list[Note]:
 
 
 # ---------------------------------------------------------------------------
+# MATHEMATICAL GUARANTEE AGAINST PITCH BEND CLIPPING
+# ---------------------------------------------------------------------------
+# When exporting microtonal notes (e.g., quarter-tones or neutral intervals):
+# 1. Any fractional note pitch P is rounded to the nearest integer semitone:
+#    R = round(P)
+# 2. This guarantees that the fractional deviation D = P - R is strictly bounded:
+#    |D| <= 0.5 semitones (50 cents).
+# 3. Our MIDI track RPN initialization establishes a Pitch Bend Range of ±B semitones,
+#    where B >= 1 (default B = 2 semitones, which is ±200 cents).
+# 4. The pitchwheel value is scaled precisely as:
+#    bend_value = int(D * (8192.0 / B))
+# 5. Since |D| <= 0.5 and B >= 1, the maximum bend value is:
+#    |bend_value| <= 0.5 * (8192.0 / B) <= 4096.0
+# 6. Since the MIDI pitchwheel range is [-8192, 8191], our maximum deviation of ±4096
+#    occupies at most 50% of the available range (and only 25% under the default B = 2).
+# 7. Therefore, pitch bend values will NEVER clip or exceed MIDI boundary limits,
+#    regardless of the microtonal interval or tuning system used.
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
 # Write — NoteInfo list (from generators / Idea Tool)
 # ---------------------------------------------------------------------------
 
@@ -377,50 +398,82 @@ def export_multitrack_midi(
         last_tick = tick
 
 
-    # 2. Add individual tracks
+    # 2. Dynamic voice channel pool allocation to prevent polyphonic pitch bend overlap.
+    # Identify which tracks in tracks_data contain microtonal notes.
+    microtonal_tracks = []
+    for name, notes in tracks_data.items():
+        has_micro = False
+        for n in notes:
+            if abs(n.pitch - round(n.pitch)) > 0.001:
+                has_micro = True
+                break
+        if has_micro:
+            microtonal_tracks.append(name)
+
+    track_channels: dict[str, list[int]] = {}
+    next_chan = 0
+    for name in tracks_data.keys():
+        if name in microtonal_tracks:
+            # Give a pool of 3 channels for polyphonic microtonal voice allocation
+            pool_size = 3
+            remaining_tracks = len(tracks_data) - len(track_channels) - 1
+            if next_chan + pool_size + remaining_tracks > 16:
+                pool_size = max(1, 16 - next_chan - remaining_tracks)
+            
+            track_channels[name] = list(range(next_chan, next_chan + pool_size))
+            next_chan += pool_size
+        else:
+            # Diatonic tracks only need 1 channel
+            track_channels[name] = [next_chan]
+            next_chan += 1
+        # Clamp channels to range 0-15
+        track_channels[name] = [min(15, ch) for ch in track_channels[name]]
+
+    # 3. Add individual tracks
     for i, (name, notes) in enumerate(tracks_data.items()):
         if i >= 16:
             break  # MIDI limit
 
-        channel = i
+        pool = track_channels.get(name, [i])
 
         tr = mido.MidiTrack()
         mid.tracks.append(tr)
         tr.append(mido.MetaMessage("track_name", name=name, time=0))
 
-        # Program change: use instruments map if provided, else default to 0
-        program = (instruments or {}).get(name, 0)
-        tr.append(mido.Message("program_change", program=program, channel=channel, time=0))
+        # Program change and controllers: broadcast to all channels in the pool
+        for channel in pool:
+            program = (instruments or {}).get(name, 0)
+            tr.append(mido.Message("program_change", program=program, channel=channel, time=0))
 
-        if volumes and name in volumes:
+            if volumes and name in volumes:
+                tr.append(
+                    mido.Message(
+                        "control_change",
+                        control=7,
+                        value=max(0, min(127, volumes[name])),
+                        channel=channel,
+                        time=0,
+                    )
+                )
+
+            # RPN 0x0000 — Pitch Bend Range (semitones)
+            tr.append(mido.Message("control_change", control=101, value=0, channel=channel, time=0))
+            tr.append(mido.Message("control_change", control=100, value=0, channel=channel, time=0))
             tr.append(
                 mido.Message(
-                    "control_change",
-                    control=7,
-                    value=max(0, min(127, volumes[name])),
-                    channel=channel,
-                    time=0,
+                    "control_change", control=6, value=pitch_bend_range, channel=channel, time=0
                 )
             )
-
-        # RPN 0x0000 — Pitch Bend Range (semitones)
-        # Protocol: CC101=0, CC100=0 selects the parameter; CC6=semitones, CC38=cents
-        tr.append(mido.Message("control_change", control=101, value=0, channel=channel, time=0))
-        tr.append(mido.Message("control_change", control=100, value=0, channel=channel, time=0))
-        tr.append(
-            mido.Message(
-                "control_change", control=6, value=pitch_bend_range, channel=channel, time=0
-            )
-        )
-        tr.append(mido.Message("control_change", control=38, value=0, channel=channel, time=0))
-        # Null RPN — deselect active parameter to prevent accidental CC6 overrides later
-        tr.append(mido.Message("control_change", control=101, value=127, channel=channel, time=0))
-        tr.append(mido.Message("control_change", control=100, value=127, channel=channel, time=0))
+            tr.append(mido.Message("control_change", control=38, value=0, channel=channel, time=0))
+            # Null RPN to prevent accidental CC6 overrides later
+            tr.append(mido.Message("control_change", control=101, value=127, channel=channel, time=0))
+            tr.append(mido.Message("control_change", control=100, value=127, channel=channel, time=0))
 
         # Build all events: note_on, note_off, control_change, pitchwheel
-        events: list[tuple[int, str, int, int]] = []
+        # Format: (tick, msg_type, val1, val2, channel)
+        events: list[tuple[int, str, int, int, int]] = []
 
-        # 1. Calculate jittered onsets first to handle timing changes deterministically
+        # 3.1. Calculate jittered onsets first to handle timing changes deterministically
         jittered_notes = []
         for n in notes:
             onset = max(0.0, n.start)
@@ -437,7 +490,7 @@ def export_multitrack_midi(
         # Sort chronologically by onset
         jittered_notes.sort(key=lambda jn: jn["onset"])
 
-        # 2. Prevent same-pitch note overlaps by trimming overlapping note durations
+        # 3.2. Prevent same-pitch note overlaps by trimming overlapping note durations
         pitch_last_note = {}
         for jn in jittered_notes:
             pitch = jn["note"].pitch
@@ -449,11 +502,26 @@ def export_multitrack_midi(
                     prev_jn["duration"] = max(0.01, jn["onset"] - prev_jn["onset"] - 0.02)
             pitch_last_note[pitch] = jn
 
-        # 3. Generate events
+        # Polyphonic voice channel allocation tracker for the pool
+        channel_busy_until = {ch: -1.0 for ch in pool}
+
+        # 3.3. Generate events
         for jn in jittered_notes:
             n = jn["note"]
             onset = jn["onset"]
             duration = jn["duration"]
+
+            # Dynamic voice allocation
+            assigned_ch = None
+            for ch in pool:
+                if channel_busy_until[ch] <= onset:
+                    assigned_ch = ch
+                    break
+            if assigned_ch is None:
+                # Steal the voice that becomes free earliest
+                assigned_ch = min(pool, key=lambda ch: channel_busy_until[ch])
+            
+            channel_busy_until[assigned_ch] = onset + duration
 
             on_tick = round(onset * tpb)
             off_tick = round((onset + duration) * tpb)
@@ -463,8 +531,8 @@ def export_multitrack_midi(
             bend_value = int(deviation * (8192.0 / pitch_bend_range))
 
             # Note on/off
-            events.append((on_tick, "note_on", rounded_pitch, n.velocity))
-            events.append((off_tick, "note_off", rounded_pitch, 0))
+            events.append((on_tick, "note_on", rounded_pitch, n.velocity, assigned_ch))
+            events.append((off_tick, "note_off", rounded_pitch, 0, assigned_ch))
 
             has_cc11 = False
             custom_bend = 0
@@ -475,28 +543,27 @@ def export_multitrack_midi(
                     if cc_num == 11:
                         has_cc11 = True
                     if isinstance(cc_num, int) and 0 <= cc_num <= 127:
-                        events.append((on_tick, "control_change", cc_num, max(0, min(127, cc_val))))
+                        events.append((on_tick, "control_change", cc_num, max(0, min(127, cc_val)), assigned_ch))
                     elif cc_num == "pitch_bend":
                         custom_bend = int(cc_val)
                         has_custom_bend = True
 
             total_bend = max(-8192, min(8191, bend_value + custom_bend))
             if bend_value != 0 or has_custom_bend:
-                events.append((on_tick, "pitchwheel", total_bend, 0))
-                events.append((off_tick, "pitchwheel_reset", 0, 0))
+                events.append((on_tick, "pitchwheel", total_bend, 0, assigned_ch))
+                events.append((off_tick, "pitchwheel_reset", 0, 0, assigned_ch))
 
             # Advanced humanized CC11 (Expression) and CC1 (Modulation) for long notes
             if humanize and duration > 1.5:
                 if not has_cc11:
-                    cc_steps = max(3, int(duration / 0.25))  # Thinned out from 0.125 to 0.25
+                    cc_steps = max(3, int(duration / 0.25))
                     for step in range(cc_steps + 1):
                         t_beat = onset + (step / cc_steps) * duration
-                        # A breathing wave LFO at 0.5 Hz (approx 2 beats per cycle at default tempo) with random micro-jitter
                         phase = (t_beat - onset) * math.pi / 2.0
                         import random
                         jitter = random.uniform(-4, 4)
                         val = 75 + int(math.sin(phase) * 30) + int(jitter)
-                        events.append((round(t_beat * tpb), "control_change", 11, max(0, min(127, val))))
+                        events.append((round(t_beat * tpb), "control_change", 11, max(0, min(127, val)), assigned_ch))
 
                 # Modulation / Vibrato / Filter sweeps LFO on CC1 for solo & pad instruments
                 is_expressive_solo = any(
@@ -504,32 +571,27 @@ def export_multitrack_midi(
                     for k in ["cello", "viola", "flute", "clarinet", "voice", "choir", "strings", "pad"]
                 )
                 if is_expressive_solo:
-                    cc_steps = max(3, int(duration / 0.25))  # Thinned out from 0.125 to 0.25
+                    cc_steps = max(3, int(duration / 0.25))
                     for step in range(cc_steps + 1):
                         t_beat = onset + (step / cc_steps) * duration
                         time_since_start = t_beat - onset
-
-                        # Delayed vibrato LFO (ramps up over 1.0 beat)
                         ramp = min(1.0, time_since_start / 1.0)
 
                         if "pad" in name.lower() or "choir" in name.lower():
-                            # Evolving filter sweep LFO (slow, 0.1 Hz)
                             phase = time_since_start * math.pi / 4.0  # 8 beats per cycle
                             val = 45 + int(math.sin(phase) * 25)
                         else:
-                            # 6 Hz acoustic vibrato LFO
                             cycles_per_beat = 6.0 * (60.0 / bpm)
                             phase = time_since_start * 2.0 * math.pi * cycles_per_beat
                             val = int(ramp * (35 + int(math.sin(phase) * 15)))
 
-                        events.append((round(t_beat * tpb), "control_change", 1, max(0, min(127, val))))
+                        events.append((round(t_beat * tpb), "control_change", 1, max(0, min(127, val)), assigned_ch))
 
-        # Auto sustain pedal (CC64) automation for piano, harp, arpeggios
+        # Auto sustain pedal (CC64) automation for piano, harp, arpeggios: broadcast to pool
         is_pedal_inst = any(k in name.lower() for k in ["harp", "piano", "arp"])
         if humanize and is_pedal_inst and notes:
             max_end = max(n.start + n.duration for n in notes)
             t_pedal = 0.0
-            # Check if there is already manual sustain pedal in cc_events
             has_manual_pedal = False
             if cc_events and name in cc_events:
                 if any(ev[1] == 64 for ev in cc_events[name]):
@@ -537,18 +599,18 @@ def export_multitrack_midi(
             
             if not has_manual_pedal:
                 while t_pedal < max_end:
-                    # Press pedal at the start of measure (t_pedal)
-                    events.append((round(t_pedal * tpb), "control_change", 64, 127))
-                    # Release pedal just before the next measure (t_pedal + 3.95)
-                    release_time = min(t_pedal + 3.95, max_end)
-                    events.append((round(release_time * tpb), "control_change", 64, 0))
+                    for ch in pool:
+                        events.append((round(t_pedal * tpb), "control_change", 64, 127, ch))
+                        release_time = min(t_pedal + 3.95, max_end)
+                        events.append((round(release_time * tpb), "control_change", 64, 0, ch))
                     t_pedal += 4.0
 
-        # Standalone CC events (e.g. sustain pedal boundaries)
+        # Standalone CC events: broadcast to all channels in pool
         if cc_events and name in cc_events:
             for beat, cc_num, cc_val in cc_events[name]:
                 tick = round(max(0.0, beat) * tpb)
-                events.append((tick, "control_change", cc_num, max(0, min(127, cc_val))))
+                for ch in pool:
+                    events.append((tick, "control_change", cc_num, max(0, min(127, cc_val)), ch))
 
         # Sort using type_order to prevent note start/end artifacts and tail-bend issues
         type_order = {
@@ -561,7 +623,7 @@ def export_multitrack_midi(
         events.sort(key=lambda e: (e[0], type_order.get(e[1], 5)))
 
         prev_tick = 0
-        for tick, msg_type, data1, data2 in events:
+        for tick, msg_type, data1, data2, ch in events:
             delta = max(0, tick - prev_tick)
             if msg_type == "control_change":
                 tr.append(
@@ -570,11 +632,11 @@ def export_multitrack_midi(
                         control=int(data1),
                         value=int(data2),
                         time=delta,
-                        channel=channel,
+                        channel=ch,
                     )
                 )
             elif msg_type in ("pitchwheel", "pitchwheel_reset"):
-                tr.append(mido.Message("pitchwheel", pitch=int(data1), time=delta, channel=channel))
+                tr.append(mido.Message("pitchwheel", pitch=int(data1), time=delta, channel=ch))
             else:
                 tr.append(
                     mido.Message(
@@ -582,7 +644,7 @@ def export_multitrack_midi(
                         note=int(data1),
                         velocity=int(data2),
                         time=delta,
-                        channel=channel,
+                        channel=ch,
                     )
                 )
             prev_tick = tick
@@ -661,10 +723,33 @@ def export_midi(
             meta_track.append(msg)
             last_tick = tick
 
-    # 2. Individual Tracks
+    # 2. Dynamic voice channel pool allocation to prevent polyphonic pitch bend overlap.
+    # Pre-assigned channels in the Track objects
+    used_channels = {t.channel for t in tracks}
+    # Unused channels we can borrow for polyphonic pitch bends
+    free_channels = [ch for ch in range(16) if ch not in used_channels]
+
+    track_pools: dict[int, list[int]] = {}
+    for idx, t in enumerate(tracks):
+        pool = [t.channel]
+        has_micro = False
+        for n in t.notes:
+            if abs(n.pitch - round(n.pitch)) > 0.001:
+                has_micro = True
+                break
+        if has_micro:
+            # Borrow up to 2 free channels for the pool to support polyphony
+            borrow_count = min(2, len(free_channels))
+            for _ in range(borrow_count):
+                pool.append(free_channels.pop(0))
+        track_pools[idx] = pool
+
+    # 3. Individual Tracks
     for i, t in enumerate(tracks):
         if i >= 16:
             break
+
+        pool = track_pools.get(i, [t.channel])
 
         tr = mido.MidiTrack()
         mid.tracks.append(tr)
@@ -672,74 +757,73 @@ def export_midi(
         if t.instrument_name:
             tr.append(mido.MetaMessage("instrument_name", name=t.instrument_name, time=0))
 
-        # Program Change (instrument selection)
-        tr.append(mido.Message("program_change", program=t.program, channel=t.channel, time=0))
+        # Program changes and controllers: broadcast to all channels in the pool
+        for channel in pool:
+            tr.append(mido.Message("program_change", program=t.program, channel=channel, time=0))
 
-        # CC 7  — Channel Volume (static mix level — do not automate)
-        tr.append(
-            mido.Message("control_change", control=7, value=t.volume, channel=t.channel, time=0)
-        )
-        # CC 10 — Pan
-        tr.append(
-            mido.Message("control_change", control=10, value=t.pan, channel=t.channel, time=0)
-        )
-        # CC 11 — Expression (dynamic shaping within volume)
-        tr.append(
-            mido.Message(
-                "control_change", control=11, value=t.expression, channel=t.channel, time=0
+            # CC 7  — Channel Volume (static mix level — do not automate)
+            tr.append(
+                mido.Message("control_change", control=7, value=t.volume, channel=channel, time=0)
             )
-        )
-        # CC 1  — Modulation (vibrato depth; 0 = off at start, shaped by automation)
-        tr.append(
-            mido.Message("control_change", control=1, value=t.modulation, channel=t.channel, time=0)
-        )
-        # CC 73 — Attack Time
-        tr.append(
-            mido.Message("control_change", control=73, value=t.attack, channel=t.channel, time=0)
-        )
-        # CC 72 — Release Time
-        tr.append(
-            mido.Message("control_change", control=72, value=t.release, channel=t.channel, time=0)
-        )
-        # CC 74 is NOT written here — apply_articulation provides per-note CC74.
-        # Writing it here would conflict with articulation-driven brightness.
-        # CC 91 — Reverb Send
-        tr.append(
-            mido.Message("control_change", control=91, value=t.reverb, channel=t.channel, time=0)
-        )
-        # CC 93 — Chorus Send
-        tr.append(
-            mido.Message("control_change", control=93, value=t.chorus, channel=t.channel, time=0)
-        )
-        # CC 3  — Vibrato depth (0=off at start; automation/apply_articulation shapes it)
-        tr.append(
-            mido.Message("control_change", control=3, value=t.vibrato, channel=t.channel, time=0)
-        )
-        # CC 64 — Sustain Pedal / Articulation Trigger
-        tr.append(
-            mido.Message(
-                "control_change", control=64, value=t.sustain_pedal, channel=t.channel, time=0
+            # CC 10 — Pan
+            tr.append(
+                mido.Message("control_change", control=10, value=t.pan, channel=channel, time=0)
             )
-        )
+            # CC 11 — Expression (dynamic shaping within volume)
+            tr.append(
+                mido.Message(
+                    "control_change", control=11, value=t.expression, channel=channel, time=0
+                )
+            )
+            # CC 1  — Modulation (vibrato depth)
+            tr.append(
+                mido.Message("control_change", control=1, value=t.modulation, channel=channel, time=0)
+            )
+            # CC 73 — Attack Time
+            tr.append(
+                mido.Message("control_change", control=73, value=t.attack, channel=channel, time=0)
+            )
+            # CC 72 — Release Time
+            tr.append(
+                mido.Message("control_change", control=72, value=t.release, channel=channel, time=0)
+            )
+            # CC 91 — Reverb Send
+            tr.append(
+                mido.Message("control_change", control=91, value=t.reverb, channel=channel, time=0)
+            )
+            # CC 93 — Chorus Send
+            tr.append(
+                mido.Message("control_change", control=93, value=t.chorus, channel=channel, time=0)
+            )
+            # CC 3  — Vibrato depth
+            tr.append(
+                mido.Message("control_change", control=3, value=t.vibrato, channel=channel, time=0)
+            )
+            # CC 64 — Sustain Pedal / Articulation Trigger
+            tr.append(
+                mido.Message(
+                    "control_change", control=64, value=t.sustain_pedal, channel=channel, time=0
+                )
+            )
 
-        # RPN 0x0000 — Pitch Bend Range (semitones)
-        # Protocol: CC101=0, CC100=0 selects the parameter; CC6=semitones, CC38=cents
-        tr.append(mido.Message("control_change", control=101, value=0, channel=t.channel, time=0))
-        tr.append(mido.Message("control_change", control=100, value=0, channel=t.channel, time=0))
-        tr.append(
-            mido.Message(
-                "control_change", control=6, value=t.pitch_bend_range, channel=t.channel, time=0
+            # RPN 0x0000 — Pitch Bend Range (semitones)
+            tr.append(mido.Message("control_change", control=101, value=0, channel=channel, time=0))
+            tr.append(mido.Message("control_change", control=100, value=0, channel=channel, time=0))
+            tr.append(
+                mido.Message(
+                    "control_change", control=6, value=t.pitch_bend_range, channel=channel, time=0
+                )
             )
-        )
-        tr.append(mido.Message("control_change", control=38, value=0, channel=t.channel, time=0))
-        # Null RPN — deselect active parameter to prevent accidental CC6 overrides later
-        tr.append(mido.Message("control_change", control=101, value=127, channel=t.channel, time=0))
-        tr.append(mido.Message("control_change", control=100, value=127, channel=t.channel, time=0))
+            tr.append(mido.Message("control_change", control=38, value=0, channel=channel, time=0))
+            # Null RPN to prevent accidental CC6 overrides later
+            tr.append(mido.Message("control_change", control=101, value=127, channel=channel, time=0))
+            tr.append(mido.Message("control_change", control=100, value=127, channel=channel, time=0))
 
         # Build relative events
-        events: list[tuple[int, str, int, int]] = []
+        # Format: (tick, msg_type, val1, val2, channel)
+        events: list[tuple[int, str, int, int, int]] = []
 
-        # 1. Calculate jittered onsets first to handle timing changes deterministically
+        # 3.1. Calculate jittered onsets first to handle timing changes deterministically
         jittered_notes = []
         for n in t.notes:
             onset = max(0.0, n.start)
@@ -756,7 +840,7 @@ def export_midi(
         # Sort chronologically by onset
         jittered_notes.sort(key=lambda jn: jn["onset"])
 
-        # 2. Prevent same-pitch note overlaps by trimming overlapping note durations
+        # 3.2. Prevent same-pitch note overlaps by trimming overlapping note durations
         pitch_last_note = {}
         for jn in jittered_notes:
             pitch = jn["note"].pitch
@@ -768,22 +852,36 @@ def export_midi(
                     prev_jn["duration"] = max(0.01, jn["onset"] - prev_jn["onset"] - 0.02)
             pitch_last_note[pitch] = jn
 
-        # 3. Generate events
+        # Polyphonic voice channel allocation tracker for the pool
+        channel_busy_until = {ch: -1.0 for ch in pool}
+
+        # 3.3. Generate events
         for jn in jittered_notes:
             n = jn["note"]
             onset = jn["onset"]
             duration = jn["duration"]
 
+            # Dynamic voice allocation
+            assigned_ch = None
+            for ch in pool:
+                if channel_busy_until[ch] <= onset:
+                    assigned_ch = ch
+                    break
+            if assigned_ch is None:
+                # Steal the voice that becomes free earliest
+                assigned_ch = min(pool, key=lambda ch: channel_busy_until[ch])
+            
+            channel_busy_until[assigned_ch] = onset + duration
+
             on_tick = round(onset * tpb)
             off_tick = round((onset + duration) * tpb)
 
-            # Round the note's pitch to the nearest semitone
             rounded_pitch = int(round(n.pitch))
             deviation = n.pitch - rounded_pitch
             bend_value = int(deviation * (8192.0 / t.pitch_bend_range))
 
-            events.append((on_tick, "note_on", rounded_pitch, n.velocity))
-            events.append((off_tick, "note_off", rounded_pitch, 0))
+            events.append((on_tick, "note_on", rounded_pitch, n.velocity, assigned_ch))
+            events.append((off_tick, "note_off", rounded_pitch, 0, assigned_ch))
 
             has_cc11 = False
             custom_bend = 0
@@ -796,12 +894,12 @@ def export_midi(
                     custom_bend = int(cc_val)
                     has_custom_bend = True
                 else:
-                    events.append((on_tick, "control_change", cc_num, cc_val))
+                    events.append((on_tick, "control_change", cc_num, cc_val, assigned_ch))
 
             total_bend = max(-8192, min(8191, bend_value + custom_bend))
             if bend_value != 0 or has_custom_bend:
-                events.append((on_tick, "pitchwheel", total_bend, 0))
-                events.append((off_tick, "pitchwheel_reset", 0, 0))
+                events.append((on_tick, "pitchwheel", total_bend, 0, assigned_ch))
+                events.append((off_tick, "pitchwheel_reset", 0, 0, assigned_ch))
 
             # Auto CC11 for long notes
             if humanize and duration > 1.5 and not has_cc11:
@@ -810,13 +908,14 @@ def export_midi(
                     t_beat = onset + (i / cc_steps) * duration
                     phase = (i / cc_steps) * math.pi
                     val = 60 + int(math.sin(phase) * 60)
-                    events.append((round(t_beat * tpb), "control_change", 11, val))
+                    events.append((round(t_beat * tpb), "control_change", 11, val, assigned_ch))
 
-        # Keyswitch events: 1-tick note_on/note_off at the specified beat positions
+        # Keyswitch events: broadcast to all channels in the pool to ensure correct articulation on all voices
         for ks_beat, ks_pitch in t.keyswitch_events:
             ks_tick = round(ks_beat * tpb)
-            events.append((ks_tick, "note_on", ks_pitch, 64))
-            events.append((ks_tick + 1, "note_off", ks_pitch, 0))
+            for ch in pool:
+                events.append((ks_tick, "note_on", ks_pitch, 64, ch))
+                events.append((ks_tick + 1, "note_off", ks_pitch, 0, ch))
 
         # Sort using type_order to prevent note start/end artifacts and tail-bend issues
         type_order = {
@@ -829,7 +928,7 @@ def export_midi(
         events.sort(key=lambda e: (e[0], type_order.get(e[1], 5)))
 
         prev_tick = 0
-        for tick, msg_type, val1, val2 in events:
+        for tick, msg_type, val1, val2, ch in events:
             delta = max(0, tick - prev_tick)
             if msg_type == "control_change":
                 tr.append(
@@ -838,17 +937,17 @@ def export_midi(
                         control=int(val1),
                         value=int(val2),
                         time=delta,
-                        channel=t.channel,
+                        channel=ch,
                     )
                 )
             elif msg_type in ("pitchwheel", "pitchwheel_reset"):
                 tr.append(
-                    mido.Message("pitchwheel", pitch=int(val1), time=delta, channel=t.channel)
+                    mido.Message("pitchwheel", pitch=int(val1), time=delta, channel=ch)
                 )
             else:
                 tr.append(
                     mido.Message(
-                        msg_type, note=int(val1), velocity=int(val2), time=delta, channel=t.channel
+                        msg_type, note=int(val1), velocity=int(val2), time=delta, channel=ch
                     )
                 )
             prev_tick = tick

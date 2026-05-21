@@ -244,8 +244,8 @@ MODAL_CADENCES: dict[Mode, dict[tuple[int, int], float]] = {
         (4, 0): 0.75,
     },
     Mode.ARABIAN: {
-        (3, 0): 0.75,
-        (4, 0): 0.8,
+        (4, 0): 0.85,
+        (6, 0): 0.75,
     },
     Mode.SPANISH_8_TONE: {
         (1, 0): 0.8,

@@ -48,13 +48,13 @@ def run_smoke_track():
 
     # 2. Harmonize using HMM3Harmonizer
     print("\n[1/3] Running HMM3Harmonizer...")
-    start_time = time.perf_counter()
+    start_harm = time.perf_counter()
     harmonizer = HMM3Harmonizer(chord_change="bars")  # chord every bar (4 beats)
     chords = harmonizer.harmonize(melody, key, 32.0)
-    end_time = time.perf_counter()
+    end_harm = time.perf_counter()
 
-    elapsed = end_time - start_time
-    print(f"Harmonization completed in {elapsed:.4f} seconds.")
+    harm_elapsed_ms = (end_harm - start_harm) * 1000.0
+    print(f"Harmonization completed in {harm_elapsed_ms:.2f} ms.")
 
     # 3. Print the generated chord progression
     print("\nGenerated Chord Progression:")
@@ -83,6 +83,7 @@ def run_smoke_track():
     midi_path = output_dir / "smoke_track_dorian.mid"
 
     print(f"\n[2/3] Exporting to MIDI: {midi_path}...")
+    start_export = time.perf_counter()
     export_multitrack_midi(
         tracks_data={"melody": melody},
         path=midi_path,
@@ -90,7 +91,11 @@ def run_smoke_track():
         key=key,
         humanize=True
     )
-    print("MIDI exported successfully!")
+    end_export = time.perf_counter()
+    export_elapsed_ms = (end_export - start_export) * 1000.0
+    print(f"MIDI exported successfully in {export_elapsed_ms:.2f} ms!")
+
+    print(f"\nPhase Timings: [harmonize: {harm_elapsed_ms:.2f} ms] [export: {export_elapsed_ms:.2f} ms]")
 
     print("\n[3/3] Overall Smoke Track check: PASSED!")
     print("=" * 60)

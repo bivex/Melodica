@@ -306,7 +306,7 @@ class TestHMM3Harmonizer:
         assert len(chords) > 0
 
 
-class TestDorianProgressionIntegration:
+class TestModalProgressionIntegration:
     def test_dorian_plagal_cadence_hmm3(self):
         """
         Verify that HMM3Harmonizer harmonizing a Dorian melody in D Dorian
@@ -338,6 +338,56 @@ class TestDorianProgressionIntegration:
 
         assert has_i, "Dorian progression should contain the tonic i chord"
         assert has_iv, "Dorian progression should contain the plagal IV chord"
+
+    def test_phrygian_cadence_hmm3(self):
+        """
+        Verify that HMM3Harmonizer harmonizing a Phrygian melody in D Phrygian
+        produces Phrygian-appropriate resolution (resolving to i chord, which is D minor).
+        """
+        # D Phrygian melody emphasizing the minor 2nd (Eb, pitch 63)
+        melody = [
+            NoteInfo(pitch=62, start=0.0, duration=1.0, velocity=80),  # D
+            NoteInfo(pitch=63, start=1.0, duration=1.0, velocity=80),  # Eb (characteristic minor 2nd)
+            NoteInfo(pitch=65, start=2.0, duration=1.0, velocity=80),  # F
+            NoteInfo(pitch=63, start=3.0, duration=1.0, velocity=80),  # Eb
+            NoteInfo(pitch=62, start=4.0, duration=2.0, velocity=80),  # D (resolution)
+        ]
+        key = Scale(root=2, mode=Mode.PHRYGIAN)  # D Phrygian
+
+        h = HMM3Harmonizer(chord_change="bars")
+        chords = h.harmonize(melody, key, 8.0)
+
+        assert len(chords) > 0
+        has_i = any(c.degree == 1 for c in chords)
+        has_modal = any(c.degree in (2, 5, 7) for c in chords)
+
+        assert has_i, "Phrygian progression should contain the tonic i chord"
+        assert has_modal, "Phrygian progression should contain a characteristic Phrygian chord (bII, v, or bVII)"
+
+    def test_lydian_cadence_hmm3(self):
+        """
+        Verify that HMM3Harmonizer harmonizing a Lydian melody in C Lydian
+        produces Lydian-appropriate resolution (resolving to I chord, which is C major).
+        """
+        # C Lydian melody emphasizing the raised 4th (F#, pitch 66)
+        melody = [
+            NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80),  # C
+            NoteInfo(pitch=66, start=1.0, duration=1.0, velocity=80),  # F# (characteristic raised 4th)
+            NoteInfo(pitch=67, start=2.0, duration=1.0, velocity=80),  # G
+            NoteInfo(pitch=66, start=3.0, duration=1.0, velocity=80),  # F#
+            NoteInfo(pitch=64, start=4.0, duration=2.0, velocity=80),  # E (resolution)
+        ]
+        key = Scale(root=0, mode=Mode.LYDIAN)  # C Lydian
+
+        h = HMM3Harmonizer(chord_change="bars")
+        chords = h.harmonize(melody, key, 8.0)
+
+        assert len(chords) > 0
+        has_i = any(c.degree == 1 for c in chords)
+        has_modal = any(c.degree in (2, 4, 7) for c in chords)
+
+        assert has_i, "Lydian progression should contain the tonic I chord"
+        assert has_modal, "Lydian progression should contain a characteristic Lydian chord (II, IV, or VII)"
 
 
 class TestGeneticHarmonizer:
