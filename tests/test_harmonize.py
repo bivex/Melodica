@@ -430,3 +430,58 @@ class TestModalAwareCadenceScoring:
         bonus_minor = _get_cadence_bonus(4, 0, scale_minor)
         assert bonus_minor == 0.8
 
+    def test_dorian_cadence_bonuses(self):
+        from melodica.harmonize._hmm_helpers import _get_cadence_bonus
+        scale = Scale(root=2, mode=Mode.DORIAN)
+        # IV -> i is 3 -> 0
+        assert _get_cadence_bonus(3, 0, scale) == 0.8
+        # ii -> i is 1 -> 0
+        assert _get_cadence_bonus(1, 0, scale) == 0.7
+        # bVII -> i is 6 -> 0
+        assert _get_cadence_bonus(6, 0, scale) == 0.6
+
+    def test_phrygian_cadence_bonuses(self):
+        from melodica.harmonize._hmm_helpers import _get_cadence_bonus
+        scale = Scale(root=4, mode=Mode.PHRYGIAN)
+        # bII -> i is 1 -> 0
+        assert _get_cadence_bonus(1, 0, scale) == 0.85
+        # bvii -> i is 6 -> 0
+        assert _get_cadence_bonus(6, 0, scale) == 0.7
+        # bIII -> i is 2 -> 0
+        assert _get_cadence_bonus(2, 0, scale) == 0.5
+
+    def test_lydian_cadence_bonuses(self):
+        from melodica.harmonize._hmm_helpers import _get_cadence_bonus
+        scale = Scale(root=0, mode=Mode.LYDIAN)
+        # II -> I is 1 -> 0
+        assert _get_cadence_bonus(1, 0, scale) == 0.85
+        # vii -> I is 6 -> 0
+        assert _get_cadence_bonus(6, 0, scale) == 0.7
+
+    def test_mixolydian_cadence_bonuses(self):
+        from melodica.harmonize._hmm_helpers import _get_cadence_bonus
+        scale = Scale(root=7, mode=Mode.MIXOLYDIAN)
+        # bVII -> I is 6 -> 0
+        assert _get_cadence_bonus(6, 0, scale) == 0.8
+        # v -> I is 4 -> 0
+        assert _get_cadence_bonus(4, 0, scale) == 0.7
+
+    def test_locrian_cadence_bonuses(self):
+        from melodica.harmonize._hmm_helpers import _get_cadence_bonus
+        scale = Scale(root=11, mode=Mode.LOCRIAN)
+        # bII -> i° is 1 -> 0
+        assert _get_cadence_bonus(1, 0, scale) == 0.8
+        # bIII -> i° is 2 -> 0
+        assert _get_cadence_bonus(2, 0, scale) == 0.6
+
+    def test_harmonic_melodic_minor_cadence_bonuses(self):
+        from melodica.harmonize._hmm_helpers import _get_cadence_bonus
+        scale_harm = Scale(root=9, mode=Mode.HARMONIC_MINOR)
+        scale_melo = Scale(root=9, mode=Mode.MELODIC_MINOR)
+        
+        # Harmonic minor V -> i (4 -> 0)
+        assert _get_cadence_bonus(4, 0, scale_harm) == 0.85
+        # Melodic minor IV -> i (3 -> 0)
+        assert _get_cadence_bonus(3, 0, scale_melo) == 0.75
+
+

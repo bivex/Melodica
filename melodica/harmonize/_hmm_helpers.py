@@ -114,28 +114,109 @@ def _get_cadence_bonus(prev_deg: int, curr_deg: int, scale: Scale | None = None)
     Get the cadence bonus for transitioning from prev_deg to curr_deg (0-indexed).
     Takes scale modal qualities into account.
     """
-    is_minor = False
     if scale is not None:
-        intervals = scale.intervals()
-        if len(intervals) > 2:
-            is_minor = (intervals[2] == 3)
+        mode = scale.mode
+        if mode in (Mode.DORIAN,):
+            # Dorian rules:
+            # IV -> i (3 -> 0): 0.8 (Dorian Plagal)
+            # ii -> i (1 -> 0): 0.7
+            # bVII -> i (6 -> 0): 0.6
+            dorian_bonuses = {
+                (3, 0): 0.8,
+                (1, 0): 0.7,
+                (6, 0): 0.6,
+            }
+            if (prev_deg, curr_deg) in dorian_bonuses:
+                return dorian_bonuses[(prev_deg, curr_deg)]
+        elif mode in (Mode.PHRYGIAN,):
+            # Phrygian rules:
+            # bII -> i (1 -> 0): 0.85 (Phrygian cadence)
+            # bvii -> i (6 -> 0): 0.7
+            # bIII -> i (2 -> 0): 0.5
+            phrygian_bonuses = {
+                (1, 0): 0.85,
+                (6, 0): 0.7,
+                (2, 0): 0.5,
+            }
+            if (prev_deg, curr_deg) in phrygian_bonuses:
+                return phrygian_bonuses[(prev_deg, curr_deg)]
+        elif mode in (Mode.LYDIAN,):
+            # Lydian rules:
+            # II -> I (1 -> 0): 0.85 (Lydian cadence)
+            # vii -> I (6 -> 0): 0.7
+            lydian_bonuses = {
+                (1, 0): 0.85,
+                (6, 0): 0.7,
+            }
+            if (prev_deg, curr_deg) in lydian_bonuses:
+                return lydian_bonuses[(prev_deg, curr_deg)]
+        elif mode in (Mode.MIXOLYDIAN,):
+            # Mixolydian rules:
+            # bVII -> I (6 -> 0): 0.8 (Mixolydian flat-seven resolution)
+            # v -> I (4 -> 0): 0.7 (Mixolydian minor dominant)
+            mixo_bonuses = {
+                (6, 0): 0.8,
+                (4, 0): 0.7,
+            }
+            if (prev_deg, curr_deg) in mixo_bonuses:
+                return mixo_bonuses[(prev_deg, curr_deg)]
+        elif mode in (Mode.LOCRIAN,):
+            # Locrian rules:
+            # bII -> i° (1 -> 0): 0.8
+            # bIII -> i° (2 -> 0): 0.6
+            locrian_bonuses = {
+                (1, 0): 0.8,
+                (2, 0): 0.6,
+            }
+            if (prev_deg, curr_deg) in locrian_bonuses:
+                return locrian_bonuses[(prev_deg, curr_deg)]
+        elif mode in (Mode.HARMONIC_MINOR,):
+            # Harmonic minor rules:
+            # V -> i (4 -> 0): 0.85 (authentic with leading tone)
+            # vii° -> i (6 -> 0): 0.7
+            harmonic_bonuses = {
+                (4, 0): 0.85,
+                (6, 0): 0.7,
+            }
+            if (prev_deg, curr_deg) in harmonic_bonuses:
+                return harmonic_bonuses[(prev_deg, curr_deg)]
+        elif mode in (Mode.MELODIC_MINOR,):
+            # Melodic minor rules:
+            # V -> i (4 -> 0): 0.85
+            # IV -> i (3 -> 0): 0.75
+            melodic_bonuses = {
+                (4, 0): 0.85,
+                (3, 0): 0.75,
+            }
+            if (prev_deg, curr_deg) in melodic_bonuses:
+                return melodic_bonuses[(prev_deg, curr_deg)]
+        elif mode in (Mode.NATURAL_MINOR, Mode.AEOLIAN):
+            # Natural minor rules:
+            # v -> i (4 -> 0): 0.8 (authentic minor)
+            # iv -> i (3 -> 0): 0.7
+            # bVII -> i (6 -> 0): 0.6
+            nat_minor_bonuses = {
+                (4, 0): 0.8,
+                (3, 0): 0.7,
+                (6, 0): 0.6,
+            }
+            if (prev_deg, curr_deg) in nat_minor_bonuses:
+                return nat_minor_bonuses[(prev_deg, curr_deg)]
 
-    if is_minor:
-        # Minor scale cadence rules:
-        # iv -> i (3 -> 0) is minor plagal cadence
-        # v/V -> i (4 -> 0) is authentic cadence
-        # VII -> i (6 -> 0) or VII -> III (6 -> 2)
-        # ii° -> V/v (1 -> 4)
-        minor_bonuses = {
-            (4, 0): 0.8,  # V/v → i (authentic cadence)
-            (3, 0): 0.7,  # iv → i (minor plagal cadence)
-            (1, 4): 0.6,  # ii° → V/v
-            (6, 0): 0.5,  # VII → i (modal cadence)
-            (6, 2): 0.4,  # VII → III (relative major resolution)
-            (5, 4): 0.4,  # VI → V
-        }
-        return minor_bonuses.get((prev_deg, curr_deg), 0.0)
-    else:
-        # Major scale cadence rules (default _CADENCE_BONUSES):
-        return _CADENCE_BONUSES.get((prev_deg, curr_deg), 0.0)
+        # Generic interval-based minor check (fallback for exotic minor scales)
+        intervals = scale.intervals()
+        if len(intervals) > 2 and intervals[2] == 3:
+            minor_bonuses = {
+                (4, 0): 0.8,  # V/v → i (authentic cadence)
+                (3, 0): 0.7,  # iv → i (minor plagal cadence)
+                (1, 4): 0.6,  # ii° → V/v
+                (6, 0): 0.5,  # VII → i (modal cadence)
+                (6, 2): 0.4,  # VII → III (relative major resolution)
+                (5, 4): 0.4,  # VI → V
+            }
+            if (prev_deg, curr_deg) in minor_bonuses:
+                return minor_bonuses[(prev_deg, curr_deg)]
+
+    # Default to major scale bonuses (handles major / ionian and fallback)
+    return _CADENCE_BONUSES.get((prev_deg, curr_deg), 0.0)
 
