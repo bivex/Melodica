@@ -55,6 +55,13 @@ from melodica.types_pkg._phrases import (
     Arrangement,
 )
 
+from melodica.types_pkg._scenes import (
+    TransitionType,
+    SceneTransition,
+    Scene,
+    SceneGraph,
+)
+
 from melodica.types_pkg._theory import parse_progression
 from melodica.theory.modulation import ModulationEngine
 
@@ -88,4 +95,8 @@ __all__ = [
     "RomanNumeral",
     "parse_progression_structured",
     "ModulationEngine",
+    "TransitionType",
+    "SceneTransition",
+    "Scene",
+    "SceneGraph",
 ]
