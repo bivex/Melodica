@@ -91,7 +91,7 @@ class MixingDesk:
             if track_name.startswith("_"):
                 mixed[track_name] = notes
                 continue
-            gain = self.track_gains.get(track_name, 1.0)
+            gain = self.track_gains.get(track_name, self._auto_gain(notes))
             new_notes = []
             for n in notes:
                 # Determine which section this note belongs to
@@ -104,7 +104,6 @@ class MixingDesk:
                     self.section_faders.get(section, {}).get(track_name, 1.0) if section else 1.0
                 )
                 total_gain = gain * fader
-                # Apply velocity scaling with ceiling
                 new_vel = min(120, max(1, int(n.velocity * total_gain)))
                 new_notes.append(
                     NoteInfo(
@@ -118,6 +117,24 @@ class MixingDesk:
                 )
             mixed[track_name] = new_notes
         return mixed
+
+    @staticmethod
+    def _auto_gain(notes: List[NoteInfo]) -> float:
+        """Derive gain from average register: low voices need boost, high need attenuation."""
+        if not notes:
+            return 1.0
+        avg_pitch = sum(n.pitch for n in notes) / len(notes)
+        # Low register (< C4=60): boost to compensate perceived quietness
+        # High register (> C5=72): attenuate to avoid masking
+        if avg_pitch < 48:
+            return 1.15
+        elif avg_pitch < 60:
+            return 1.05
+        elif avg_pitch > 84:
+            return 0.80
+        elif avg_pitch > 72:
+            return 0.90
+        return 1.0
 
     def apply_fade_loop_end(
         self, tracks: Dict[str, List[NoteInfo]], loop_start_beat: float, fade_beats: float = 2.0

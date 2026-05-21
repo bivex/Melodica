@@ -41,32 +41,33 @@ class MasteringDesk:
         }
     )
 
-    # Frequency-band compression ratios (RMS-based)
-    band_compression: Dict[str, float] = field(
+    # Frequency-band compression: threshold (velocity) + ratio
+    band_compression: Dict[str, dict] = field(
         default_factory=lambda: {
-            "low": 0.88,  # bass/drums — gentle compression
-            "mid": 0.94,  # lead/voice — light compression
-            "high": 0.98,  # SFX/pad — leave mostly intact
+            "sub":  {"threshold": 88,  "ratio": 3.0},
+            "low":  {"threshold": 92,  "ratio": 2.5},
+            "mid":  {"threshold": 98,  "ratio": 2.0},
+            "high": {"threshold": 104, "ratio": 1.5},
         }
     )
 
     @property
     def target_rms_velocity(self) -> int:
-        """Convert LUFS target to RMS velocity (approximate mapping)."""
-        # Rough mapping: -14 LUFS → 85 RMS, linear per 2 LUFS ≈ +10 RMS
-        # -16 LUFS → 75, -12 → 95, -10 → 105
-        return int(round(85 + (self.target_lufs + 14) * 5))
+        """Convert LUFS target to RMS velocity (curved mapping, clamped)."""
+        # -23→58  -18→73  -14→86  -10→99  -6→108
+        raw = 86.0 + (self.target_lufs + 14.0) * 4.8
+        return int(round(max(45, min(115, raw))))
 
     @staticmethod
     def _split_band(pitch: int) -> str:
         """Categorize note into frequency band for multiband compression."""
-        if pitch < 48:  # C2 and below — sub-bass
+        if pitch < 36:   # Below C2 — sub-bass
+            return "sub"
+        elif pitch < 60: # C2–B3 — bass/low-mid
             return "low"
-        elif pitch < 72:  # C2-C4 — low-mid/bass
-            return "low"
-        elif pitch < 96:  # C4-C6 — midrange (vocals, lead, snare)
+        elif pitch < 84: # C4–B5 — midrange
             return "mid"
-        else:  # C6+ — highs (cymbals, FX)
+        else:            # C6+ — high/air
             return "high"
 
     @staticmethod
@@ -86,10 +87,36 @@ class MasteringDesk:
         return int(round(64 + pan_norm * 63))
 
     def _apply_limiter(self, vel: int) -> int:
-        """Brickwall limiter at threshold with soft-knee approach."""
-        if vel > self.limiter_threshold:
-            return self.limiter_threshold
-        return vel
+        """Soft-knee limiter: 2:1 compression above 90% of ceiling, hard brickwall at ceiling."""
+        ceiling = self.limiter_threshold
+        knee_start = int(ceiling * 0.9)
+        if vel <= knee_start:
+            return vel
+        if vel >= ceiling:
+            return ceiling
+        # Quadratic curve: output < input in knee zone, reaches ceiling at boundary
+        range_ = ceiling - knee_start
+        t = (vel - knee_start) / range_
+        return int(round(knee_start + range_ * t * t))
+
+    def _compress(self, vel: int, band: str) -> int:
+        """Downward compression: above threshold, reduce by ratio."""
+        cfg = self.band_compression.get(band)
+        if not cfg:
+            return vel
+        threshold = cfg["threshold"]
+        ratio = cfg["ratio"]
+        if vel <= threshold:
+            return vel
+        excess = vel - threshold
+        return int(round(threshold + excess / ratio))
+
+    def _get_pan(self, track_name: str) -> float:
+        """Get pan for track; auto-assign deterministic spread for unknown tracks."""
+        if track_name in self.track_pan:
+            return self.track_pan[track_name]
+        h = hash(track_name) & 0xFFFF
+        return (h / 0xFFFF - 0.5) * 0.8
 
     def apply_mastering(
         self, tracks: Dict[str, List[NoteInfo]]
@@ -118,19 +145,13 @@ class MasteringDesk:
                 mastered[track_name] = notes
                 continue
             gain = gain_factors.get(track_name, 1.0)
-            band_factor_map = self.band_compression
             new_notes: List[NoteInfo] = []
             for n in notes:
-                band = self._split_band(n.pitch)
-                band_factor = band_factor_map.get(band, 1.0)
-                total_gain = gain * band_factor
+                # Band compression → gain → limiter
+                compressed = self._compress(n.velocity, self._split_band(n.pitch))
+                boosted = int(round(compressed * gain))
 
-                # Apply gain with soft-knee
-                boosted = int(round(n.velocity * total_gain))
-                if boosted > 110:
-                    boosted = int(round(110 + (boosted - 110) * 0.5))
-
-                # Brickwall limiter
+                # Soft-knee limiter
                 new_vel = self._apply_limiter(boosted)
 
                 new_notes.append(
@@ -151,7 +172,7 @@ class MasteringDesk:
         for track_name, notes in mastered.items():
             if track_name.startswith("_"):
                 continue
-            pan_val = self.track_pan.get(track_name, 0.0)
+            pan_val = self._get_pan(track_name)
             cc10_val = self._pan_to_cc10(pan_val)
             if notes:
                 # Place pan CC at first note time of track
@@ -167,7 +188,7 @@ class MasteringDesk:
             "rms_velocity": 0.0,
             "clipping_notes": 0,
             "total_notes": 0,
-            "band_distribution": {"low": 0, "mid": 0, "high": 0},
+            "band_distribution": {"sub": 0, "low": 0, "mid": 0, "high": 0},
             "target_lufs": self.target_lufs,
             "target_rms": self.target_rms_velocity,
         }
