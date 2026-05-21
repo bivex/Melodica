@@ -36,6 +36,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from typing import Any
 from melodica.types import NoteInfo
 
 
@@ -111,11 +112,13 @@ def _interval(a: int, b: int) -> int:
 def detect_clashes(
     tracks: dict[str, list[NoteInfo]],
     config: VerifierConfig,
+    chords: list[Any] | None = None,
 ) -> list[ClashEvent]:
     """
     Detect simultaneous dissonant intervals across all track pairs.
     """
     import bisect
+    from melodica.types import Quality
     events: list[ClashEvent] = []
 
     # Filter to only tracks containing NoteInfo objects
@@ -159,10 +162,54 @@ def detect_clashes(
                     if severity is None:
                         continue  # consonant
 
+                    beat = max(na.start, nb.start)
+
+                    # 1. Dynamic Mid-Range Clash Penalty (Golden Mean Rule)
+                    current_tolerance = tolerance
+                    if 36 <= na.pitch <= 60 and 36 <= nb.pitch <= 60:
+                        mid_active_tracks = 0
+                        for tname, notes in valid_tracks.items():
+                            for n in notes:
+                                if n.start <= beat < n.start + n.duration:
+                                    if 36 <= n.pitch <= 60:
+                                        mid_active_tracks += 1
+                                        break
+                        if mid_active_tracks > 3:
+                            current_tolerance = max(0.0, tolerance - 0.3)
+
+                    # 2. Functional Dissonance Awareness
+                    if chords:
+                        active_chord = None
+                        for c in chords:
+                            if c.start <= beat < c.start + c.duration:
+                                active_chord = c
+                                break
+                        
+                        if active_chord:
+                            pc_a = na.pitch % 12
+                            pc_b = nb.pitch % 12
+                            
+                            # A. Both notes are chord tones (e.g. C and B in Cmaj7)
+                            chord_pcs = active_chord.pitch_classes() if hasattr(active_chord, "pitch_classes") else []
+                            if pc_a in chord_pcs and pc_b in chord_pcs:
+                                continue
+                                
+                            # B. Tritone in dominant chord (e.g. B and F in G7)
+                            if iv == 6 and getattr(active_chord, "quality", None) == Quality.DOMINANT7:
+                                if (pc_a == (active_chord.root + 4) % 12 and pc_b == (active_chord.root + 10) % 12) or \
+                                   (pc_b == (active_chord.root + 4) % 12 and pc_a == (active_chord.root + 10) % 12):
+                                    continue
+                                    
+                            # C. Leading tone resolution clash (e.g. B and C when C is root/tonic)
+                            lt = (active_chord.root - 1) % 12
+                            if (pc_a == lt and pc_b == active_chord.root) or (pc_b == lt and pc_a == active_chord.root):
+                                if current_tolerance > 0.2:
+                                    continue
+
                     # Tolerance check: high tolerance = allow more
-                    if severity == "mild" and tolerance > 0.7:
+                    if severity == "mild" and current_tolerance > 0.7:
                         continue
-                    if severity == "strong" and tolerance > 0.9:
+                    if severity == "strong" and current_tolerance > 0.9:
                         continue
 
                     # Skip very brief notes (MIDI artifacts)
@@ -178,7 +225,7 @@ def detect_clashes(
 
                     events.append(
                         ClashEvent(
-                            beat=max(na.start, nb.start),
+                            beat=beat,
                             note_a=na,
                             track_a=ta,
                             note_b=nb,
@@ -331,8 +378,8 @@ def verify_and_fix(
     # Filter to only NoteInfo tracks (skip _chords, _metadata, etc.)
     note_tracks = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
 
-    # Phase 1: Detect clashes
-    clashes = detect_clashes(note_tracks, config)
+    chords = tracks.get("_chords")
+    clashes = detect_clashes(note_tracks, config, chords=chords)
     parallel = detect_parallel_fifths(note_tracks)
     all_events = clashes + parallel
     report.clashes_detected = len(all_events)

@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Any
 
 GM_PROFILES = {
     0: {"name": "Acoustic Grand Piano", "band": "Full", "type": "Percussive"},
@@ -131,7 +131,55 @@ GM_PROFILES = {
     127: {"name": "Gunshot", "band": "Full", "type": "Transient"}
 }
 
-def analyze_orchestration(instruments: Dict[str, int]) -> List[str]:
+def get_interval_name(semitones: int) -> str:
+    """Map semitone count to a beautiful interval name, matching music21 style."""
+    octaves = semitones // 12
+    base_semitones = semitones % 12
+    base_names = {
+        0: "Unison",
+        1: "Minor Second",
+        2: "Major Second",
+        3: "Minor Third",
+        4: "Major Third",
+        5: "Perfect Fourth",
+        6: "Tritone",
+        7: "Perfect Fifth",
+        8: "Minor Sixth",
+        9: "Major Sixth",
+        10: "Minor Seventh",
+        11: "Major Seventh"
+    }
+    base_name = base_names[base_semitones]
+    if octaves == 0:
+        return base_name if base_name == "Tritone" else f"{base_name}"
+    elif octaves == 1:
+        if base_semitones == 0:
+            return "Perfect Octave"
+        elif base_semitones == 7:
+            return "Perfect Twelfth"
+        else:
+            return f"Octave + {base_name}"
+    elif octaves == 2:
+        if base_semitones == 0:
+            return "Perfect Double-octave"
+        elif base_semitones == 7:
+            return "Perfect Nineteenth"
+        else:
+            return f"Double-octave + {base_name}"
+    elif octaves == 3:
+        if base_semitones == 0:
+            return "Perfect Triple-octave"
+        else:
+            return f"Triple-octave + {base_name}"
+    else:
+        return f"{octaves} Octaves + {base_name}"
+
+
+def analyze_orchestration(
+    instruments: Dict[str, int],
+    tracks: dict[str, list[Any]] | None = None,
+    chords: list[Any] | None = None
+) -> List[str]:
     """Returns a list of alerts/warnings about the orchestration."""
     alerts = []
     
@@ -159,5 +207,125 @@ def analyze_orchestration(instruments: Dict[str, int]) -> List[str]:
         alerts.append("ℹ️ Dry Mix: Нет педальных/тянущихся звуков.")
     elif transient_count == 0:
         alerts.append("ℹ️ Ambient Mix: Нет перкуссионных/щипковых звуков.")
+
+    # Deep analysis if tracks are provided
+    if tracks:
+        from melodica.types import NoteInfo
+        note_tracks = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
+        
+        # 1. Conflict Ambitus (Orchestration Blur)
+        sustained_ambitus = {}
+        for tname, notes in note_tracks.items():
+            prog = instruments.get(tname)
+            if prog in GM_PROFILES:
+                profile = GM_PROFILES[prog]
+                if profile["type"] in ("Sustained", "Pad") and len(notes) >= 3:
+                    pitches = [n.pitch for n in notes]
+                    sustained_ambitus[tname] = (min(pitches), max(pitches))
+        
+        t_names = list(sustained_ambitus.keys())
+        for i in range(len(t_names)):
+            for j in range(i + 1, len(t_names)):
+                t1, t2 = t_names[i], t_names[j]
+                min1, max1 = sustained_ambitus[t1]
+                min2, max2 = sustained_ambitus[t2]
+                
+                range1 = max1 - min1 + 1
+                range2 = max2 - min2 + 1
+                overlap = max(0, min(max1, max2) - max(min1, min2) + 1)
+                
+                if range1 > 0 and range2 > 0:
+                    pct = overlap / min(range1, range2)
+                    if pct > 0.5:
+                        alerts.append(
+                            f"⚠️ Orchestration Blur: Инструменты {t1} и {t2} (Sustained) "
+                            f"имеют пересекающийся диапазон {pct*100:.1f}%. Рекомендуется развести их."
+                        )
+
+        # 2. Vertical Interval Profile & Low-Interval Mud (LIM)
+        onsets = sorted(list({n.start for notes in note_tracks.values() for n in notes}))
+        
+        total_intervals = 0
+        count_octaves = 0
+        count_fifths = 0
+        count_thirds = 0
+        count_dissonances = 0
+        muddy_thirds = 0
+        mid_clutter_count = 0
+        
+        interval_distribution = {}
+        
+        for t in onsets:
+            # Find all notes sounding at t
+            sounding = []
+            for tname, notes in note_tracks.items():
+                for n in notes:
+                    if n.start <= t < n.start + n.duration:
+                        sounding.append((tname, n))
+            
+            # Mid-Range Clutter Check (Golden Mean)
+            mid_tracks = {tname for tname, n in sounding if 36 <= n.pitch <= 60}
+            if len(mid_tracks) > 3:
+                mid_clutter_count += 1
+            
+            # Pairwise intervals
+            pitches = sorted(list({n.pitch for _, n in sounding}))
+            if len(pitches) >= 2:
+                for idx1 in range(len(pitches)):
+                    for idx2 in range(idx1 + 1, len(pitches)):
+                        p1, p2 = pitches[idx1], pitches[idx2]
+                        iv = p2 - p1
+                        
+                        total_intervals += 1
+                        interval_distribution[iv] = interval_distribution.get(iv, 0) + 1
+                        
+                        base_iv = iv % 12
+                        if base_iv == 0:
+                            count_octaves += 1
+                        elif base_iv in (5, 7):
+                            count_fifths += 1
+                        elif base_iv in (3, 4, 8, 9):
+                            count_thirds += 1
+                            if base_iv in (3, 4) and p1 < 48:
+                                muddy_thirds += 1
+                        elif base_iv in (1, 2, 6, 10, 11):
+                            count_dissonances += 1
+        
+        if muddy_thirds > 3:
+            alerts.append(
+                f"⚠️ Low-Interval Mud: Обнаружено {muddy_thirds} терций в низком регистре (ниже C3). "
+                "Это создает гул и 'мыло' в басу."
+            )
+            
+        if mid_clutter_count > 2:
+            alerts.append(
+                f"⚠️ Mid-Range Clutter (Dynamic): В {mid_clutter_count} моментах более 3-х инструментов "
+                "играют в диапазоне 36-60 одновременно. Активировано динамическое сжатие диссонансов."
+            )
+            
+        if total_intervals > 10:
+            pct_oct = count_octaves / total_intervals
+            pct_fifths = count_fifths / total_intervals
+            pct_thirds = count_thirds / total_intervals
+            pct_diss = count_dissonances / total_intervals
+            
+            # Cinematic vs Jazz scoring
+            cinematic_score = (pct_oct * 0.4 + pct_fifths * 0.3 + (1.0 - pct_thirds) * 0.3) * 100
+            jazz_score = (pct_thirds * 0.5 + pct_diss * 0.5) * 100
+            
+            if cinematic_score > jazz_score:
+                alerts.append(
+                    f"ℹ️ Interval Profile: Cinematic Preset (Octaves: {pct_oct*100:.1f}%, "
+                    f"Fifths: {pct_fifths*100:.1f}%, Thirds: {pct_thirds*100:.1f}%)."
+                )
+            else:
+                alerts.append(
+                    f"ℹ️ Interval Profile: Jazz/Modern Preset (Thirds/Sixths: {pct_thirds*100:.1f}%, "
+                    f"Dissonances: {pct_diss*100:.1f}%)."
+                )
+                
+            sorted_ivs = sorted(interval_distribution.items(), key=lambda x: x[1], reverse=True)[:3]
+            top_intervals = [f"{get_interval_name(iv)} ({count}x)" for iv, count in sorted_ivs]
+            alerts.append(f"ℹ️ Top intervals detected: {', '.join(top_intervals)}.")
 
     return alerts

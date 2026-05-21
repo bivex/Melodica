@@ -858,7 +858,7 @@ def produce_track(
         
         # Analyze orchestration
         from melodica.composer.orchestrator import analyze_orchestration
-        alerts = analyze_orchestration(instruments)
+        alerts = analyze_orchestration(instruments, tracks=shaped, chords=chords)
         
         if verbose:
             if psycho_report.issues_detected > 0:
