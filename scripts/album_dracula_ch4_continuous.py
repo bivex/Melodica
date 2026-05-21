@@ -67,35 +67,46 @@ def _loop_chords(base_chords, dur: float) -> list:
 # ---------------------------------------------------------------------------
 
 def build_secret_correspondence() -> dict:
-    """Harker bribes the gypsies. Gypsy guitar + melancholic violin + cold pad."""
+    """Harker bribes the gypsies. Gypsy guitar + melancholic violin + cold pad.
+    REFACTORED: Better spacing, rhythmic pulses, and dynamic entry."""
     bpm, dur = 72, 96.0
     chords = _loop_chords(types.parse_progression("i:4.0 - iv:4.0 - V:4.0 - i:4.0", KEY_MINOR), dur)
 
+    # 1. BASS - Foundation only
+    bass = BassGenerator(
+        GeneratorParams(density=0.35, velocity_range=(50, 70), key_range_low=23, key_range_high=35),
+        style="walking" # Add subtle motion instead of hold
+    ).render(chords, KEY_MINOR, dur)
+
+    # 2. GUITAR - Harmonic Body (shifted UP for separation)
     guitar_notes = ArpeggiatorGenerator(
-        GeneratorParams(density=0.65, velocity_range=(60, 85), key_range_low=48, key_range_high=72),
+        GeneratorParams(density=0.55, velocity_range=(55, 75), key_range_low=55, key_range_high=79),
         pattern="up_down"
     ).render(chords, KEY_MINOR, dur)
     guitar_track = types.Track(name="guitar", notes=guitar_notes)
-    guitar_track.humanize(timing_std_beats=0.015, velocity_std=4.0).swing(factor=0.08, grid=0.25)
+    guitar_track.humanize(timing_std_beats=0.015, velocity_std=4.0)
 
+    # 3. PAD - Airy layer (Filtered and sparse)
+    pad = AmbientPadGenerator(
+        GeneratorParams(density=0.12, velocity_range=(40, 55), key_range_low=67, key_range_high=91),
+        voicing="spread"
+    ).render(chords, KEY_MINOR, dur)
+    # Staggered entrance for pad: starts after 16 beats
+    pad = [n for n in pad if n.start >= 16.0]
+
+    # 4. VIOLIN - Emotional Lead (Anxiety/Tension)
     violin_notes = MelodyGenerator(
-        GeneratorParams(density=0.52, complexity=0.75, velocity_range=(75, 105),
-                        key_range_low=62, key_range_high=88),
-        phrase_length=8.0, motif_probability=0.80
+        GeneratorParams(density=0.48, complexity=0.70, velocity_range=(75, 105),
+                        key_range_low=67, key_range_high=93),
+        phrase_length=6.0, motif_probability=0.85
     ).render(chords, KEY_MINOR, dur)
     violin_track = types.Track(name="violin", notes=violin_notes)
-    violin_track.humanize(timing_std_beats=0.01, velocity_std=3.0)
-
-    pad  = AmbientPadGenerator(
-        GeneratorParams(density=0.20, velocity_range=(45, 60), key_range_low=47, key_range_high=71)
-    ).render(chords, KEY_MINOR, dur)
-    bass = BassGenerator(
-        GeneratorParams(density=0.45, velocity_range=(55, 75), key_range_low=23, key_range_high=43)
-    ).render(chords, KEY_MINOR, dur)
+    # Give it 'breath': silence at specific intervals
+    violin_track.notes = [n for n in violin_track.notes if not (32.0 <= n.start <= 40.0)]
 
     cc_events = {
-        "violin": AutomationCurve.exponential(11, 70, 110, 0.0, dur, exponent=1.2, steps=40),
-        "pad":    AutomationCurve.sine_lfo(74, 40, 95, 0.0, dur, period=12.0),
+        "violin": AutomationCurve.exponential(11, 60, 110, 0.0, dur, exponent=1.1, steps=40),
+        "pad":    AutomationCurve.sine_lfo(74, 40, 110, 16.0, dur, period=16.0),
     }
 
     return {
@@ -212,37 +223,48 @@ def build_draculas_vault() -> dict:
 # ---------------------------------------------------------------------------
 
 def build_shovels_strike() -> dict:
-    """Jonathan strikes Dracula. Martial percussion, accelerando, Dracula's glare."""
+    """Jonathan strikes Dracula. Martial percussion, accelerando, Dracula's glare.
+    REFACTORED: High-register 'air', clearer bass, and dramatic expansion."""
     bpm, dur = 80, 48.0
     chords = _loop_chords(types.parse_progression("i:2.0 - V:2.0 - VI:2.0 - iv:2.0", KEY_MINOR), dur)
 
-    violin_notes = MelodyGenerator(
-        GeneratorParams(density=0.72, complexity=0.80, velocity_range=(85, 115),
-                        key_range_low=60, key_range_high=86),
-        phrase_length=4.0
-    ).render(chords, KEY_MINOR, dur)
-    violin_track = types.Track(name="violin", notes=violin_notes)
-    violin_track.scale_velocity(1.20)
-
+    # 1. BASS - Clear sub foundation
     timpani = RhythmicAccentGenerator(
         preset="march", pitch=36, velocity_humanize=8, accent_strength=1.3
     ).render(chords, KEY_MINOR, dur)
 
+    # 2. CELLO - Mid-low drive (restricted to C2-C3 for separation)
     cello = StringsEnsembleGenerator(
-        GeneratorParams(density=0.55, velocity_range=(75, 100), key_range_low=36, key_range_high=60)
+        GeneratorParams(density=0.45, velocity_range=(75, 95), key_range_low=36, key_range_high=48)
     ).render(chords, KEY_MINOR, dur)
 
-    tempo_events = [(float(b), 80.0 + (125.0 - 80.0) * (b / dur)) for b in range(0, int(dur), 2)]
+    # 3. VIOLIN - High Lead (Screaming/Anxiety)
+    violin_notes = MelodyGenerator(
+        GeneratorParams(density=0.65, complexity=0.85, velocity_range=(90, 115),
+                        key_range_low=72, key_range_high=96),
+        phrase_length=4.0
+    ).render(chords, KEY_MINOR, dur)
+    violin_track = types.Track(name="violin", notes=violin_notes)
+
+    # 4. AIR LAYER - Glass/Metallic textures (High register > 6kHz equivalent)
+    # Using Arp with very high register and sparse density
+    sparkle = ArpeggiatorGenerator(
+        GeneratorParams(density=0.15, velocity_range=(40, 65), key_range_low=96, key_range_high=108),
+        pattern="random", note_duration=0.125
+    ).render(chords, KEY_MINOR, dur)
+
+    tempo_events = [(float(b), 80.0 + (135.0 - 80.0) * (b / dur)) for b in range(0, int(dur), 2)]
 
     cc_events = {
-        "violin": AutomationCurve.sine_lfo(1, 10, 110, 0.0, dur, period=2.0),
-        "cello":  AutomationCurve.exponential(74, 40, 110, 0.0, dur, exponent=2.5, steps=30),
+        "violin":  AutomationCurve.exponential(1, 40, 120, 0.0, dur, exponent=1.5, steps=30),
+        "cello":   AutomationCurve.exponential(74, 30, 95, 0.0, dur, exponent=2.0, steps=20),
+        "sparkle": AutomationCurve.sine_lfo(74, 20, 90, 0.0, dur, period=8.0),
     }
 
     return {
-        "tracks":       {"violin": violin_track.notes, "timpani": timpani, "cello": cello},
+        "tracks":       {"violin": violin_track.notes, "timpani": timpani, "cello": cello, "sparkle": sparkle},
         "bpm":          bpm,
-        "instruments":  {"violin": 40, "timpani": 47, "cello": 42},
+        "instruments":  {"violin": 40, "timpani": 47, "cello": 42, "sparkle": 98}, # 98: Crystal/FX
         "cc_events":    cc_events,
         "tempo_events": tempo_events,
         "key":          KEY_MINOR,
