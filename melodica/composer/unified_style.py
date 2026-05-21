@@ -363,6 +363,38 @@ _UNIFIED_STYLES["ambient"] = UnifiedStyle(
     tension_curve="ambient",
 )
 
+# Hungarian
+_UNIFIED_STYLES["hungarian"] = UnifiedStyle(
+    name="hungarian",
+    harmony=HarmonyProfile(
+        dissonance_tolerance=0.7,
+        allowed_qualities=(
+            Quality.MINOR,
+            Quality.DIMINISHED,
+            Quality.AUGMENTED,
+            Quality.DOMINANT7,
+        ),
+        secondary_dominants=True,
+        modal_interchange=True,
+        density=1.0,
+    ),
+    melody=MelodyProfile(
+        steps_probability=0.75,
+        harmony_note_probability=0.60,
+        note_repetition_probability=0.15,
+        register_low=48,
+        register_high=88,
+        avoid_notes=True,
+    ),
+    rhythm=RhythmProfile(
+        markov_style="driving",
+        syncopation=0.35,
+        density=0.6,
+        phrase_length=8,
+    ),
+    tension_curve="classical",
+)
+
 
 # ---------------------------------------------------------------------------
 # Public API

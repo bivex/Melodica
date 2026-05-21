@@ -58,7 +58,7 @@ _AVOID_NOTES: dict[Quality, list[int]] = {
     Quality.MAJOR: [5],  # 4th (F over C major) clashes with 3rd
     Quality.MINOR: [],  # no avoid notes in minor triad
     Quality.MAJOR7: [5],  # 4th clashes with maj7
-    Quality.DOMINANT7: [],  # dom7 is flexible
+    Quality.DOMINANT7: [5],  # 4th clashes with major 3rd
     Quality.MINOR7: [],  # minor 7th is flexible
     Quality.DIMINISHED: [],
     Quality.HALF_DIM7: [],
@@ -103,10 +103,10 @@ _CHORD_TONE_INTERVALS: dict[Quality, list[int]] = {
 
 # Extension intervals (9th, 11th, 13th)
 _EXTENSION_INTERVALS: dict[Quality, list[int]] = {
-    Quality.MAJOR: [2, 9, 11],  # 9, #11, 13
-    Quality.MINOR: [2, 5, 9],  # 9, 11, b13
-    Quality.MAJOR7: [2, 9, 11],
-    Quality.DOMINANT7: [2, 5, 9],  # 9, 11, 13
+    Quality.MAJOR: [2, 9],  # 9, 13 (maj7 is 11, but often avoided in triad)
+    Quality.MINOR: [2, 5, 8, 10],  # 9, 11, b13, b7
+    Quality.MAJOR7: [2, 9],
+    Quality.DOMINANT7: [2, 9],  # 9, 13 (11 is avoid)
     Quality.MINOR7: [2, 5, 9],
     Quality.DIMINISHED: [],
     Quality.HALF_DIM7: [2, 5],

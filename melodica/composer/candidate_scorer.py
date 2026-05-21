@@ -75,6 +75,7 @@ class ScoringContext:
     beat_strength: float = 1.0
     recent_pitches: list[int] = field(default_factory=list)
     preferred_contour: str = ""  # "ascending", "descending", "arch", ""
+    phrase_pos: float = 0.5  # 0.0 to 1.0 (start to end of phrase)
     low: int = 36
     high: int = 96
 
@@ -158,7 +159,8 @@ class CandidateScorer:
         top = scored[:top_n]
         # Weighted random among top candidates
         pitches = [p for p, _ in top]
-        weights = [s for _, s in top]
+        # Softmax-like or just square the scores for more contrast
+        weights = [s**2 for _, s in top]
         return _random.choices(pitches, weights=weights, k=1)[0]
 
     def pick_best_note(
@@ -178,7 +180,7 @@ class CandidateScorer:
         top_n = min(3, len(scored))
         top = scored[:top_n]
         notes = [n for n, _ in top]
-        weights = [s for _, s in top]
+        weights = [s**2 for _, s in top]
         return _random.choices(notes, weights=weights, k=1)[0]
 
 
@@ -195,6 +197,7 @@ def pick_best_note(
     scale_pcs: list[int] | None = None,
     beat_strength: float = 1.0,
     recent_pitches: list[int] | None = None,
+    phrase_pos: float = 0.5,
     low: int = 36,
     high: int = 96,
 ) -> int:
@@ -206,6 +209,7 @@ def pick_best_note(
         scale_pcs=scale_pcs or list(range(12)),
         beat_strength=beat_strength,
         recent_pitches=recent_pitches or [],
+        phrase_pos=phrase_pos,
         low=low,
         high=high,
     )
@@ -219,21 +223,16 @@ def pick_best_note(
 
 
 def _score_smoothness(pitch: int, prev_pitch: int | None) -> float:
-    """Prefer small intervals (stepwise motion)."""
+    """Prefer small intervals (Gaussian decay)."""
     if prev_pitch is None:
         return 0.8
-    interval = abs(pitch - prev_pitch)
-    if interval == 0:
-        return 0.5  # repetition is OK but not ideal
-    if interval <= 2:
-        return 1.0  # step
-    if interval <= 4:
-        return 0.8  # small leap
-    if interval <= 7:
-        return 0.5  # leap
-    if interval <= 12:
-        return 0.2  # large leap
-    return 0.05  # extreme
+    import math
+    dist = abs(pitch - prev_pitch)
+    if dist == 0:
+        return 0.4  # discourage same-note repetition slightly
+    # Gaussian-like decay: exp(-x^2 / 2*sigma^2)
+    # sigma = 4 (prefers steps and small leaps)
+    return math.exp(-(dist**2) / 32.0)
 
 
 def _score_harmony(pitch: int, ctx: ScoringContext) -> float:
@@ -247,27 +246,29 @@ def _score_contour(pitch: int, ctx: ScoringContext) -> float:
         return 0.5
 
     diff = pitch - ctx.prev_pitch
-    direction = "up" if diff > 0 else ("down" if diff < 0 else "same")
-
+    
     if ctx.preferred_contour == "ascending":
-        return 0.9 if direction == "up" else (0.3 if direction == "same" else 0.1)
+        return 0.9 if diff > 0 else (0.2 if diff < 0 else 0.4)
     if ctx.preferred_contour == "descending":
-        return 0.9 if direction == "down" else (0.3 if direction == "same" else 0.1)
+        return 0.9 if diff < 0 else (0.2 if diff > 0 else 0.4)
     if ctx.preferred_contour == "arch":
-        # In arch, prefer ascending in first half, descending in second
-        # We don't know position here, so just prefer motion over stasis
-        return 0.7 if direction != "same" else 0.3
+        # First half: go up. Second half: go down.
+        if ctx.phrase_pos < 0.5:
+            return 0.9 if diff > 0 else (0.1 if diff < 0 else 0.5)
+        else:
+            return 0.9 if diff < 0 else (0.1 if diff > 0 else 0.5)
     return 0.5
 
 
 def _score_range(pitch: int, low: int, high: int) -> float:
-    """Prefer middle register, penalize extremes."""
+    """Prefer middle register, penalize extremes (Parabolic penalty)."""
     if pitch < low or pitch > high:
         return 0.0
     mid = (low + high) / 2
     half_range = (high - low) / 2
-    distance_from_center = abs(pitch - mid) / max(half_range, 1)
-    return max(0.0, 1.0 - distance_from_center * 0.5)
+    # Quadratic penalty: 1 - x^2
+    norm_dist = (pitch - mid) / max(half_range, 1)
+    return max(0.0, 1.0 - norm_dist**2)
 
 
 def _score_novelty(pitch: int, recent: list[int]) -> float:
@@ -275,8 +276,14 @@ def _score_novelty(pitch: int, recent: list[int]) -> float:
     if not recent:
         return 0.8
     pc = pitch % _OCTAVE
-    recent_pcs = [r % _OCTAVE for r in recent[-8:]]  # last 8 notes
+    # Window of 16 notes
+    recent_pcs = [r % _OCTAVE for r in recent[-16:]]
     if pc not in recent_pcs:
         return 1.0
+    # Penalize based on frequency and recency
     count = recent_pcs.count(pc)
-    return max(0.2, 1.0 - count * 0.3)
+    # Also check exact pitch
+    if pitch in recent[-4:]:
+        return 0.1
+        
+    return max(0.2, 1.0 - count * 0.2)
