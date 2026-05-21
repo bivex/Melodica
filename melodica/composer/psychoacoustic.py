@@ -153,8 +153,8 @@ def _is_fusion(a: NoteInfo, b: NoteInfo) -> bool:
     """Check if two notes with same onset fuse into one percept."""
     if abs(a.start - b.start) > 0.02:
         return False
-    interval = abs(a.pitch - b.pitch) % 13  # 0-12
-    return interval in _FUSION_INTERVALS
+    interval = abs(a.pitch - b.pitch) % 12  # 0-11
+    return interval in {0, 7}
 
 
 def _is_blurry(note: NoteInfo, min_dur: float) -> bool:
@@ -250,6 +250,7 @@ def detect_fusion(
     tracks: dict[str, list[NoteInfo]],
 ) -> list[PsychoEvent]:
     """Detect harmonic fusion (octave/unison/fifth with same onset)."""
+    import bisect
     events = []
     valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
     names = list(valid.keys())
@@ -257,8 +258,12 @@ def detect_fusion(
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
             ta, tb = names[i], names[j]
+            notes_b = valid[tb]
+            starts_b = [n.start for n in notes_b]
             for na in valid[ta]:
-                for nb in valid[tb]:
+                lo = bisect.bisect_left(starts_b, na.start - 0.02)
+                hi = bisect.bisect_right(starts_b, na.start + 0.02)
+                for nb in notes_b[lo:hi]:
                     if _is_fusion(na, nb):
                         events.append(
                             PsychoEvent(
@@ -301,6 +306,7 @@ def detect_register_masking(
     tracks: dict[str, list[NoteInfo]],
 ) -> list[PsychoEvent]:
     """Detect when bass and melody compete in the same low register."""
+    import bisect
     events = []
     valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
     names = list(valid.keys())
@@ -308,8 +314,12 @@ def detect_register_masking(
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
             ta, tb = names[i], names[j]
+            notes_b = valid[tb]
+            starts_b = [n.start for n in notes_b]
             for na in valid[ta]:
-                for nb in valid[tb]:
+                lo = bisect.bisect_left(starts_b, na.start - na.duration)
+                hi = bisect.bisect_right(starts_b, na.start + na.duration)
+                for nb in notes_b[lo:hi]:
                     # Both in low register
                     if na.pitch >= _LOW_REGISTER or nb.pitch >= _LOW_REGISTER:
                         continue
