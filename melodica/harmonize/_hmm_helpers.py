@@ -447,37 +447,54 @@ MODAL_CADENCES: dict[Mode, dict[tuple[int, int], float]] = {
 }
 
 # --- Style-Specific Transition Matrices (Functional weights) ---
-# Each matrix defines {current_degree: {next_degree: probability}}
+# Each matrix defines {current_root_offset: {next_root_offset: probability}}
+# Offset is semitones from tonic (0-11).
 STYLE_MATRICES: dict[str, dict[int, dict[int, float]]] = {
-    "gothic": { # Heavy focus on i, iv, V, and bII (Neapolitan)
-        0: {1: 0.25, 3: 0.35, 4: 0.35, 5: 0.05}, # i -> bII, iv, V
-        1: {4: 0.60, 0: 0.40},                 # bII -> V or i
-        3: {4: 0.50, 0: 0.30, 1: 0.20},        # iv -> V, i, bII
-        4: {0: 0.70, 5: 0.20, 3: 0.10},        # V -> i, VI, iv
-        5: {3: 0.40, 4: 0.40, 0: 0.20},        # VI -> iv, V, i
+    "gothic": { # Heavy focus on i (0), iv (5), V (7), and bII (1)
+        0: {1: 0.25, 5: 0.35, 7: 0.35, 8: 0.05}, # i -> bII, iv, V
+        1: {7: 0.60, 0: 0.40},                 # bII -> V or i
+        5: {7: 0.50, 0: 0.30, 1: 0.20},        # iv -> V, i, bII
+        7: {0: 0.70, 8: 0.20, 5: 0.10},        # V -> i, VI, iv
+        8: {5: 0.40, 7: 0.40, 0: 0.20},        # VI -> iv, V, i
     },
-    "cinematic": { # Wide spread, emotional leaps (i, III, VI, bVII)
-        0: {2: 0.30, 5: 0.30, 6: 0.20, 3: 0.20}, # i -> III, VI, bVII, iv
-        2: {5: 0.40, 3: 0.30, 0: 0.30},          # III -> VI, iv, i
-        5: {3: 0.40, 6: 0.30, 0: 0.30},          # VI -> iv, bVII, i
-        6: {0: 0.60, 3: 0.40},                   # bVII -> i, iv
-        3: {4: 0.50, 0: 0.50},                   # iv -> V, i
+    "cinematic": { # Wide spread, emotional leaps (0, 3, 8, 10)
+        0: {3: 0.30, 8: 0.30, 10: 0.20, 5: 0.20}, # i -> III, VI, bVII, iv
+        3: {8: 0.40, 5: 0.30, 0: 0.30},           # III -> VI, iv, i
+        8: {5: 0.40, 10: 0.30, 0: 0.30},          # VI -> iv, bVII, i
+        10: {0: 0.60, 5: 0.40},                    # bVII -> i, iv
+        5: {7: 0.50, 0: 0.50},                    # iv -> V, i
     },
-    "jazz": { # ii-V-I focused
-        1: {4: 0.70, 0: 0.10, 5: 0.20},          # ii -> V
-        4: {0: 0.60, 3: 0.30, 5: 0.10},          # V -> I or IV
-        0: {3: 0.30, 5: 0.30, 1: 0.40},          # I -> IV, vi, ii
-        5: {1: 0.60, 3: 0.40},                   # vi -> ii or IV
-        3: {1: 0.50, 4: 0.50},                   # IV -> ii or V
+    "jazz": { # ii-V-I focused (2, 7, 0)
+        2: {7: 0.70, 0: 0.10, 9: 0.20},          # ii -> V
+        7: {0: 0.60, 5: 0.30, 9: 0.10},          # V -> I or IV
+        0: {5: 0.30, 9: 0.30, 2: 0.40},          # I -> IV, vi, ii
+        9: {2: 0.60, 5: 0.40},                   # vi -> ii or IV
+        5: {2: 0.50, 7: 0.50},                   # IV -> ii or V
     },
     "academic": { # Kostka-Payne (Classical Harmony standard)
-        0: {1: 0.15, 2: 0.10, 3: 0.20, 4: 0.30, 5: 0.15, 6: 0.10}, # I -> all
-        1: {4: 0.70, 6: 0.30},                                      # ii -> V, vii°
-        2: {5: 1.0},                                                 # iii -> vi
-        3: {4: 0.40, 6: 0.20, 0: 0.20, 1: 0.20},                   # IV -> V, vii°, I, ii
-        4: {0: 0.80, 5: 0.20},                                      # V -> I, vi
-        5: {1: 0.50, 3: 0.50},                                      # vi -> ii, IV
-        6: {0: 0.90, 2: 0.10},                                      # vii° -> I, iii
+        0: {2: 0.15, 4: 0.10, 5: 0.20, 7: 0.30, 9: 0.15, 11: 0.10}, # I -> all
+        2: {7: 0.70, 11: 0.30},                                      # ii -> V, vii°
+        4: {9: 1.0},                                                 # iii -> vi
+        5: {7: 0.40, 11: 0.20, 0: 0.20, 2: 0.20},                   # IV -> V, vii°, I, ii
+        7: {0: 0.80, 9: 0.20},                                      # V -> I, vi
+        9: {2: 0.50, 5: 0.50},                                      # vi -> ii, IV
+        11: {0: 0.90, 4: 0.10},                                      # vii° -> I, iii
+    },
+    "ultra_jazz": { # Based on HarmTrace Jazz Grammar (Tritone subs & bII)
+        0: {2: 0.20, 5: 0.20, 9: 0.40, 1: 0.10, 10: 0.10}, # I -> ii, IV, vi, bII (tritone sub), bVII
+        2: {7: 0.60, 1: 0.30, 9: 0.10},                    # ii -> V, bII7 (tritone sub), vi
+        7: {0: 0.70, 2: 0.10, 9: 0.10, 1: 0.10},           # V -> I, ii, vi, bII (recursive)
+        1: {0: 0.90},                                      # bII (Tritone Sub) -> I (Strict resolution)
+        5: {7: 0.40, 2: 0.30, 0: 0.20, 10: 0.10},           # IV -> V, ii, I, bVII (backdoor)
+        10: {0: 0.80, 7: 0.20},                             # bVII (Backdoor) -> I, V
+        9: {2: 0.80, 5: 0.20},                              # vi -> ii, IV
+    },
+    "ultra_academic": { # Based on HarmTrace Moll-Dur & Neapolitan rules
+        0: {2: 0.15, 7: 0.35, 5: 0.20, 8: 0.15, 1: 0.15}, # I -> ii, V, IV, bVI (borrowed), bII (Neapolitan)
+        1: {7: 0.80, 11: 0.20},                             # bII (Neapolitan) -> V, vii°
+        8: {7: 0.60, 5: 0.40},                             # bVI (Borrowed) -> V, iv
+        5: {7: 0.50, 1: 0.20, 0: 0.30},                    # IV -> V, bII, I
+        7: {0: 0.70, 9: 0.20, 8: 0.10},                    # V -> I, vi, bVI (deceptive)
     }
 }
 

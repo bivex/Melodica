@@ -894,20 +894,29 @@ class HMM4Harmonizer:
         return fit
 
     def _score_transition_1st(self, p, c, catalog, style_mat, scale):
-        deg_p = catalog[p][2]
-        deg_c = catalog[c][2]
+        rpc_p = catalog[p][0]
+        rpc_c = catalog[c][0]
+        
+        # Calculate semitone offsets from tonic (0-11)
+        off_p = (rpc_p - scale.root) % 12
+        off_c = (rpc_c - scale.root) % 12
         
         # Base transition from style matrix
-        prob = 0.1
-        if deg_p > 0 and deg_c > 0:
-            prob = style_mat.get(deg_p-1, {}).get(deg_c-1, 0.1)
-        
+        prob = style_mat.get(off_p, {}).get(off_c, 0.1)
         return prob * self.transition_weight
 
     def _score_transition_2nd(self, p2, p1, c, catalog, style_mat, scale):
+        rpc_p2 = catalog[p2][0]
+        rpc_p1 = catalog[p1][0]
+        rpc_c  = catalog[c][0]
+        
         deg_p2 = catalog[p2][2]
         deg_p1 = catalog[p1][2]
         deg_c  = catalog[c][2]
+
+        # Calculate semitone offsets from tonic (0-11)
+        off_p1 = (rpc_p1 - scale.root) % 12
+        off_c  = (rpc_c - scale.root) % 12
         
         # 2nd Order Logic: Functional attraction
         score = 0.1
@@ -924,12 +933,18 @@ class HMM4Harmonizer:
         # I -> IV -> V (1 -> 4 -> 5)
         elif deg_p2 == 1 and deg_p1 == 4 and deg_c == 5: score = 1.0
         
+        # Add HarmTrace-inspired chromatic resolutions
+        # bII -> I (Tritone sub or Neapolitan resolution)
+        if off_p1 == 1 and off_c == 0: score += 1.0
+        # bVII -> I (Backdoor cadence)
+        if off_p1 == 10 and off_c == 0: score += 0.8
+        
         # General Tonic resolution bonus
         if deg_c == 1 and deg_p1 != 1:
             score += 0.5
         
-        # Fallback to style matrix
-        prob1 = style_mat.get(deg_p1-1 if deg_p1 > 0 else -1, {}).get(deg_c-1 if deg_c > 0 else -1, 0.1)
+        # Fallback to style matrix lookup using offsets
+        prob1 = style_mat.get(off_p1, {}).get(off_c, 0.1)
         return (score + prob1) * self.transition_weight
 
     def _build_catalog(self, chords_def, scale):
