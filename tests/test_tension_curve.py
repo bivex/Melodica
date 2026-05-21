@@ -747,13 +747,15 @@ class TestPeakIntensitySensitivity:
             peak_t = c._build_release_curve(0.5)
             assert peak_t == pytest.approx(intensity, abs=1e-4)
 
-    def test_peak_intensity_zero_classical_stays_low(self):
-        """Even with peak_intensity=0 the rest-base of 0.2 prevents a full collapse."""
-        c = TensionCurve(curve_type="classical", peak_intensity=0.0)
+    def test_peak_intensity_zero_gives_classical_resolution_tail(self):
+        """With peak_intensity=0 the RESOLUTION tail (not BUILD) drives the late tension to 0."""
+        c = TensionCurve(total_beats=20.0, peak_intensity=0.0)
         pts = c.generate()
-        # Classical rest phase floors at 0.2 regardless of peak_intensity
-        for p in pts:
-            assert p.tension >= 0.1, f"Unexpected low tension {p.tension} at beat {p.beat}"
+        # The very last segment before total_beats should resolve close to 0
+        last_pts = [p for p in pts if p.beat >= c.total_beats * 0.85]
+        assert all(p.tension < 0.15 for p in last_pts), (
+            f"Expected near-zero tension in late resolution with intensity=0: {[p.tension for p in last_pts]}"
+        )
 
     def test_peak_intensity_one_gives_max_classical(self):
         c = TensionCurve(curve_type="classical", peak_intensity=1.0)

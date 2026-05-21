@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import math
 import mido  # type: ignore
 
 from melodica.types import ChordLabel, Note, NoteInfo, Track, Scale, MusicTimeline
@@ -384,17 +385,44 @@ def export_multitrack_midi(
 
         # Build all events: note_on, note_off, control_change, pitchwheel
         events: list[tuple[int, str, int, int]] = []
+
+        # 1. Calculate jittered onsets first to handle timing changes deterministically
+        jittered_notes = []
         for n in notes:
             onset = max(0.0, n.start)
-            
             if humanize:
                 import random
-                import math
                 jitter_beats = random.uniform(-0.015, 0.015) * (bpm / 60.0)
                 onset = max(0.0, onset + jitter_beats)
-                
+            jittered_notes.append({
+                "onset": onset,
+                "duration": n.duration,
+                "note": n
+            })
+
+        # Sort chronologically by onset
+        jittered_notes.sort(key=lambda jn: jn["onset"])
+
+        # 2. Prevent same-pitch note overlaps by trimming overlapping note durations
+        pitch_last_note = {}
+        for jn in jittered_notes:
+            pitch = jn["note"].pitch
+            if pitch in pitch_last_note:
+                prev_jn = pitch_last_note[pitch]
+                prev_end = prev_jn["onset"] + prev_jn["duration"]
+                # If notes overlap or trigger closer than 0.02 beats, create a 0.02 beat gap
+                if prev_end >= jn["onset"] - 0.02:
+                    prev_jn["duration"] = max(0.01, jn["onset"] - prev_jn["onset"] - 0.02)
+            pitch_last_note[pitch] = jn
+
+        # 3. Generate events
+        for jn in jittered_notes:
+            n = jn["note"]
+            onset = jn["onset"]
+            duration = jn["duration"]
+
             on_tick = round(onset * tpb)
-            off_tick = round((onset + n.duration) * tpb)
+            off_tick = round((onset + duration) * tpb)
 
             # Note on/off
             events.append((on_tick, "note_on", n.pitch, n.velocity))
@@ -413,11 +441,11 @@ def export_multitrack_midi(
                         events.append((on_tick, "pitchwheel", bend, 0))
 
             # Advanced humanized CC11 (Expression) and CC1 (Modulation) for long notes
-            if humanize and n.duration > 1.5:
+            if humanize and duration > 1.5:
                 if not has_cc11:
-                    cc_steps = max(3, int(n.duration / 0.125))  # Finer time steps
+                    cc_steps = max(3, int(duration / 0.25))  # Thinned out from 0.125 to 0.25
                     for step in range(cc_steps + 1):
-                        t_beat = onset + (step / cc_steps) * n.duration
+                        t_beat = onset + (step / cc_steps) * duration
                         # A breathing wave LFO at 0.5 Hz (approx 2 beats per cycle at default tempo) with random micro-jitter
                         phase = (t_beat - onset) * math.pi / 2.0
                         import random
@@ -431,15 +459,14 @@ def export_multitrack_midi(
                     for k in ["cello", "viola", "flute", "clarinet", "voice", "choir", "strings", "pad"]
                 )
                 if is_expressive_solo:
-                    cc_steps = max(3, int(n.duration / 0.125))
+                    cc_steps = max(3, int(duration / 0.25))  # Thinned out from 0.125 to 0.25
                     for step in range(cc_steps + 1):
-                        t_beat = onset + (step / cc_steps) * n.duration
+                        t_beat = onset + (step / cc_steps) * duration
                         time_since_start = t_beat - onset
-                        
+
                         # Delayed vibrato LFO (ramps up over 1.0 beat)
                         ramp = min(1.0, time_since_start / 1.0)
-                        
-                        import math
+
                         if "pad" in name.lower() or "choir" in name.lower():
                             # Evolving filter sweep LFO (slow, 0.1 Hz)
                             phase = time_since_start * math.pi / 4.0  # 8 beats per cycle
@@ -449,7 +476,7 @@ def export_multitrack_midi(
                             cycles_per_beat = 6.0 * (60.0 / bpm)
                             phase = time_since_start * 2.0 * math.pi * cycles_per_beat
                             val = int(ramp * (35 + int(math.sin(phase) * 15)))
-                            
+
                         events.append((round(t_beat * tpb), "control_change", 1, max(0, min(127, val))))
 
         # Auto sustain pedal (CC64) automation for piano, harp, arpeggios
@@ -660,17 +687,44 @@ def export_midi(
 
         # Build relative events
         events: list[tuple[int, str, int, int]] = []
+
+        # 1. Calculate jittered onsets first to handle timing changes deterministically
+        jittered_notes = []
         for n in t.notes:
             onset = max(0.0, n.start)
-            
             if humanize:
                 import random
-                import math
                 jitter_beats = random.uniform(-0.015, 0.015) * (bpm / 60.0)
                 onset = max(0.0, onset + jitter_beats)
+            jittered_notes.append({
+                "onset": onset,
+                "duration": n.duration,
+                "note": n
+            })
+
+        # Sort chronologically by onset
+        jittered_notes.sort(key=lambda jn: jn["onset"])
+
+        # 2. Prevent same-pitch note overlaps by trimming overlapping note durations
+        pitch_last_note = {}
+        for jn in jittered_notes:
+            pitch = jn["note"].pitch
+            if pitch in pitch_last_note:
+                prev_jn = pitch_last_note[pitch]
+                prev_end = prev_jn["onset"] + prev_jn["duration"]
+                # If notes overlap or trigger closer than 0.02 beats, create a 0.02 beat gap
+                if prev_end >= jn["onset"] - 0.02:
+                    prev_jn["duration"] = max(0.01, jn["onset"] - prev_jn["onset"] - 0.02)
+            pitch_last_note[pitch] = jn
+
+        # 3. Generate events
+        for jn in jittered_notes:
+            n = jn["note"]
+            onset = jn["onset"]
+            duration = jn["duration"]
 
             on_tick = round(onset * tpb)
-            off_tick = round((onset + n.duration) * tpb)
+            off_tick = round((onset + duration) * tpb)
 
             has_cc11 = False
             # Emit Expression (CC) data
@@ -686,10 +740,10 @@ def export_midi(
             events.append((off_tick, "note_off", n.pitch, 0))
 
             # Auto CC11 for long notes
-            if humanize and n.duration > 1.5 and not has_cc11:
-                cc_steps = max(3, int(n.duration / 0.25))
+            if humanize and duration > 1.5 and not has_cc11:
+                cc_steps = max(3, int(duration / 0.25))
                 for i in range(cc_steps + 1):
-                    t_beat = onset + (i / cc_steps) * n.duration
+                    t_beat = onset + (i / cc_steps) * duration
                     phase = (i / cc_steps) * math.pi
                     val = 60 + int(math.sin(phase) * 60)
                     events.append((round(t_beat * tpb), "control_change", 11, val))
