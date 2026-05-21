@@ -36,6 +36,34 @@ class RhythmEvent:
     velocity_factor: float = 1.0  # 0.0-1.0 modulation for velocity (1.0 = normal)
 
 
+@dataclass(frozen=True)
+class Tuplet:
+    """Represents a tuplet grouping (e.g. triplet = 3 in the time of 2).
+
+    Attributes:
+        count: Number of notes in the tuplet (e.g. 3 for triplet)
+        in_place_of: Number of notes being replaced (e.g. 2 for triplet)
+        unit: Base note duration in beats (1.0 = quarter note)
+    """
+
+    count: int = 3
+    in_place_of: int = 2
+    unit: float = 1.0
+
+    @property
+    def ratio(self) -> float:
+        """Compression ratio: in_place_of / count."""
+        return self.in_place_of / self.count
+
+    def subdivide(self) -> list[float]:
+        """Return list of equal-duration slots that fill the tuplet span."""
+        slot = self.unit * self.ratio
+        return [slot] * self.count
+
+
+TRIPLET = Tuplet(3, 2, 1.0)
+
+
 class RhythmGenerator(typing.Protocol):
     """
     Protocol for all rhythm generators.
@@ -96,9 +124,15 @@ from melodica.rhythm.polyrhythm import PolyrhythmGenerator
 from melodica.rhythm.smooth import SmoothRhythmGenerator
 from melodica.rhythm.bass_rhythm import BassRhythmGenerator
 from melodica.rhythm.markov_rhythm import MarkovRhythmGenerator
+from melodica.rhythm.groove_template import (
+    GrooveSlot, GrooveTemplate, GROOVE_PRESETS,
+    STRAIGHT, SWING_60, HARD_SWING, SHUFFLE, LAID_BACK,
+)
 
 __all__ = [
     "RhythmEvent",
+    "Tuplet",
+    "TRIPLET",
     "RhythmGenerator",
     "RhythmCoordinator",
     "EuclideanRhythmGenerator",
@@ -114,4 +148,12 @@ __all__ = [
     "SmoothRhythmGenerator",
     "BassRhythmGenerator",
     "MarkovRhythmGenerator",
+    "GrooveSlot",
+    "GrooveTemplate",
+    "GROOVE_PRESETS",
+    "STRAIGHT",
+    "SWING_60",
+    "HARD_SWING",
+    "SHUFFLE",
+    "LAID_BACK",
 ]

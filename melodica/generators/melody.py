@@ -197,6 +197,36 @@ class MelodyGenerator(PhraseGenerator):
         self.base_motif = base_motif
         self.base_motif_rhythm = base_motif_rhythm
 
+    @classmethod
+    def from_style(cls, style, **overrides):
+        """Create a MelodyGenerator pre-configured from a UnifiedStyle."""
+        from melodica.composer.unified_style import UnifiedStyle
+        if not isinstance(style, UnifiedStyle):
+            raise TypeError(f"Expected UnifiedStyle, got {type(style).__name__}")
+
+        rp = style.rhythm
+        mp = style.melody
+        hp = style.harmony
+
+        defaults = dict(
+            params=GeneratorParams(density=rp.density),
+            syncopation=rp.syncopation,
+            phrase_length=float(rp.phrase_length),
+            steps_probability=mp.steps_probability,
+            harmony_note_probability=mp.harmony_note_probability,
+            note_repetition_probability=mp.note_repetition_probability,
+            direction_bias=mp.direction_bias,
+            note_range_low=mp.register_low,
+            note_range_high=mp.register_high,
+        )
+        defaults.update(overrides)
+        return cls(**defaults)
+
+    def _build_groove(self):
+        """Build a GrooveProfile matching this generator's meter settings."""
+        from melodica.generators._melody_rhythm import GrooveProfile
+        return GrooveProfile()
+
     # ------------------------------------------------------------------
     # Render
     # ------------------------------------------------------------------
@@ -212,7 +242,7 @@ class MelodyGenerator(PhraseGenerator):
             return []
 
         # Components
-        groove = GrooveProfile()
+        groove = self._build_groove()
 
         # Global position for section buildup
         global_pos = context.phrase_position if context else 0.0

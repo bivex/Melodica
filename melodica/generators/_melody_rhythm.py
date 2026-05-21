@@ -12,34 +12,50 @@ from __future__ import annotations
 import math
 import random
 
-from melodica.rhythm import RhythmEvent, RhythmGenerator
+from melodica.rhythm import RhythmEvent, RhythmGenerator, Tuplet, TRIPLET
+
+
+# ---------------------------------------------------------------------------
+# Meter-aware beat strength tables
+# ---------------------------------------------------------------------------
+
+METER_STRENGTHS: dict[tuple[int, int], dict[float, float]] = {
+    (4, 4): {0.0: 1.0, 1.0: 0.7, 2.0: 0.9, 3.0: 0.6},
+    (3, 4): {0.0: 1.0, 1.0: 0.6, 2.0: 0.8},
+    (6, 8): {0.0: 1.0, 1.5: 0.85, 3.0: 0.9, 4.5: 0.65},
+    (5, 4): {0.0: 1.0, 1.0: 0.7, 2.0: 0.85, 3.0: 0.6, 4.0: 0.75},
+    (7, 8): {0.0: 1.0, 1.5: 0.75, 3.0: 0.85, 4.5: 0.6, 6.0: 0.7},
+}
 
 
 class GrooveProfile:
     """Defines beat strength per subdivision for natural accent patterns."""
 
-    # 4/4 groove: beat 1 strongest, beat 3 secondary strong
-    _DEFAULT_STRENGTHS: dict[float, float] = {
-        0.0: 1.0,   # beat 1
-        1.0: 0.7,   # beat 2
-        2.0: 0.9,   # beat 3
-        3.0: 0.6,   # beat 4
-    }
     _OFFBEAT_STRENGTH = 0.4
     _SIXTEENTH_STRENGTH = 0.2
 
+    def __init__(
+        self,
+        beats_per_bar: int = 4,
+        denominator: int = 4,
+        strengths: dict[float, float] | None = None,
+    ) -> None:
+        self.beats_per_bar = beats_per_bar
+        self.denominator = denominator
+        self._strengths = strengths or METER_STRENGTHS.get(
+            (beats_per_bar, denominator), METER_STRENGTHS[(4, 4)]
+        )
+
     def beat_strength(self, onset: float) -> float:
         """Return continuous beat strength (0.0-1.0) for a given onset."""
-        beat = onset % 4.0
-        # Check if near a strong beat position
-        for strong_beat, strength in self._DEFAULT_STRENGTHS.items():
+        beat = onset % self.beats_per_bar
+        for strong_beat, strength in self._strengths.items():
             if abs(beat - strong_beat) < 0.1:
                 return strength
         # Offbeat (x.5 positions)
         frac = onset % 1.0
         if abs(frac - 0.5) < 0.15:
             return self._OFFBEAT_STRENGTH
-        # Sixteenth note positions
         return self._SIXTEENTH_STRENGTH
 
 
@@ -57,6 +73,7 @@ class RhythmBuilder:
         rhythm: RhythmGenerator | None = None,
         groove: GrooveProfile | None = None,
         density: float | None = None,
+        groove_template=None,
     ) -> None:
         self.params = params
         self.phrase_length = phrase_length
@@ -67,6 +84,7 @@ class RhythmBuilder:
         self.rhythm = rhythm
         self.groove = groove or GrooveProfile()
         self.density = density if density is not None else params.density
+        self.groove_template = groove_template
 
     def build_events(self, duration_beats: float, drama: DramaticArc | None = None) -> list[RhythmEvent]:
         """Generate rhythm events for the given duration."""
@@ -74,9 +92,14 @@ class RhythmBuilder:
             return self.rhythm.generate(duration_beats)
 
         if self.rhythm_motif is not None and len(self.rhythm_motif) >= 2:
-            return self._build_motif_events(duration_beats, drama=drama)
+            events = self._build_motif_events(duration_beats, drama=drama)
+        else:
+            events = self._build_groove_events(duration_beats, drama=drama)
 
-        return self._build_groove_events(duration_beats, drama=drama)
+        if self.groove_template is not None:
+            events = self.groove_template.apply(events)
+
+        return events
 
     def _build_groove_events(self, duration_beats: float, drama: DramaticArc | None = None) -> list[RhythmEvent]:
         """Groove-aware rhythm generation with beat strength."""
@@ -120,7 +143,7 @@ class RhythmBuilder:
                 if drama and intel.tension_subdivision_boost > 0:
                     tension = drama.tension(t)
                     if tension > 0.7 and random.random() < (0.3 * intel.tension_subdivision_boost):
-                        dur = 0.333333 # Triplets
+                        dur = TRIPLET.subdivide()[0]
                     elif tension > 0.85 and random.random() < (0.4 * intel.tension_subdivision_boost):
                         dur = 0.125 # 1/32 notes
             else:
@@ -165,7 +188,7 @@ class RhythmBuilder:
             # Advance time
             advance = base_step
             if drama and drama.tension(t) > 0.6:
-                advance = random.choice([0.125, 0.25, 0.25, 0.333333])
+                advance = random.choice([0.125, 0.25, 0.25, TRIPLET.subdivide()[0]])
             elif self.rhythm_variety > 0 and random.random() < self.rhythm_variety:
                 advance = random.choice([base_step * 0.5, base_step, base_step, base_step * 1.5])
                 

@@ -89,6 +89,9 @@ class RhythmProfile:
     density: float = 0.5
     gate: float = 0.9
     phrase_length: int = 8
+    groove_template: str = "straight"
+    beats_per_bar: int = 4
+    denominator: int = 4
 
 
 @dataclass(frozen=True)
