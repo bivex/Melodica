@@ -9,16 +9,16 @@ Musical adaptation of Chapter V of Bram Stoker's gothic masterpiece "Dracula"
 (Mina's shorthand letters, Lucy's three proposals in one day, Dr. Seward's heartbreak,
 the introduction of the lunatic Renfield, and Quincey's campfire toast).
 
-Scale: Contrasting scales representing the light of London/Whitby vs the looming madness.
+Scale: Hungarian Minor representing the looming madness and gothic atmosphere.
 
 Tracks:
-  I.   Стенография Мины (Mina's Shorthand) — 110 BPM. C Major.
+  I.   Стенография Мины (Mina's Shorthand) — 110 BPM. C Hungarian Minor.
        Atmosphere: Light, rhythmic, structured. Mina typing and practicing shorthand.
-  II.  Три предложения (Three Proposals) — 90 BPM. F Major.
+  II.  Три предложения (Three Proposals) — 90 BPM. F Hungarian Minor.
        Atmosphere: Romantic, sweeping strings and harp. Lucy's overwhelming joy and gentle rejection of the two.
-  III. Пациент Ренфилд (Patient Renfield) — 60 BPM. D Minor.
+  III. Пациент Ренфилд (Patient Renfield) — 60 BPM. D Hungarian Minor.
        Atmosphere: Dr. Seward's broken heart turning into a clinical obsession with a zoophagous maniac. Dark, erratic, moody.
-  IV.  Тост у костра (The Campfire Toast) — 75 BPM. G Major.
+  IV.  Тост у костра (The Campfire Toast) — 75 BPM. G Hungarian Minor.
        Atmosphere: Quincey Morris invites Seward and Arthur to drink to the winner. Acoustic, comradely, slightly melancholic.
 """
 
@@ -36,11 +36,11 @@ from melodica.generators.accent import RhythmicAccentGenerator
 from melodica.composer.automation import AutomationCurve
 from melodica.composer.album_pipeline import produce_track, Mood
 
-# Scales
-KEY_C_MAJOR = types.Scale(root=0, mode=types.Mode.MAJOR)
-KEY_F_MAJOR = types.Scale(root=5, mode=types.Mode.MAJOR)
-KEY_D_MINOR = types.Scale(root=2, mode=types.Mode.NATURAL_MINOR)
-KEY_G_MAJOR = types.Scale(root=7, mode=types.Mode.MAJOR)
+# Scales (All Hungarian Minor for a consistent Gothic feel)
+KEY_C_MINOR = types.Scale(root=0, mode=types.Mode.HUNGARIAN_MINOR)
+KEY_F_MINOR = types.Scale(root=5, mode=types.Mode.HUNGARIAN_MINOR)
+KEY_D_MINOR = types.Scale(root=2, mode=types.Mode.HUNGARIAN_MINOR)
+KEY_G_MINOR = types.Scale(root=7, mode=types.Mode.HUNGARIAN_MINOR)
 
 random.seed(1897)  # Year of Dracula's first publication
 OUT = Path("output/album_dracula_ch5")
@@ -53,12 +53,12 @@ OUT.mkdir(parents=True, exist_ok=True)
 def produce_minas_shorthand():
     """
     Light, staccato, typewriter-like feel for Mina practicing her shorthand
-    and writing to Lucy.
+    and writing to Lucy. Now in C Hungarian Minor.
     """
     bpm, dur = 110, 64.0
 
-    prog_str = "I:4.0 - IV:4.0 - V:4.0 - I:4.0"
-    chords = types.parse_progression(prog_str, KEY_C_MAJOR)
+    prog_str = "i:4.0 - iv:4.0 - V:4.0 - i:4.0"
+    chords = types.parse_progression(prog_str, KEY_C_MINOR)
     
     full_chords = []
     t = 0.0
@@ -77,7 +77,7 @@ def produce_minas_shorthand():
         ),
         pattern="random"
     )
-    piano_notes = piano_gen.render(full_chords, KEY_C_MAJOR, dur)
+    piano_notes = piano_gen.render(full_chords, KEY_C_MINOR, dur)
     piano_track = types.Track(name="piano", notes=piano_notes)
     piano_track.humanize(timing_std_beats=0.01, velocity_std=2.0) # Very precise, like a machine
 
@@ -90,7 +90,7 @@ def produce_minas_shorthand():
         ),
         phrase_length=8.0
     )
-    flute_notes = flute_gen.render(full_chords, KEY_C_MAJOR, dur)
+    flute_notes = flute_gen.render(full_chords, KEY_C_MINOR, dur)
     
     # Light Bass (Acoustic Bass - Program 32)
     bass = BassGenerator(
@@ -98,7 +98,7 @@ def produce_minas_shorthand():
             density=0.5, velocity_range=(60, 75),
             key_range_low=24, key_range_high=48
         )
-    ).render(full_chords, KEY_C_MAJOR, dur)
+    ).render(full_chords, KEY_C_MINOR, dur)
 
     cc_events = {
         "flute": AutomationCurve.sine_lfo(11, 50, 100, 0.0, dur, period=8.0)
@@ -109,7 +109,7 @@ def produce_minas_shorthand():
         bpm=bpm,
         instruments={"piano": 0, "flute": 73, "bass": 32},
         path=OUT / "01_Minas_Shorthand.mid",
-        mood=Mood.CHAMBER, key=KEY_C_MAJOR,
+        mood=Mood.CHAMBER, key=KEY_C_MINOR,
         chords=full_chords, cc_events=cc_events
     )
 
@@ -119,13 +119,13 @@ def produce_minas_shorthand():
 def produce_three_proposals():
     """
     Lucy's overwhelming joy and romantic flutter as she receives
-    three proposals in one day. Lush strings and harp.
+    three proposals in one day. Lush strings and harp. Now in F Hungarian Minor.
     """
     bpm, dur = 90, 80.0
 
-    # Romantic and sweeping: I -> vi -> ii -> V
-    prog_str = "I:4.0 - vi:4.0 - ii:4.0 - V:4.0"
-    chords = types.parse_progression(prog_str, KEY_F_MAJOR)
+    # Romantic and sweeping, but with a dark undertone: i -> VI -> iidim -> V
+    prog_str = "i:4.0 - VI:4.0 - iidim:4.0 - V:4.0"
+    chords = types.parse_progression(prog_str, KEY_F_MINOR)
     
     full_chords = []
     t = 0.0
@@ -144,7 +144,7 @@ def produce_three_proposals():
         ),
         pattern="up"
     )
-    harp = harp_gen.render(full_chords, KEY_F_MAJOR, dur)
+    harp = harp_gen.render(full_chords, KEY_F_MINOR, dur)
 
     # Lush Strings Ensemble (String Ensemble 1 - Program 48)
     strings = StringsEnsembleGenerator(
@@ -152,7 +152,7 @@ def produce_three_proposals():
             density=0.6, velocity_range=(70, 95),
             key_range_low=48, key_range_high=72
         )
-    ).render(full_chords, KEY_F_MAJOR, dur)
+    ).render(full_chords, KEY_F_MINOR, dur)
 
     # A beautiful Violin solo representing Lucy's ultimate choice, Arthur (Violin - Program 40)
     violin_gen = MelodyGenerator(
@@ -163,7 +163,7 @@ def produce_three_proposals():
         ),
         phrase_length=8.0
     )
-    violin = violin_gen.render(full_chords, KEY_F_MAJOR, dur)
+    violin = violin_gen.render(full_chords, KEY_F_MINOR, dur)
     
     cc_events = {
         "strings": AutomationCurve.sine_lfo(11, 60, 110, 0.0, dur, period=8.0),
@@ -175,7 +175,7 @@ def produce_three_proposals():
         bpm=bpm,
         instruments={"harp": 46, "strings": 48, "violin": 40},
         path=OUT / "02_Three_Proposals.mid",
-        mood=Mood.CINEMATIC, key=KEY_F_MAJOR,
+        mood=Mood.CINEMATIC, key=KEY_F_MINOR,
         chords=full_chords, cc_events=cc_events
     )
 
@@ -186,6 +186,7 @@ def produce_patient_renfield():
     """
     Dr. Seward's diary. Heartbroken, he throws himself into work
     and introduces the zoophagous maniac R.M. Renfield. Dark, moody, clinical.
+    Now in D Hungarian Minor.
     """
     bpm, dur = 60, 64.0
 
@@ -255,11 +256,12 @@ def produce_campfire_toast():
     """
     Quincey Morris invites Arthur and Seward to drink.
     Acoustic Texan warmth, comradely but hiding heartbreak.
+    Now in G Hungarian Minor.
     """
     bpm, dur = 75, 64.0
 
-    prog_str = "I:4.0 - IV:4.0 - V:4.0 - I:4.0"
-    chords = types.parse_progression(prog_str, KEY_G_MAJOR)
+    prog_str = "i:4.0 - iv:4.0 - V:4.0 - i:4.0"
+    chords = types.parse_progression(prog_str, KEY_G_MINOR)
     
     full_chords = []
     t = 0.0
@@ -278,7 +280,7 @@ def produce_campfire_toast():
         ),
         pattern="up_down"
     )
-    guitar = guitar_gen.render(full_chords, KEY_G_MAJOR, dur)
+    guitar = guitar_gen.render(full_chords, KEY_G_MINOR, dur)
     guitar_track = types.Track(name="guitar", notes=guitar)
     guitar_track.humanize(timing_std_beats=0.02, velocity_std=4.0).swing(factor=0.1)
 
@@ -288,7 +290,7 @@ def produce_campfire_toast():
             density=0.45, velocity_range=(60, 80),
             key_range_low=28, key_range_high=40
         )
-    ).render(full_chords, KEY_G_MAJOR, dur)
+    ).render(full_chords, KEY_G_MINOR, dur)
 
     # Harmonicas or a whistling lead (Ocarina - Program 79 or Whistle - Program 78)
     whistle_gen = MelodyGenerator(
@@ -299,7 +301,7 @@ def produce_campfire_toast():
         ),
         phrase_length=8.0
     )
-    whistle = whistle_gen.render(full_chords, KEY_G_MAJOR, dur)
+    whistle = whistle_gen.render(full_chords, KEY_G_MINOR, dur)
 
     cc_events = {
         "whistle": AutomationCurve.sine_lfo(11, 70, 110, 0.0, dur, period=4.0)
@@ -310,7 +312,7 @@ def produce_campfire_toast():
         bpm=bpm,
         instruments={"guitar": 25, "bass": 35, "whistle": 78},
         path=OUT / "04_The_Campfire_Toast.mid",
-        mood=Mood.CHAMBER, key=KEY_G_MAJOR,
+        mood=Mood.CHAMBER, key=KEY_G_MINOR,
         chords=full_chords, cc_events=cc_events
     )
 
