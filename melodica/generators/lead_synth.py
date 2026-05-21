@@ -126,7 +126,13 @@ class LeadSynthGenerator(PhraseGenerator):
             pcs = chord.pitch_classes()
             pc = random.choice(pcs) if pcs else chord.root
             pitch = nearest_pitch(int(pc), prev_pitch)
-            pitch = snap_to_scale(max(low, min(high, pitch)), key)
+            if pitch < low:
+                pitch += 12 * ((low - pitch + 11) // 12)
+            if pitch > high:
+                pitch -= 12 * ((pitch - high + 11) // 12)
+            if not (low <= pitch <= high):
+                pitch = max(low, min(high, pitch))
+                pitch = snap_to_scale(pitch, key)
 
             dur = self._apply_articulation(event.duration, i)
             vel = self._velocity(i, event.velocity_factor)

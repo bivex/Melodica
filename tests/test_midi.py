@@ -117,14 +117,14 @@ def test_chords_to_midi(tmp_path: Path):
         ChordLabel(root=5, quality=Quality.MAJOR, duration=1.0, start=1.0),
     ]
     out_file = tmp_path / "chords.mid"
-    chords_to_midi(chords, out_file)
+    chords_to_midi(chords, out_file, humanize=False)
     
     read_notes = from_midi(out_file)
     assert len(read_notes) == 6 # 3 notes per chord
     
     # Test valid alternate voicings
-    chords_to_midi(chords, out_file, voicing="spread")
-    chords_to_midi(chords, out_file, voicing="open")
+    chords_to_midi(chords, out_file, voicing="spread", humanize=False)
+    chords_to_midi(chords, out_file, voicing="open", humanize=False)
     
     with pytest.raises(ValueError, match="voicing must be one of"):
         chords_to_midi(chords, out_file, voicing="invalid_voicing")
