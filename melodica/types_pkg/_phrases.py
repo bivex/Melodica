@@ -37,7 +37,7 @@ class StaticPhrase:
 class HarmonizationRequest:
     melody: list[Note]
     key: Scale
-    engine: int = 0                       # 0=functional, 1=rule_based, 2=adaptive
+    engine: int | str = 0                 # 0=functional, 1=rule_based, 2=adaptive, 3/4=hmm, 'fibril'
     chord_rhythm: float = 4.0
     allow_secondary_dominants: bool = True
     allow_borrowed_chords: bool = False
@@ -46,8 +46,6 @@ class HarmonizationRequest:
     def __post_init__(self) -> None:
         if not self.melody:
             raise ValueError("Melody must not be empty.")
-        if self.engine not in [0, 1, 2]:
-            raise ValueError("Engine must be 0, 1, or 2.")
         if self.chord_rhythm <= 0:
             raise ValueError("chord_rhythm must be > 0.")
 
