@@ -217,6 +217,7 @@ from melodica.generators.bend import BendGenerator
 from melodica.generators.clusters import ClusterGenerator
 from melodica.generators.cadence import CadenceGenerator
 from melodica.generators.synth_bass import SynthBassGenerator
+from melodica.generators.modern_bass_2025 import ModernBass2025Generator
 from melodica.generators.supersaw_pad import SupersawPadGenerator
 from melodica.generators.pluck_sequence import PluckSequenceGenerator
 from melodica.generators.strings_legato import StringsLegatoGenerator
@@ -390,6 +391,7 @@ __all__ = [
     "ClusterGenerator",
     "CadenceGenerator",
     "SynthBassGenerator",
+    "ModernBass2025Generator",
     "SupersawPadGenerator",
     "PluckSequenceGenerator",
     "StringsLegatoGenerator",
