@@ -138,6 +138,7 @@ _NAME_HINTS: Dict[str, Role] = {
     "clarinet": Role.LEAD, "harp": Role.STRINGS, "organ": Role.STRINGS,
     "guitar": Role.LEAD, "fx": Role.FX, "glass": Role.FX,
     "banjo": Role.LEAD, "koto": Role.LEAD, "bowl": Role.FX,
+    "riser": Role.FX, "impact": Role.FX,
 }
 
 

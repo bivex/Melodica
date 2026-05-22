@@ -98,24 +98,14 @@ class FXRiserGenerator(PhraseGenerator):
         mid = (low + high) // 2
         last_chord = chords[-1]
 
-        # Place risers at bar boundaries
-        t = 0.0
-        while t < duration_beats:
-            # Find the section boundary (every 4 or 8 bars)
-            riser_start = t
-            riser_dur = min(self.length_beats, duration_beats - riser_start)
-            if riser_dur < 1.0:
-                break
+        # Place a single riser at the end of the section to transition to the next section
+        riser_dur = min(self.length_beats, duration_beats)
+        riser_start = max(0.0, duration_beats - riser_dur)
 
-            chord = chord_at(chords, riser_start)
-            if chord is None:
-                t += 4.0
-                continue
-
+        if riser_dur >= 1.0:
+            chord = chord_at(chords, riser_start) or last_chord
             riser_notes = self._render_riser(chord, key, riser_start, riser_dur, low, high, mid)
             notes.extend(riser_notes)
-
-            t += max(self.length_beats, 4.0)
 
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(
