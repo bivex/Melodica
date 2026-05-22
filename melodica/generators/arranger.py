@@ -1,28 +1,23 @@
 # Copyright (c) 2026 Bivex
 #
-# Author: Bivex
-# Available for contact via email: support@b-b.top
-# For up-to-date contact information:
-# https://github.com/bivex
-#
-# Created: 2026-04-02 03:04
-# Last Updated: 2026-04-02 03:04
-#
 # Licensed under the MIT License.
-# Commercial licensing available upon request.
 
 """
 generators/arranger.py — Arrangement structure generator.
 
 Layer: Application / Domain
-Style: All genres — pop, rock, jazz, EDM, film.
+Style: All genres — pop, rock, jazz, EDM, film, orchestral.
 
-The arranger generator manages the high-level structure of a piece,
-sequencing other generators through verse, chorus, bridge, and other
-sections. It outputs notes from a composite of section-specific
-generator selections.
+The arranger manages high-level structure of a piece, sequencing
+other generators through verse, chorus, bridge, and other sections.
 
-This is a meta-generator that orchestrates the arrangement.
+It can work in two modes:
+1. Orchestral mode (use_orchestral=True): delegates to OrchestralScoreGenerator
+   for full multi-track orchestral arrangements with per-instrument voicing.
+2. Classic mode (use_orchestral=False): lightweight inline generation with
+   intensity-based density/register control (backwards compatible).
+
+Both modes populate self.tracks and self.instruments for multi-track export.
 
 Form patterns:
     "ABABCB"  — pop structure (intro-verse-chorus-verse-chorus-bridge-chorus)
@@ -52,23 +47,32 @@ FORM_SECTIONS: dict[str, list[str]] = {
     "rondo": ["A", "B", "A", "C", "A"],
 }
 
+# Map abstract letters to section semantics for intensity
+_LETTER_TO_INTENSITY = {
+    "A": 0.6,
+    "B": 0.75,
+    "C": 0.85,
+    "D": 0.7,
+}
+
 
 @dataclass
 class ArrangerGenerator(PhraseGenerator):
     """
     Arrangement structure generator.
 
-    Manages section-based note generation by varying density, register,
-    and rhythmic complexity across sections.
-
     form:
-        Arrangement form (see above).
+        Arrangement form (see FORM_SECTIONS).
     section_length:
         Length of each section in bars.
     variation_seed:
         Random seed for reproducible arrangements.
     intensity_map:
         Per-section intensity overrides. E.g., {"chorus": 0.9, "verse": 0.5}
+    use_orchestral:
+        If True, delegates to OrchestralScoreGenerator for full orchestral
+        arrangement with proper instrument voicing and texture control.
+        Populates self.tracks with per-instrument note lists.
     """
 
     name: str = "Arranger Generator"
@@ -88,7 +92,14 @@ class ArrangerGenerator(PhraseGenerator):
             "D": 0.8,
         }
     )
+    use_orchestral: bool = False
     rhythm: RhythmGenerator | None = None
+
+    # Multi-track output (populated after render)
+    tracks: dict[str, list[NoteInfo]] = field(default_factory=dict, init=False, repr=False)
+    instruments: dict[str, int] = field(default_factory=dict, init=False, repr=False)
+    pan_map: dict[str, float] = field(default_factory=dict, init=False, repr=False)
+
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -99,6 +110,7 @@ class ArrangerGenerator(PhraseGenerator):
         section_length: int = 8,
         variation_seed: int = 0,
         intensity_map: dict[str, float] | None = None,
+        use_orchestral: bool = False,
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
@@ -107,19 +119,11 @@ class ArrangerGenerator(PhraseGenerator):
         self.variation_seed = variation_seed
         if intensity_map is not None:
             self.intensity_map = intensity_map
-        else:
-            self.intensity_map = {
-                "intro": 0.3,
-                "verse": 0.5,
-                "chorus": 0.85,
-                "bridge": 0.6,
-                "outro": 0.4,
-                "A": 0.6,
-                "B": 0.7,
-                "C": 0.75,
-                "D": 0.8,
-            }
+        self.use_orchestral = use_orchestral
         self.rhythm = rhythm
+        self.tracks = {}
+        self.instruments = {}
+        self.pan_map = {}
 
     def render(
         self,
@@ -131,46 +135,96 @@ class ArrangerGenerator(PhraseGenerator):
         if not chords:
             return []
 
-        sections = FORM_SECTIONS.get(self.form, FORM_SECTIONS["verse_chorus"])
-        bars_per_section = self.section_length
-        beats_per_section = bars_per_section * 4
+        self.tracks = {}
+        self.instruments = {}
+        self.pan_map = {}
 
+        sections = FORM_SECTIONS.get(self.form, FORM_SECTIONS["verse_chorus"])
+        beats_per_section = self.section_length * 4
+
+        # Build section tuples for orchestral mode
+        section_tuples = []
+        t = 0.0
+        idx = 0
+        while t < duration_beats:
+            sec_name = sections[idx % len(sections)]
+            dur = min(beats_per_section, duration_beats - t)
+            section_tuples.append((sec_name, t, dur))
+            t += dur
+            idx += 1
+
+        if self.use_orchestral:
+            return self._render_orchestral(chords, key, duration_beats, section_tuples, context)
+        else:
+            return self._render_classic(chords, key, duration_beats, section_tuples, context)
+
+    def _render_orchestral(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        section_tuples: list[tuple[str, float, float]],
+        context: RenderContext | None,
+    ) -> list[NoteInfo]:
+        from melodica.generators.orchestral_score import OrchestralScoreGenerator
+
+        score = OrchestralScoreGenerator(
+            self.params,
+            sections=section_tuples,
+        )
+        all_notes = score.render(chords, key, duration_beats, context)
+
+        # Copy multi-track output
+        self.tracks = dict(score.tracks)
+        self.instruments = dict(score.instruments)
+        self.pan_map = dict(score.pan_map)
+
+        if all_notes:
+            self._last_context = (context or RenderContext()).with_end_state(
+                last_pitch=all_notes[-1].pitch,
+                last_velocity=all_notes[-1].velocity,
+                last_chord=chords[-1] if chords else None,
+            )
+        return all_notes
+
+    def _render_classic(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        section_tuples: list[tuple[str, float, float]],
+        context: RenderContext | None,
+    ) -> list[NoteInfo]:
         notes: list[NoteInfo] = []
         low = self.params.key_range_low
         high = self.params.key_range_high
         mid = (low + high) // 2
-
         prev_pitch = context.prev_pitch if context and context.prev_pitch is not None else mid
-        last_chord: ChordLabel | None = None
         rng = random.Random(self.variation_seed)
 
-        section_idx = 0
-        t = 0.0
-        while t < duration_beats:
-            section_name = sections[section_idx % len(sections)]
-            intensity = self.intensity_map.get(section_name, 0.6)
-            section_end = min(t + beats_per_section, duration_beats)
+        for sec_name, sec_start, sec_dur in section_tuples:
+            intensity = self.intensity_map.get(sec_name, _LETTER_TO_INTENSITY.get(sec_name, 0.6))
+            sec_end = sec_start + sec_dur
 
-            # Generate notes for this section with section-specific parameters
-            section_notes = self._generate_section(
-                chords, key, t, section_end, intensity, prev_pitch, rng, mid, low, high
+            sec_notes = self._generate_section(
+                chords, key, sec_start, sec_end, intensity, prev_pitch, rng, mid, low, high
             )
-            notes.extend(section_notes)
-            if section_notes:
-                prev_pitch = section_notes[-1].pitch
-
-            t = section_end
-            section_idx += 1
-
-        if chords:
-            last_chord = chords[-1]
+            notes.extend(sec_notes)
+            if sec_notes:
+                prev_pitch = sec_notes[-1].pitch
 
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(
                 last_pitch=notes[-1].pitch,
                 last_velocity=notes[-1].velocity,
-                last_chord=last_chord,
+                last_chord=chords[-1] if chords else None,
             )
+
+            # In classic mode, store as single track
+            self.tracks["arranger"] = notes
+            self.instruments["arranger"] = 0
+            self.pan_map["arranger"] = 0.0
+
         return notes
 
     def _generate_section(
@@ -186,16 +240,6 @@ class ArrangerGenerator(PhraseGenerator):
         low: int,
         high: int,
     ) -> list[NoteInfo]:
-        """
-        Generate section notes with distinct strategies by intensity level:
-
-        - Low  (intro/outro, intensity < 0.45): sparse whole-chord pads, slow rhythm,
-          low register. One chord voicing per harmony change.
-        - Mid  (verse/bridge, 0.45–0.7): single-voice melody-like line at 1-beat steps,
-          mid register, moderate velocity.
-        - High (chorus, intensity > 0.7): full block chords (all tones) on every beat,
-          upper register, high velocity with accent on beat 1.
-        """
         notes = []
         vel_base = int(30 + intensity * 70)
 
@@ -203,7 +247,6 @@ class ArrangerGenerator(PhraseGenerator):
         if not slot_chords:
             return notes
 
-        # ── LOW: pad/ambient — one voicing per chord change ──────────────────
         if intensity < 0.45:
             for chord in slot_chords:
                 c_start = max(chord.start, start)
@@ -213,7 +256,6 @@ class ArrangerGenerator(PhraseGenerator):
                 pcs = chord.pitch_classes()
                 if not pcs:
                     continue
-                # Spread voicing: root + fifth + octave, low register
                 root_pc = int(pcs[0])
                 pitches = [nearest_pitch(root_pc, low + 12)]
                 if len(pcs) > 1:
@@ -228,7 +270,6 @@ class ArrangerGenerator(PhraseGenerator):
                         velocity=max(1, min(127, vel_base + rng.randint(-5, 5))),
                     ))
 
-        # ── MID: single melodic voice at quarter-note steps ──────────────────
         elif intensity <= 0.7:
             step = 1.0
             t = start
@@ -237,10 +278,9 @@ class ArrangerGenerator(PhraseGenerator):
                 if chord is None:
                     t += step
                     continue
-                if rng.random() > 0.25:  # 75% fill rate
+                if rng.random() > 0.25:
                     pcs = chord.pitch_classes()
                     if pcs:
-                        # Stepwise bias: prefer close pitch classes
                         pc = min(pcs, key=lambda p: abs(nearest_pitch(int(p), prev_pitch) - prev_pitch))
                         pitch = nearest_pitch(int(pc), prev_pitch)
                         pitch = max(mid - 12, min(mid + 12, pitch))
@@ -254,7 +294,6 @@ class ArrangerGenerator(PhraseGenerator):
                         prev_pitch = pitch
                 t += step
 
-        # ── HIGH: full block chords every beat, accented ─────────────────────
         else:
             step = 1.0
             t = start

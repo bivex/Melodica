@@ -323,6 +323,29 @@ from melodica.generators.puzzle_loop import PuzzleLoopGenerator
 from melodica.generators.medieval_tavern import MedievalTavernGenerator
 from melodica.generators.scifi_underscore import SciFiUnderscoreGenerator
 from melodica.generators.victory_fanfare import VictoryFanfareGenerator
+from melodica.generators.orchestral_strings import (
+    ViolinGenerator,
+    ViolaGenerator,
+    CelloGenerator,
+    ContrabassGenerator,
+)
+from melodica.generators.orchestral_brass import (
+    TrumpetGenerator,
+    TromboneGenerator,
+    FrenchHornGenerator,
+)
+from melodica.generators.orchestral_woodwinds import (
+    FluteGenerator,
+    OboeGenerator,
+    ClarinetGenerator,
+    BassoonGenerator,
+)
+from melodica.generators.orchestral_percussion import (
+    TimpaniGenerator,
+    MalletPercussionGenerator,
+)
+from melodica.generators.harp import HarpGenerator
+from melodica.generators.orchestral_score import OrchestralScoreGenerator
 
 __all__ = [
     "PhraseGenerator",
@@ -498,4 +521,19 @@ __all__ = [
     "MedievalTavernGenerator",
     "SciFiUnderscoreGenerator",
     "VictoryFanfareGenerator",
+    "ViolinGenerator",
+    "ViolaGenerator",
+    "CelloGenerator",
+    "ContrabassGenerator",
+    "TrumpetGenerator",
+    "TromboneGenerator",
+    "FrenchHornGenerator",
+    "FluteGenerator",
+    "OboeGenerator",
+    "ClarinetGenerator",
+    "BassoonGenerator",
+    "TimpaniGenerator",
+    "MalletPercussionGenerator",
+    "HarpGenerator",
+    "OrchestralScoreGenerator",
 ]
