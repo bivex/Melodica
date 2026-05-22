@@ -224,6 +224,7 @@ from melodica.generators.strings_legato import StringsLegatoGenerator
 from melodica.generators.strings_pizzicato import StringsPizzicatoGenerator
 from melodica.generators.brass_section import BrassSectionGenerator
 from melodica.generators.sax_solo import SaxSoloGenerator
+from melodica.generators.solo_melody import SoloMelodyGenerator
 from melodica.generators.trap_drums import TrapDrumsGenerator
 from melodica.generators.four_on_floor import FourOnFloorGenerator
 from melodica.generators.breakbeat import BreakbeatGenerator
@@ -398,6 +399,7 @@ __all__ = [
     "StringsPizzicatoGenerator",
     "BrassSectionGenerator",
     "SaxSoloGenerator",
+    "SoloMelodyGenerator",
     "TrapDrumsGenerator",
     "FourOnFloorGenerator",
     "BreakbeatGenerator",
