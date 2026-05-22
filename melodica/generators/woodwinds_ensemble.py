@@ -30,6 +30,7 @@ Sections:
 from __future__ import annotations
 
 import random
+import math
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
@@ -135,6 +136,11 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
 
         # Track cumulative play duration per voice index to insert breaths
         voice_accumulators = {v_idx: 0.0 for v_idx in range(len(voicing_offsets))}
+        # Give each voice its own slightly humanized breath threshold
+        voice_breath_thresholds = {
+            v_idx: self.breath_interval + random.uniform(-1.0, 1.0)
+            for v_idx in range(len(voicing_offsets))
+        }
 
         for chord in chords:
             pcs = chord.pitch_classes()
@@ -157,27 +163,54 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
 
                 vel = self._velocity(vel_boost)
 
-                onset = chord.start + random.uniform(0.0, 0.02 * self.dynamic_range)
+                # Physical attack timing offset depending on the instrument voice index
+                # Flutes (idx=0) are very fast, Oboes (idx=1) double reed slightly slower,
+                # Clarinets (idx=2) medium, Bassoons (idx=3) slowest double reed response.
+                inst_delay = 0.0
+                if voice_idx == 1:    # Oboe
+                    inst_delay = random.uniform(0.004, 0.012)
+                elif voice_idx == 2:  # Clarinet
+                    inst_delay = random.uniform(0.003, 0.010)
+                elif voice_idx >= 3:  # Bassoon
+                    inst_delay = random.uniform(0.010, 0.022)
+
+                onset = chord.start + inst_delay + random.uniform(0.0, 0.005 * self.dynamic_range)
                 note_dur = chord.duration * dur_factor
 
-                # Breath mark logic:
-                # If cumulative play duration for this voice exceeds breath_interval, shorten note to take a breath!
+                # Breath mark logic with humanized thresholds and gaps:
                 accum = voice_accumulators[voice_idx]
-                if accum >= self.breath_interval:
-                    note_dur = max(0.1, note_dur - self.breath_gap)
+                if accum >= voice_breath_thresholds[voice_idx]:
+                    gap = self.breath_gap + random.uniform(-0.05, 0.05)
+                    note_dur = max(0.1, note_dur - max(0.05, gap))
                     voice_accumulators[voice_idx] = 0.0
+                    voice_breath_thresholds[voice_idx] = self.breath_interval + random.uniform(-1.0, 1.0)
                 else:
                     voice_accumulators[voice_idx] += chord.duration
 
-                notes.append(
-                    NoteInfo(
-                        pitch=pitch,
-                        start=round(onset, 6),
-                        duration=max(0.1, note_dur),
-                        velocity=vel,
-                        articulation=self.articulation,
-                    )
+                # Acoustic Air Pressure LFO (CC 11 Expression fluctuations) on long legato notes
+                expression = {}
+                if self.articulation == "legato" and note_dur >= 1.0:
+                    steps = 12
+                    cc11_list = []
+                    for s in range(steps + 1):
+                        progress = s / steps
+                        t_rel = progress * note_dur
+                        # Pressure sweep: LFO starts dry and increases on long notes at 7Hz
+                        fade = min(1.0, t_rel / 0.6)
+                        lfo_val = int(80 + fade * 8 * math.sin(2 * math.pi * 7.0 * t_rel))
+                        cc11_list.append((t_rel, max(0, min(127, lfo_val))))
+                    expression[11] = cc11_list
+
+                note = NoteInfo(
+                    pitch=pitch,
+                    start=round(onset, 6),
+                    duration=max(0.1, note_dur),
+                    velocity=vel,
+                    articulation=self.articulation,
                 )
+                if expression:
+                    note.expression = expression
+                notes.append(note)
 
         notes.sort(key=lambda n: n.start)
 

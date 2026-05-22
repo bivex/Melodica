@@ -22,6 +22,7 @@ Produces sustained chords with Hammond-style drawbar voicings and Leslie articul
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
@@ -101,34 +102,66 @@ class OrganDrawbarsGenerator(PhraseGenerator):
             base_vel = int(self._velocity() * event.velocity_factor)
             leslie_dur = event.duration * (0.95 if self.leslie_speed == "fast" else 0.98)
 
+            # Leslie cabinet physical rotor LFO parameters
+            rotor_freq = 6.8 if self.leslie_speed == "fast" else 1.2
+            rotor_depth = 10 if self.leslie_speed == "fast" else 3
+            pb_depth = 60 if self.leslie_speed == "fast" else 15
+            
+            steps = int(leslie_dur * 20)
+            steps = max(5, steps)
+            
             for i, pitch in enumerate(drawbar_pitches):
                 pitch = snap_to_scale(max(self.params.key_range_low, min(self.params.key_range_high, pitch)), key)
                 drawbar_factor = 0.6 + 0.4 * math.sin(
                     math.pi * (i + 1) / (len(drawbar_pitches) + 1)
                 )
                 vel = int(base_vel * drawbar_factor)
+                
+                # Drawbar voice attack timing humanization to prevent Harmonic Fusion
+                voice_delay = random.uniform(0.0, 0.006)
+                onset = max(0.0, event.onset + voice_delay)
 
                 if self.percussion and i == 0:
                     perc_dur = max(0.01, round(min(0.08, event.duration * 0.1), 6))
+                    click_jitter = random.uniform(-0.003, 0.003)
                     notes.append(
                         NoteInfo(
                             pitch=pitch,
-                            start=round(event.onset, 6),
+                            start=round(max(0.0, event.onset + click_jitter), 6),
                             duration=perc_dur,
-                            velocity=max(1, min(MIDI_MAX, int(vel * 0.4))),
+                            velocity=max(1, min(MIDI_MAX, int(vel * 0.4 + random.randint(-5, 5)))),
                             articulation="staccato",
                         )
                     )
 
-                notes.append(
-                    NoteInfo(
-                        pitch=pitch,
-                        start=round(event.onset, 6),
-                        duration=max(0.01, round(leslie_dur, 6)),
-                        velocity=max(0, min(MIDI_MAX, vel)),
-                        articulation="sustain",
-                    )
+                expression = {}
+                # 1. Leslie Rotor Tremolo (CC 11 Expression fluctuation)
+                cc11_list = []
+                # 2. Leslie Rotor Vibrato (micro Pitch Bend oscillation)
+                pb_list = []
+                for s in range(steps + 1):
+                    progress = s / steps
+                    t_rel = progress * leslie_dur
+                    # Rotating speaker phase offset per drawbar index (creates deep spatial chorus!)
+                    phase_offset = (i * 0.25) * math.pi
+                    trem_osc = math.sin(2 * math.pi * rotor_freq * t_rel + phase_offset) * rotor_depth
+                    pb_osc = math.sin(2 * math.pi * rotor_freq * t_rel + phase_offset) * pb_depth
+                    
+                    cc11_list.append((t_rel, max(0, min(127, int(100 + trem_osc)))))
+                    pb_list.append((t_rel, int(pb_osc)))
+                    
+                expression[11] = cc11_list
+                expression["pitch_bend"] = pb_list
+
+                note = NoteInfo(
+                    pitch=pitch,
+                    start=round(onset, 6),
+                    duration=max(0.01, round(leslie_dur - voice_delay, 6)),
+                    velocity=max(0, min(MIDI_MAX, vel)),
+                    articulation="sustain",
                 )
+                note.expression = expression
+                notes.append(note)
 
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(
