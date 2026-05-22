@@ -27,6 +27,7 @@ Drum map (MIDI):
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 
@@ -448,7 +449,7 @@ class DrumKitPatternGenerator(PhraseGenerator):
         return notes
 
     @staticmethod
-    def _hat_pan_value(mode: str, alt_count: int) -> int:
+    def _hat_pan_value(mode: str, alt_count: int, spread: int = 12) -> int:
         """Return a CC10 pan value for a hi-hat note."""
         r = alt_count % 4
         if mode == "off":
@@ -461,6 +462,15 @@ class DrumKitPatternGenerator(PhraseGenerator):
             return min(76, max(52, 52 + r * 8))
         elif mode == "sweep_rl":
             return min(76, max(52, 76 - r * 8))
+        elif mode == "breathe":
+            # Sine LFO across hits — hi-hat "breathes" left-right
+            phase = (alt_count / 8) * 2 * math.pi
+            offset = int(math.sin(phase) * spread)
+            return max(0, min(127, 64 + offset))
+        elif mode == "humanize":
+            # Gaussian drift — subtle random micro-panning
+            drift = random.gauss(0, spread * 0.4)
+            return max(0, min(127, int(64 + drift)))
         return 64
 
     def _apply_pro_features(self, notes: list[NoteInfo]) -> list[NoteInfo]:

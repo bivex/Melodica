@@ -232,6 +232,39 @@ _ROLE_PAN_PROFILES: Dict[str, Dict[Role, float]] = {
         Role.PAD: -0.40,
         Role.FX: 0.45,
     },
+    "neosoul": {
+        Role.LEAD: 0.0,
+        Role.BASS: 0.0,
+        Role.PAD: -0.25,
+        Role.STRINGS: 0.30,
+        Role.CHOIR: -0.20,
+        Role.PERC: 0.10,
+    },
+    "hip_hop": {
+        Role.LEAD: 0.0,
+        Role.BASS: 0.0,
+        Role.PAD: -0.35,
+        Role.STRINGS: 0.20,
+        Role.CHOIR: -0.15,
+        Role.PERC: 0.05,
+        Role.FX: 0.40,
+    },
+    "lofi": {
+        Role.LEAD: 0.05,
+        Role.BASS: 0.0,
+        Role.PAD: -0.15,
+        Role.STRINGS: 0.18,
+        Role.CHOIR: -0.12,
+        Role.PERC: -0.08,
+    },
+    "gospel": {
+        Role.LEAD: 0.0,
+        Role.BASS: 0.0,
+        Role.PAD: -0.20,
+        Role.STRINGS: 0.25,
+        Role.CHOIR: -0.18,
+        Role.PERC: 0.0,
+    },
 }
 
 # Fallback default (kept separate from profiles so every entry stays in one place)
@@ -323,19 +356,65 @@ def _auto_spread_panning(
 _PAN_RULES: Dict[Role, tuple[float, float]] = {
     Role.BASS: (-0.05, 0.05),  # strict centre
     Role.LEAD: (-0.10, 0.10),  # near centre
-    Role.PAD: (-0.60, -0.10),  # left of centre
+    Role.PAD: (-0.60, 0.60),   # flexible — genre decides
     Role.PERC: (-0.20, 0.20),  # near centre
     Role.STRINGS: (-0.45, 0.45),
-    Role.CHOIR: (-0.40, -0.10),
-    Role.FX: (0.15, 0.60),  # right of centre
+    Role.CHOIR: (-0.40, 0.40),
+    Role.FX: (-0.65, 0.65),    # widest range
 }
 
 
+def _check_frequency_pan_conflicts(
+    pan_map: Dict[str, float],
+    profiles: Dict[str, _TrackProfile],
+    register_threshold: float = 6.0,
+    pan_threshold: float = 0.15,
+) -> list[tuple[str, str, str]]:
+    """Detect masking: two tracks in same register AND same pan position.
+
+    Returns list of (track_a, track_b, severity) tuples.
+    """
+    conflicts: list[tuple[str, str, str]] = []
+    names = list(pan_map.keys())
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            a, b = names[i], names[j]
+            pa, pb = profiles.get(a), profiles.get(b)
+            if not pa or not pb:
+                continue
+            same_register = abs(pa.avg_pitch - pb.avg_pitch) < register_threshold
+            same_pan = abs(pan_map[a] - pan_map[b]) < pan_threshold
+            if same_register and same_pan:
+                # Skip bass/perc centre pairs
+                if pa.role in (Role.BASS, Role.PERC) and pb.role in (Role.BASS, Role.PERC):
+                    continue
+                severity = "HIGH" if abs(pa.avg_pitch - pb.avg_pitch) < 3 else "MED"
+                conflicts.append((a, b, severity))
+    return conflicts
+
+
+@dataclass
+class PanReport:
+    """Structured result from PanValidator."""
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    width_score: float = 0.0
+    mono_compatible: bool = True
+
+
 class PanValidator:
-    """Validates pan map for role-correct boundaries and orphan conflicts."""
+    """Validates pan map for role boundaries, frequency conflicts, and stereo width."""
 
     def validate(self, pan_map: Dict[str, float], profiles: Dict[str, _TrackProfile]) -> list[str]:
-        """Return list of warning strings (empty = OK)."""
+        """Return list of warning strings for backward compatibility."""
+        report = self.full_validate(pan_map, profiles)
+        return report.errors + report.warnings
+
+    def full_validate(self, pan_map: Dict[str, float], profiles: Dict[str, _TrackProfile]) -> PanReport:
+        """Full validation returning structured PanReport."""
+        import statistics as _stat
+
+        errors: list[str] = []
         warnings: list[str] = []
         seen: list[tuple[str, float, Role]] = []
 
@@ -346,12 +425,12 @@ class PanValidator:
             role = prof.role
             lo, hi = _PAN_RULES.get(role, (-1.0, 1.0))
             if not (lo <= pan <= hi):
-                warnings.append(
-                    f"pan={pan:+.2f} вне диапазона [{lo}, {hi}] для {name} ({role.value})"
+                errors.append(
+                    f"pan={pan:+.2f} вне [{lo},{hi}] для {name} ({role.value})"
                 )
             seen.append((name, pan, role))
 
-        # Detect two tracks at identical pan positions (except centre / bass+kick)
+        # Detect identical pan positions (except bass/perc centre)
         for i in range(len(seen)):
             for j in range(i + 1, len(seen)):
                 a_name, a_pan, a_role = seen[i]
@@ -361,7 +440,29 @@ class PanValidator:
                         warnings.append(
                             f"{a_name} и {b_name} стоят на одной точке: pan={a_pan:+.2f}"
                         )
-        return warnings
+
+        # Frequency-pan conflict detection
+        conflicts = _check_frequency_pan_conflicts(pan_map, profiles)
+        for a, b, sev in conflicts:
+            warnings.append(f"Маскировка ({sev}): {a} ↔ {b} — один регистр и pan")
+
+        # Stereo width score
+        non_bass_pans = [pan for (_, pan, role) in seen if role != Role.BASS]
+        width_score = round(_stat.stdev(non_bass_pans), 3) if len(non_bass_pans) > 1 else 0.0
+        if width_score < 0.10 and len(non_bass_pans) >= 3:
+            warnings.append(f"Stereo width={width_score:.2f} — очень узкий микс")
+        elif width_score > 0.50:
+            warnings.append(f"Stereo width={width_score:.2f} — очень широкий микс")
+
+        # Mono compatibility: sum to mono, check if any pair cancels
+        mono_compatible = all(abs(pan) < 0.80 for _, pan, _ in seen)
+
+        return PanReport(
+            errors=errors,
+            warnings=warnings,
+            width_score=width_score,
+            mono_compatible=mono_compatible,
+        )
 
 
 
@@ -769,17 +870,24 @@ def _generate_pan_automation(
     profiles: Dict[str, _TrackProfile],
     mood_profile: _MoodProfile,
     mood: Mood | None = None,
+    spread_map: Dict[str, float] | None = None,
+    tension: float | None = None,
+    section_breaks: List[Tuple[float, str]] | None = None,
 ) -> Dict[str, List[Tuple[float, int, int]]]:
-    """Generate CC10 pan automation for PAD (cone-LFO swing) and FX (sweep).
+    """Generate CC10 pan automation with anchors, tension-aware width, and section events.
 
-    Called from _stage_master after MasteringDesk sets the static pan map.
-    This adds time-varying CC10 on top of the static pan.
+    Features:
+      - CC10 anchors every 4 bars for DAW seek reliability
+      - PAD: sine-LFO with tension-aware width (narrow=calm, wide=energy)
+      - FX: right-to-centre sweep at entry beat
+      - Section events: drop=spread, break=collapse, intro/outro=gradual
 
-    PAD  → sine-LFO on CC10 pulses over the note span.
-          Width is driven by Mood parameter (AMBIENT=narrow, AGGRESSIVE=wide).
-    FX   → single right-to-centre sweep at the entry beat.
+    Args:
+        tension: 0.0 (calm) to 1.0 (chaotic) from harmonic analysis.
+        section_breaks: [(beat_position, section_name), ...] e.g. [(0,"intro"),(16,"drop")].
     """
     cc_events: Dict[str, List[Tuple[float, int, int]]] = {}
+    spread_map = spread_map or {}
 
     _MOOD_WIDTH = {Mood.AMBIENT: 5, Mood.INTIMATE: 3,
                    Mood.CHAMBER: 7, Mood.EXPERIMENTAL: 12,
@@ -787,8 +895,7 @@ def _generate_pan_automation(
 
     if mood is not None:
         eff_mood = mood
-        pad_cc_spread = _MOOD_WIDTH.get(eff_mood, 9)
-    else:  # derive from lufs when mood not explicitly provided
+    else:
         lufs = mood_profile.lufs
         if   lufs <= -20:    eff_mood = Mood.AMBIENT
         elif lufs <= -18:    eff_mood = Mood.INTIMATE
@@ -796,8 +903,28 @@ def _generate_pan_automation(
         elif lufs <= -15:    eff_mood = Mood.EXPERIMENTAL
         elif lufs <= -14:    eff_mood = Mood.CINEMATIC
         else:                 eff_mood = Mood.AGGRESSIVE
-        pad_cc_spread = _MOOD_WIDTH.get(eff_mood, 9)
+
+    base_spread = _MOOD_WIDTH.get(eff_mood, 9)
+    # Tension-aware: low tension narrows, high tension widens
+    if tension is not None:
+        pad_cc_spread = int(base_spread * (0.5 + 0.5 * tension))
+    else:
+        pad_cc_spread = base_spread
     fx_cc_spread = 12
+
+    # Find global span for anchors
+    all_ends = []
+    for tname in profiles:
+        notes = tracks.get(tname, [])
+        if notes:
+            all_ends.append(notes[-1].start + notes[-1].duration)
+    global_end = max(all_ends) if all_ends else 0.0
+
+    # Section-aware: precompute section transition beats
+    section_map: Dict[float, str] = {}
+    if section_breaks:
+        for beat, name in section_breaks:
+            section_map[round(beat, 2)] = name.lower()
 
     for tname, prof in profiles.items():
         notes = tracks.get(tname, [])
@@ -807,31 +934,76 @@ def _generate_pan_automation(
         t_start = notes[0].start
         t_end   = notes[-1].start + notes[-1].duration
         span    = t_end - t_start
+        evts: list[tuple[float, int, int]] = []
 
-        # PAD: sine-LFO across the full track span (only if >2 beats)
+        # --- CC10 anchors every 4 bars (16 beats at 4/4) ---
+        pan_norm = spread_map.get(tname, 0.0)
+        anchor_cc10 = max(0, min(127, int(64 + pan_norm * 63)))
+        anchor_interval = 16.0  # 4 bars
+        beat = t_start
+        while beat <= t_end:
+            evts.append((round(beat, 6), 10, anchor_cc10))
+            beat += anchor_interval
+
+        # --- PAD: tension-aware sine-LFO ---
         if prof.role == Role.PAD and span > 2.0:
-            ctr  = 64
-            lo   = max(20, ctr - pad_cc_spread)
-            hi   = min(107, ctr + pad_cc_spread)
+            ctr = anchor_cc10
+            lo  = max(20, ctr - pad_cc_spread)
+            hi  = min(107, ctr + pad_cc_spread)
             period = max(4.0, span / 2)
             lfo = AutomationCurve.sine_lfo(
                 cc_num=10, min_val=lo, max_val=hi,
                 start_beat=t_start, end_beat=t_end,
                 period=period, steps_per_period=8,
             )
-            cc_events[tname] = lfo
+            evts.extend(lfo)
 
-        # FX: right-to-centre sweep at entry beat
+        # --- FX: right-to-centre sweep at entry ---
         elif prof.role == Role.FX and prof.entry_beat < t_end:
-            entry    = prof.entry_beat
+            entry     = prof.entry_beat
             sweep_dur = min(1.5, t_end - entry)
             sweep_end = entry + sweep_dur
-            right    = min(107, 64 + fx_cc_spread)
+            right     = min(107, 64 + fx_cc_spread)
             sweep = AutomationCurve.linear(
                 cc_num=10, start_val=right, end_val=64,
                 start_beat=entry, end_beat=sweep_end, steps=6,
             )
-            cc_events[tname] = sweep
+            evts.extend(sweep)
+
+        # --- Section-aware pan events ---
+        if section_breaks:
+            for sec_beat, sec_name in section_breaks:
+                if sec_beat < t_start or sec_beat > t_end:
+                    continue
+                if sec_name == "drop" and prof.role == Role.PAD:
+                    # Instant spread: jump to wide pan
+                    spread_cc10 = max(0, min(127, int(64 + pan_norm * 63 * 1.5)))
+                    evts.append((round(sec_beat, 6), 10, spread_cc10))
+                elif sec_name in ("break", "bridge") and prof.role in (Role.PAD, Role.STRINGS):
+                    # Collapse to center
+                    evts.append((round(sec_beat, 6), 10, 64))
+                elif sec_name == "intro":
+                    # Slow spread from center over 8 beats
+                    spread_end_beat = min(sec_beat + 8.0, t_end)
+                    spread_to = anchor_cc10
+                    intro_curve = AutomationCurve.linear(
+                        cc_num=10, start_val=64, end_val=spread_to,
+                        start_beat=sec_beat, end_beat=spread_end_beat, steps=8,
+                    )
+                    evts.extend(intro_curve)
+                elif sec_name == "outro":
+                    # Slow collapse to center over 8 beats
+                    collapse_end = min(sec_beat + 8.0, t_end)
+                    outro_curve = AutomationCurve.linear(
+                        cc_num=10, start_val=anchor_cc10, end_val=64,
+                        start_beat=sec_beat, end_beat=collapse_end, steps=8,
+                    )
+                    evts.extend(outro_curve)
+
+        # Sort and deduplicate by (beat, cc) keeping last value
+        if evts:
+            evts.sort(key=lambda e: (e[0], e[1]))
+            cc_events[tname] = evts
 
     return cc_events
 
@@ -1211,6 +1383,7 @@ def _stage_tension(kw):
     chords = kw.get("chords")
     if chords:
         tension = _compute_tension(chords)
+        kw["_tension"] = tension
         if tension > 0.7:
             kw["tracks"] = _tension_boost(kw["tracks"], 1.10)
         elif tension < 0.3:
@@ -1267,7 +1440,11 @@ def _stage_master(kw):
     reverb_cc = _generate_reverb_sends(mastered, kw["_profiles"], kw["mood_profile"])
     delay_cc = _generate_delay_sends(mastered, kw["_profiles"])
     pan_auto_cc = _generate_pan_automation(
-        mastered, kw["_profiles"], kw["mood_profile"]
+        mastered, kw["_profiles"], kw["mood_profile"],
+        mood=kw.get("mood"),
+        spread_map=spread_map,
+        tension=kw.get("_tension"),
+        section_breaks=kw.get("section_breaks"),
     )
     all_cc = _merge_cc_events(
         master_cc, entry_cc, reverb_cc, delay_cc, pan_auto_cc, kw.get("cc_events", {})
@@ -1388,6 +1565,7 @@ def produce_track(
     pipeline: list | None = None,
     engine: str = "hmm",
     style: str = "academic",
+    section_breaks: List[Tuple[float, str]] | None = None,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -1453,6 +1631,7 @@ def produce_track(
         tempo_events=tempo_events,
         engine=engine,
         style=style,
+        section_breaks=section_breaks,
     )
 
     # Run stages sequentially

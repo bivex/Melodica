@@ -298,7 +298,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     mute_boundaries: bool = False
     kick_less_verse: bool = False
     # CC10 hi-hat panning
-    pan_mode: str = "off"  # off | alternate | sweep_lr | sweep_rl | mono
+    pan_mode: str = "off"  # off | alternate | sweep_lr | sweep_rl | mono | random | breathe | humanize
     pan_alternation_rate: float = 0.5
     pan_width: float = 0.20  # 0.0=narrow (no spread) → 1.0=full stereo width
     # Flam & drag rudiments
@@ -621,6 +621,17 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             # True random across full width (re-seeded each call for variety)
             _rnd.seed()
             return int(_rnd.uniform(L, R))
+        elif mode == "breathe":
+            # Sine LFO across hits — hi-hat breathes left-right
+            import math as _math
+            phase = (alt_count / 8) * 2 * _math.pi
+            offset = int(_math.sin(phase) * spread)
+            return max(0, min(127, 64 + offset))
+        elif mode == "humanize":
+            # Gaussian drift — subtle random micro-panning
+            import random as _rnd
+            drift = _rnd.gauss(0, spread * 0.4)
+            return max(0, min(127, int(64 + drift)))
         else:
             return 64
 

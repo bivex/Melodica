@@ -152,8 +152,9 @@ class TestPanValidator:
             "fx":     Role.FX,
             "strings":Role.STRINGS,
         }
+        pitches = {"bass": 36, "lead": 72, "pad": 54, "fx": 90, "strings": 65}
         profile_dummy = lambda name, role: _TrackProfile(
-            avg_pitch=60.0, pitch_range=12.0, density=0.1,
+            avg_pitch=float(pitches[name]), pitch_range=12.0, density=0.1,
             rms_velocity=80.0, role=role
         )
         profiles = {name: profile_dummy(name, role) for name, role in roles.items()}
@@ -170,8 +171,8 @@ class TestPanValidator:
     @pytest.mark.parametrize("name,role_bad,pan_bad", [
         ("my_bass", Role.BASS,  0.50),   # bass should be centre
         ("my_lead", Role.LEAD,  0.50),   # lead should be near centre
-        ("my_pad",  Role.PAD,   0.20),   # pad should be left of centre
-        ("my_fx",   Role.FX,   -0.10),   # fx should be right
+        ("my_pad",  Role.PAD,   0.70),   # pad beyond max +0.60
+        ("my_fx",   Role.FX,   -0.70),   # fx beyond min -0.65
     ])
     def test_violations_detected(self, name, role_bad, pan_bad):
         profiles = {name: _TrackProfile(
@@ -317,7 +318,11 @@ class TestPanAutomation:
             short_pad, short_pad_profile,
             _MOOD_PROFILES[Mood.CINEMATIC],
         )
-        assert cc_events == {}, "Short PAD span (<2 beats) = no automation"
+        # Short PAD gets CC10 anchors but no LFO automation
+        assert "short_pad" in cc_events
+        evts = cc_events["short_pad"]
+        assert all(e[1] == 10 for e in evts), "All events should be CC10"
+        assert len(evts) >= 1, "At least one CC10 anchor"
 
     def test_fx_sweep_right_to_centre(self, fx_track_onset):
         profiles = {
@@ -333,8 +338,9 @@ class TestPanAutomation:
         assert "fx_whoosh" in cc_events
         evts = cc_events["fx_whoosh"]
         assert len(evts) >= 2
-        # First event should be on the right (≥64)
-        assert evts[0][2] >= 65, f"FX should start right, got {evts[0][2]}"
+        # Find the FX sweep start (should be ≥65, right of centre)
+        sweep_vals = [e[2] for e in evts if e[2] >= 65]
+        assert len(sweep_vals) >= 1, f"FX should include right-side values, got {[e[2] for e in evts]}"
         # Last event should be at centre (64)
         assert abs(evts[-1][2] - 64) <= 5, f"FX should drift to centre, got {evts[-1][2]}"
 
