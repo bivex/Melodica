@@ -91,9 +91,13 @@ class ChoirAahsGenerator(PhraseGenerator):
         if not chords:
             return []
 
+        import math
         notes: list[NoteInfo] = []
         mid = (self.params.key_range_low + self.params.key_range_high) // 2
         last_chord = chords[-1]
+
+        # Soprano (60-84), Alto (53-72), Tenor (48-69), Bass (41-64)
+        satb_ranges = [(60, 84), (53, 72), (48, 69), (41, 64)]
 
         for chord in chords:
             pcs = chord.pitch_classes()
@@ -104,9 +108,15 @@ class ChoirAahsGenerator(PhraseGenerator):
                 pc = pcs[voice_idx % len(pcs)]
                 anchor = mid + SATB_OCTAVES[voice_idx] * 12
                 pitch = nearest_pitch(int(pc), anchor)
-                pitch = snap_to_scale(
-                    max(self.params.key_range_low, min(self.params.key_range_high, pitch)), key
-                )
+
+                # Keep in natural SATB range
+                low_r, high_r = satb_ranges[voice_idx]
+                while pitch < low_r:
+                    pitch += 12
+                while pitch > high_r:
+                    pitch -= 12
+                pitch = snap_to_scale(pitch, key)
+                pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
 
                 vel = self._velocity()
                 vel += random.randint(-int(self.vibrato * 10), int(self.vibrato * 10))
@@ -115,14 +125,30 @@ class ChoirAahsGenerator(PhraseGenerator):
                 onset = chord.start
                 onset += random.uniform(0.0, 0.03)  # ensemble breath offset
 
-                notes.append(
-                    NoteInfo(
-                        pitch=pitch,
-                        start=round(onset, 6),
-                        duration=chord.duration * 0.92,
-                        velocity=vel,
-                    )
+                # Map Syllable to CC 74 cutoff
+                cutoff_base = 95 if self.syllable == "aah" else (65 if self.syllable == "oh" else 35)
+
+                expression = {}
+                if self.vibrato > 0 and chord.duration > 1.0:
+                    steps = 8
+                    cc74_list = []
+                    for s in range(steps + 1):
+                        t_rel = (s / steps) * chord.duration * 0.92
+                        mod = math.sin((s / steps) * math.pi * 3) * 8 * self.vibrato
+                        cc74_list.append((t_rel, max(10, min(127, int(cutoff_base + mod)))))
+                    expression[74] = cc74_list
+                else:
+                    expression[74] = cutoff_base
+
+                note = NoteInfo(
+                    pitch=pitch,
+                    start=round(onset, 6),
+                    duration=chord.duration * 0.92,
+                    velocity=vel,
                 )
+                if expression:
+                    note.expression = expression
+                notes.append(note)
 
         notes.sort(key=lambda n: n.start)
 
@@ -135,4 +161,11 @@ class ChoirAahsGenerator(PhraseGenerator):
         return notes
 
     def _velocity(self) -> int:
-        return self.base_velocity()
+        if self.dynamics == "pp":
+            base = 40
+        elif self.dynamics == "ff":
+            base = 110
+        else:  # mf
+            base = 75
+        base += int(self.params.density * 10)
+        return max(1, min(127, base))

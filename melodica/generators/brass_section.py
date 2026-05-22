@@ -64,6 +64,7 @@ class BrassSectionGenerator(PhraseGenerator):
     intensity: float = 0.8
     divisi_count: int = 3
     breath_gap: float = 0.25
+    mute: str | None = None
     rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
@@ -76,6 +77,7 @@ class BrassSectionGenerator(PhraseGenerator):
         intensity: float = 0.8,
         divisi_count: int = 3,
         breath_gap: float = 0.25,
+        mute: str | None = None,
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
@@ -84,6 +86,7 @@ class BrassSectionGenerator(PhraseGenerator):
         self.intensity = max(0.0, min(1.0, intensity))
         self.divisi_count = max(2, min(5, divisi_count))
         self.breath_gap = max(0.0, min(1.0, breath_gap))
+        self.mute = mute
         self.rhythm = rhythm
 
     def render(
@@ -107,80 +110,135 @@ class BrassSectionGenerator(PhraseGenerator):
                 continue
             last_chord = chord
 
-            voicing = chord_pitches_closed(chord, mid)
-            voicing = [snap_to_scale(p, key) for p in voicing]
-            voicing = voicing[: self.divisi_count]
+            # Voicing and instrument registers mapping
+            raw_voicing = chord_pitches_closed(chord, mid)
+            raw_voicing = [snap_to_scale(p, key) for p in raw_voicing]
+            
+            # Sort descending (highest voice first)
+            raw_voicing = sorted(raw_voicing, reverse=True)
+            voicing_sub = raw_voicing[:self.divisi_count]
+
+            # Place each voice in its corresponding instrument's natural register:
+            # Voice 0 (highest): Trumpet (58-84)
+            # Voice 1: French Horn (41-72)
+            # Voice 2: Trombone (31-70)
+            # Voice 3+: Tuba / Contrabass Trombone (29-65)
+            processed_voicing = []
+            for idx, p in enumerate(voicing_sub):
+                if idx == 0:  # Trumpet
+                    low_r, high_r = 58, 84
+                elif idx == 1:  # French Horn
+                    low_r, high_r = 41, 72
+                elif idx == 2:  # Trombone
+                    low_r, high_r = 31, 70
+                else:  # Tuba
+                    low_r, high_r = 29, 65
+
+                while p < low_r:
+                    p += 12
+                while p > high_r:
+                    p -= 12
+                p = snap_to_scale(p, key)
+                p = max(self.params.key_range_low, min(self.params.key_range_high, p))
+                processed_voicing.append(p)
+
+            voicing = processed_voicing
+
+            # Build expression CC data
+            expression = {}
+            if self.mute == "straight":
+                expression[74] = 60
+            elif self.mute == "harmon":
+                if self.articulation in ("swell", "sustained"):
+                    steps = 10
+                    cc74_list = []
+                    for s in range(steps + 1):
+                        t_rel = (s / steps) * event.duration
+                        val = int(50 + 45 * (s / steps))
+                        cc74_list.append((t_rel, val))
+                    expression[74] = cc74_list
+                else:
+                    expression[74] = 85
+
+            if self.articulation == "swell":
+                steps = 15
+                cc11_list = []
+                for s in range(steps + 1):
+                    t_rel = (s / steps) * event.duration
+                    val = int(30 + 90 * (s / steps)**1.5)
+                    cc11_list.append((t_rel, val))
+                expression[11] = cc11_list
 
             if self.articulation == "hit":
                 for p in voicing:
-                    p = max(self.params.key_range_low, min(self.params.key_range_high, p))
                     vel = int(self.intensity * 110)
                     # Marcato: loud attack, quick decay
-                    notes.append(
-                        NoteInfo(
-                            pitch=p,
-                            start=round(event.onset, 6),
-                            duration=event.duration * 0.6,
-                            velocity=max(1, min(127, vel)),
-                        )
+                    note = NoteInfo(
+                        pitch=p,
+                        start=round(event.onset, 6),
+                        duration=event.duration * 0.6,
+                        velocity=max(1, min(127, vel)),
                     )
+                    if expression:
+                        note.expression = expression.copy()
+                    notes.append(note)
 
             elif self.articulation == "swell":
                 for p in voicing:
-                    p = max(self.params.key_range_low, min(self.params.key_range_high, p))
                     vel = int(self.intensity * 50)  # Start soft
-                    notes.append(
-                        NoteInfo(
-                            pitch=p,
-                            start=round(event.onset, 6),
-                            duration=event.duration,
-                            velocity=max(1, min(127, vel)),
-                        )
+                    note = NoteInfo(
+                        pitch=p,
+                        start=round(event.onset, 6),
+                        duration=event.duration,
+                        velocity=max(1, min(127, vel)),
                     )
+                    if expression:
+                        note.expression = expression.copy()
+                    notes.append(note)
 
             elif self.articulation == "fanfare":
                 # Ascending arpeggio
                 t = event.onset
                 step = event.duration / max(len(voicing), 1)
                 for i, p in enumerate(voicing):
-                    p = max(self.params.key_range_low, min(self.params.key_range_high, p))
                     vel = int(self.intensity * (80 + i * 10))
-                    notes.append(
-                        NoteInfo(
-                            pitch=p,
-                            start=round(t, 6),
-                            duration=event.duration - i * step,
-                            velocity=max(1, min(127, vel)),
-                        )
+                    note = NoteInfo(
+                        pitch=p,
+                        start=round(t, 6),
+                        duration=event.duration - i * step,
+                        velocity=max(1, min(127, vel)),
                     )
+                    if expression:
+                        note.expression = expression.copy()
+                    notes.append(note)
                     t += step
 
             elif self.articulation == "sustained":
                 for p in voicing:
-                    p = max(self.params.key_range_low, min(self.params.key_range_high, p))
                     vel = int(self.intensity * 90)
-                    notes.append(
-                        NoteInfo(
-                            pitch=p,
-                            start=round(event.onset, 6),
-                            duration=event.duration,
-                            velocity=max(1, min(127, vel)),
-                        )
+                    note = NoteInfo(
+                        pitch=p,
+                        start=round(event.onset, 6),
+                        duration=event.duration,
+                        velocity=max(1, min(127, vel)),
                     )
+                    if expression:
+                        note.expression = expression.copy()
+                    notes.append(note)
 
             elif self.articulation in ("falls", "doits"):
                 for p in voicing:
-                    p = max(self.params.key_range_low, min(self.params.key_range_high, p))
                     vel = int(self.intensity * 95)
                     # Main note
-                    notes.append(
-                        NoteInfo(
-                            pitch=p,
-                            start=round(event.onset, 6),
-                            duration=event.duration * 0.7,
-                            velocity=max(1, min(127, vel)),
-                        )
+                    note = NoteInfo(
+                        pitch=p,
+                        start=round(event.onset, 6),
+                        duration=event.duration * 0.7,
+                        velocity=max(1, min(127, vel)),
                     )
+                    if expression:
+                        note.expression = expression.copy()
+                    notes.append(note)
                     # Fall or doit
                     direction = -1 if self.articulation == "falls" else 1
                     t = event.onset + event.duration * 0.7
@@ -189,14 +247,15 @@ class BrassSectionGenerator(PhraseGenerator):
                         fall_p = max(
                             self.params.key_range_low, min(self.params.key_range_high, fall_p)
                         )
-                        notes.append(
-                            NoteInfo(
-                                pitch=fall_p,
-                                start=round(t, 6),
-                                duration=0.1,
-                                velocity=max(1, int(vel * 0.7 - s * 5)),
-                            )
+                        fall_note = NoteInfo(
+                            pitch=fall_p,
+                            start=round(t, 6),
+                            duration=0.1,
+                            velocity=max(1, int(vel * 0.7 - s * 5)),
                         )
+                        if self.mute:
+                            fall_note.expression = {74: expression.get(74, 80)}
+                        notes.append(fall_note)
                         t += 0.1
 
         if notes:

@@ -59,6 +59,7 @@ from melodica.composer.harmonic_verifier import ClashEvent, VerifierConfig, Veri
 from melodica.composer.diagnostics import diagnose_tracks, DiagnosticReport
 from melodica.composer.transition_coordinator import TransitionCoordinator
 from melodica.composer.album_pipeline import compile_continuous_album
+from melodica.composer.instrument_assigner import InstrumentAssigner
 
 __all__ = [
     "TransitionCoordinator",
@@ -106,4 +107,5 @@ __all__ = [
     "VerifierReport",
     "diagnose_tracks",
     "DiagnosticReport",
+    "InstrumentAssigner",
 ]

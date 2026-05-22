@@ -349,6 +349,10 @@ from melodica.generators.orchestral_score import OrchestralScoreGenerator
 from melodica.generators.film_score import FilmScoreGenerator
 from melodica.generators.texture_manager import TextureManager
 from melodica.generators.orchestral_transition import OrchestralTransitionGenerator
+from melodica.generators.tuba import TubaGenerator
+from melodica.generators.snare_drum import SnareDrumGenerator
+from melodica.generators.orchestral_cymbal import OrchestralCymbalGenerator
+from melodica.generators.tubular_bells import TubularBellsGenerator
 
 __all__ = [
     "PhraseGenerator",
@@ -542,4 +546,8 @@ __all__ = [
     "FilmScoreGenerator",
     "TextureManager",
     "OrchestralTransitionGenerator",
+    "TubaGenerator",
+    "SnareDrumGenerator",
+    "OrchestralCymbalGenerator",
+    "TubularBellsGenerator",
 ]

@@ -89,65 +89,115 @@ class OrchestralHitGenerator(PhraseGenerator):
         if not chords:
             return []
 
+        import math
         notes: list[NoteInfo] = []
         mid = (self.params.key_range_low + self.params.key_range_high) // 2
         last_chord = chords[-1]
 
         for chord in chords:
-            hit_pitches = self._get_hit_pitches(chord, mid, key)
+            if self.hit_type == "braam":
+                # Deep, low brass impact
+                hit_pitches = self._get_hit_pitches(chord, mid - 24, key)
+            else:
+                hit_pitches = self._get_hit_pitches(chord, mid, key)
 
             if self.hit_type == "riser_hit":
-                # Rising buildup before the hit
+                # Rising continuous buildup note before the hit
                 riser_dur = min(chord.duration * 0.6, 2.0)
                 riser_start = chord.start
-                riser_pc = chord.root
-                for i in range(int(riser_dur / 0.25)):
-                    p = nearest_pitch(int(riser_pc), mid - 12 + i * 2)
-                    p = snap_to_scale(p, key)
-                    p = max(self.params.key_range_low, min(self.params.key_range_high, p))
-                    vel = int(30 + i * 8)
-                    notes.append(
-                        NoteInfo(
-                            pitch=p,
-                            start=round(riser_start + i * 0.25, 6),
-                            duration=0.2,
-                            velocity=min(127, vel),
-                        )
-                    )
-                # The hit itself
+                
+                # Single continuous note sweeping up in pitch and volume
+                riser_pitch = nearest_pitch(int(chord.root), mid - 12)
+                riser_pitch = snap_to_scale(riser_pitch, key)
+                riser_pitch = max(self.params.key_range_low, min(self.params.key_range_high, riser_pitch))
+                
+                riser_expr = {}
+                pb_list = []
+                cc11_list = []
+                steps = 20
+                for s in range(steps + 1):
+                    t_rel = (s / steps) * riser_dur
+                    # Pitch sweep: exponential curve up an octave (8191 units)
+                    bend = int(8191 * (s / steps)**2.0)
+                    pb_list.append((t_rel, bend))
+                    
+                    # Expression crescendo from 20 to 125
+                    val = int(20 + 105 * (s / steps))
+                    cc11_list.append((t_rel, val))
+                    
+                riser_expr["pitch_bend"] = pb_list
+                riser_expr[11] = cc11_list
+                
+                riser_note = NoteInfo(
+                    pitch=riser_pitch,
+                    start=round(riser_start, 6),
+                    duration=riser_dur,
+                    velocity=40,
+                )
+                riser_note.expression = riser_expr
+                notes.append(riser_note)
+                
+                # The hit itself starts at the end of the riser
                 hit_onset = chord.start + riser_dur
             else:
                 hit_onset = chord.start
 
-            # Main hit
+            # Main hit duration
             hit_dur = self.duration
             if self.hit_type == "braam":
-                hit_dur = self.duration * 1.5
+                hit_dur = self.duration * 1.8
             elif self.hit_type == "sustain":
                 hit_dur = chord.duration * 0.9
 
+            expression = {}
+            if self.hit_type == "braam":
+                # Deep low growl with a pitch fall:
+                # Starts at +200 cents (1365 units) and falls to -2000 cents (-13653 units)
+                pb_list = []
+                steps = 15
+                for s in range(steps + 1):
+                    t_rel = (s / steps) * hit_dur
+                    bend = int(1365 - 15018 * (s / steps)**1.5)
+                    pb_list.append((t_rel, bend))
+                expression["pitch_bend"] = pb_list
+
+                # Growling CC 74 Filter Cutoff LFO modulation
+                cc74_list = []
+                cc_steps = 25
+                for s in range(cc_steps + 1):
+                    t_rel = (s / cc_steps) * hit_dur
+                    base_cutoff = 110 - 65 * (s / cc_steps)
+                    growl = math.sin((s / cc_steps) * hit_dur * 14 * math.pi * 2) * 15
+                    cc74_list.append((t_rel, max(10, min(127, int(base_cutoff + growl)))))
+                expression[74] = cc74_list
+
             for p in hit_pitches:
                 vel = self._hit_velocity()
-                notes.append(
-                    NoteInfo(
-                        pitch=p,
-                        start=round(hit_onset, 6),
-                        duration=hit_dur,
-                        velocity=vel,
-                    )
+                note = NoteInfo(
+                    pitch=p,
+                    start=round(hit_onset, 6),
+                    duration=hit_dur,
+                    velocity=vel,
+                    articulation="braam" if self.hit_type == "braam" else "hit",
                 )
+                if expression:
+                    note.expression = expression.copy()
+                notes.append(note)
 
             # Reverb tail: quiet sustained note
             if self.reverb_tail > 0 and hit_pitches:
                 tail_pitch = hit_pitches[0]
-                notes.append(
-                    NoteInfo(
-                        pitch=tail_pitch,
-                        start=round(hit_onset + hit_dur, 6),
-                        duration=self.reverb_tail,
-                        velocity=max(1, int(self._hit_velocity() * 0.2)),
-                    )
+                tail_note = NoteInfo(
+                    pitch=tail_pitch,
+                    start=round(hit_onset + hit_dur, 6),
+                    duration=self.reverb_tail,
+                    velocity=max(1, int(self._hit_velocity() * 0.2)),
+                    articulation="sustain",
                 )
+                # Keep filter somewhat closed for the fading reverb tail
+                if self.hit_type == "braam":
+                    tail_note.expression = {74: 40}
+                notes.append(tail_note)
 
         notes.sort(key=lambda n: n.start)
 

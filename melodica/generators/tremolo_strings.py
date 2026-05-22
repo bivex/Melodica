@@ -56,6 +56,8 @@ class TremoloStringsGenerator(PhraseGenerator):
     variant: str = "chord"
     bow_speed: float = 0.0625
     dynamic_swell: bool = True
+    attack_time: float = 0.5
+    decay_time: float = 0.5
     rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
@@ -66,12 +68,16 @@ class TremoloStringsGenerator(PhraseGenerator):
         variant: str = "chord",
         bow_speed: float = 0.0625,
         dynamic_swell: bool = True,
+        attack_time: float = 0.5,
+        decay_time: float = 0.5,
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
         self.variant = variant
         self.bow_speed = max(0.02, min(0.2, bow_speed))
         self.dynamic_swell = dynamic_swell
+        self.attack_time = max(0.0, attack_time)
+        self.decay_time = max(0.0, decay_time)
         self.rhythm = rhythm
 
     def render(
@@ -101,12 +107,40 @@ class TremoloStringsGenerator(PhraseGenerator):
             total_dur = end - event.onset
             note_idx = 0
 
+            base_vel = int(45 + self.params.density * 25)
+
             while t < end:
+                elapsed = t - event.onset
+
+                # Attack/decay envelope factors
+                attack_factor = 1.0
+                if elapsed < self.attack_time and self.attack_time > 0:
+                    attack_factor = elapsed / self.attack_time
+
+                decay_factor = 1.0
+                time_left = end - t
+                if time_left < self.decay_time and self.decay_time > 0:
+                    decay_factor = time_left / self.decay_time
+
+                # Dynamic swell factor
+                swell_factor = 1.0
+                if self.dynamic_swell and total_dur > 0:
+                    progress = elapsed / total_dur
+                    swell_factor = 0.7 + 0.3 * (1.0 - abs(2.0 * progress - 1.0))
+
+                intensity = attack_factor * decay_factor * swell_factor
+
+                # Dynamic bow speed based on intensity (louder/more intense = faster bow)
+                current_bow_speed = self.bow_speed * (2.0 - intensity)
+                current_bow_speed = max(0.02, min(0.3, current_bow_speed))
+
                 for p in pitches:
                     if t >= end:
                         break
-                    n_dur = min(self.bow_speed, end - t)
-                    vel = self._dynamic(t - event.onset, total_dur, note_idx)
+                    n_dur = min(current_bow_speed, end - t)
+                    vel = int(base_vel * intensity)
+                    # Slight bow variation
+                    vel += random.randint(-2, 2)
                     notes.append(
                         NoteInfo(
                             pitch=p,
@@ -115,8 +149,8 @@ class TremoloStringsGenerator(PhraseGenerator):
                             velocity=max(1, min(127, vel)),
                         )
                     )
-                    t += self.bow_speed
-                    note_idx += 1
+                t += current_bow_speed
+                note_idx += 1
 
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(
@@ -145,16 +179,6 @@ class TremoloStringsGenerator(PhraseGenerator):
             root = snap_to_scale(root, key)
             return [max(low, min(high, snap_to_scale(root + i, key))) for i in range(3)]
         return [max(low, min(high, snap_to_scale(nearest_pitch(chord.root, anchor), key)))]
-
-    def _dynamic(self, elapsed: float, total: float, note_idx: int) -> int:
-        base = int(45 + self.params.density * 25)
-        if self.dynamic_swell and total > 0:
-            progress = elapsed / total
-            swell = 0.7 + 0.3 * (1.0 - abs(2.0 * progress - 1.0))
-            base = int(base * swell)
-        # Slight bow variation
-        base += random.randint(-2, 2)
-        return max(1, base)
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
         if self.rhythm is not None:

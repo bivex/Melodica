@@ -163,8 +163,10 @@ class ChoraleGenerator(PhraseGenerator):
         last_chord: ChordLabel | None = None
         leading_tone = _leading_tone_pc(key)
         tonic_pc = int(key.degrees()[0]) if key.degrees() else 0
+        dominant_pc = int(key.degrees()[4]) if len(key.degrees()) >= 5 else 7
 
         t = 0.0
+        prev_chord: ChordLabel | None = None
         while t < duration_beats:
             chord = chord_at(chords, t)
             if chord is None:
@@ -172,9 +174,23 @@ class ChoraleGenerator(PhraseGenerator):
                 continue
             last_chord = chord
 
-            voices = self._build_voices(chord, prev, key, leading_tone, tonic_pc)
+            # Detect if this is the last chord (cadence point)
+            is_cadence = (t + self.rhythmic_unit >= duration_beats - 0.01)
+            if is_cadence:
+                voices = self._build_cadence_voices(
+                    chord, prev, key, leading_tone, tonic_pc, dominant_pc,
+                )
+            else:
+                voices = self._build_voices(chord, prev, key, leading_tone, tonic_pc)
+
             self._emit_chord_notes(voices, t, notes)
+
+            # Add passing tone in soprano between chords if motion allows
+            if prev_chord is not None and not is_cadence:
+                self._maybe_add_passing_tone(voices, prev, prev_chord, chord, key, t, notes)
+
             prev = voices
+            prev_chord = chord
             t += self.rhythmic_unit
 
         if notes:
@@ -236,6 +252,66 @@ class ChoraleGenerator(PhraseGenerator):
                     velocity=max(1, min(127, vel)),
                 )
             )
+
+    def _build_cadence_voices(
+        self,
+        chord: ChordLabel,
+        prev: _VoiceState,
+        key: Scale,
+        leading_tone: int | None,
+        tonic_pc: int,
+        dominant_pc: int,
+    ) -> _VoiceState:
+        root_pc = chord.root
+        # Authentic cadence: V → I (dominant root to tonic)
+        if root_pc == tonic_pc and leading_tone is not None:
+            voices = self._build_voices(chord, prev, key, leading_tone, tonic_pc)
+            # Resolve leading tone upward in all voices
+            if leading_tone is not None:
+                voices = _resolve_leading_tone(voices, prev, leading_tone)
+            # Ensure soprano lands on root or fifth for finality
+            if voices.S % _SEMITONES_IN_OCTAVE not in (tonic_pc, (tonic_pc + 7) % 12):
+                voices.S = nearest_pitch(tonic_pc, voices.S)
+                voices.S = max(_SOPRANO_RANGE[0], min(_SOPRANO_RANGE[1], voices.S))
+            return voices
+
+        # Plagal cadence: IV → I (subdominant to tonic)
+        if root_pc == tonic_pc:
+            voices = self._build_voices(chord, prev, key, leading_tone, tonic_pc)
+            return voices
+
+        # Default: treat as dominant preparation
+        return self._build_voices(chord, prev, key, leading_tone, tonic_pc)
+
+    def _maybe_add_passing_tone(
+        self,
+        voices: _VoiceState,
+        prev: _VoiceState,
+        prev_chord: ChordLabel,
+        curr_chord: ChordLabel,
+        key: Scale,
+        t: float,
+        notes: list[NoteInfo],
+    ) -> None:
+        """Add passing tones in soprano, alto, and tenor lines halfway between chord changes."""
+        degs = [int(d) % 12 for d in key.degrees()]
+        for vname in ("S", "A", "T"):
+            prev_pitch = getattr(prev, vname)
+            curr_pitch = getattr(voices, vname)
+            gap = abs(curr_pitch - prev_pitch)
+            if 3 <= gap <= 9:
+                direction = 1 if curr_pitch > prev_pitch else -1
+                passing = prev_pitch + direction
+                # Ensure passing tone is a scale degree
+                if passing % 12 not in degs:
+                    passing += direction
+                lo, hi = _RANGES[vname]
+                passing = max(lo, min(hi, passing))
+                
+                onset = round(t - self.rhythmic_unit * 0.5, 6)
+                dur = self.rhythmic_unit * 0.4
+                vel = max(1, min(127, _velocity(self.params.density) - 10))
+                notes.append(NoteInfo(pitch=passing, start=onset, duration=dur, velocity=vel))
 
 
 # ---------------------------------------------------------------------------

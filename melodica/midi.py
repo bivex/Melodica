@@ -550,20 +550,34 @@ def export_multitrack_midi(
             has_cc11 = False
             custom_bend = 0
             has_custom_bend = False
+            has_dynamic_bend = False
             # CC and pitchwheel events from note.expression
             if getattr(n, "expression", None):
                 for cc_num, cc_val in n.expression.items():
                     if cc_num == 11:
                         has_cc11 = True
                     if isinstance(cc_num, int) and 0 <= cc_num <= 127:
-                        note_events.append([on_tick, "control_change", cc_num, max(0, min(127, cc_val)), assigned_ch])
+                        if isinstance(cc_val, list):
+                            for rel_time, val in cc_val:
+                                note_events.append([round((onset + rel_time) * tpb), "control_change", cc_num, max(0, min(127, int(val))), assigned_ch])
+                        else:
+                            note_events.append([on_tick, "control_change", cc_num, max(0, min(127, int(cc_val))), assigned_ch])
                     elif cc_num == "pitch_bend":
-                        custom_bend = int(cc_val)
-                        has_custom_bend = True
+                        if isinstance(cc_val, list):
+                            for rel_time, val in cc_val:
+                                t_bend = max(-8192, min(8191, bend_value + int(val)))
+                                note_events.append([round((onset + rel_time) * tpb), "pitchwheel", t_bend, 0, assigned_ch])
+                            has_dynamic_bend = True
+                        else:
+                            custom_bend = int(cc_val)
+                            has_custom_bend = True
 
-            total_bend = max(-8192, min(8191, bend_value + custom_bend))
-            if bend_value != 0 or has_custom_bend:
-                note_events.append([on_tick, "pitchwheel", total_bend, 0, assigned_ch])
+            if not has_dynamic_bend:
+                total_bend = max(-8192, min(8191, bend_value + custom_bend))
+                if bend_value != 0 or has_custom_bend:
+                    note_events.append([on_tick, "pitchwheel", total_bend, 0, assigned_ch])
+                    note_events.append([off_tick, "pitchwheel_reset", 0, 0, assigned_ch])
+            else:
                 note_events.append([off_tick, "pitchwheel_reset", 0, 0, assigned_ch])
 
             # Advanced humanized CC11 (Expression) and CC1 (Modulation) for long notes
@@ -919,19 +933,34 @@ def export_midi(
             has_cc11 = False
             custom_bend = 0
             has_custom_bend = False
+            has_dynamic_bend = False
             # Emit Expression (CC) data
-            for cc_num, cc_val in n.expression.items():
-                if cc_num == 11:
-                    has_cc11 = True
-                if cc_num == "pitch_bend":
-                    custom_bend = int(cc_val)
-                    has_custom_bend = True
-                else:
-                    note_events.append([on_tick, "control_change", cc_num, cc_val, assigned_ch])
+            if getattr(n, "expression", None):
+                for cc_num, cc_val in n.expression.items():
+                    if cc_num == 11:
+                        has_cc11 = True
+                    if cc_num == "pitch_bend":
+                        if isinstance(cc_val, list):
+                            for rel_time, val in cc_val:
+                                t_bend = max(-8192, min(8191, bend_value + int(val)))
+                                note_events.append([round((onset + rel_time) * tpb), "pitchwheel", t_bend, 0, assigned_ch])
+                            has_dynamic_bend = True
+                        else:
+                            custom_bend = int(cc_val)
+                            has_custom_bend = True
+                    else:
+                        if isinstance(cc_val, list):
+                            for rel_time, val in cc_val:
+                                note_events.append([round((onset + rel_time) * tpb), "control_change", cc_num, max(0, min(127, int(val))), assigned_ch])
+                        else:
+                            note_events.append([on_tick, "control_change", cc_num, max(0, min(127, int(cc_val))), assigned_ch])
 
-            total_bend = max(-8192, min(8191, bend_value + custom_bend))
-            if bend_value != 0 or has_custom_bend:
-                note_events.append([on_tick, "pitchwheel", total_bend, 0, assigned_ch])
+            if not has_dynamic_bend:
+                total_bend = max(-8192, min(8191, bend_value + custom_bend))
+                if bend_value != 0 or has_custom_bend:
+                    note_events.append([on_tick, "pitchwheel", total_bend, 0, assigned_ch])
+                    note_events.append([off_tick, "pitchwheel_reset", 0, 0, assigned_ch])
+            else:
                 note_events.append([off_tick, "pitchwheel_reset", 0, 0, assigned_ch])
 
             # Auto CC11 for long notes

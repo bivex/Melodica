@@ -120,44 +120,30 @@ class StringsLegatoGenerator(PhraseGenerator):
             vel = max(1, min(127, vel))
 
             # Portamento: slide note before target
-            if self.portamento_speed > 0 and abs(pitch - prev_pitch) > 2:
-                slide_start = event.onset
-                slide_dur = self.portamento_speed
-                # Slide from prev_pitch toward pitch
-                steps = max(2, int(abs(pitch - prev_pitch) / 2))
-                direction = 1 if pitch > prev_pitch else -1
-                for s in range(steps):
-                    s_onset = slide_start + (s / steps) * slide_dur
-                    s_pitch = prev_pitch + direction * s * 2
-                    s_pitch = max(
-                        self.params.key_range_low, min(self.params.key_range_high, s_pitch)
-                    )
-                    notes.append(
-                        NoteInfo(
-                            pitch=s_pitch,
-                            start=round(s_onset, 6),
-                            duration=slide_dur / steps * 0.9,
-                            velocity=max(1, int(vel * 0.6)),
-                        )
-                    )
-                # Target note
-                notes.append(
-                    NoteInfo(
-                        pitch=pitch,
-                        start=round(event.onset + slide_dur, 6),
-                        duration=event.duration - slide_dur,
-                        velocity=vel,
-                    )
-                )
-            else:
-                notes.append(
-                    NoteInfo(
-                        pitch=pitch,
-                        start=round(event.onset, 6),
-                        duration=event.duration,
-                        velocity=vel,
-                    )
-                )
+            expression = {}
+            if self.portamento_speed > 0 and abs(pitch - prev_pitch) > 1:
+                slide_dur = min(self.portamento_speed, event.duration * 0.5)
+                pb_range = 12
+                diff_semitones = prev_pitch - pitch
+                steps = 10
+                pb_list = []
+                for s in range(steps + 1):
+                    t_rel = (s / steps) * slide_dur
+                    factor = 1.0 - (s / steps)
+                    bend = int(diff_semitones * factor * (8192.0 / pb_range))
+                    bend = max(-8192, min(8191, bend))
+                    pb_list.append((t_rel, bend))
+                expression["pitch_bend"] = pb_list
+
+            note = NoteInfo(
+                pitch=pitch,
+                start=round(event.onset, 6),
+                duration=event.duration,
+                velocity=vel,
+            )
+            if expression:
+                note.expression = expression
+            notes.append(note)
 
             # Ensemble/full: add divisi voices
             if self.section_size in ("ensemble", "full"):

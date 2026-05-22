@@ -330,3 +330,156 @@ class TestChordGeneratorUpdate:
         notes = gen.render(_simple_chords()[:1], C_MAJOR, 2.0)
         # No extra bass note
         assert len(notes) > 0
+
+
+class TestTubaGenerator:
+    def test_staccato_articulation(self):
+        from melodica.generators.tuba import TubaGenerator
+        gen = TubaGenerator(articulation="staccato")
+        notes = gen.render(_simple_chords(), C_MAJOR, 4.0)
+        assert len(notes) > 0
+        for n in notes:
+            assert 29 <= n.pitch <= 65
+            # Staccato should have CC 74
+            assert 74 in n.expression
+
+    def test_sustained_growl_lfo(self):
+        from melodica.generators.tuba import TubaGenerator
+        gen = TubaGenerator(articulation="sustained", growl=True)
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        assert len(notes) > 0
+        for n in notes:
+            # Growl should generate a list of LFO steps
+            assert isinstance(n.expression[74], list)
+            assert len(n.expression[74]) > 0
+
+    def test_walking_bass_march(self):
+        from melodica.generators.tuba import TubaGenerator
+        gen = TubaGenerator(articulation="walking")
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        assert len(notes) > 0
+
+    def test_swell_crescendo(self):
+        from melodica.generators.tuba import TubaGenerator
+        gen = TubaGenerator(articulation="swell")
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        assert len(notes) > 0
+        for n in notes:
+            assert 11 in n.expression
+            assert isinstance(n.expression[11], list)
+            assert "pitch_bend" in n.expression
+
+
+class TestSnareDrumGenerator:
+    def test_march_pattern(self):
+        from melodica.generators.snare_drum import SnareDrumGenerator
+        gen = SnareDrumGenerator(pattern_type="march")
+        notes = gen.render(_simple_chords(), C_MAJOR, 4.0)
+        assert len(notes) > 0
+        for n in notes:
+            assert n.pitch in (37, 38, 40)
+
+    def test_roll_crescendo(self):
+        from melodica.generators.snare_drum import SnareDrumGenerator
+        gen = SnareDrumGenerator(pattern_type="roll")
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        assert len(notes) > 0
+        for n in notes:
+            assert 11 in n.expression
+
+    def test_rimshot_accents(self):
+        from melodica.generators.snare_drum import SnareDrumGenerator
+        gen = SnareDrumGenerator(pattern_type="rimshot")
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        assert len(notes) > 0
+
+
+class TestOrchestralCymbalGenerator:
+    def test_crash_hits(self):
+        from melodica.generators.orchestral_cymbal import OrchestralCymbalGenerator
+        gen = OrchestralCymbalGenerator(pattern_type="crash")
+        notes = gen.render(_simple_chords(), C_MAJOR, 4.0)
+        assert len(notes) > 0
+        for n in notes:
+            assert n.pitch in (49, 51, 52, 55)
+
+    def test_rolls(self):
+        from melodica.generators.orchestral_cymbal import OrchestralCymbalGenerator
+        gen = OrchestralCymbalGenerator(pattern_type="rolls")
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        assert len(notes) > 0
+
+    def test_sizzle(self):
+        from melodica.generators.orchestral_cymbal import OrchestralCymbalGenerator
+        gen = OrchestralCymbalGenerator(pattern_type="sizzle")
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        assert len(notes) > 0
+
+
+class TestTubularBellsGenerator:
+    def test_single_bell_decay(self):
+        from melodica.generators.tubular_bells import TubularBellsGenerator
+        gen = TubularBellsGenerator(stroke_pattern="single")
+        notes = gen.render(_simple_chords(), C_MAJOR, 4.0)
+        assert len(notes) > 0
+        for n in notes:
+            assert 53 <= n.pitch <= 79
+            assert 11 in n.expression
+
+    def test_chime_motifs(self):
+        from melodica.generators.tubular_bells import TubularBellsGenerator
+        gen = TubularBellsGenerator(stroke_pattern="chime")
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        assert len(notes) > 0
+
+    def test_dampen_tail(self):
+        from melodica.generators.tubular_bells import TubularBellsGenerator
+        gen1 = TubularBellsGenerator(stroke_pattern="single", dampen=False)
+        gen2 = TubularBellsGenerator(stroke_pattern="single", dampen=True)
+        notes1 = gen1.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        notes2 = gen2.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        # Dampened decay should have lower CC 11 end values
+        cc11_1 = notes1[0].expression[11][-1][1]
+        cc11_2 = notes2[0].expression[11][-1][1]
+        assert cc11_2 < cc11_1
+
+
+class TestInstrumentAssigner:
+    def test_assign_generators_to_tracks(self):
+        from melodica.composer.instrument_assigner import InstrumentAssigner
+        from melodica.generators.tuba import TubaGenerator
+        from melodica.generators.melody import MelodyGenerator
+        from melodica.generators.snare_drum import SnareDrumGenerator
+
+        assigner = InstrumentAssigner()
+        tuba = TubaGenerator()
+        melody = MelodyGenerator()
+        snare = SnareDrumGenerator()
+
+        tracks = ["Bass_Track", "Melody_Track", "Snare_Track"]
+        mapping = assigner.assign_generators([tuba, melody, snare], tracks)
+
+        assert len(mapping) == 3
+        assert isinstance(mapping["Bass_Track"], TubaGenerator)
+        assert isinstance(mapping["Melody_Track"], MelodyGenerator)
+        assert isinstance(mapping["Snare_Track"], SnareDrumGenerator)
+
+    def test_assign_gm_programs(self):
+        from melodica.composer.instrument_assigner import InstrumentAssigner
+        assigner = InstrumentAssigner()
+        
+        roles = {
+            "Bassoon_Bass": "bass",
+            "Violin_Lead": "melody",
+            "Trumpet_Solo": "melody",
+            "Brass_Section_Chords": "harmony",
+            "Timpani_Roll": "percussion",
+        }
+        gm_map = assigner.assign_gm_programs(roles)
+        
+        assert gm_map["Bassoon_Bass"] == 58  # Tuba/Low
+        assert gm_map["Violin_Lead"] == 40   # Violin
+        assert gm_map["Trumpet_Solo"] == 56  # Trumpet
+        assert gm_map["Brass_Section_Chords"] == 61  # Brass Section
+        assert gm_map["Timpani_Roll"] == 47  # Timpani
+

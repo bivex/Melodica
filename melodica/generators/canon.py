@@ -44,7 +44,7 @@ _OCTAVE = 12
 _CONSONANT = {0, 3, 4, 5, 7, 8, 9}
 _STRONG_CONSONANT = {0, 3, 4, 7, 8, 9}
 _STEP_WEIGHT = 0.5
-_INVALID_CANON_TYPES = frozenset({"strict", "tonal", "contrary", "free"})
+_VALID_CANON_TYPES = frozenset({"strict", "tonal", "contrary", "free", "fugue"})
 _DEFAULT_DELAY = 2.0
 
 
@@ -73,13 +73,17 @@ class CanonGenerator(PhraseGenerator):
     Canon/imitation generator with counterpoint rules.
 
     canon_type:
-        "strict", "tonal", "contrary", "free"
+        "strict", "tonal", "contrary", "free", "fugue"
     delay_beats:
         How many beats the follower lags behind.
     interval:
         Semitone offset for the first follower.
     num_followers:
         Number of follower voices (1-3).
+    subject_length:
+        For fugue mode: how many beats the subject lasts.
+    augmentation:
+        For fugue mode: duration multiplier for augmented entries (2.0 = double).
     """
 
     name: str = "Canon Generator"
@@ -87,6 +91,8 @@ class CanonGenerator(PhraseGenerator):
     delay_beats: float = _DEFAULT_DELAY
     interval: int = 7
     num_followers: int = 1
+    subject_length: float = 4.0
+    augmentation: float = 2.0
     lead_rhythm: RhythmGenerator | None = None
     follower_rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
@@ -99,18 +105,22 @@ class CanonGenerator(PhraseGenerator):
         delay_beats: float = _DEFAULT_DELAY,
         interval: int = 7,
         num_followers: int = 1,
+        subject_length: float = 4.0,
+        augmentation: float = 2.0,
         lead_rhythm: RhythmGenerator | None = None,
         follower_rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
-        if canon_type not in _INVALID_CANON_TYPES:
+        if canon_type not in _VALID_CANON_TYPES:
             raise ValueError(
-                f"canon_type must be one of {_INVALID_CANON_TYPES}; got {canon_type!r}"
+                f"canon_type must be one of {_VALID_CANON_TYPES}; got {canon_type!r}"
             )
         self.canon_type = canon_type
         self.delay_beats = max(0.25, delay_beats)
         self.interval = interval
         self.num_followers = max(1, min(3, num_followers))
+        self.subject_length = max(1.0, subject_length)
+        self.augmentation = max(1.0, augmentation)
         self.lead_rhythm = lead_rhythm
         self.follower_rhythm = follower_rhythm
 
@@ -177,13 +187,52 @@ class CanonGenerator(PhraseGenerator):
         duration_beats: float,
         context: RenderContext | None,
     ) -> list[NoteInfo]:
-        events = self._build_events(duration_beats, self.lead_rhythm)
-        notes: list[NoteInfo] = []
         low = self.params.key_range_low
         high = self.params.key_range_high
         anchor = (low + high) // 2
         prev = context.prev_pitch if context and context.prev_pitch is not None else anchor
 
+        if self.canon_type == "fugue":
+            # 1. Generate core subject
+            subject_events = self._build_events(self.subject_length, self.lead_rhythm)
+            subject_notes = []
+            for ev in subject_events:
+                chord = chord_at(chords, ev.onset)
+                pitch = _pick_lead_pitch(chord or chords[0], key, prev, low, high)
+                vel = int((70 + self.params.density * 30) * ev.velocity_factor)
+                subject_notes.append(NoteInfo(pitch=pitch, start=round(ev.onset, 6), duration=ev.duration, velocity=max(1, min(127, vel))))
+                prev = pitch
+            
+            # 2. Generate countersubject
+            cs_events = self._build_events(self.subject_length, self.lead_rhythm)
+            cs_notes = []
+            for ev in cs_events:
+                onset = ev.onset + self.subject_length
+                chord = chord_at(chords, onset)
+                pitch = _pick_lead_pitch(chord or chords[0], key, prev, low, high)
+                vel = int((65 + self.params.density * 25) * ev.velocity_factor)
+                cs_notes.append(NoteInfo(pitch=pitch, start=round(onset, 6), duration=ev.duration, velocity=max(1, min(127, vel))))
+                prev = pitch
+
+            notes = subject_notes + cs_notes
+            
+            # 3. Generate episodic / remainder up to duration_beats
+            t_rem = 2 * self.subject_length
+            if duration_beats > t_rem:
+                rem_events = self._build_events(duration_beats - t_rem, self.lead_rhythm)
+                for ev in rem_events:
+                    onset = ev.onset + t_rem
+                    if onset >= duration_beats:
+                        break
+                    chord = chord_at(chords, onset)
+                    pitch = _pick_lead_pitch(chord or chords[0], key, prev, low, high)
+                    vel = int((60 + self.params.density * 25) * ev.velocity_factor)
+                    notes.append(NoteInfo(pitch=pitch, start=round(onset, 6), duration=ev.duration, velocity=max(1, min(127, vel))))
+                    prev = pitch
+            return notes
+
+        events = self._build_events(duration_beats, self.lead_rhythm)
+        notes: list[NoteInfo] = []
         for ev in events:
             chord = chord_at(chords, ev.onset)
             if chord is None:
@@ -213,10 +262,92 @@ class CanonGenerator(PhraseGenerator):
         duration_beats: float,
         cfg: _FollowerCfg,
     ) -> list[NoteInfo]:
-        notes: list[NoteInfo] = []
         low = self.params.key_range_low
         high = self.params.key_range_high
 
+        if self.canon_type == "fugue":
+            follower_notes = []
+            subject_notes = [n for n in lead if n.start < self.subject_length]
+            cs_notes = [n for n in lead if self.subject_length <= n.start < 2 * self.subject_length]
+            ep_notes = [n for n in lead if n.start >= 2 * self.subject_length]
+            
+            if cfg.index == 0:
+                # Answer: plays subject shifted by subject_length, transposed by fifth
+                for note in subject_notes:
+                    onset = note.start + self.subject_length
+                    if onset >= duration_beats:
+                        break
+                    pitch = _tonal_transpose(note.pitch, 7, key)
+                    pitch = max(low, min(high, pitch))
+                    chord = chord_at(chords, onset)
+                    if chord is not None:
+                        pitch = _ensure_consonance(pitch, note.pitch, chord, low, high)
+                    follower_notes.append(NoteInfo(pitch=pitch, start=round(onset, 6), duration=note.duration, velocity=max(1, min(127, int(note.velocity * 0.85)))))
+                
+                # Plays countersubject next
+                for note in cs_notes:
+                    onset = note.start + self.subject_length
+                    if onset >= duration_beats:
+                        break
+                    pitch = _free_imitation(note, chords, key, 0, onset)
+                    pitch = max(low, min(high, pitch))
+                    chord = chord_at(chords, onset)
+                    if chord is not None:
+                        pitch = _ensure_consonance(pitch, note.pitch, chord, low, high)
+                    follower_notes.append(NoteInfo(pitch=pitch, start=round(onset, 6), duration=note.duration, velocity=max(1, min(127, int(note.velocity * 0.8)))))
+
+                # Remainder
+                for note in ep_notes:
+                    onset = note.start + self.subject_length
+                    if onset >= duration_beats:
+                        break
+                    pitch = _free_imitation(note, chords, key, -5, onset)
+                    pitch = max(low, min(high, pitch))
+                    chord = chord_at(chords, onset)
+                    if chord is not None:
+                        pitch = _ensure_consonance(pitch, note.pitch, chord, low, high)
+                    follower_notes.append(NoteInfo(pitch=pitch, start=round(onset, 6), duration=note.duration, velocity=max(1, min(127, int(note.velocity * 0.75)))))
+            
+            elif cfg.index == 1:
+                # Voice 3: Augmentation entry (plays subject at half speed / augmented)
+                aug_delay = 1.5 * self.subject_length
+                for note in subject_notes:
+                    onset = note.start * self.augmentation + aug_delay
+                    if onset >= duration_beats:
+                        break
+                    pitch = _tonal_transpose(note.pitch, -12, key)
+                    pitch = max(low, min(high, pitch))
+                    chord = chord_at(chords, onset)
+                    if chord is not None:
+                        pitch = _ensure_consonance(pitch, note.pitch, chord, low, high)
+                    follower_notes.append(NoteInfo(
+                        pitch=pitch,
+                        start=round(onset, 6),
+                        duration=note.duration * self.augmentation,
+                        velocity=max(1, min(127, int(note.velocity * 0.8))),
+                    ))
+            
+            else:
+                # Voice 4: Stretto entry (enters very early, e.g. delay of only 0.5 * subject_length)
+                stretto_delay = 0.5 * self.subject_length
+                for note in subject_notes:
+                    onset = note.start + stretto_delay
+                    if onset >= duration_beats:
+                        break
+                    pitch = _tonal_transpose(note.pitch, 12, key)
+                    pitch = max(low, min(high, pitch))
+                    chord = chord_at(chords, onset)
+                    if chord is not None:
+                        pitch = _ensure_consonance(pitch, note.pitch, chord, low, high)
+                    follower_notes.append(NoteInfo(
+                        pitch=pitch,
+                        start=round(onset, 6),
+                        duration=note.duration,
+                        velocity=max(1, min(127, int(note.velocity * 0.75))),
+                    ))
+            return follower_notes
+
+        notes: list[NoteInfo] = []
         for note in lead:
             onset = note.start + cfg.delay
             if onset >= duration_beats:

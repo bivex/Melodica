@@ -30,6 +30,10 @@ from melodica.generators import (
     MalletPercussionGenerator,
     FilmScoreGenerator,
     OrchestralTransitionGenerator,
+    TubaGenerator,
+    SnareDrumGenerator,
+    OrchestralCymbalGenerator,
+    TubularBellsGenerator,
 )
 
 BASIC_GENERATORS = {
@@ -222,5 +226,24 @@ BASIC_GENERATORS = {
         params=p,
         transition_type=cfg.get("transition_type", "crescendo_build"),
         intensity_curve=cfg.get("intensity_curve", "crescendo"),
+    ),
+    "tuba": lambda p, cfg: TubaGenerator(
+        params=p,
+        articulation=cfg.get("articulation", "sustained"),
+        mute=cfg.get("mute", False),
+        growl=cfg.get("growl", False),
+    ),
+    "snare_drum": lambda p, cfg: SnareDrumGenerator(
+        params=p,
+        pattern_type=cfg.get("pattern_type", "march"),
+    ),
+    "orchestral_cymbal": lambda p, cfg: OrchestralCymbalGenerator(
+        params=p,
+        pattern_type=cfg.get("pattern_type", "crash"),
+    ),
+    "tubular_bells": lambda p, cfg: TubularBellsGenerator(
+        params=p,
+        stroke_pattern=cfg.get("stroke_pattern", "single"),
+        dampen=cfg.get("dampen", False),
     ),
 }

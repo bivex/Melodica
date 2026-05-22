@@ -95,11 +95,46 @@ def _build_shearing(root: int, intervals: list[int]) -> list[int]:
     return sorted(notes)
 
 
-def _build_rootless(root: int, intervals: list[int]) -> list[int]:
-    """Jazz rootless voicing: 3-7-9-13."""
-    # Use typical rootless intervals
-    rootless = [4, 11, 14, 21]  # E, B, D, A for Cmaj7
-    return [root + i for i in rootless]
+def _get_chord_tones(intervals: list[int]) -> tuple[int, int, int, int, int]:
+    third = 4
+    if len(intervals) > 1:
+        third = intervals[1]
+    
+    fifth = 7
+    if len(intervals) > 2:
+        fifth = intervals[2]
+        
+    seventh = 10
+    if len(intervals) > 3:
+        seventh = intervals[3]
+    elif third == 3:
+        seventh = 10
+    else:
+        seventh = 11
+
+    ninth = 14
+    thirteenth = 21
+    return third, fifth, seventh, ninth, thirteenth
+
+
+def _build_rootless_a(root: int, intervals: list[int]) -> list[int]:
+    """Category A rootless voicing: 3rd, 5th/13th, 7th, 9th."""
+    third, fifth, seventh, ninth, thirteenth = _get_chord_tones(intervals)
+    note3 = root + third
+    note5 = root + (thirteenth if seventh == 10 and third == 4 else fifth)
+    note7 = root + seventh
+    note9 = root + ninth
+    return sorted([note3, note5, note7, note9])
+
+
+def _build_rootless_b(root: int, intervals: list[int]) -> list[int]:
+    """Category B rootless voicing: 7th, 9th, 3rd, 5th/13th."""
+    third, fifth, seventh, ninth, thirteenth = _get_chord_tones(intervals)
+    note7 = root + seventh
+    note9 = root + ninth
+    note3 = root + third + 12
+    note5 = root + (thirteenth if seventh == 10 and third == 4 else fifth) + 12
+    return sorted([note7, note9, note3, note5])
 
 
 _BUILDERS = {
@@ -110,7 +145,9 @@ _BUILDERS = {
     "cluster": _build_cluster,
     "spread": _build_spread,
     "shearing": _build_shearing,
-    "rootless": _build_rootless,
+    "rootless": _build_rootless_a,
+    "rootless_a": _build_rootless_a,
+    "rootless_b": _build_rootless_b,
 }
 
 
@@ -152,6 +189,7 @@ class ChordVoicingGenerator(PhraseGenerator):
     rhythm_pattern: str = "sustained"
     octave: int = 4
     velocity_curve: str = "flat"
+    inversion: int = 0
     rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
@@ -163,6 +201,7 @@ class ChordVoicingGenerator(PhraseGenerator):
         rhythm_pattern: str = "sustained",
         octave: int = 4,
         velocity_curve: str = "flat",
+        inversion: int = 0,
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
@@ -172,6 +211,7 @@ class ChordVoicingGenerator(PhraseGenerator):
         self.rhythm_pattern = rhythm_pattern
         self.octave = max(1, min(7, octave))
         self.velocity_curve = velocity_curve
+        self.inversion = inversion
         self.rhythm = rhythm
 
     def render(
@@ -194,7 +234,17 @@ class ChordVoicingGenerator(PhraseGenerator):
             root_pc = chord.root % 12
             base_midi = root_pc + self.octave * 12
             quality = str(chord.quality).lower().replace("quality.", "")
-            intervals = _CHORD_INTERVALS.get(quality, [0, 4, 7])
+            intervals = list(_CHORD_INTERVALS.get(quality, [0, 4, 7]))
+
+            # Apply inversion: rotate intervals so bass note is first
+            inv = self.inversion
+            if hasattr(chord, "inversion") and chord.inversion is not None:
+                inv = chord.inversion
+            if 0 < inv < len(intervals):
+                bass_interval = intervals[inv]
+                intervals = [i - bass_interval for i in intervals]
+                # Move bass interval up an octave
+                intervals = intervals[inv:] + [i + 12 for i in intervals[:inv]]
 
             pitches = builder(base_midi, intervals)
             pitches = [snap_to_scale(max(0, min(127, p)), key) for p in pitches]

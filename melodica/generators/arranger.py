@@ -119,6 +119,18 @@ class ArrangerGenerator(PhraseGenerator):
         self.variation_seed = variation_seed
         if intensity_map is not None:
             self.intensity_map = intensity_map
+        else:
+            self.intensity_map = {
+                "intro": 0.3,
+                "verse": 0.5,
+                "chorus": 0.85,
+                "bridge": 0.6,
+                "outro": 0.4,
+                "A": 0.6,
+                "B": 0.7,
+                "C": 0.75,
+                "D": 0.8,
+            }
         self.use_orchestral = use_orchestral
         self.rhythm = rhythm
         self.tracks = {}

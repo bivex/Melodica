@@ -75,6 +75,8 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
     section: str = "quartet"
     articulation: str = "legato"
     dynamic_range: float = 0.5
+    breath_interval: float = 6.0
+    breath_gap: float = 0.3
     rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
@@ -85,12 +87,16 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
         section: str = "quartet",
         articulation: str = "legato",
         dynamic_range: float = 0.5,
+        breath_interval: float = 6.0,
+        breath_gap: float = 0.3,
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
         self.section = section
         self.articulation = articulation
         self.dynamic_range = max(0.0, min(1.0, dynamic_range))
+        self.breath_interval = max(2.0, breath_interval)
+        self.breath_gap = max(0.0, min(1.0, breath_gap))
         self.rhythm = rhythm
 
     def _velocity(self, vel_boost: int = 0) -> int:
@@ -116,6 +122,20 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
         dur_factor = ARTICULATION_DURATIONS.get(self.articulation, 0.95)
         vel_boost = ARTICULATION_VELOCITY_BOOST.get(self.articulation, 0)
 
+        # Natural instrument ranges (low, high MIDI pitch)
+        if self.section == "trio":
+            # Trio: Flute (60-96), Oboe (58-91), Clarinet (50-89)
+            ranges = [(60, 96), (58, 91), (50, 89)]
+        elif self.section == "quartet":
+            # Quartet: Flute (60-96), Oboe (58-91), Clarinet (50-89), Bassoon (26-67)
+            ranges = [(60, 96), (58, 91), (50, 89), (26, 67)]
+        else:
+            # Full: Flute 1 (60-96), Flute 2 (60-96), Oboe (58-91), Clarinet (50-89), Bassoon (26-67)
+            ranges = [(60, 96), (60, 96), (58, 91), (50, 89), (26, 67)]
+
+        # Track cumulative play duration per voice index to insert breaths
+        voice_accumulators = {v_idx: 0.0 for v_idx in range(len(voicing_offsets))}
+
         for chord in chords:
             pcs = chord.pitch_classes()
             if not pcs:
@@ -125,6 +145,13 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
                 pc = pcs[voice_idx % len(pcs)]
                 anchor = mid + offset * 12
                 pitch = nearest_pitch(int(pc), anchor)
+
+                # Transpose to natural instrument register range
+                low_r, high_r = ranges[voice_idx % len(ranges)]
+                while pitch < low_r:
+                    pitch += 12
+                while pitch > high_r:
+                    pitch -= 12
                 pitch = snap_to_scale(pitch, key)
                 pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
 
@@ -133,12 +160,22 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
                 onset = chord.start + random.uniform(0.0, 0.02 * self.dynamic_range)
                 note_dur = chord.duration * dur_factor
 
+                # Breath mark logic:
+                # If cumulative play duration for this voice exceeds breath_interval, shorten note to take a breath!
+                accum = voice_accumulators[voice_idx]
+                if accum >= self.breath_interval:
+                    note_dur = max(0.1, note_dur - self.breath_gap)
+                    voice_accumulators[voice_idx] = 0.0
+                else:
+                    voice_accumulators[voice_idx] += chord.duration
+
                 notes.append(
                     NoteInfo(
                         pitch=pitch,
                         start=round(onset, 6),
                         duration=max(0.1, note_dur),
                         velocity=vel,
+                        articulation=self.articulation,
                     )
                 )
 

@@ -162,6 +162,8 @@ class VoiceLeadingGenerator(PhraseGenerator):
         best = candidates[0]
         best_dist = float("inf")
         for cand in candidates:
+            if self.avoid_parallels and _has_parallel_forbidden(prev, cand):
+                continue
             dist = voice_leading_distance(prev, cand)
             if self.prefer_stepwise:
                 for i in range(min(len(prev), len(cand))):
@@ -235,3 +237,21 @@ class VoiceLeadingGenerator(PhraseGenerator):
     def _velocity(self, vel_factor: float = 1.0) -> int:
         base = int(55 + self.params.density * 30)
         return max(1, min(127, int(base * vel_factor)))
+
+
+_PARALLEL_FORBIDDEN_INTERVALS = {0, 7}  # unison/octave, perfect fifth
+
+
+def _has_parallel_forbidden(prev: list[int], curr: list[int]) -> bool:
+    """Check for parallel fifths or octaves between any pair of voices."""
+    n = min(len(prev), len(curr))
+    for i in range(n):
+        for j in range(i + 1, n):
+            prev_ivl = abs(prev[i] - prev[j]) % 12
+            curr_ivl = abs(curr[i] - curr[j]) % 12
+            if prev_ivl in _PARALLEL_FORBIDDEN_INTERVALS and prev_ivl == curr_ivl:
+                di = curr[i] - prev[i]
+                dj = curr[j] - prev[j]
+                if (di > 0 and dj > 0) or (di < 0 and dj < 0):
+                    return True
+    return False

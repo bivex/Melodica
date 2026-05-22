@@ -67,7 +67,7 @@ class CounterpointGenerator(PhraseGenerator):
     rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
-    _CONSONANT_INTERVALS: frozenset[int] = frozenset({0, 3, 4, 5, 7, 8, 9})
+    _CONSONANT_INTERVALS: frozenset[int] = frozenset({0, 3, 4, 5, 7, 8, 9, 12})
 
     def __init__(
         self,
@@ -105,11 +105,23 @@ class CounterpointGenerator(PhraseGenerator):
         anchor = (low + high) // 2
 
         cantus_anchor = anchor - 12 if self.cantus_position == "below" else anchor + 12
-        counter_anchor = anchor if self.cantus_position == "below" else anchor - 6
-
-        prev_counter = (
-            context.prev_pitch if context and context.prev_pitch is not None else counter_anchor
+        num_counters = self.voices - 1  # voices - 1 = counter voices
+        counter_offsets = [0, -5, 7] if num_counters >= 3 else (
+            [0, -5] if num_counters >= 2 else [0]
         )
+        counter_anchors = []
+        for i in range(num_counters):
+            offset = counter_offsets[i % len(counter_offsets)]
+            if self.cantus_position == "below":
+                counter_anchors.append(anchor + offset)
+            else:
+                counter_anchors.append(anchor - 12 + offset)
+
+        prev_counters = [
+            context.prev_pitch - 12 * (i + 1) if context and context.prev_pitch is not None
+            else ca
+            for i, ca in enumerate(counter_anchors)
+        ]
         last_chord: ChordLabel | None = None
 
         for event in events:
@@ -126,45 +138,44 @@ class CounterpointGenerator(PhraseGenerator):
             cantus_pitch = nearest_pitch(cantus_pc, cantus_anchor)
             cantus_pitch = max(low, min(high, cantus_pitch))
 
-            counter_pitch = self._pick_counter_pitch(
-                cantus_pitch, pcs, prev_counter, low, high, event.onset
+            # Emit cantus firmus
+            cantus_vel = max(1, min(127, self._velocity(True)))
+            cantus_note = NoteInfo(
+                pitch=cantus_pitch,
+                start=round(event.onset, 6),
+                duration=event.duration,
+                velocity=cantus_vel,
             )
 
+            # Generate each counter voice
+            counter_pitches = []
+            for ci in range(num_counters):
+                cp = self._pick_counter_pitch(
+                    [cantus_pitch] + counter_pitches, pcs, prev_counters[ci],
+                    low, high, event.onset, counter_anchors[ci],
+                )
+                counter_pitches.append(cp)
+                prev_counters[ci] = cp
+
+            # Order: cantus below counters or above
             if self.cantus_position == "below":
-                notes.append(
-                    NoteInfo(
-                        pitch=cantus_pitch,
+                notes.append(cantus_note)
+                for ci, cp in enumerate(counter_pitches):
+                    notes.append(NoteInfo(
+                        pitch=cp,
                         start=round(event.onset, 6),
                         duration=event.duration,
-                        velocity=max(1, min(127, self._velocity(True))),
-                    )
-                )
-                notes.append(
-                    NoteInfo(
-                        pitch=counter_pitch,
-                        start=round(event.onset, 6),
-                        duration=event.duration,
-                        velocity=max(1, min(127, self._velocity(False))),
-                    )
-                )
+                        velocity=max(1, min(127, self._velocity(False, ci))),
+                    ))
             else:
-                notes.append(
-                    NoteInfo(
-                        pitch=counter_pitch,
+                for ci, cp in enumerate(counter_pitches):
+                    notes.append(NoteInfo(
+                        pitch=cp,
                         start=round(event.onset, 6),
                         duration=event.duration,
-                        velocity=max(1, min(127, self._velocity(False))),
-                    )
-                )
-                notes.append(
-                    NoteInfo(
-                        pitch=cantus_pitch,
-                        start=round(event.onset, 6),
-                        duration=event.duration,
-                        velocity=max(1, min(127, self._velocity(True))),
-                    )
-                )
-            prev_counter = counter_pitch
+                        velocity=max(1, min(127, self._velocity(False, ci))),
+                    ))
+                notes.append(cantus_note)
 
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(
@@ -183,35 +194,42 @@ class CounterpointGenerator(PhraseGenerator):
 
     def _pick_counter_pitch(
         self,
-        cantus: int,
+        other_active_pitches: list[int],
         pcs: list[int],
         prev: int,
         low: int,
         high: int,
         onset: float,
+        anchor: int | None = None,
     ) -> int:
         beat_pos = onset % 1.0
         is_strong = beat_pos < 0.01
 
-        valid_pcs = list(pcs)
-        if self.dissonance_rules and is_strong:
-            valid_pcs = [
-                int(pc) for pc in pcs if abs((int(pc) - cantus) % 12) in self._CONSONANT_INTERVALS
-            ]
-            if not valid_pcs:
-                valid_pcs = [int(pcs[0])]
+        search_anchor = anchor if anchor is not None else prev
 
-        best_pitch = nearest_pitch(int(valid_pcs[0]), prev)
-        best_dist = abs(best_pitch - prev)
-
-        for pc in valid_pcs:
-            p = nearest_pitch(int(pc), prev)
+        # Generate candidate pitches from chord tones and scale degrees
+        candidates = []
+        for pc in pcs:
+            p = nearest_pitch(int(pc), search_anchor)
             p = max(low, min(high, p))
-            dist = abs(p - prev)
-            if dist < best_dist:
-                best_dist = dist
-                best_pitch = p
+            
+            is_valid = True
+            if self.dissonance_rules and is_strong:
+                for active_p in other_active_pitches:
+                    interval = abs(p - active_p) % 12
+                    if interval not in self._CONSONANT_INTERVALS:
+                        is_valid = False
+                        break
+            if is_valid:
+                candidates.append(p)
 
+        if not candidates:
+            # Fallback: nearest root pitch
+            p = nearest_pitch(int(pcs[0]), search_anchor)
+            candidates = [max(low, min(high, p))]
+
+        # Pick candidate closest to previous pitch (smooth voice leading)
+        best_pitch = min(candidates, key=lambda p: abs(p - prev))
         return max(low, min(high, best_pitch))
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
@@ -258,7 +276,8 @@ class CounterpointGenerator(PhraseGenerator):
             note_idx += 1
         return events
 
-    def _velocity(self, is_cantus: bool) -> int:
+    def _velocity(self, is_cantus: bool, counter_idx: int = 0) -> int:
         if is_cantus:
             return int(55 + self.params.density * 25)
-        return int(50 + self.params.density * 30)
+        decay = counter_idx * 5
+        return int(50 + self.params.density * 30 - decay)
