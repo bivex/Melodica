@@ -109,11 +109,12 @@ class OrganDrawbarsGenerator(PhraseGenerator):
                 vel = int(base_vel * drawbar_factor)
 
                 if self.percussion and i == 0:
+                    perc_dur = max(0.01, round(min(0.08, event.duration * 0.1), 6))
                     notes.append(
                         NoteInfo(
                             pitch=pitch,
                             start=round(event.onset, 6),
-                            duration=round(min(0.08, event.duration * 0.1), 6),
+                            duration=perc_dur,
                             velocity=max(1, min(MIDI_MAX, int(vel * 0.4))),
                             articulation="staccato",
                         )
@@ -123,7 +124,7 @@ class OrganDrawbarsGenerator(PhraseGenerator):
                     NoteInfo(
                         pitch=pitch,
                         start=round(event.onset, 6),
-                        duration=round(leslie_dur, 6),
+                        duration=max(0.01, round(leslie_dur, 6)),
                         velocity=max(0, min(MIDI_MAX, vel)),
                         articulation="sustain",
                     )

@@ -38,6 +38,8 @@ class RenderContext:
     prev_chord: ChordLabel | None = None
     prev_pitches: list[int] = field(default_factory=list)  # for polyphonic generators
     current_scale: Scale | None = None  # active key; set by MusicDirector on modulation
+    bass_pitch: int | None = None  # lowest sounding pitch for counterpoint
+    prev_bass_pitch: int | None = None  # previous bass pitch for voice leading
 
     def with_end_state(
         self,
@@ -48,6 +50,7 @@ class RenderContext:
         current_scale: Scale | None = None,
         duration_beats: float = 0.0,
         total_duration: float = 0.0,
+        last_bass_pitch: int | None = None,
     ) -> RenderContext:
         """Return a new context with updated state for the next phrase."""
         # Update phrase position based on duration
@@ -61,4 +64,6 @@ class RenderContext:
             prev_chord=last_chord if last_chord is not None else self.prev_chord,
             prev_pitches=last_pitches if last_pitches is not None else self.prev_pitches,
             current_scale=current_scale if current_scale is not None else self.current_scale,
+            bass_pitch=last_bass_pitch if last_bass_pitch is not None else self.bass_pitch,
+            prev_bass_pitch=self.bass_pitch,
         )
