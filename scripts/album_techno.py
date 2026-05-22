@@ -1012,7 +1012,7 @@ def build_3(name):
         case "pad_industrial":
             gen = DarkPadGenerator(
                 params=GeneratorParams(density=0.18),
-                mode="dorian_pad",
+                mode="chromatic_pad",
                 chord_dur=4.0,
                 velocity_level=0.12,
                 register="low",
