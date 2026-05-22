@@ -58,8 +58,9 @@ class TestGenrePanProfiles:
         assert _get_pan_for_role(Role.BASS, genre) == 0.0
 
     @pytest.mark.parametrize("genre", ["techno", "rnb", "trap"])
-    def test_lead_always_center_in_genre_profile(self, genre: str):
-        assert _get_pan_for_role(Role.LEAD, genre) == 0.0
+    def test_lead_near_center_in_genre_profile(self, genre: str):
+        pan = _get_pan_for_role(Role.LEAD, genre)
+        assert -0.15 <= pan <= 0.15, f"{genre}: LEAD pan={pan} too far from centre"
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +104,7 @@ class TestAutoSpreadPanning:
 
     def test_lead_gets_default_pan(self, profiles):
         result = self._run(profiles)
-        assert result["lead"] == 0.0  # techno LEAD default
+        assert result["lead"] == pytest.approx(0.08, abs=0.01)  # techno LEAD default
 
     def test_pads_wide_spread_when_same_register(self, profiles):
         result = self._run(profiles)
@@ -170,7 +171,7 @@ class TestPanValidator:
 
     @pytest.mark.parametrize("name,role_bad,pan_bad", [
         ("my_bass", Role.BASS,  0.50),   # bass should be centre
-        ("my_lead", Role.LEAD,  0.50),   # lead should be near centre
+        ("my_lead", Role.LEAD,  0.30),   # lead beyond +/-0.15
         ("my_pad",  Role.PAD,   0.70),   # pad beyond max +0.60
         ("my_fx",   Role.FX,   -0.70),   # fx beyond min -0.65
     ])

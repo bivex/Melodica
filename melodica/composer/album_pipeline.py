@@ -211,7 +211,7 @@ def _analyze_track(name: str, notes: List[NoteInfo], total_dur: float = 0.0) -> 
 
 _ROLE_PAN_PROFILES: Dict[str, Dict[Role, float]] = {
     "techno": {
-        Role.LEAD: 0.0,
+        Role.LEAD: 0.08,
         Role.BASS: 0.0,
         Role.PAD: -0.30,
         Role.PERC: 0.15,
@@ -220,20 +220,22 @@ _ROLE_PAN_PROFILES: Dict[str, Dict[Role, float]] = {
         Role.FX: 0.30,
     },
     "rnb": {
-        Role.LEAD: 0.0,
+        Role.LEAD: 0.10,
         Role.BASS: 0.0,
         Role.PAD: -0.20,
         Role.STRINGS: 0.25,
         Role.CHOIR: -0.15,
+        Role.PERC: 0.05,
     },
     "trap": {
-        Role.LEAD: 0.0,
+        Role.LEAD: 0.12,
         Role.BASS: 0.0,
         Role.PAD: -0.40,
         Role.FX: 0.45,
+        Role.PERC: 0.08,
     },
     "neosoul": {
-        Role.LEAD: 0.0,
+        Role.LEAD: 0.06,
         Role.BASS: 0.0,
         Role.PAD: -0.25,
         Role.STRINGS: 0.30,
@@ -241,7 +243,7 @@ _ROLE_PAN_PROFILES: Dict[str, Dict[Role, float]] = {
         Role.PERC: 0.10,
     },
     "hip_hop": {
-        Role.LEAD: 0.0,
+        Role.LEAD: 0.10,
         Role.BASS: 0.0,
         Role.PAD: -0.35,
         Role.STRINGS: 0.20,
@@ -258,7 +260,7 @@ _ROLE_PAN_PROFILES: Dict[str, Dict[Role, float]] = {
         Role.PERC: -0.08,
     },
     "gospel": {
-        Role.LEAD: 0.0,
+        Role.LEAD: 0.08,
         Role.BASS: 0.0,
         Role.PAD: -0.20,
         Role.STRINGS: 0.25,
@@ -298,25 +300,35 @@ def _auto_spread_panning(
 
     Returns {track_name: pan_norm} so MasteringDesk receives plain string keys.
     Rules:
-      1. BASS and PERC always sit at centre.
-      2. PAD vs PAD in same register -> wide +/-0.40 spread.
-      3. FX gets outermost alternating edges +/-0.60.
-      4. LEAD, STRINGS, CHOIR keep genre-default pan.
+      1. BASS always sits at centre.
+      2. PERC gets genre default (slight offset allowed).
+      3. PAD vs PAD in same register -> wide +/-0.40 spread.
+      4. FX gets outermost alternating edges +/-0.60.
+      5. LEAD: multiple LEADs in same register -> spread +/-0.15.
+      6. Remaining LEAD, STRINGS, CHOIR keep genre-default pan.
     """
     result: Dict[str, float] = {}
     fxs: List[str] = []
     pads: List[str] = []
+    leads: List[str] = []
 
     for name, prof in profiles.items():
         if prof.role == Role.FX:
             fxs.append(name)
         elif prof.role == Role.PAD:
             pads.append(name)
+        elif prof.role == Role.LEAD:
+            leads.append(name)
 
-    # 1/2. BASS / PERC — permanently centre
+    # 1. BASS — permanently centre
     for name, prof in profiles.items():
-        if prof.role in _PROTECTED_CENTER or prof.role == Role.PERC:
+        if prof.role in _PROTECTED_CENTER:
             result[name] = 0.0
+
+    # 2. PERC — genre default (slight offset)
+    for name, prof in profiles.items():
+        if prof.role == Role.PERC and name not in result:
+            result[name] = role_pan_map.get(Role.PERC, 0.0)
 
     # 3. FX — alternating outer edges
     for idx, name in enumerate(fxs):
@@ -339,7 +351,26 @@ def _auto_spread_panning(
         if name not in result:
             result[name] = role_pan_map.get(Role.PAD, -0.30)  # genre default
 
-    # 5. LEAD, STRINGS, CHOIR and any remaining -> genre default
+    # 5. LEAD — spread multiple LEADs if they share a register
+    lead_default = role_pan_map.get(Role.LEAD, 0.08)
+    if len(leads) >= 2:
+        paired_l: set = set()
+        for i, a in enumerate(leads):
+            if a in paired_l:
+                continue
+            for b in leads[i + 1:]:
+                if b in paired_l:
+                    continue
+                if abs(profiles[a].avg_pitch - profiles[b].avg_pitch) < 10:
+                    result[a] = lead_default - 0.15
+                    result[b] = lead_default + 0.15
+                    paired_l.update([a, b])
+                    break
+    for name in leads:
+        if name not in result:
+            result[name] = lead_default
+
+    # 6. STRINGS, CHOIR and any remaining -> genre default
     for name, prof in profiles.items():
         if name not in result:
             result[name] = role_pan_map.get(prof.role, 0.0)
@@ -355,7 +386,7 @@ def _auto_spread_panning(
 
 _PAN_RULES: Dict[Role, tuple[float, float]] = {
     Role.BASS: (-0.05, 0.05),  # strict centre
-    Role.LEAD: (-0.10, 0.10),  # near centre
+    Role.LEAD: (-0.15, 0.15),  # slight offset allowed per genre
     Role.PAD: (-0.60, 0.60),   # flexible — genre decides
     Role.PERC: (-0.20, 0.20),  # near centre
     Role.STRINGS: (-0.45, 0.45),
