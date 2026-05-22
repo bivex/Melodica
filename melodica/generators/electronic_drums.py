@@ -174,6 +174,26 @@ PATTERN_DEFS: dict[str, list[tuple[int, float, int, float]]] = {
 }
 
 
+def _get_section_multiplier(s_type: str, onset: float, total_beats: float) -> float:
+    if s_type == "intro":
+        return 0.75
+    elif s_type == "verse":
+        return 0.90
+    elif s_type == "chorus":
+        return 1.05
+    elif s_type == "bridge":
+        return 0.92
+    elif s_type == "pre_chorus":
+        # crescendo ramp: 0.85 -> 1.05
+        ratio = onset / max(1.0, total_beats)
+        return 0.85 + (1.05 - 0.85) * min(1.0, max(0.0, ratio))
+    elif s_type == "outro":
+        # decrescendo ramp: 0.85 -> 0.50
+        ratio = onset / max(1.0, total_beats)
+        return 0.85 - (0.85 - 0.50) * min(1.0, max(0.0, ratio))
+    return 0.90  # Default to verse
+
+
 @dataclass
 class ElectronicDrumsGenerator(PhraseGenerator):
     """
@@ -201,6 +221,8 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     swing_grid: float = 0.25
     choke_hats: bool = True
     ghost_snare_prob: float = 0.0
+    section_type: str = "verse"
+    auto_fills: bool = True
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -218,6 +240,8 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         swing_grid: float = 0.25,
         choke_hats: bool = True,
         ghost_snare_prob: float = 0.0,
+        section_type: str = "verse",
+        auto_fills: bool = True,
     ) -> None:
         super().__init__(params)
         self.kit = kit
@@ -231,6 +255,8 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         self.swing_grid = swing_grid
         self.choke_hats = choke_hats
         self.ghost_snare_prob = ghost_snare_prob
+        self.section_type = section_type
+        self.auto_fills = auto_fills
 
     def render(
         self,
@@ -241,6 +267,10 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     ) -> list[NoteInfo]:
         if not chords:
             return []
+
+        # Resolve section_type and auto_fills from context if available, otherwise use instance defaults
+        s_type = getattr(context, "section_type", self.section_type)
+        fills_enabled = getattr(context, "auto_fills", self.auto_fills)
 
         notes: list[NoteInfo] = []
         last_chord = chords[-1]
@@ -256,7 +286,18 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             scale_factor = 0.8 + self.params.density * 0.4
 
         while t < duration_beats:
+            is_final_bar = (fills_enabled and duration_beats > 4.0 and (t >= duration_beats - 4.0))
+
             for pitch, offset, base_vel, dur in pattern_def:
+                if is_final_bar and offset >= 2.0:
+                    continue  # Mute normal groove in the second half of final bar
+
+                # Intro density adjustments: skip claps/rims, simplify open hats to closed
+                if s_type == "intro" and pitch in (CLAP, RIM):
+                    continue
+                if s_type == "intro" and pitch == HH_OPEN:
+                    pitch = HH_CLOSED
+
                 onset = t + offset
                 if onset >= duration_beats:
                     continue
@@ -283,9 +324,11 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                     )
                 )
 
-            # Generate low-velocity snare ghost notes if requested
-            if self.ghost_snare_prob > 0.0:
+            # Generate low-velocity snare ghost notes if requested (skip in intro and outro)
+            if self.ghost_snare_prob > 0.0 and s_type not in ("intro", "outro"):
                 for sub in [0.75, 1.75, 2.25, 2.75, 3.75]:
+                    if is_final_bar and sub >= 2.0:
+                        continue
                     if random.random() < self.ghost_snare_prob:
                         onset = t + sub
                         if onset < duration_beats:
@@ -297,6 +340,59 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                                     velocity=random.randint(22, 38),
                                 )
                             )
+
+            # Phrase-boundary transitions
+            if is_final_bar:
+                if s_type in ("chorus", "pre_chorus"):
+                    # Accelerating crescendo snare and clap rolls
+                    fill_notes = [
+                        (SNARE, 2.0, 75, 0.12),
+                        (SNARE, 2.5, 85, 0.12),
+                        (SNARE, 3.0, 95, 0.08),
+                        (CLAP, 3.0, 90, 0.08),
+                        (SNARE, 3.25, 100, 0.08),
+                        (SNARE, 3.5, 110, 0.05),
+                        (CLAP, 3.5, 105, 0.05),
+                        (SNARE, 3.625, 115, 0.05),
+                        (SNARE, 3.75, 120, 0.05),
+                        (CLAP, 3.75, 115, 0.05),
+                        (SNARE, 3.875, 125, 0.05),
+                    ]
+                elif s_type in ("intro", "outro"):
+                    # Soft fading shaker or rim shot (no kick)
+                    fill_notes = [
+                        (RIM, 2.0, 50, 0.12),
+                        (HH_CLOSED, 2.5, 45, 0.08),
+                        (RIM, 3.0, 40, 0.12),
+                        (HH_CLOSED, 3.5, 30, 0.08),
+                    ]
+                else:  # "verse", "bridge", etc.
+                    # Quick double-step kick rush + closed hat rolls
+                    fill_notes = [
+                        (KICK, 2.0, 100, 0.2),
+                        (HH_CLOSED, 2.0, 80, 0.08),
+                        (KICK, 2.5, 110, 0.2),
+                        (KICK, 2.75, 115, 0.2),
+                        (HH_CLOSED, 3.0, 85, 0.08),
+                        (HH_CLOSED, 3.25, 90, 0.08),
+                        (HH_CLOSED, 3.5, 95, 0.08),
+                        (HH_CLOSED, 3.75, 100, 0.08),
+                    ]
+
+                for pitch, offset, vel, dur in fill_notes:
+                    if pitch == CLAP and not char["use_clap"]:
+                        pitch = SNARE
+                    
+                    onset = t + offset
+                    if onset < duration_beats:
+                        notes.append(
+                            NoteInfo(
+                                pitch=pitch,
+                                start=round(onset, 6),
+                                duration=dur,
+                                velocity=max(1, min(127, int(vel * scale_factor))),
+                            )
+                        )
 
             t += 4.0
 
@@ -316,6 +412,10 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                     n.velocity = int(n.velocity * 0.85)
                 elif abs(sub_pos - 0.25) < 0.01 or abs(sub_pos - 0.75) < 0.01:
                     n.velocity = int(n.velocity * 0.72)
+
+            # Apply section-aware dynamic scaling
+            mult = _get_section_multiplier(s_type, n.start, duration_beats)
+            n.velocity = int(n.velocity * mult)
 
             n.velocity = max(1, min(127, n.velocity + random.randint(-4, 4)))
 

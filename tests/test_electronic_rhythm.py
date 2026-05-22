@@ -322,7 +322,7 @@ class TestTrapDrumsGenerator:
                         break
 
     def test_swing_and_pocket_delays(self):
-        gen = TrapDrumsGenerator(groove_swing=0.6, swing_grid=0.25, snare_delay=0.05, hihat_delay=0.02, ghost_snare_prob=0.0)
+        gen = TrapDrumsGenerator(groove_swing=0.6, swing_grid=0.25, snare_delay=0.05, hihat_delay=0.02, ghost_snare_prob=0.0, hat_roll_density=0.0)
         notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
         snare_notes = [n for n in notes if n.pitch == 38]
         for sn in snare_notes:
@@ -437,3 +437,86 @@ class TestDrumKitPatternGenerator:
         gen = DrumKitPatternGenerator(fill_frequency=1.0)
         notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
         assert len(notes) > 0
+
+
+class TestDrumSectionDynamicsAndFills:
+    def test_section_dynamics(self):
+        from melodica.generators.drum_kit_pattern import DrumKitPatternGenerator
+        from melodica.generators.electronic_drums import ElectronicDrumsGenerator
+        from melodica.generators.trap_drums import TrapDrumsGenerator
+        from melodica.render_context import RenderContext
+
+        chords = _simple_chords()
+
+        for gen_cls in [DrumKitPatternGenerator, ElectronicDrumsGenerator, TrapDrumsGenerator]:
+            # Render intro
+            ctx_intro = RenderContext()
+            ctx_intro.section_type = "intro"
+            notes_intro = gen_cls().render(chords, C_MAJOR, 4.0, context=ctx_intro)
+
+            # Render chorus
+            ctx_chorus = RenderContext()
+            ctx_chorus.section_type = "chorus"
+            notes_chorus = gen_cls().render(chords, C_MAJOR, 4.0, context=ctx_chorus)
+
+            # Assert that the first Kick note (pitch 36) at start 0.0 is louder in chorus than in intro
+            kick_intro = next(n for n in notes_intro if n.pitch == 36 and abs(n.start) < 0.01)
+            kick_chorus = next(n for n in notes_chorus if n.pitch == 36 and abs(n.start) < 0.01)
+            assert kick_chorus.velocity > kick_intro.velocity
+
+    def test_pre_chorus_crescendo(self):
+        from melodica.generators.electronic_drums import ElectronicDrumsGenerator
+        from melodica.render_context import RenderContext
+
+        ctx = RenderContext()
+        ctx.section_type = "pre_chorus"
+        gen = ElectronicDrumsGenerator()
+        notes = gen.render(_simple_chords(), C_MAJOR, 16.0, context=ctx)
+        
+        # Compare notes in the first bar (start < 4.0) with notes in the last bar (start >= 12.0)
+        first_bar_vels = [n.velocity for n in notes if n.start < 4.0]
+        last_bar_vels = [n.velocity for n in notes if 12.0 <= n.start < 16.0]
+        
+        if first_bar_vels and last_bar_vels:
+            avg_first = sum(first_bar_vels) / len(first_bar_vels)
+            avg_last = sum(last_bar_vels) / len(last_bar_vels)
+            # Crescendo should make the last bar velocity higher than the first bar
+            assert avg_last > avg_first
+
+    def test_phrase_boundary_fills(self):
+        from melodica.generators.trap_drums import TrapDrumsGenerator
+        from melodica.generators.drum_kit_pattern import DrumKitPatternGenerator
+        from melodica.render_context import RenderContext
+
+        chords = _simple_chords()
+
+        # 1. Trap Drums fill test
+        ctx_fill = RenderContext()
+        ctx_fill.section_type = "chorus"
+        ctx_fill.auto_fills = True
+        
+        gen_trap = TrapDrumsGenerator(ghost_snare_prob=0.0)
+        notes_fill = gen_trap.render(chords, C_MAJOR, 8.0, context=ctx_fill)
+        
+        snare_fills = [n for n in notes_fill if n.pitch == 38 and n.start >= 6.0]
+        assert len(snare_fills) >= 2
+        
+        ctx_nofill = RenderContext()
+        ctx_nofill.section_type = "chorus"
+        ctx_nofill.auto_fills = False
+        notes_nofill = gen_trap.render(chords, C_MAJOR, 8.0, context=ctx_nofill)
+        
+        snare_nofill = [n for n in notes_nofill if n.pitch == 38 and n.start >= 6.0]
+        assert len(snare_nofill) <= 1
+
+        # 2. Drum Kit fill test
+        ctx_kit = RenderContext()
+        ctx_kit.section_type = "verse"
+        ctx_kit.auto_fills = True
+        gen_kit = DrumKitPatternGenerator()
+        notes_kit = gen_kit.render(chords, C_MAJOR, 8.0, context=ctx_kit)
+        
+        fill_pitches = [38, 41, 45, 48]
+        kit_fills = [n for n in notes_kit if n.pitch in fill_pitches and n.start >= 6.0]
+        assert len(kit_fills) >= 2
+

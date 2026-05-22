@@ -51,6 +51,26 @@ CLAP = 39
 SUB_808 = 36  # Low C
 
 
+def _get_section_multiplier(s_type: str, onset: float, total_beats: float) -> float:
+    if s_type == "intro":
+        return 0.75
+    elif s_type == "verse":
+        return 0.90
+    elif s_type == "chorus":
+        return 1.05
+    elif s_type == "bridge":
+        return 0.92
+    elif s_type == "pre_chorus":
+        # crescendo ramp: 0.85 -> 1.05
+        ratio = onset / max(1.0, total_beats)
+        return 0.85 + (1.05 - 0.85) * min(1.0, max(0.0, ratio))
+    elif s_type == "outro":
+        # decrescendo ramp: 0.85 -> 0.50
+        ratio = onset / max(1.0, total_beats)
+        return 0.85 - (0.85 - 0.50) * min(1.0, max(0.0, ratio))
+    return 0.90  # Default to verse
+
+
 @dataclass
 class TrapDrumsGenerator(PhraseGenerator):
     """
@@ -82,6 +102,8 @@ class TrapDrumsGenerator(PhraseGenerator):
     swing_grid: float = 0.25
     choke_hats: bool = True
     ghost_snare_prob: float = 0.3
+    section_type: str = "verse"
+    auto_fills: bool = True
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -101,6 +123,8 @@ class TrapDrumsGenerator(PhraseGenerator):
         swing_grid: float = 0.25,
         choke_hats: bool = True,
         ghost_snare_prob: float = 0.3,
+        section_type: str = "verse",
+        auto_fills: bool = True,
     ) -> None:
         super().__init__(params)
         self.variant = variant
@@ -116,6 +140,8 @@ class TrapDrumsGenerator(PhraseGenerator):
         self.swing_grid = swing_grid
         self.choke_hats = choke_hats
         self.ghost_snare_prob = ghost_snare_prob
+        self.section_type = section_type
+        self.auto_fills = auto_fills
 
     def _velocity(self, ratio: float = 1.0) -> int:
         """Standard velocity for trap drums based on base_velocity."""
@@ -131,6 +157,10 @@ class TrapDrumsGenerator(PhraseGenerator):
         if not chords:
             return []
 
+        # Resolve section_type and auto_fills from context if available, otherwise use instance defaults
+        s_type = getattr(context, "section_type", self.section_type)
+        fills_enabled = getattr(context, "auto_fills", self.auto_fills)
+
         notes: list[NoteInfo] = []
         low = self.params.key_range_low
         last_chord = chords[-1]
@@ -142,29 +172,54 @@ class TrapDrumsGenerator(PhraseGenerator):
                 bar_start += 4.0
                 continue
 
+            # Determine if this is the final bar of the phrase
+            is_final_bar = (fills_enabled and duration_beats > 4.0 and (bar_start >= duration_beats - 4.0))
+
+            # Apply intro density cuts
+            active_kick_pattern = "sparse" if s_type == "intro" else self.kick_pattern
+            active_hat_roll_density = 0.0 if s_type == "intro" else self.hat_roll_density
+
             # 808/sub on beats 1 and (3)
-            sub_pitch = max(low, nearest_pitch(chord.root, low + 12))
-            self._add_note(notes, sub_pitch, bar_start, 3.5, self._velocity(1.1), duration_beats)
-            if self.kick_pattern != "sparse":
-                self._add_note(notes, sub_pitch, bar_start + 2, 1.5, self._velocity(1.0), duration_beats)
+            if s_type != "intro":
+                sub_pitch = max(low, nearest_pitch(chord.root, low + 12))
+                # Outro early truncation: shorten duration in final bar
+                if s_type == "outro" and is_final_bar:
+                    sub_dur = 0.8
+                else:
+                    sub_dur = 3.5
+
+                self._add_note(notes, sub_pitch, bar_start, sub_dur, self._velocity(1.1), duration_beats)
+                
+                # Beat 3 is at offset 2, which is >= 2.0. In final bar, second half is silenced, so we do not add sub on beat 3.
+                if active_kick_pattern != "sparse" and not is_final_bar:
+                    self._add_note(notes, sub_pitch, bar_start + 2, 1.5, self._velocity(1.0), duration_beats)
 
             # Kick
-            if self.kick_pattern == "standard":
-                self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
-                self._add_note(notes, KICK, bar_start + 2, 0.3, self._velocity(1.1), duration_beats)
-            elif self.kick_pattern == "syncopated":
-                self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
-                self._add_note(notes, KICK, bar_start + 2.5, 0.3, self._velocity(1.05), duration_beats)
-                self._add_note(notes, KICK, bar_start + 3.5, 0.3, self._velocity(0.95), duration_beats)
+            if not is_final_bar:
+                if active_kick_pattern == "standard":
+                    self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
+                    self._add_note(notes, KICK, bar_start + 2, 0.3, self._velocity(1.1), duration_beats)
+                elif active_kick_pattern == "syncopated":
+                    self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
+                    self._add_note(notes, KICK, bar_start + 2.5, 0.3, self._velocity(1.05), duration_beats)
+                    self._add_note(notes, KICK, bar_start + 3.5, 0.3, self._velocity(0.95), duration_beats)
+                else:
+                    self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
             else:
+                # If is_final_bar, only add kick on beat 1 (onset 0.0)
                 self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
 
-            # Snare/Clap on 2 and 4
+            # Snare/Clap on 2 and 4 (or 1 and 3 depending on clap_on_two)
             clap_beat = 1 if self.clap_on_two else 2
-            self._add_note(notes, SNARE, bar_start + clap_beat, 0.3, self._velocity(1.2), duration_beats)
-            self._add_note(notes, CLAP, bar_start + clap_beat, 0.3, self._velocity(1.0), duration_beats)
-            self._add_note(notes, SNARE, bar_start + 3, 0.3, self._velocity(1.2), duration_beats)
-            self._add_note(notes, CLAP, bar_start + 3, 0.3, self._velocity(1.0), duration_beats)
+            # Beat 1 or 2
+            if not is_final_bar or clap_beat < 2.0:
+                self._add_note(notes, SNARE, bar_start + clap_beat, 0.3, self._velocity(1.2), duration_beats)
+                self._add_note(notes, CLAP, bar_start + clap_beat, 0.3, self._velocity(1.0), duration_beats)
+            
+            # Beat 3
+            if not is_final_bar:
+                self._add_note(notes, SNARE, bar_start + 3, 0.3, self._velocity(1.2), duration_beats)
+                self._add_note(notes, CLAP, bar_start + 3, 0.3, self._velocity(1.0), duration_beats)
 
             # Hi-hats
             if self.variant in ("standard", "drill", "melodic"):
@@ -177,8 +232,13 @@ class TrapDrumsGenerator(PhraseGenerator):
                     if onset >= duration_beats:
                         break
                         
+                    # Silence the second half of final bar
+                    if is_final_bar and (i * step_duration) >= 2.0:
+                        i += 1
+                        continue
+
                     # Determine if we should trigger a roll at this step
-                    trigger_roll = random.random() < self.hat_roll_density and (i < steps_per_bar - 1)
+                    trigger_roll = random.random() < active_hat_roll_density and (i < steps_per_bar - 1)
                     
                     if trigger_roll:
                         # Choose roll parameters
@@ -243,6 +303,9 @@ class TrapDrumsGenerator(PhraseGenerator):
                     else:
                         # Normal hi-hat note
                         is_open = random.random() < self.open_hat_probability
+                        # Intro hat simplification: open hat is simplified to closed hat
+                        if s_type == "intro":
+                            is_open = False
                         hat = HH_OPEN if is_open else HH_CLOSED
                         
                         # Dynamics: strong beats are accented, offbeats are slightly quieter
@@ -261,18 +324,23 @@ class TrapDrumsGenerator(PhraseGenerator):
             elif self.variant == "minimal":
                 # Sparse hats
                 for beat in [0, 1, 2, 3]:
+                    if is_final_bar and beat >= 2:
+                        continue
                     onset = bar_start + beat
                     self._add_note(notes, HH_CLOSED, onset, 0.15, self._velocity(0.75), duration_beats)
                     if random.random() < 0.3:
-                        self._add_note(
-                            notes, HH_CLOSED, onset + 0.5, 0.1, self._velocity(0.6), duration_beats
-                        )
+                        if not (is_final_bar and (beat + 0.5) >= 2.0):
+                            self._add_note(
+                                notes, HH_CLOSED, onset + 0.5, 0.1, self._velocity(0.6), duration_beats
+                            )
 
             # Generate low-velocity trap snare ghost notes if requested
-            if self.ghost_snare_prob > 0.0:
+            if self.ghost_snare_prob > 0.0 and s_type not in ("intro", "outro"):
                 # Ghost note positions (sixteenth subdivisions)
                 ghost_positions = [0.75, 1.75, 2.25, 2.75, 3.75]
                 for sub in ghost_positions:
+                    if is_final_bar and sub >= 2.0:
+                        continue
                     if random.random() < self.ghost_snare_prob:
                         onset = bar_start + sub
                         # Make sure we don't overlap with a main snare hit
@@ -294,6 +362,47 @@ class TrapDrumsGenerator(PhraseGenerator):
                             vel = int(self._velocity(random.uniform(0.25, 0.45)))
                             self._add_note(notes, SNARE, onset, 0.08, vel, duration_beats)
 
+            # Phrase-boundary transitions
+            if is_final_bar:
+                sub_pitch = max(low, nearest_pitch(chord.root, low + 12)) if s_type != "intro" else 36
+                if s_type in ("chorus", "pre_chorus"):
+                    # Snare accents
+                    self._add_note(notes, SNARE, bar_start + 2.0, 0.2, self._velocity(1.15), duration_beats)
+                    self._add_note(notes, SNARE, bar_start + 2.5, 0.2, self._velocity(1.15), duration_beats)
+                    
+                    # 64th snare roll crescendo: 8 notes from 3.0 to 3.5
+                    for step in range(8):
+                        onset = bar_start + 3.0 + step * 0.0625
+                        vel_ratio = 0.7 + 0.45 * (step / 7)
+                        self._add_note(notes, SNARE, onset, 0.05, self._velocity(vel_ratio), duration_beats)
+                    
+                    # Pitched hi-hat 32nd-triplet sweep: 5 notes from 3.5 to 3.9167
+                    for step in range(5):
+                        onset = bar_start + 3.5 + step * 0.083333
+                        pitch_offset = step
+                        roll_pitch = max(0, min(127, HH_CLOSED + pitch_offset))
+                        vel_ratio = 0.65 + 0.25 * (step / 4)
+                        self._add_note(notes, roll_pitch, onset, 0.07, self._velocity(vel_ratio), duration_beats)
+                    
+                    # Final open hat accent
+                    self._add_note(notes, HH_OPEN, bar_start + 3.9, 0.2, self._velocity(1.15), duration_beats)
+                    
+                elif s_type == "outro":
+                    # Soft fading hats with no kick/sub
+                    self._add_note(notes, HH_CLOSED, bar_start + 2.0, 0.15, self._velocity(0.5), duration_beats)
+                    self._add_note(notes, HH_CLOSED, bar_start + 2.5, 0.15, self._velocity(0.4), duration_beats)
+                    self._add_note(notes, HH_CLOSED, bar_start + 3.0, 0.15, self._velocity(0.3), duration_beats)
+                    self._add_note(notes, HH_CLOSED, bar_start + 3.5, 0.15, self._velocity(0.2), duration_beats)
+                    
+                else: # "verse", "bridge", etc.
+                    # Syncopated 808 sub triplets with a single snare punch
+                    self._add_note(notes, sub_pitch, bar_start + 2.0, 0.25, self._velocity(1.0), duration_beats)
+                    self._add_note(notes, sub_pitch, bar_start + 2.3333, 0.25, self._velocity(0.95), duration_beats)
+                    self._add_note(notes, sub_pitch, bar_start + 2.6667, 0.25, self._velocity(0.9), duration_beats)
+                    
+                    # Single snare punch on beat 3.0
+                    self._add_note(notes, SNARE, bar_start + 3.0, 0.3, self._velocity(1.15), duration_beats)
+
             bar_start += 4.0
 
         # Pro-grade dynamic velocity and transient scaling
@@ -312,6 +421,10 @@ class TrapDrumsGenerator(PhraseGenerator):
                     n.velocity = int(n.velocity * 0.88)
                 elif abs(sub_pos - 0.25) < 0.01 or abs(sub_pos - 0.75) < 0.01:
                     n.velocity = int(n.velocity * 0.78)
+
+            # Apply section-aware dynamic scaling
+            mult = _get_section_multiplier(s_type, n.start, duration_beats)
+            n.velocity = int(n.velocity * mult)
 
             n.velocity = max(1, min(127, n.velocity + random.randint(-4, 4)))
 

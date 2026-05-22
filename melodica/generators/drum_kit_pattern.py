@@ -137,6 +137,26 @@ STYLE_PATTERNS: dict[str, list[tuple[int, float, int]]] = {
 }
 
 
+def _get_section_multiplier(s_type: str, onset: float, total_beats: float) -> float:
+    if s_type == "intro":
+        return 0.75
+    elif s_type == "verse":
+        return 0.90
+    elif s_type == "chorus":
+        return 1.05
+    elif s_type == "bridge":
+        return 0.92
+    elif s_type == "pre_chorus":
+        # crescendo ramp: 0.85 -> 1.05
+        ratio = onset / max(1.0, total_beats)
+        return 0.85 + (1.05 - 0.85) * min(1.0, max(0.0, ratio))
+    elif s_type == "outro":
+        # decrescendo ramp: 0.85 -> 0.50
+        ratio = onset / max(1.0, total_beats)
+        return 0.85 - (0.85 - 0.50) * min(1.0, max(0.0, ratio))
+    return 0.90  # Default to verse
+
+
 @dataclass
 class DrumKitPatternGenerator(PhraseGenerator):
     """
@@ -161,6 +181,8 @@ class DrumKitPatternGenerator(PhraseGenerator):
     groove_swing: float = 0.5
     swing_grid: float = 0.25
     choke_hats: bool = True
+    section_type: str = "verse"
+    auto_fills: bool = True
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -177,6 +199,8 @@ class DrumKitPatternGenerator(PhraseGenerator):
         groove_swing: float = 0.5,
         swing_grid: float = 0.25,
         choke_hats: bool = True,
+        section_type: str = "verse",
+        auto_fills: bool = True,
     ) -> None:
         super().__init__(params)
         self.style = style
@@ -189,6 +213,8 @@ class DrumKitPatternGenerator(PhraseGenerator):
         self.groove_swing = groove_swing
         self.swing_grid = swing_grid
         self.choke_hats = choke_hats
+        self.section_type = section_type
+        self.auto_fills = auto_fills
 
     def render(
         self,
@@ -200,14 +226,23 @@ class DrumKitPatternGenerator(PhraseGenerator):
         if not chords:
             return []
 
+        # Resolve section_type and auto_fills from context if available, otherwise use instance defaults
+        s_type = getattr(context, "section_type", self.section_type)
+        fills_enabled = getattr(context, "auto_fills", self.auto_fills)
+
         notes: list[NoteInfo] = []
         last_chord = chords[-1]
         bar_idx = 0
         t = 0.0
 
         while t < duration_beats:
+            is_final_bar = (fills_enabled and duration_beats > 4.0 and (t >= duration_beats - 4.0))
+
             pattern = STYLE_PATTERNS.get(self.style, STYLE_PATTERNS["rock"])
             for pitch, offset, vel in pattern:
+                if is_final_bar and offset >= 2.0:
+                    continue  # Drop normal groove in the second half of final bar to make room for fill
+                
                 onset = t + offset
                 if onset < duration_beats:
                     dur = 0.12 if pitch in (HH_CLOSED, HH_OPEN, RIDE) else 0.25
@@ -220,34 +255,85 @@ class DrumKitPatternGenerator(PhraseGenerator):
                         )
                     )
 
-            # Extra hi-hat subdivision
-            if self.hihat_pattern == "sixteenth":
-                for sub in [0.25, 0.75, 1.25, 1.75, 2.25, 2.75, 3.25, 3.75]:
-                    onset = t + sub
-                    if onset < duration_beats:
-                        notes.append(
-                            NoteInfo(
-                                pitch=HH_CLOSED,
-                                start=round(onset, 6),
-                                duration=0.08,
-                                velocity=random.randint(40, 55),
+            # Extra hi-hat subdivision (skip in intro and outro sections to simplify density)
+            if s_type not in ("intro", "outro"):
+                if self.hihat_pattern == "sixteenth":
+                    for sub in [0.25, 0.75, 1.25, 1.75, 2.25, 2.75, 3.25, 3.75]:
+                        if is_final_bar and sub >= 2.0:
+                            continue
+                        onset = t + sub
+                        if onset < duration_beats:
+                            notes.append(
+                                NoteInfo(
+                                    pitch=HH_CLOSED,
+                                    start=round(onset, 6),
+                                    duration=0.08,
+                                    velocity=random.randint(40, 55),
+                                )
                             )
-                        )
-            elif self.hihat_pattern == "open":
-                for sub in [0.5, 1.5, 2.5, 3.5]:
-                    onset = t + sub
-                    if onset < duration_beats:
-                        notes.append(
-                            NoteInfo(
-                                pitch=HH_OPEN,
-                                start=round(onset, 6),
-                                duration=0.4,
-                                velocity=random.randint(55, 70),
+                elif self.hihat_pattern == "open":
+                    for sub in [0.5, 1.5, 2.5, 3.5]:
+                        if is_final_bar and sub >= 2.0:
+                            continue
+                        onset = t + sub
+                        if onset < duration_beats:
+                            notes.append(
+                                NoteInfo(
+                                    pitch=HH_OPEN,
+                                    start=round(onset, 6),
+                                    duration=0.4,
+                                    velocity=random.randint(55, 70),
+                                )
                             )
-                        )
 
-            # Fill at end of bar
-            if random.random() < self.fill_frequency:
+            # Phrase-boundary transitions
+            if is_final_bar:
+                if s_type in ("chorus", "pre_chorus"):
+                    # Heavy descending 16th tom fills + snare double punch + crash
+                    fill_notes = [
+                        (TOM_HIGH, 2.0, 105, 0.2),
+                        (TOM_HIGH, 2.25, 105, 0.2),
+                        (TOM_MID, 2.5, 110, 0.2),
+                        (TOM_MID, 2.75, 110, 0.2),
+                        (TOM_LOW, 3.0, 115, 0.2),
+                        (TOM_LOW, 3.25, 115, 0.2),
+                        (SNARE, 3.5, 120, 0.25),
+                        (SNARE, 3.75, 120, 0.25),
+                        (CRASH, 3.85, 120, 0.6),
+                    ]
+                elif s_type in ("intro", "outro"):
+                    # Sparse fill
+                    fill_notes = [
+                        (RIDE, 2.0, 55, 0.15),
+                        (RIDE, 3.0, 50, 0.3),
+                        (TOM_LOW, 3.75, 45, 0.15),
+                    ]
+                else:  # "verse", "bridge", etc.
+                    # Tasteful syncopated snare ghost roll + tom
+                    fill_notes = [
+                        (SNARE, 2.0, 80, 0.15),
+                        (HH_OPEN, 2.25, 70, 0.2),
+                        (SNARE, 2.5, 45, 0.1),
+                        (SNARE, 2.75, 48, 0.1),
+                        (TOM_MID, 3.0, 95, 0.2),
+                        (SNARE, 3.25, 50, 0.1),
+                        (SNARE, 3.5, 90, 0.15),
+                        (TOM_LOW, 3.75, 100, 0.2),
+                    ]
+
+                for pitch, offset, vel, dur in fill_notes:
+                    onset = t + offset
+                    if onset < duration_beats:
+                        notes.append(
+                            NoteInfo(
+                                pitch=pitch,
+                                start=round(onset, 6),
+                                duration=dur,
+                                velocity=max(1, min(127, vel)),
+                            )
+                        )
+            # Normal fill at end of bar (only if not phrase final bar or auto_fills is disabled)
+            elif random.random() < self.fill_frequency:
                 fill_start = t + 3.0
                 for i, tom in enumerate([TOM_HIGH, TOM_MID, TOM_LOW]):
                     onset = fill_start + i * 0.25
@@ -282,6 +368,10 @@ class DrumKitPatternGenerator(PhraseGenerator):
                     n.velocity = int(n.velocity * 0.85)
                 elif abs(sub_pos - 0.25) < 0.01 or abs(sub_pos - 0.75) < 0.01:
                     n.velocity = int(n.velocity * 0.72)
+
+            # Apply section-aware dynamic scaling
+            mult = _get_section_multiplier(s_type, n.start, duration_beats)
+            n.velocity = int(n.velocity * mult)
 
             n.velocity = max(1, min(127, n.velocity + random.randint(-4, 4)))
 
