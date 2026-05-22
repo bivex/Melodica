@@ -90,41 +90,115 @@ def generate_voice_led_comping(chords, base_octave=4, velocity=70, duration_rati
     return notes, prev_voicing
 
 def generate_drum_pattern(style: str, duration: float) -> list[NoteInfo]:
-    """Simple drum patterns to keep the groove cohesive."""
+    """
+    Advanced humanized and phrase-aware drum pattern generator.
+    Implements:
+    - Micro-timing micro-delays (laid-back / behind the beat lazy feel)
+    - Dynamic timing jitter (random deviation to emulate touch)
+    - Dynamic velocity variations (human stroke velocity emulation)
+    - Phrase-aware structural transitions (automatic drum fills at phrase boundaries)
+    """
     notes = []
     t = 0.0
+    
+    # Humanization parameters
+    timing_jitter = 0.008      # Max random timing deviation in beats (~10ms)
+    velocity_jitter = 6        # Random velocity deviation range (+/-)
+    laid_back_delay = 0.015    # Lazy jazz feel (delays snare and ride/hats slightly)
+    
+    def add_hit(pitch, start_beat, note_dur, base_vel, is_ride_or_hat=False, is_snare=False):
+        # 1. Apply laid-back micro-delays
+        offset = 0.0
+        if is_snare:
+            offset += laid_back_delay
+        elif is_ride_or_hat:
+            offset += laid_back_delay * 0.5
+            
+        # 2. Add random human jitter
+        offset += random.uniform(-timing_jitter, timing_jitter)
+        final_start = max(0.0, start_beat + offset)
+        
+        # 3. Add random velocity jitter
+        final_vel = int(base_vel + random.randint(-velocity_jitter, velocity_jitter))
+        final_vel = max(1, min(127, final_vel))
+        
+        notes.append(NoteInfo(
+            pitch=pitch, 
+            start=round(final_start, 6), 
+            duration=round(note_dur, 6), 
+            velocity=final_vel
+        ))
+
     if style == "swing_brushed":
         while t < duration:
-            # Brushed snare (pitch 38) swing tap
-            notes.append(NoteInfo(pitch=38, start=t, duration=0.15, velocity=45))
-            notes.append(NoteInfo(pitch=38, start=t + 0.66, duration=0.1, velocity=30))
-            notes.append(NoteInfo(pitch=38, start=t + 1.0, duration=0.15, velocity=40))
-            notes.append(NoteInfo(pitch=38, start=t + 1.66, duration=0.1, velocity=30))
-            # Soft kick drum (pitch 36) on 1 and 3
-            notes.append(NoteInfo(pitch=36, start=t, duration=0.2, velocity=50))
-            notes.append(NoteInfo(pitch=36, start=t + 1.0, duration=0.2, velocity=48))
-            # Hi-hat foot (pitch 44) on 2 and 4
-            notes.append(NoteInfo(pitch=44, start=t + 0.5, duration=0.15, velocity=55))
-            notes.append(NoteInfo(pitch=44, start=t + 1.5, duration=0.15, velocity=55))
+            # Detect phrase end boundary (last 2 beats of an 8-bar section, i.e., every 16 beats)
+            is_phrase_end = (t % 16.0 >= 14.0) and (t + 2.0 <= duration)
+            
+            if is_phrase_end:
+                # Play a beautiful soft drum fill: snare roll swelling in volume
+                fill_offsets = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
+                for off in fill_offsets:
+                    vel = int(35 + 25 * (off / 2.0))
+                    add_hit(38, t + off, 0.12, vel, is_snare=True)
+                # Crash cymbal on next downbeat
+                add_hit(49, t + 2.0, 1.5, 80)
+            else:
+                # Brushed snare (pitch 38) swing tap
+                add_hit(38, t, 0.15, 45, is_snare=True)
+                add_hit(38, t + 0.66, 0.1, 30, is_snare=True)
+                add_hit(38, t + 1.0, 0.15, 40, is_snare=True)
+                add_hit(38, t + 1.66, 0.1, 30, is_snare=True)
+                
+                # Soft kick drum (pitch 36) on 1 and 3
+                add_hit(36, t, 0.2, 50)
+                add_hit(36, t + 1.0, 0.2, 48)
+                
+                # Hi-hat foot (pitch 44) on 2 and 4
+                add_hit(44, t + 0.5, 0.15, 55, is_ride_or_hat=True)
+                add_hit(44, t + 1.5, 0.15, 55, is_ride_or_hat=True)
             t += 2.0
+            
     elif style == "hard_bop":
         while t < duration:
-            # Ride cymbal (pitch 51) active bop
-            notes.append(NoteInfo(pitch=51, start=t, duration=0.2, velocity=68))
-            notes.append(NoteInfo(pitch=51, start=t + 0.5, duration=0.15, velocity=55))
-            notes.append(NoteInfo(pitch=51, start=t + 0.66, duration=0.12, velocity=72))
-            notes.append(NoteInfo(pitch=51, start=t + 1.0, duration=0.2, velocity=65))
-            notes.append(NoteInfo(pitch=51, start=t + 1.5, duration=0.15, velocity=58))
-            notes.append(NoteInfo(pitch=51, start=t + 1.66, duration=0.12, velocity=75))
-            # Snare comps (pitch 38) on offbeats
-            if random.random() < 0.4:
-                notes.append(NoteInfo(pitch=38, start=t + 0.33, duration=0.1, velocity=60))
-            if random.random() < 0.4:
-                notes.append(NoteInfo(pitch=38, start=t + 1.25, duration=0.1, velocity=62))
-            # Hi-hat pedal on 2 and 4
-            notes.append(NoteInfo(pitch=44, start=t + 0.5, duration=0.1, velocity=65))
-            notes.append(NoteInfo(pitch=44, start=t + 1.5, duration=0.1, velocity=65))
+            # Detect phrase end boundary (last 2 beats of an 8-bar section, i.e., every 16 beats)
+            is_phrase_end = (t % 16.0 >= 14.0) and (t + 2.0 <= duration)
+            
+            if is_phrase_end:
+                # Energetic hard bop fill: tom cascades + snare roll
+                add_hit(38, t, 0.12, 75, is_snare=True)
+                add_hit(38, t + 0.25, 0.12, 85, is_snare=True)
+                # High tom (pitch 50)
+                add_hit(50, t + 0.5, 0.15, 80)
+                add_hit(50, t + 0.75, 0.15, 85)
+                # Floor tom (pitch 41)
+                add_hit(41, t + 1.0, 0.18, 90)
+                add_hit(41, t + 1.25, 0.18, 95)
+                # Snare accents
+                add_hit(38, t + 1.5, 0.12, 110, is_snare=True)
+                add_hit(38, t + 1.75, 0.12, 115, is_snare=True)
+                # Downbeat crash (pitch 49)
+                add_hit(49, t + 2.0, 2.0, 105)
+            else:
+                # Ride cymbal (pitch 51) active bop
+                add_hit(51, t, 0.2, 68, is_ride_or_hat=True)
+                add_hit(51, t + 0.5, 0.15, 55, is_ride_or_hat=True)
+                add_hit(51, t + 0.66, 0.12, 72, is_ride_or_hat=True)
+                add_hit(51, t + 1.0, 0.2, 65, is_ride_or_hat=True)
+                add_hit(51, t + 1.5, 0.15, 58, is_ride_or_hat=True)
+                add_hit(51, t + 1.66, 0.12, 75, is_ride_or_hat=True)
+                
+                # Snare comps (pitch 38) on offbeats
+                if random.random() < 0.45:
+                    add_hit(38, t + 0.33, 0.1, 60, is_snare=True)
+                if random.random() < 0.45:
+                    add_hit(38, t + 1.25, 0.1, 62, is_snare=True)
+                    
+                # Hi-hat pedal on 2 and 4
+                add_hit(44, t + 0.5, 0.1, 65, is_ride_or_hat=True)
+                add_hit(44, t + 1.5, 0.1, 65, is_ride_or_hat=True)
             t += 2.0
+            
+    notes.sort(key=lambda n: n.start)
     return notes
 
 def produce_demo_track():
