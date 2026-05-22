@@ -170,12 +170,14 @@ class BrassSectionGenerator(PhraseGenerator):
                 expression[11] = cc11_list
 
             if self.articulation == "hit":
-                for p in voicing:
+                for idx, p in enumerate(voicing):
                     vel = int(self.intensity * 110)
-                    # Marcato: loud attack, quick decay
+                    # Staggered physical entry delay based on instrument voice
+                    inst_delay = 0.0 if idx == 0 else random.uniform(0.005, 0.015)
+                    note_onset = max(0.0, event.onset + inst_delay)
                     note = NoteInfo(
                         pitch=p,
-                        start=round(event.onset, 6),
+                        start=round(note_onset, 6),
                         duration=event.duration * 0.6,
                         velocity=max(1, min(127, vel)),
                     )
@@ -184,11 +186,13 @@ class BrassSectionGenerator(PhraseGenerator):
                     notes.append(note)
 
             elif self.articulation == "swell":
-                for p in voicing:
+                for idx, p in enumerate(voicing):
                     vel = int(self.intensity * 50)  # Start soft
+                    inst_delay = 0.0 if idx == 0 else random.uniform(0.008, 0.020)
+                    note_onset = max(0.0, event.onset + inst_delay)
                     note = NoteInfo(
                         pitch=p,
-                        start=round(event.onset, 6),
+                        start=round(note_onset, 6),
                         duration=event.duration,
                         velocity=max(1, min(127, vel)),
                     )
@@ -197,15 +201,17 @@ class BrassSectionGenerator(PhraseGenerator):
                     notes.append(note)
 
             elif self.articulation == "fanfare":
-                # Ascending arpeggio
+                # Ascending arpeggio with micro-staggering
                 t = event.onset
                 step = event.duration / max(len(voicing), 1)
-                for i, p in enumerate(voicing):
-                    vel = int(self.intensity * (80 + i * 10))
+                for idx, p in enumerate(voicing):
+                    vel = int(self.intensity * (80 + idx * 10))
+                    inst_delay = 0.0 if idx == 0 else random.uniform(0.004, 0.012)
+                    note_onset = max(0.0, t + inst_delay)
                     note = NoteInfo(
                         pitch=p,
-                        start=round(t, 6),
-                        duration=event.duration - i * step,
+                        start=round(note_onset, 6),
+                        duration=event.duration - idx * step,
                         velocity=max(1, min(127, vel)),
                     )
                     if expression:
@@ -214,11 +220,13 @@ class BrassSectionGenerator(PhraseGenerator):
                     t += step
 
             elif self.articulation == "sustained":
-                for p in voicing:
+                for idx, p in enumerate(voicing):
                     vel = int(self.intensity * 90)
+                    inst_delay = 0.0 if idx == 0 else random.uniform(0.008, 0.020)
+                    note_onset = max(0.0, event.onset + inst_delay)
                     note = NoteInfo(
                         pitch=p,
-                        start=round(event.onset, 6),
+                        start=round(note_onset, 6),
                         duration=event.duration,
                         velocity=max(1, min(127, vel)),
                     )
@@ -227,36 +235,47 @@ class BrassSectionGenerator(PhraseGenerator):
                     notes.append(note)
 
             elif self.articulation in ("falls", "doits"):
-                for p in voicing:
+                for idx, p in enumerate(voicing):
                     vel = int(self.intensity * 95)
-                    # Main note
+                    # Staggered physical entry delay based on instrument voice
+                    inst_delay = 0.0
+                    if idx == 1:    # French Horn
+                        inst_delay = random.uniform(0.008, 0.018)
+                    elif idx == 2:  # Trombone
+                        inst_delay = random.uniform(0.012, 0.024)
+                    elif idx >= 3:  # Tuba
+                        inst_delay = random.uniform(0.018, 0.032)
+                        
+                    note_onset = max(0.0, event.onset + inst_delay)
+                    
+                    # Continuous pitch fall/doit modeled via pitch bend curves on a single note
                     note = NoteInfo(
                         pitch=p,
-                        start=round(event.onset, 6),
-                        duration=event.duration * 0.7,
+                        start=round(note_onset, 6),
+                        duration=event.duration,
                         velocity=max(1, min(127, vel)),
                     )
-                    if expression:
-                        note.expression = expression.copy()
-                    notes.append(note)
-                    # Fall or doit
+                    
+                    expr_copy = expression.copy() if expression else {}
                     direction = -1 if self.articulation == "falls" else 1
-                    t = event.onset + event.duration * 0.7
-                    for s in range(4):
-                        fall_p = p + direction * (s + 1)
-                        fall_p = max(
-                            self.params.key_range_low, min(self.params.key_range_high, fall_p)
-                        )
-                        fall_note = NoteInfo(
-                            pitch=fall_p,
-                            start=round(t, 6),
-                            duration=0.1,
-                            velocity=max(1, int(vel * 0.7 - s * 5)),
-                        )
-                        if self.mute:
-                            fall_note.expression = {74: expression.get(74, 80)}
-                        notes.append(fall_note)
-                        t += 0.1
+                    
+                    # Pitch bend curve: flat for 70% of duration, then rapid slide in final 30%
+                    slide_start_t = event.duration * 0.70
+                    steps = 10
+                    pb_list = []
+                    for s in range(steps + 1):
+                        progress = s / steps
+                        t_rel = slide_start_t + progress * (event.duration - slide_start_t)
+                        # Slide depth: 6 semitones = 4096 MIDI pitch bend value (direction * 4096)
+                        val = int(direction * 4096 * progress)
+                        pb_list.append((t_rel, val))
+                        
+                    # Prepend a 0.0 flat bend at note start and slide start
+                    pb_curve = [(0.0, 0), (slide_start_t, 0)] + pb_list
+                    expr_copy["pitch_bend"] = pb_curve
+                    
+                    note.expression = expr_copy
+                    notes.append(note)
 
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(
