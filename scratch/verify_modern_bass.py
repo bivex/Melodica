@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-scratch/verify_modern_bass.py — Test suite and metric validator for ModernBass2025Generator.
+scratch/verify_modern_bass.py — Detailed validation script for all 20 styles in ModernBass2025Generator.
 """
 
 import sys
@@ -15,121 +15,123 @@ from melodica.generators.modern_bass_2025 import ModernBass2025Generator
 from melodica.generators import GeneratorParams
 from melodica.types import ChordLabel, Scale, Mode, Quality
 
+ALL_20_STYLES = [
+    "walking", "slap", "pop", "ghost_note", "synth", 
+    "saw", "sub", "hybrid_slap", "fingerstyle", "adaptive",
+    "procedural", "generative", "euclidean", "spectral_morphing",
+    "sidechain_reactive", "self_modifying", "cinematic", "tape",
+    "harmonic", "envelope"
+]
+
 
 def run_tests():
-    print("=" * 60)
-    print("VERIFYING MODERN BASS 2025 GENERATORS")
-    print("=" * 60)
+    print("=" * 80)
+    print("        VERIFYING ALL 20 ADVANCED MODERN BASS STYLES (2025 MODEL)")
+    print("=" * 80)
 
-    # 1. Setup sample key/chords
-    key = Scale(root=0, mode=Mode.MAJOR)  # C Major
+    # Setup sample key/chords
+    key = Scale(root=7, mode=Mode.DORIAN)  # G Dorian
     chords = [
-        ChordLabel(start=0.0, duration=4.0, root=0, quality=Quality.MAJOR, degree=1),  # C Major
-        ChordLabel(start=4.0, duration=4.0, root=5, quality=Quality.MAJOR, degree=4),  # F Major
-        ChordLabel(start=8.0, duration=4.0, root=7, quality=Quality.MAJOR, degree=5),  # G Major
-        ChordLabel(start=12.0, duration=4.0, root=9, quality=Quality.MINOR, degree=6),  # A Minor
+        ChordLabel(start=0.0, duration=4.0, root=7, quality=Quality.MINOR, degree=1),
+        ChordLabel(start=4.0, duration=4.0, root=0, quality=Quality.MINOR, degree=4),
+        ChordLabel(start=8.0, duration=4.0, root=10, quality=Quality.MAJOR, degree=7),
+        ChordLabel(start=12.0, duration=4.0, root=5, quality=Quality.MINOR, degree=5),
     ]
     duration_beats = 16.0
 
     params = GeneratorParams(
         density=0.7,
-        key_range_low=36,
-        key_range_high=72,
+        key_range_low=24,
+        key_range_high=84,
     )
 
-    # 2. Test Velvet Soul style
-    print("\n--- Test 1: Velvet Soul style ---")
-    gen_velvet = ModernBass2025Generator(params, style="velvet_soul")
-    notes_velvet = gen_velvet.render(chords, key, duration_beats)
-    
-    assert len(notes_velvet) > 0, "No notes generated for velvet_soul!"
-    vels = [n.velocity for n in notes_velvet]
-    avg_vel = sum(vels) / len(vels)
-    max_vel = max(vels)
-    min_vel = min(vels)
-    
-    print(f"Notes Count: {len(notes_velvet)}")
-    print(f"Velocities - Min: {min_vel}, Max: {max_vel}, Avg: {avg_vel:.2f}")
-    print(f"Target metrics - Expected Max: 84, Expected Avg: ~63.0")
-    
-    # Assertions
-    assert max_vel == 84, f"Velvet Soul max velocity should be exactly 84, got {max_vel}"
-    assert abs(avg_vel - 63.0) < 0.2, f"Velvet Soul avg velocity should be around 63, got {avg_vel:.2f}"
-    print("✓ Velvet Soul velocity bounds validation PASSED!")
+    passed_count = 0
 
-    # 3. Test Hybrid Slap style
-    print("\n--- Test 2: Hybrid Slap style ---")
-    gen_slap = ModernBass2025Generator(params, style="hybrid_slap")
-    notes_slap = gen_slap.render(chords, key, duration_beats)
-    
-    assert len(notes_slap) > 0, "No notes generated for hybrid_slap!"
-    vels_slap = [n.velocity for n in notes_slap]
-    avg_slap = sum(vels_slap) / len(vels_slap)
-    max_slap = max(vels_slap)
-    min_slap = min(vels_slap)
-    
-    articulations = set(n.articulation for n in notes_slap)
-    
-    print(f"Notes Count: {len(notes_slap)}")
-    print(f"Velocities - Min: {min_slap}, Max: {max_slap}, Avg: {avg_slap:.2f}")
-    print(f"Articulations present: {articulations}")
-    print(f"Target metrics - Expected Max: 92, Expected Avg: ~59.0")
-    
-    # Assertions
-    assert max_slap == 92, f"Hybrid Slap max velocity should be exactly 92, got {max_slap}"
-    assert abs(avg_slap - 59.0) < 0.2, f"Hybrid Slap avg velocity should be around 59, got {avg_slap:.2f}"
-    assert "slap" in articulations or "pop" in articulations, "Slap/pop articulations missing!"
-    print("✓ Hybrid Slap velocity bounds and articulation validation PASSED!")
+    for style in ALL_20_STYLES:
+        print(f"\n⚡ Testing style: '{style}'...")
+        gen = ModernBass2025Generator(params, style=style)
+        notes = gen.render(chords, key, duration_beats)
+        
+        # 1. Base assertions
+        assert len(notes) > 0, f"Error: No notes generated for style '{style}'!"
+        
+        vels = [n.velocity for n in notes]
+        avg_vel = sum(vels) / len(vels)
+        max_vel = max(vels)
+        min_vel = min(vels)
+        
+        print(f"   Notes Count: {len(notes)}")
+        print(f"   Velocities  — Min: {min_vel}, Max: {max_vel}, Avg: {avg_vel:.2f}")
+        
+        # Style presets definitions for confirmation matching
+        target_avg = 63.0
+        target_max = 84.0
+        if style == "walking":
+            target_avg, target_max = 68.0, 88.0
+        elif style == "slap":
+            target_avg, target_max = 64.0, 95.0
+        elif style == "pop":
+            target_avg, target_max = 68.0, 90.0
+        elif style == "ghost_note":
+            target_avg, target_max = 42.0, 75.0
+        elif style == "synth":
+            target_avg, target_max = 64.0, 85.0
+        elif style == "saw":
+            target_avg, target_max = 75.0, 98.0
+        elif style == "sub":
+            target_avg, target_max = 58.0, 78.0
+        elif style == "hybrid_slap":
+            target_avg, target_max = 59.0, 92.0
+        elif style == "fingerstyle":
+            target_avg, target_max = 63.0, 84.0
+        elif style == "adaptive":
+            target_avg, target_max = 65.0, 88.0
+        elif style == "procedural":
+            target_avg, target_max = 63.0, 85.0
+        elif style == "generative":
+            target_avg, target_max = 64.0, 86.0
+        elif style == "euclidean":
+            target_avg, target_max = 65.0, 88.0
+        elif style == "spectral_morphing":
+            target_avg, target_max = 63.0, 84.0
+        elif style == "sidechain_reactive":
+            target_avg, target_max = 60.0, 84.0
+        elif style == "self_modifying":
+            target_avg, target_max = 66.0, 90.0
+        elif style == "cinematic":
+            target_avg, target_max = 60.0, 82.0
+        elif style == "tape":
+            target_avg, target_max = 62.0, 82.0
+        elif style == "harmonic":
+            target_avg, target_max = 68.0, 92.0
+        elif style == "envelope":
+            target_avg, target_max = 63.0, 85.0
 
-    # 4. Test Analog Pluck style
-    print("\n--- Test 3: Analog Pluck style ---")
-    gen_pluck = ModernBass2025Generator(params, style="analog_pluck")
-    notes_pluck = gen_pluck.render(chords, key, duration_beats)
-    
-    assert len(notes_pluck) > 0, "No notes generated for analog_pluck!"
-    vels_pluck = [n.velocity for n in notes_pluck]
-    avg_pluck = sum(vels_pluck) / len(vels_pluck)
-    max_pluck = max(vels_pluck)
-    min_pluck = min(vels_pluck)
-    
-    durations = [n.duration for n in notes_pluck]
-    max_dur = max(durations)
-    
-    print(f"Notes Count: {len(notes_pluck)}")
-    print(f"Velocities - Min: {min_pluck}, Max: {max_pluck}, Avg: {avg_pluck:.2f}")
-    print(f"Durations - Max note duration: {max_dur}")
-    print(f"Target metrics - Expected Max: 84, Expected Avg: ~63.0, Short decay (< 0.25)")
-    
-    # Assertions
-    assert max_pluck == 84, f"Analog Pluck max velocity should be exactly 84, got {max_pluck}"
-    assert abs(avg_pluck - 63.0) < 0.2, f"Analog Pluck avg velocity should be around 63, got {avg_pluck:.2f}"
-    assert max_dur <= 0.25, f"Analog Pluck durations should be short (<= 0.25), got {max_dur}"
-    print("✓ Analog Pluck velocity bounds and pluck decay validation PASSED!")
+        # Assert max velocity is exactly locked
+        assert max_vel == int(target_max), f"[{style}] Expected max velocity {target_max}, got {max_vel}"
+        # Assert average velocity is extremely close (clamping offset threshold)
+        assert abs(avg_vel - target_avg) < 0.2, f"[{style}] Expected average velocity {target_avg}, got {avg_vel:.2f}"
+        
+        # Style specific validation checks
+        if style == "sub":
+            # Low register only
+            for n in notes:
+                assert n.pitch <= 38, f"Sub bass note pitch too high: {n.pitch}"
+        elif style == "sidechain_reactive":
+            # Sidechain reaction
+            for n in notes:
+                assert 7 in n.expression, f"Sidechain volume controller (CC 7) missing from note!"
+        elif style == "spectral_morphing":
+            # Spectral sweep modulation
+            for n in notes:
+                assert 74 in n.expression, f"Cutoff controller (CC 74) missing from spectral note!"
 
-    # 5. Test Crescendo Return style
-    print("\n--- Test 4: Crescendo Return style ---")
-    gen_crescendo = ModernBass2025Generator(params, style="crescendo_return")
-    notes_crescendo = gen_crescendo.render(chords, key, duration_beats)
-    
-    assert len(notes_crescendo) > 0, "No notes generated for crescendo_return!"
-    vels_crescendo = [n.velocity for n in notes_crescendo]
-    
-    print(f"Notes Count: {len(notes_crescendo)}")
-    print(f"Start Velocity: {vels_crescendo[0]}, Peak Velocity: {vels_crescendo[-1]}")
-    print(f"Expression sweeps on CC 74 (LPF):")
-    for idx, n in enumerate(notes_crescendo[:3] + notes_crescendo[-3:]):
-        label = "Start Note" if idx < 3 else "End Note"
-        print(f"  [{label}] onset: {n.start:.2f}, velocity: {n.velocity}, CC 74: {n.expression.get(74)}")
-    
-    # Assertions
-    assert vels_crescendo[0] == 31, f"Crescendo should start at velocity 31, got {vels_crescendo[0]}"
-    assert vels_crescendo[-1] == 68, f"Crescendo should peak at velocity 68, got {vels_crescendo[-1]}"
-    assert notes_crescendo[0].expression[74] < notes_crescendo[-1].expression[74], "LPF sweep is not opening up!"
-    print("✓ Crescendo Return dynamic ramp and expression sweeps validation PASSED!")
+        print(f"   ✓ Style '{style}' PASSED dynamic bounds and constraint validation!")
+        passed_count += 1
 
-    print("\n" + "=" * 60)
-    print("ALL TESTS PASSED SUCCESSFULLY!")
-    print("=" * 60)
+    print("\n" + "=" * 80)
+    print(f" SUCCESS: ALL {passed_count}/{len(ALL_20_STYLES)} MODERN BASS STYLES VALIDATED!")
+    print("=" * 80)
 
 
 if __name__ == "__main__":
