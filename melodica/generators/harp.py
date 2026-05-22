@@ -92,6 +92,63 @@ class HarpGenerator(PhraseGenerator):
         self.params.key_range_low = max(self.params.key_range_low, HARP_LOW)
         self.params.key_range_high = min(self.params.key_range_high, HARP_HIGH)
 
+    def _build_harp_note(
+        self,
+        pitch: int,
+        onset: float,
+        duration: float,
+        vel: int,
+        key: Scale | None = None,
+    ) -> NoteInfo:
+        """
+        Unified high-fidelity concert harp string pluck builder.
+        Implements register-dependent decay curves, hammer/pluck jitter, and string detuning buzz.
+        """
+        # 1. Pluck timing jitter
+        jitter = random.uniform(-0.003, 0.003)
+        onset_h = max(0.0, onset + jitter)
+        
+        # 2. Register-Dependent Resonance Decay (CC 11)
+        # Low strings ring long, high strings decay very rapidly
+        if pitch < 48:
+            decay_time = max(4.0, duration)
+            max_decay = 40
+        elif pitch < 72:
+            decay_time = min(3.0, duration)
+            max_decay = 75
+        else:
+            decay_time = min(1.0, duration)
+            max_decay = 105
+            
+        steps = 8
+        cc11_list = []
+        for s in range(steps + 1):
+            progress = s / steps
+            t_rel = progress * decay_time
+            val = int(127 - max_decay * (progress ** 0.8))
+            cc11_list.append((t_rel, max(0, min(127, val))))
+            
+        expression = {11: cc11_list}
+        
+        # 3. High-Velocity Pluck String Detuning Buzz
+        if vel >= 95:
+            # String impact detuning decressing rapidly in first 80ms
+            pb_list = [
+                (0.0, 45),
+                (0.04, 20),
+                (0.08, 0),
+            ]
+            expression["pitch_bend"] = pb_list
+            
+        note = NoteInfo(
+            pitch=pitch,
+            start=round(onset_h, 6),
+            duration=round(decay_time, 6),
+            velocity=max(1, min(127, vel)),
+        )
+        note.expression = expression
+        return note
+
     def render(
         self,
         chords: list[ChordLabel],
@@ -160,11 +217,12 @@ class HarpGenerator(PhraseGenerator):
                 note_vel = max(1, min(127, int(vel * (self.velocity_decay ** i))))
                 note_vel += random.randint(-3, 3)
 
-                notes.append(NoteInfo(
+                notes.append(self._build_harp_note(
                     pitch=pitch,
-                    start=round(onset, 6),
+                    onset=onset,
                     duration=max(0.1, chord.duration - (onset - chord.start) - 0.05),
-                    velocity=max(1, min(127, note_vel)),
+                    vel=note_vel,
+                    key=key,
                 ))
 
             elapsed += chord.duration
@@ -198,11 +256,12 @@ class HarpGenerator(PhraseGenerator):
                 onset = chord.start + i * roll_speed
                 note_vel = max(1, min(127, vel + random.randint(-4, 2)))
 
-                notes.append(NoteInfo(
+                notes.append(self._build_harp_note(
                     pitch=pitch,
-                    start=round(onset, 6),
+                    onset=onset,
                     duration=max(0.15, chord.duration * 0.8),
-                    velocity=note_vel,
+                    vel=note_vel,
+                    key=key,
                 ))
 
             elapsed += chord.duration
@@ -254,11 +313,12 @@ class HarpGenerator(PhraseGenerator):
                 note_vel = int(vel * (0.6 + 0.4 * math.sin(t * math.pi)))
                 note_vel = max(1, min(127, note_vel + random.randint(-2, 2)))
 
-                notes.append(NoteInfo(
+                notes.append(self._build_harp_note(
                     pitch=pitch,
-                    start=round(onset, 6),
+                    onset=onset,
                     duration=max(0.04, step * 1.2),
-                    velocity=note_vel,
+                    vel=note_vel,
+                    key=key,
                 ))
 
             elapsed += chord.duration
@@ -297,11 +357,12 @@ class HarpGenerator(PhraseGenerator):
                 pitch = pitch_a if toggle else pitch_b
                 note_vel = max(1, min(127, vel + random.randint(-5, 5)))
 
-                notes.append(NoteInfo(
+                notes.append(self._build_harp_note(
                     pitch=pitch,
-                    start=round(t, 6),
+                    onset=t,
                     duration=grain * 0.7,
-                    velocity=note_vel,
+                    vel=note_vel,
+                    key=key,
                 ))
                 toggle = not toggle
                 t += grain
@@ -334,11 +395,12 @@ class HarpGenerator(PhraseGenerator):
             t = chord.start
             while t < chord.start + chord.duration:
                 note_vel = max(1, min(127, vel + random.randint(-4, 4)))
-                notes.append(NoteInfo(
+                notes.append(self._build_harp_note(
                     pitch=pitch,
-                    start=round(t, 6),
+                    onset=t,
                     duration=max(0.08, interval * 0.6),
-                    velocity=note_vel,
+                    vel=note_vel,
+                    key=key,
                 ))
                 t += interval
 
@@ -377,11 +439,12 @@ class HarpGenerator(PhraseGenerator):
 
                 note_vel = max(1, min(127, vel + random.randint(-3, 3)))
 
-                notes.append(NoteInfo(
+                notes.append(self._build_harp_note(
                     pitch=pitch,
-                    start=round(t, 6),
+                    onset=t,
                     duration=max(0.1, self.spread_speed * 3),
-                    velocity=note_vel,
+                    vel=note_vel,
+                    key=key,
                 ))
                 t += self.spread_speed * 2
                 idx += 1

@@ -30,6 +30,7 @@ Variants:
 from __future__ import annotations
 
 import random
+import math
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
@@ -109,6 +110,24 @@ class TremoloStringsGenerator(PhraseGenerator):
 
             base_vel = int(45 + self.params.density * 25)
 
+            # Calculate a continuous expression swell list for CC 11
+            cc11_list = []
+            steps = int(total_dur / 0.1)
+            steps = max(5, steps)
+            for s in range(steps + 1):
+                progress = s / steps
+                t_rel = progress * total_dur
+                
+                # Envelope calculations
+                attack_f = t_rel / self.attack_time if (t_rel < self.attack_time and self.attack_time > 0) else 1.0
+                time_left = total_dur - t_rel
+                decay_f = time_left / self.decay_time if (time_left < self.decay_time and self.decay_time > 0) else 1.0
+                swell_f = 0.7 + 0.3 * (1.0 - abs(2.0 * progress - 1.0)) if self.dynamic_swell else 1.0
+                
+                intensity = attack_f * decay_f * swell_f
+                cc11_val = int(40 + 80 * intensity)
+                cc11_list.append((t_rel, max(0, min(127, cc11_val))))
+
             while t < end:
                 elapsed = t - event.onset
 
@@ -134,21 +153,37 @@ class TremoloStringsGenerator(PhraseGenerator):
                 current_bow_speed = self.bow_speed * (2.0 - intensity)
                 current_bow_speed = max(0.02, min(0.3, current_bow_speed))
 
-                for p in pitches:
+                # Alternating bow direction (down-bow is heavy, up-bow is light)
+                is_down_bow = (note_idx % 2 == 0)
+                bow_vel_offset = 3 if is_down_bow else -3
+                bow_brightness = 85 if is_down_bow else 70
+
+                for i, p in enumerate(pitches):
                     if t >= end:
                         break
                     n_dur = min(current_bow_speed, end - t)
-                    vel = int(base_vel * intensity)
-                    # Slight bow variation
+                    vel = int(base_vel * intensity) + bow_vel_offset
                     vel += random.randint(-2, 2)
-                    notes.append(
-                        NoteInfo(
-                            pitch=p,
-                            start=round(t, 6),
-                            duration=n_dur * 0.85,
-                            velocity=max(1, min(127, vel)),
-                        )
+                    
+                    # Micro-timing jitter per pitch to prevent Harmonic Fusion
+                    pitch_jitter = random.uniform(-0.005, 0.005)
+                    onset = max(0.0, t + pitch_jitter)
+
+                    # Dynamic brightness sweep representing bow friction changes
+                    expression = {
+                        11: [((s / steps) * n_dur, cc_val) for s, cc_val in cc11_list],
+                        74: [(0.0, bow_brightness), (n_dur * 0.8, bow_brightness - 10)]
+                    }
+
+                    note = NoteInfo(
+                        pitch=p,
+                        start=round(onset, 6),
+                        duration=round(n_dur * 0.95, 6),  # More overlap for seamless blending
+                        velocity=max(1, min(127, vel)),
                     )
+                    note.expression = expression
+                    notes.append(note)
+                    
                 t += current_bow_speed
                 note_idx += 1
 
