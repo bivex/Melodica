@@ -161,25 +161,75 @@ class TubularBellsGenerator(PhraseGenerator):
                 vel = int(115 + random.randint(-5, 8))  # High-velocity impact
                 ring_dur = max(4.0, chord.duration * 1.2)
                 
+                # Hammer strike timing humanization
+                strike_delay = random.uniform(0.0, 0.004)
+                onset = max(0.0, chord.start + strike_delay)
+                
                 note = NoteInfo(
                     pitch=pitch,
-                    start=round(chord.start, 6),
+                    start=round(onset, 6),
                     duration=ring_dur,
                     velocity=max(1, min(127, vel)),
                 )
                 
-                # Exponential/linear decay automation on CC 11 to simulate metal resonance decay
+                # Decay automation on CC 11 to simulate metal resonance decay
                 steps = 15
                 cc11_list = []
-                # If dampened, chimes decay very quickly (damping felt applied to tubes)
                 max_damp = 115 if self.dampen else 70
                 for s in range(steps + 1):
                     progress = s / steps
                     val = int(127 - max_damp * (progress ** 0.7))
                     cc11_list.append(((s / steps) * ring_dur, val))
                 
-                note.expression = {11: cc11_list}
+                # High-energy impact detuning drift (starts slightly sharp, decays back to 0)
+                pb_list = []
+                for s in range(steps + 1):
+                    progress = s / steps
+                    t_rel = progress * ring_dur
+                    detune_decay = max(0.0, 1.0 - progress * 2.0)  # detuning dies out in first 50%
+                    val = int(80 * detune_decay)  # +80 cents sharp on hit
+                    pb_list.append((t_rel, val))
+                
+                note.expression = {11: cc11_list, "pitch_bend": pb_list}
                 notes.append(note)
+                
+                # Add metallic resonance overtones (octave, quint, tierce) to build realistic bell body!
+                # Hum Tone (octave below or above)
+                octave_pitch = pitch + 12
+                if octave_pitch <= self.params.key_range_high:
+                    notes.append(
+                        NoteInfo(
+                            pitch=octave_pitch,
+                            start=round(onset + random.uniform(0.0, 0.002), 6),
+                            duration=ring_dur * 0.8,
+                            velocity=max(1, int(vel * 0.40)),
+                            expression={11: [((s / steps) * ring_dur * 0.8, int(val * 0.7)) for s, val in cc11_list]},
+                        )
+                    )
+                # Quint Tone (Perfect 5th above, +7 or +19 semitones)
+                quint_pitch = pitch + 19
+                if quint_pitch <= self.params.key_range_high:
+                    notes.append(
+                        NoteInfo(
+                            pitch=quint_pitch,
+                            start=round(onset + random.uniform(0.0, 0.003), 6),
+                            duration=ring_dur * 0.6,
+                            velocity=max(1, int(vel * 0.25)),
+                            expression={11: [((s / steps) * ring_dur * 0.6, int(val * 0.5)) for s, val in cc11_list]},
+                        )
+                    )
+                # Tierce Tone (Minor/Major 3rd above, +15 or +16 semitones)
+                tierce_pitch = snap_to_scale(pitch + 15, key)
+                if tierce_pitch <= self.params.key_range_high:
+                    notes.append(
+                        NoteInfo(
+                            pitch=tierce_pitch,
+                            start=round(onset + random.uniform(0.0, 0.003), 6),
+                            duration=ring_dur * 0.5,
+                            velocity=max(1, int(vel * 0.15)),
+                            expression={11: [((s / steps) * ring_dur * 0.5, int(val * 0.4)) for s, val in cc11_list]},
+                        )
+                    )
 
             elapsed += chord.duration
 
