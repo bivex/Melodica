@@ -223,6 +223,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     ghost_snare_prob: float = 0.0
     section_type: str = "verse"
     auto_fills: bool = True
+    groove_template: any = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -242,6 +243,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         ghost_snare_prob: float = 0.0,
         section_type: str = "verse",
         auto_fills: bool = True,
+        groove_template: any = None,
     ) -> None:
         super().__init__(params)
         self.kit = kit
@@ -257,6 +259,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         self.ghost_snare_prob = ghost_snare_prob
         self.section_type = section_type
         self.auto_fills = auto_fills
+        self.groove_template = groove_template
 
     def render(
         self,
@@ -433,19 +436,25 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         return notes
 
     def _apply_pro_features(self, notes: list[NoteInfo]) -> list[NoteInfo]:
-        # 1. Swing Timing & Pocket Timing Offsets
-        swing_delay = 0.0
-        if self.groove_swing > 0.5 and self.swing_grid > 0:
-            swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
-
+        # 1. Swing / Groove Timing & Pocket Timing Offsets
         for n in notes:
-            # Check swing
-            grid_pos = n.start % (2.0 * self.swing_grid)
-            is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
-
             shift = 0.0
-            if is_offbeat:
-                shift += swing_delay
+            
+            # Apply groove template if present
+            if self.groove_template is not None:
+                frac = n.start % 1.0
+                for slot in self.groove_template.slots:
+                    if abs(frac - slot.position) < 0.05:
+                        shift += slot.timing_offset * 0.01
+                        n.velocity = max(1, min(127, int(n.velocity * slot.velocity_factor)))
+                        break
+            elif self.groove_swing > 0.5 and self.swing_grid > 0:
+                # Apply standard swing delay
+                swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
+                grid_pos = n.start % (2.0 * self.swing_grid)
+                is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
+                if is_offbeat:
+                    shift += swing_delay
 
             # Apply pocket delays
             if n.pitch in (SNARE, CLAP, RIM):
@@ -454,6 +463,49 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                 shift += self.hihat_delay
 
             n.start = round(max(0.0, n.start + shift), 6)
+
+        # 1.5. Physical Hand-to-Foot Coordination Limits Safeguard
+        hand_struck_pitches = {SNARE, CLAP, HH_CLOSED, HH_OPEN, TOM_LOW, TOM_MID, TOM_HIGH, CRASH, RIM, 51}
+        notes.sort(key=lambda x: x.start)
+        
+        groups: list[list[NoteInfo]] = []
+        for n in notes:
+            added = False
+            for group in groups:
+                if abs(n.start - group[0].start) < 0.01:
+                    group.append(n)
+                    added = True
+                    break
+            if not added:
+                groups.append([n])
+        
+        priority_map = {
+            SNARE: 1,
+            CLAP: 1,
+            CRASH: 2,
+            TOM_HIGH: 3,
+            TOM_MID: 3,
+            TOM_LOW: 3,
+            RIM: 4,
+            HH_OPEN: 5,
+            HH_CLOSED: 5,
+        }
+        
+        filtered_notes = []
+        for group in groups:
+            hand_struck = [n for n in group if n.pitch in hand_struck_pitches]
+            other = [n for n in group if n.pitch not in hand_struck_pitches]
+            
+            if len(hand_struck) > 2:
+                # Sort by priority
+                hand_struck.sort(key=lambda n: priority_map.get(n.pitch, 99))
+                # Keep top 2, drop the rest
+                filtered_notes.extend(hand_struck[:2])
+                filtered_notes.extend(other)
+            else:
+                filtered_notes.extend(group)
+        
+        notes = filtered_notes
 
         # 2. Hi-Hat Auto-Choking
         if self.choke_hats:

@@ -132,3 +132,111 @@ class TestGrooveValidator:
         assert res["matched_notes"] == 4
         assert len(res["details"]) > 0
 
+
+class TestProDrumUpgrades:
+    def test_drum_generators_groove_template(self):
+        from melodica.generators.trap_drums import TrapDrumsGenerator
+        from melodica.generators.electronic_drums import ElectronicDrumsGenerator
+        from melodica.generators.drum_kit_pattern import DrumKitPatternGenerator
+        from melodica.generators import GeneratorParams
+        from melodica.types import ChordLabel, Scale, Mode
+
+        chords = [ChordLabel(root=0, quality="major", start=0.0, duration=4.0)]
+        key = Scale(root=0, mode=Mode.MAJOR)
+        params = GeneratorParams()
+
+        # 1. TrapDrumsGenerator with groove template
+        tg = TrapDrumsGenerator(params, groove_template=SWING_60)
+        t_notes = tg.render(chords, key, duration_beats=4.0)
+        # Assert some notes exist and are shifted off standard straight grid if they are offbeats
+        assert len(t_notes) > 0
+        swung_notes = [n for n in t_notes if abs((n.start % 1.0) - 0.535) < 0.01]
+        assert len(swung_notes) > 0 or any(n.start % 0.5 != 0.0 for n in t_notes)
+
+        # 2. ElectronicDrumsGenerator with groove template
+        eg = ElectronicDrumsGenerator(params, groove_template=SWING_60)
+        e_notes = eg.render(chords, key, duration_beats=4.0)
+        assert len(e_notes) > 0
+        e_swung = [n for n in e_notes if abs((n.start % 1.0) - 0.535) < 0.01]
+        assert len(e_swung) > 0 or any(n.start % 0.5 != 0.0 for n in e_notes)
+
+        # 3. DrumKitPatternGenerator with groove template
+        dg = DrumKitPatternGenerator(params, groove_template=SWING_60)
+        d_notes = dg.render(chords, key, duration_beats=4.0)
+        assert len(d_notes) > 0
+        d_swung = [n for n in d_notes if abs((n.start % 1.0) - 0.535) < 0.01]
+        assert len(d_swung) > 0 or any(n.start % 0.5 != 0.0 for n in d_notes)
+
+    def test_808_legato_glides(self):
+        from melodica.generators.trap_drums import TrapDrumsGenerator
+        from melodica.generators import GeneratorParams
+        from melodica.types import ChordLabel, Scale, Mode
+
+        # Force consecutive 808 notes with different pitches
+        chords = [
+            ChordLabel(root=0, quality="major", start=0.0, duration=2.0),
+            ChordLabel(root=7, quality="major", start=2.0, duration=2.0),
+        ]
+        key = Scale(root=0, mode=Mode.MAJOR)
+        params = GeneratorParams(key_range_low=36)
+
+        tg = TrapDrumsGenerator(params, section_type="verse")
+        notes = tg.render(chords, key, duration_beats=4.0)
+        
+        # Check if we have multiple 808 sub-bass notes
+        sub_notes = [n for n in notes if getattr(n, "articulation", None) == "808"]
+        # Standard rendering should produce slide notes for overlapping consecutive 808s
+        slide_notes = [n for n in sub_notes if n.duration < 0.2]
+        assert len(slide_notes) > 0
+        # Ensure they have pitches intermediate or equal to the target chord root pitches
+        assert any(36 <= n.pitch <= 50 for n in slide_notes)
+
+    def test_snare_tom_flams_and_drags(self):
+        from melodica.generators.drum_kit_pattern import DrumKitPatternGenerator
+        from melodica.generators import GeneratorParams
+        from melodica.types import ChordLabel, Scale, Mode
+
+        chords = [ChordLabel(root=0, quality="major", start=0.0, duration=4.0)]
+        key = Scale(root=0, mode=Mode.MAJOR)
+        params = GeneratorParams()
+
+        # Flam only
+        dg_flam = DrumKitPatternGenerator(params, flam_probability=1.0, drag_probability=0.0)
+        notes_flam = dg_flam.render(chords, key, duration_beats=4.0)
+        graces_flam = [n for n in notes_flam if getattr(n, "articulation", None) == "grace"]
+        assert len(graces_flam) > 0
+
+        # Drag only
+        dg_drag = DrumKitPatternGenerator(params, flam_probability=0.0, drag_probability=1.0)
+        notes_drag = dg_drag.render(chords, key, duration_beats=4.0)
+        graces_drag = [n for n in notes_drag if getattr(n, "articulation", None) == "grace"]
+        assert len(graces_drag) >= 2
+
+    def test_hand_struck_coordination_safeguards(self):
+        from melodica.generators.drum_kit_pattern import DrumKitPatternGenerator
+        from melodica.generators import GeneratorParams
+        from melodica.types import ChordLabel, Scale, NoteInfo
+
+        # Manually verify coordinating logic
+        params = GeneratorParams()
+        dg = DrumKitPatternGenerator(params)
+        
+        # Build impossible simultaneous struck notes (SNARE, HH_CLOSED, HH_OPEN, TOM_LOW, CRASH, RIDE)
+        impossible_notes = [
+            NoteInfo(pitch=38, start=1.0, duration=0.2, velocity=80), # SNARE (Priority 1)
+            NoteInfo(pitch=49, start=1.0, duration=0.2, velocity=80), # CRASH (Priority 2)
+            NoteInfo(pitch=42, start=1.0, duration=0.2, velocity=80), # HH_CLOSED (Priority 5)
+            NoteInfo(pitch=46, start=1.0, duration=0.2, velocity=80), # HH_OPEN (Priority 5)
+        ]
+        
+        processed = dg._apply_pro_features(impossible_notes)
+        # Verify that only up to 2 hand-struck notes starting at 1.0 are kept
+        hand_struck_at_1 = [n for n in processed if abs(n.start - 1.0) < 0.05 and n.pitch in {38, 49, 42, 46}]
+        assert len(hand_struck_at_1) <= 2
+        # Verify that higher priority notes (SNARE and CRASH) are preserved while lower priority are dropped
+        preserved_pitches = {n.pitch for n in hand_struck_at_1}
+        assert 38 in preserved_pitches
+        assert 49 in preserved_pitches
+        assert 42 not in preserved_pitches
+        assert 46 not in preserved_pitches
+

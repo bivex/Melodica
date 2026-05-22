@@ -183,6 +183,9 @@ class DrumKitPatternGenerator(PhraseGenerator):
     choke_hats: bool = True
     section_type: str = "verse"
     auto_fills: bool = True
+    groove_template: any = None
+    flam_probability: float = 0.0
+    drag_probability: float = 0.0
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -201,6 +204,9 @@ class DrumKitPatternGenerator(PhraseGenerator):
         choke_hats: bool = True,
         section_type: str = "verse",
         auto_fills: bool = True,
+        groove_template: any = None,
+        flam_probability: float = 0.0,
+        drag_probability: float = 0.0,
     ) -> None:
         super().__init__(params)
         self.style = style
@@ -215,6 +221,9 @@ class DrumKitPatternGenerator(PhraseGenerator):
         self.choke_hats = choke_hats
         self.section_type = section_type
         self.auto_fills = auto_fills
+        self.groove_template = groove_template
+        self.flam_probability = max(0.0, min(1.0, flam_probability))
+        self.drag_probability = max(0.0, min(1.0, drag_probability))
 
     def render(
         self,
@@ -389,19 +398,43 @@ class DrumKitPatternGenerator(PhraseGenerator):
         return notes
 
     def _apply_pro_features(self, notes: list[NoteInfo]) -> list[NoteInfo]:
-        # 1. Swing Timing & Pocket Timing Offsets
-        swing_delay = 0.0
-        if self.groove_swing > 0.5 and self.swing_grid > 0:
-            swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
-
+        # 0. Flam & Drag Rudiments (applied before any timing shifts)
+        flam_drag_notes = []
         for n in notes:
-            # Check swing
-            grid_pos = n.start % (2.0 * self.swing_grid)
-            is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
+            if n.pitch in (SNARE, TOM_LOW, TOM_MID, TOM_HIGH) and getattr(n, "articulation", None) != "grace":
+                r_val = random.random()
+                if r_val < self.drag_probability:
+                    # Drag: two grace notes preceding the main hit
+                    g1 = NoteInfo(pitch=n.pitch, start=n.start, duration=0.02, velocity=max(1, int(n.velocity * 0.30)), articulation="grace")
+                    g2 = NoteInfo(pitch=n.pitch, start=n.start + 0.02, duration=0.02, velocity=max(1, int(n.velocity * 0.45)), articulation="grace")
+                    flam_drag_notes.extend([g1, g2])
+                    n.start += 0.04
+                elif r_val < self.drag_probability + self.flam_probability:
+                    # Flam: one grace note preceding the main hit
+                    g1 = NoteInfo(pitch=n.pitch, start=n.start, duration=0.02, velocity=max(1, int(n.velocity * 0.40)), articulation="grace")
+                    flam_drag_notes.append(g1)
+                    n.start += 0.03
+        notes.extend(flam_drag_notes)
 
+        # 1. Swing / Groove Timing & Pocket Timing Offsets
+        for n in notes:
             shift = 0.0
-            if is_offbeat:
-                shift += swing_delay
+            
+            # Apply groove template if present
+            if self.groove_template is not None:
+                frac = n.start % 1.0
+                for slot in self.groove_template.slots:
+                    if abs(frac - slot.position) < 0.05:
+                        shift += slot.timing_offset * 0.01
+                        n.velocity = max(1, min(127, int(n.velocity * slot.velocity_factor)))
+                        break
+            elif self.groove_swing > 0.5 and self.swing_grid > 0:
+                # Apply standard swing delay
+                swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
+                grid_pos = n.start % (2.0 * self.swing_grid)
+                is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
+                if is_offbeat:
+                    shift += swing_delay
 
             # Apply pocket delays
             if n.pitch in (SNARE, TOM_LOW, TOM_MID, TOM_HIGH):
@@ -411,7 +444,49 @@ class DrumKitPatternGenerator(PhraseGenerator):
 
             n.start = round(max(0.0, n.start + shift), 6)
 
-        # 2. Hi-Hat Auto-Choking
+        # 2. Physical Hand-to-Foot Coordination Limits Safeguard
+        hand_struck_pitches = {SNARE, HH_CLOSED, HH_OPEN, TOM_LOW, TOM_MID, TOM_HIGH, CRASH, RIDE}
+        notes.sort(key=lambda x: x.start)
+        
+        groups: list[list[NoteInfo]] = []
+        for n in notes:
+            added = False
+            for group in groups:
+                if abs(n.start - group[0].start) < 0.01:
+                    group.append(n)
+                    added = True
+                    break
+            if not added:
+                groups.append([n])
+        
+        priority_map = {
+            SNARE: 1,
+            CRASH: 2,
+            TOM_HIGH: 3,
+            TOM_MID: 3,
+            TOM_LOW: 3,
+            RIDE: 4,
+            HH_OPEN: 5,
+            HH_CLOSED: 5,
+        }
+        
+        filtered_notes = []
+        for group in groups:
+            hand_struck = [n for n in group if n.pitch in hand_struck_pitches]
+            other = [n for n in group if n.pitch not in hand_struck_pitches]
+            
+            if len(hand_struck) > 2:
+                # Sort by priority
+                hand_struck.sort(key=lambda n: priority_map.get(n.pitch, 99))
+                # Keep top 2, drop the rest
+                filtered_notes.extend(hand_struck[:2])
+                filtered_notes.extend(other)
+            else:
+                filtered_notes.extend(group)
+        
+        notes = filtered_notes
+
+        # 3. Hi-Hat Auto-Choking
         if self.choke_hats:
             notes.sort(key=lambda x: x.start)
             for i, n in enumerate(notes):
@@ -424,7 +499,7 @@ class DrumKitPatternGenerator(PhraseGenerator):
                             n.duration = round(max(0.01, next_n.start - n.start - 0.005), 6)
                             break
 
-        # 3. Post-Process Sidechain Ducking Pass
+        # 4. Post-Process Sidechain Ducking Pass
         if self.sidechain_depth > 0.0:
             kick_onsets = [n.start for n in notes if n.pitch == KICK]
             for n in notes:

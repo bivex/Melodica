@@ -39,7 +39,8 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, chord_at
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
+from melodica.generators._postprocess import post_process_808
 
 
 # GM-ish mapping
@@ -104,8 +105,15 @@ class TrapDrumsGenerator(PhraseGenerator):
     ghost_snare_prob: float = 0.3
     section_type: str = "verse"
     auto_fills: bool = True
+    groove_template: any = None
+    slide_curve: str = "exponential"
+    transient_ducking: bool = True
+    ducking_duration: float = 0.02
+    envelope_gating: bool = True
+    mute_boundaries: bool = True
+    kick_less_verse: bool = True
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
-
+ 
     def __init__(
         self,
         params: GeneratorParams | None = None,
@@ -125,6 +133,13 @@ class TrapDrumsGenerator(PhraseGenerator):
         ghost_snare_prob: float = 0.3,
         section_type: str = "verse",
         auto_fills: bool = True,
+        groove_template: any = None,
+        slide_curve: str = "exponential",
+        transient_ducking: bool = True,
+        ducking_duration: float = 0.02,
+        envelope_gating: bool = True,
+        mute_boundaries: bool = True,
+        kick_less_verse: bool = True,
     ) -> None:
         super().__init__(params)
         self.variant = variant
@@ -142,6 +157,13 @@ class TrapDrumsGenerator(PhraseGenerator):
         self.ghost_snare_prob = ghost_snare_prob
         self.section_type = section_type
         self.auto_fills = auto_fills
+        self.groove_template = groove_template
+        self.slide_curve = slide_curve
+        self.transient_ducking = transient_ducking
+        self.ducking_duration = max(0.0, ducking_duration)
+        self.envelope_gating = envelope_gating
+        self.mute_boundaries = mute_boundaries
+        self.kick_less_verse = kick_less_verse
 
     def _velocity(self, ratio: float = 1.0) -> int:
         """Standard velocity for trap drums based on base_velocity."""
@@ -188,26 +210,30 @@ class TrapDrumsGenerator(PhraseGenerator):
                 else:
                     sub_dur = 3.5
 
-                self._add_note(notes, sub_pitch, bar_start, sub_dur, self._velocity(1.1), duration_beats)
+                self._add_note(notes, sub_pitch, bar_start, sub_dur, self._velocity(1.1), duration_beats, articulation="808")
                 
                 # Beat 3 is at offset 2, which is >= 2.0. In final bar, second half is silenced, so we do not add sub on beat 3.
                 if active_kick_pattern != "sparse" and not is_final_bar:
-                    self._add_note(notes, sub_pitch, bar_start + 2, 1.5, self._velocity(1.0), duration_beats)
+                    chord_3 = chord_at(chords, bar_start + 2.0)
+                    sub_pitch_3 = max(low, nearest_pitch(chord_3.root if chord_3 is not None else chord.root, low + 12))
+                    self._add_note(notes, sub_pitch_3, bar_start + 2, 1.5, self._velocity(1.0), duration_beats, articulation="808")
 
             # Kick
-            if not is_final_bar:
-                if active_kick_pattern == "standard":
-                    self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
-                    self._add_note(notes, KICK, bar_start + 2, 0.3, self._velocity(1.1), duration_beats)
-                elif active_kick_pattern == "syncopated":
-                    self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
-                    self._add_note(notes, KICK, bar_start + 2.5, 0.3, self._velocity(1.05), duration_beats)
-                    self._add_note(notes, KICK, bar_start + 3.5, 0.3, self._velocity(0.95), duration_beats)
+            is_kick_less_bar = (bar_start == 0.0 and s_type == "verse" and self.kick_less_verse)
+            if not is_kick_less_bar:
+                if not is_final_bar:
+                    if active_kick_pattern == "standard":
+                        self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
+                        self._add_note(notes, KICK, bar_start + 2, 0.3, self._velocity(1.1), duration_beats)
+                    elif active_kick_pattern == "syncopated":
+                        self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
+                        self._add_note(notes, KICK, bar_start + 2.5, 0.3, self._velocity(1.05), duration_beats)
+                        self._add_note(notes, KICK, bar_start + 3.5, 0.3, self._velocity(0.95), duration_beats)
+                    else:
+                        self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
                 else:
+                    # If is_final_bar, only add kick on beat 1 (onset 0.0)
                     self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
-            else:
-                # If is_final_bar, only add kick on beat 1 (onset 0.0)
-                self._add_note(notes, KICK, bar_start, 0.3, self._velocity(1.2), duration_beats)
 
             # Snare/Clap on 2 and 4 (or 1 and 3 depending on clap_on_two)
             clap_beat = 1 if self.clap_on_two else 2
@@ -241,10 +267,10 @@ class TrapDrumsGenerator(PhraseGenerator):
                     trigger_roll = random.random() < active_hat_roll_density and (i < steps_per_bar - 1)
                     
                     if trigger_roll:
-                        # Choose roll parameters
+                        # Choose roll parameters (including quintuplet & septuplet stutters)
                         roll_type = random.choices(
-                            ["32nd", "32nd_triplet", "64th", "quintuplet"],
-                            weights=[40, 30, 20, 10]
+                            ["32nd", "32nd_triplet", "64th", "quintuplet", "septuplet"],
+                            weights=[30, 25, 20, 15, 10]
                         )[0]
                         
                         if roll_type == "32nd":
@@ -256,9 +282,12 @@ class TrapDrumsGenerator(PhraseGenerator):
                         elif roll_type == "64th":
                             roll_step = 0.0625
                             roll_len = 4
-                        else: # quintuplet
+                        elif roll_type == "quintuplet":
                             roll_step = 0.10
                             roll_len = 5
+                        else: # septuplet
+                            roll_step = 0.071428
+                            roll_len = 7
                             
                         # Tune sweep (pitch sweeps)
                         use_sweep = random.random() < 0.5
@@ -278,13 +307,18 @@ class TrapDrumsGenerator(PhraseGenerator):
                             if r_onset >= duration_beats:
                                 break
                                 
-                            # Calculate tuned pitch
+                            # Calculate tuned pitch with Scale Snapping & safety clamp
                             if roll_len > 1:
                                 interp = r / (roll_len - 1)
                             else:
                                 interp = 1.0
                             pitch_offset = int(start_pitch_offset + (end_pitch_offset - start_pitch_offset) * interp)
-                            roll_pitch = max(0, min(127, HH_CLOSED + pitch_offset))
+                            raw_pitch = HH_CLOSED + pitch_offset
+                            if key is not None:
+                                snapped_pitch = snap_to_scale(raw_pitch, key)
+                            else:
+                                snapped_pitch = raw_pitch
+                            roll_pitch = max(41, min(127, snapped_pitch))
                             
                             # Calculate dynamic velocity curve
                             if use_crescendo:
@@ -294,7 +328,18 @@ class TrapDrumsGenerator(PhraseGenerator):
                                 
                             roll_vel = max(1, min(127, int(self._velocity(0.85) * curve)))
                             
-                            self._add_note(notes, roll_pitch, r_onset, round(roll_step * 0.8, 6), roll_vel, duration_beats)
+                            # Alternating CC 10 wide stereo micro-panning
+                            pan_val = 32 if r % 2 == 0 else 96
+                            
+                            self._add_note(
+                                notes,
+                                roll_pitch,
+                                r_onset,
+                                round(roll_step * 0.8, 6),
+                                roll_vel,
+                                duration_beats,
+                                expression={10: pan_val}
+                            )
                             
                         # Advance step pointer past the roll duration
                         roll_duration_beats = roll_len * roll_step
@@ -318,7 +363,10 @@ class TrapDrumsGenerator(PhraseGenerator):
                             vel = self._velocity(0.7)
                             
                         dur = 0.25 if is_open else 0.12
-                        self._add_note(notes, hat, onset, dur, vel, duration_beats)
+                        
+                        # Subtle center-ish panning humanization
+                        pan_val = random.randint(54, 74)
+                        self._add_note(notes, hat, onset, dur, vel, duration_beats, expression={10: pan_val})
                         i += 1
 
             elif self.variant == "minimal":
@@ -428,7 +476,25 @@ class TrapDrumsGenerator(PhraseGenerator):
 
             n.velocity = max(1, min(127, n.velocity + random.randint(-4, 4)))
 
-        # Apply swing, pocket timing, hi-hat choking, and sidechain ducking passes
+        # 1. Post-process 808 sub-bass glides, transient ducking, and envelope gating
+        notes = post_process_808(
+            notes,
+            chords,
+            duration_beats,
+            slide_curve=self.slide_curve,
+            transient_ducking=self.transient_ducking,
+            ducking_duration=self.ducking_duration,
+            envelope_gating=self.envelope_gating,
+        )
+
+        # 2. Apply mute_boundaries phrase dropouts (complete silence of non-808 drums in the last beat)
+        if self.mute_boundaries and duration_beats > 4.0:
+            notes = [
+                n for n in notes
+                if n.start < duration_beats - 1.0 or getattr(n, "articulation", None) == "808"
+            ]
+
+        # 3. Apply swing, pocket timing, hi-hat choking, and sidechain ducking passes
         notes = self._apply_pro_features(notes)
 
         notes.sort(key=lambda n: n.start)
@@ -442,7 +508,15 @@ class TrapDrumsGenerator(PhraseGenerator):
         return notes
 
     def _add_note(
-        self, notes: list, pitch: int, onset: float, dur: float, vel: int, total: float
+        self,
+        notes: list[NoteInfo],
+        pitch: int,
+        onset: float,
+        dur: float,
+        vel: int,
+        total: float,
+        articulation: str | None = None,
+        expression: dict[int, int] | None = None,
     ) -> None:
         if 0 <= onset < total:
             notes.append(
@@ -451,23 +525,31 @@ class TrapDrumsGenerator(PhraseGenerator):
                     start=round(onset, 6),
                     duration=dur,
                     velocity=max(1, min(127, vel)),
+                    articulation=articulation,
+                    expression=expression or {},
                 )
             )
 
     def _apply_pro_features(self, notes: list[NoteInfo]) -> list[NoteInfo]:
-        # 1. Swing Timing & Pocket Timing Offsets
-        swing_delay = 0.0
-        if self.groove_swing > 0.5 and self.swing_grid > 0:
-            swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
-
+        # 1. Swing / Groove Timing & Pocket Timing Offsets
         for n in notes:
-            # Check swing
-            grid_pos = n.start % (2.0 * self.swing_grid)
-            is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
-
             shift = 0.0
-            if is_offbeat:
-                shift += swing_delay
+            
+            # Apply groove template if present
+            if self.groove_template is not None:
+                frac = n.start % 1.0
+                for slot in self.groove_template.slots:
+                    if abs(frac - slot.position) < 0.05:
+                        shift += slot.timing_offset * 0.01
+                        n.velocity = max(1, min(127, int(n.velocity * slot.velocity_factor)))
+                        break
+            elif self.groove_swing > 0.5 and self.swing_grid > 0:
+                # Apply standard swing delay
+                swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
+                grid_pos = n.start % (2.0 * self.swing_grid)
+                is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
+                if is_offbeat:
+                    shift += swing_delay
 
             # Apply pocket delays
             if n.pitch in (SNARE, CLAP):
@@ -476,6 +558,49 @@ class TrapDrumsGenerator(PhraseGenerator):
                 shift += self.hihat_delay
 
             n.start = round(max(0.0, n.start + shift), 6)
+
+        # 1.5. Physical Hand-to-Foot Coordination Limits Safeguard
+        hand_struck_pitches = {SNARE, CLAP, HH_CLOSED, HH_OPEN, 39, 41, 45, 50, 49, 37, 51}
+        notes.sort(key=lambda x: x.start)
+        
+        groups: list[list[NoteInfo]] = []
+        for n in notes:
+            added = False
+            for group in groups:
+                if abs(n.start - group[0].start) < 0.01:
+                    group.append(n)
+                    added = True
+                    break
+            if not added:
+                groups.append([n])
+        
+        priority_map = {
+            SNARE: 1,
+            CLAP: 1,
+            49: 2,
+            50: 3,
+            45: 3,
+            41: 3,
+            37: 4,
+            HH_OPEN: 5,
+            HH_CLOSED: 5,
+        }
+        
+        filtered_notes = []
+        for group in groups:
+            hand_struck = [n for n in group if n.pitch in hand_struck_pitches]
+            other = [n for n in group if n.pitch not in hand_struck_pitches]
+            
+            if len(hand_struck) > 2:
+                # Sort by priority
+                hand_struck.sort(key=lambda n: priority_map.get(n.pitch, 99))
+                # Keep top 2, drop the rest
+                filtered_notes.extend(hand_struck[:2])
+                filtered_notes.extend(other)
+            else:
+                filtered_notes.extend(group)
+        
+        notes = filtered_notes
 
         # 2. Hi-Hat Auto-Choking
         if self.choke_hats:

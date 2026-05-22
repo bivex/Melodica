@@ -43,6 +43,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale, OCTAVE, MIDI_MAX
 from melodica.utils import nearest_pitch, chord_at, snap_to_scale
+from melodica.generators._postprocess import post_process_808
 
 
 PATTERN_OFFSETS: dict[str, list[tuple[float, float, str]]] = {
@@ -101,6 +102,10 @@ class Bass808SlidingGenerator(PhraseGenerator):
     octave_range: int = 2
     accent_velocity: float = 1.1
     ghost_velocity_ratio: float = 0.55
+    slide_curve: str = "exponential"
+    transient_ducking: bool = True
+    ducking_duration: float = 0.02
+    envelope_gating: bool = True
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -113,6 +118,10 @@ class Bass808SlidingGenerator(PhraseGenerator):
         octave_range: int = 2,
         accent_velocity: float = 1.1,
         ghost_velocity_ratio: float = 0.55,
+        slide_curve: str = "exponential",
+        transient_ducking: bool = True,
+        ducking_duration: float = 0.02,
+        envelope_gating: bool = True,
     ) -> None:
         super().__init__(params)
         self.pattern = pattern
@@ -121,6 +130,10 @@ class Bass808SlidingGenerator(PhraseGenerator):
         self.octave_range = max(1, min(3, octave_range))
         self.accent_velocity = max(1.0, min(1.3, accent_velocity))
         self.ghost_velocity_ratio = max(0.2, min(0.8, ghost_velocity_ratio))
+        self.slide_curve = slide_curve
+        self.transient_ducking = transient_ducking
+        self.ducking_duration = max(0.0, ducking_duration)
+        self.envelope_gating = envelope_gating
 
     def _velocity(self, note_type: str) -> int:
         base = self.base_velocity()
@@ -218,6 +231,22 @@ class Bass808SlidingGenerator(PhraseGenerator):
                 prev_pitch = pitch
 
             bar_start += 4.0
+
+        # Ensure all notes have articulation="808" for post-processing
+        for note in notes:
+            note.articulation = "808"
+
+        # Apply pro-grade post-processing
+        notes = post_process_808(
+            notes=notes,
+            chords=chords,
+            duration_beats=duration_beats,
+            slide_curve=self.slide_curve,
+            transient_ducking=self.transient_ducking,
+            ducking_duration=self.ducking_duration,
+            envelope_gating=self.envelope_gating,
+            low_pitch_bound=low,
+        )
 
         notes.sort(key=lambda n: n.start)
 
