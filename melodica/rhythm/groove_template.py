@@ -64,6 +64,81 @@ class GrooveTemplate:
                 result.append(ev)
         return result
 
+    def verify_accuracy(self, notes: list[any], tolerance: float = 0.05) -> dict[str, any]:
+        """
+        Verify how accurately this groove template was applied to a list of NoteInfo.
+        Returns a dictionary with validation metrics:
+            - 'accuracy': float (0.0 to 1.0)
+            - 'total_notes': int
+            - 'matched_notes': int
+            - 'details': list of strings with specific slot analysis
+        """
+        if not notes:
+            return {
+                "accuracy": 1.0,
+                "total_notes": 0,
+                "matched_notes": 0,
+                "details": ["No notes provided for groove validation."]
+            }
+
+        if not self.slots:
+            # Straight groove: all notes should land on standard grid coordinates
+            total = len(notes)
+            matched = sum(1 for n in notes if any(abs((n.start % 1.0) - p) < tolerance for p in [0.0, 0.25, 0.33, 0.5, 0.66, 0.75]))
+            accuracy = matched / total if total > 0 else 1.0
+            return {
+                "accuracy": accuracy,
+                "total_notes": total,
+                "matched_notes": matched,
+                "details": [f"Straight groove validation: {matched}/{total} notes on standard grid points."]
+            }
+
+        total = 0
+        matched = 0
+        details = []
+        slot_stats = {s.position: {"expected_shift": s.timing_offset * 0.01, "count": 0, "matched": 0} for s in self.slots}
+
+        for n in notes:
+            frac = n.start % 1.0
+            total += 1
+            
+            # Check if this note falls near a slot (taking into account timing shift)
+            found_slot = False
+            for slot in self.slots:
+                expected_shift = slot.timing_offset * 0.01
+                # Unshifted position would be start - expected_shift
+                unshifted_pos = (n.start - expected_shift) % 1.0
+                
+                # Check if unshifted_pos matches slot position
+                if abs(unshifted_pos - slot.position) < 0.05:
+                    found_slot = True
+                    slot_stats[slot.position]["count"] += 1
+                    # Expected position is slot.position + expected_shift
+                    expected_pos = (slot.position + expected_shift) % 1.0
+                    if abs(frac - expected_pos) < tolerance:
+                        matched += 1
+                        slot_stats[slot.position]["matched"] += 1
+                    break
+            
+            # If not matching any swung slot, it should be on a straight subdivision (no shift expected)
+            if not found_slot:
+                if any(abs(frac - p) < tolerance for p in [0.0, 0.25, 0.33, 0.5, 0.66, 0.75]):
+                    matched += 1
+
+        for pos, stats in slot_stats.items():
+            details.append(
+                f"Slot at position {pos}: matched {stats['matched']}/{stats['count']} notes "
+                f"with expected shift of {stats['expected_shift']:.4f} beats."
+            )
+
+        accuracy = matched / total if total > 0 else 1.0
+        return {
+            "accuracy": accuracy,
+            "total_notes": total,
+            "matched_notes": matched,
+            "details": details
+        }
+
 
 # ---------------------------------------------------------------------------
 # Presets

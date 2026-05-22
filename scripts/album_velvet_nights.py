@@ -127,6 +127,9 @@ def generate_track(scale, sections, build_fn, bpb=4):
     art = ArticulationEngine()
     beat_offset = 0.0
 
+    # Track groove templates and notes generated for accuracy validation
+    grooved_sections: dict[tuple[str, str], tuple[any, list[NoteInfo]]] = {}
+
     for name, bars, trks in sections:
         s_beats = bars * bpb
         chords = harmonize(scale, bars, bpb)
@@ -162,16 +165,27 @@ def generate_track(scale, sections, build_fn, bpb=4):
 
             if tn not in tracks:
                 tracks[tn] = []
+            
+            section_notes = []
             for n in notes:
                 dur = n.duration if n.duration > 0.001 else 0.1
-                tracks[tn].append(NoteInfo(
+                note_info = NoteInfo(
                     pitch=n.pitch,
                     start=round(n.start + beat_offset, 6),
                     duration=dur,
                     velocity=n.velocity,
                     articulation=n.articulation,
                     expression=n.expression,
-                ))
+                )
+                tracks[tn].append(note_info)
+                section_notes.append(note_info)
+
+            # Store the notes for this section if a groove template is active on the generator
+            if hasattr(gen, "groove_template") and gen.groove_template is not None:
+                key = (tn, gen.groove_template.name)
+                if key not in grooved_sections:
+                    grooved_sections[key] = (gen.groove_template, [])
+                grooved_sections[key][1].extend(section_notes)
 
         beat_offset += s_beats
 
@@ -185,6 +199,23 @@ def generate_track(scale, sections, build_fn, bpb=4):
         raw = art.add_sustain_pedal_events(tracks[tn], beat_offset)
         if raw:
             cc[tn] = [(e["time"], 64, e["value"]) for e in raw]
+
+    # Console reporting of groove template validation
+    if grooved_sections:
+        print("\n  [Groove Accuracy Validation]")
+        for (tn, gt_name), (template, notes) in sorted(grooved_sections.items()):
+            res = template.verify_accuracy(notes)
+            accuracy_pct = res["accuracy"] * 100
+            matched = res["matched_notes"]
+            total = res["total_notes"]
+            
+            # Print a neat progress-bar style status
+            bar_len = 20
+            filled_len = int(round(bar_len * res["accuracy"]))
+            bar = "█" * filled_len + "░" * (bar_len - filled_len)
+            
+            print(f"    • {tn:15s} | Groove: {gt_name:10s} | {bar} | {accuracy_pct:5.1f}% ({matched}/{total} notes matched)")
+        print()
 
     return tracks, cc, beat_offset
 

@@ -114,3 +114,21 @@ class TestGroovePresets:
 
     def test_laid_back_has_four_slots(self):
         assert len(LAID_BACK.slots) == 4
+
+
+class TestGrooveValidator:
+    def test_verify_accuracy(self):
+        from melodica.types import NoteInfo
+        # SWING_60 has slot 0.5 shifted by 3.5ms (0.035 beats)
+        notes = [
+            NoteInfo(pitch=60, start=0.0, duration=0.5, velocity=64),
+            NoteInfo(pitch=62, start=0.535, duration=0.5, velocity=64),
+            NoteInfo(pitch=64, start=1.0, duration=0.5, velocity=64),
+            NoteInfo(pitch=65, start=1.535, duration=0.5, velocity=64),
+        ]
+        res = SWING_60.verify_accuracy(notes)
+        assert res["accuracy"] == 1.0
+        assert res["total_notes"] == 4
+        assert res["matched_notes"] == 4
+        assert len(res["details"]) > 0
+
