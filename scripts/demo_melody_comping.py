@@ -22,6 +22,7 @@ from melodica.types import NoteInfo, Scale, Mode, ChordLabel
 from melodica.generators import GeneratorParams
 from melodica.generators.modern_bass_2025 import ModernBass2025Generator
 from melodica.generators.solo_melody import SoloMelodyGenerator
+from melodica.generators.melody import MelodyGenerator
 from melodica.generators.countermelody import CountermelodyGenerator
 from melodica.rhythm import MarkovRhythmGenerator
 from melodica.midi import export_multitrack_midi
@@ -249,9 +250,26 @@ def produce_demo_track():
         n.start += 16.0
     piano_notes.extend(comp_B)
     
-    # Solo Melody: Lyrical vocal mimic style
-    solo_params_B = GeneratorParams(density=0.45, key_range_low=58, key_range_high=78)
-    solo_gen_B = SoloMelodyGenerator(solo_params_B, style="vocal_mimic", vibrato_depth=0.7)
+    # Soulful, syncopated jazz hook in D minor pentatonic
+    hook_pitches = [69, 72, 74, 72, 69]       # A4, C5, D5, C5, A4
+    hook_rhythm_ratio = [0.75, 0.25, 1.0, 0.5, 0.5] # Dotted quarter, sixteenth, quarter, eighth, eighth
+    rhythm_motif = [1.5, 0.5, 1.0, 1.0]        # guides structural rhythms outside hook
+
+    # Solo Melody: Lyrical, motif-driven vocal mimic style
+    solo_params_B = GeneratorParams(density=0.40, complexity=0.6, key_range_low=58, key_range_high=78)
+    solo_gen_B = MelodyGenerator(
+        solo_params_B,
+        phrase_length=8.0,              # 2-bar call-and-response phrase boundaries
+        phrase_contour="arch",          # lyrical arch phrasing
+        motif_probability=0.8,          # high chance of reusing/varying hook motif
+        harmony_note_probability=0.75,  # smooth chord-tone flow
+        drama_shape="tension_release",             # gentle expressive dynamics
+        ornament_probability=0.25,      # rich vocal/sax grace notes and turns
+        syncopation=0.2,                # swing syncopation
+        base_motif=hook_pitches,
+        base_motif_rhythm=hook_rhythm_ratio,
+        rhythm_motif=rhythm_motif,
+    )
     # Render with local chords, then shift note start times
     melody_B = solo_gen_B.render(chords_B, KEY_D_MINOR, 32.0)
     
@@ -303,9 +321,18 @@ def produce_demo_track():
         n.start += 48.0
     piano_notes.extend(comp_C)
     
-    # Solo Melody: Fast Jazz Fusion style
-    solo_params_C = GeneratorParams(density=0.68, key_range_low=55, key_range_high=80)
-    solo_gen_C = SoloMelodyGenerator(solo_params_C, style="jazz_fusion", vibrato_depth=0.8)
+    # Solo Melody: Fast Jazz Fusion style (virtuoso, syncopated runs with epic peak drama)
+    solo_params_C = GeneratorParams(density=0.65, complexity=0.8, key_range_low=55, key_range_high=80)
+    solo_gen_C = MelodyGenerator(
+        solo_params_C,
+        phrase_length=4.0,              # rapid, shorter phrases
+        phrase_contour="rise",          # intense upward climbing register
+        motif_probability=0.6,          # balanced motivic sequences
+        harmony_note_probability=0.68,  # coloristic extensions & scale runs
+        steps_probability=0.6,          # fluid cascading runs
+        drama_shape="epic",             # epic building late climax with subdivisions accelerando
+        syncopation=0.3,                # heavy syncopation
+    )
     melody_C = solo_gen_C.render(chords_C, KEY_D_DORIAN, 32.0)
     
     # Countermelody: Active contrary motion counterpoint against melody_C
@@ -365,7 +392,15 @@ def produce_demo_track():
     for c in chords_D:
         c.start -= 80.0
     solo_params_D = GeneratorParams(density=0.25, key_range_low=58, key_range_high=72)
-    solo_gen_D = SoloMelodyGenerator(solo_params_D, style="modal_ambient", vibrato_depth=0.8)
+    solo_gen_D = MelodyGenerator(
+        solo_params_D,
+        phrase_length=16.0,             # extremely wide, spacious phrasing
+        phrase_contour="flat",          # flat register for drone vibe
+        motif_probability=0.4,          # spacious modal wandering
+        harmony_note_probability=0.8,   # very stable drone scale steps
+        phrase_rest_probability=0.4,    # lets the trumpet breathe and fade away
+        ornament_probability=0.15,      # simple closing ornaments
+    )
     melody_D = solo_gen_D.render(chords_D, KEY_D_MINOR, 16.0)
     
     # Countermelody: Oblique holding voice for spacious closing outro
