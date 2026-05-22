@@ -387,24 +387,32 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         else:
             scale_factor = 0.8 + self.params.density * 0.4
 
+        bar_idx = 0
+
         while t < duration_beats:
             is_final_bar = fills_enabled and duration_beats > 4.0 and (t >= duration_beats - 4.0)
+            is_final_bar_mute = self.mute_boundaries and is_final_bar
+            is_verse_start = (s_type == "verse" and bar_idx == 0 and self.kick_less_verse)
 
             for pitch, offset, base_vel, dur in pattern_def:
-                if is_final_bar and offset >= 2.0:
-                    continue  # Mute normal groove in the second half of final bar
+                if is_final_bar_mute and offset >= 2.0:
+                    continue
 
-                # Intro density adjustments: skip claps/rims, simplify open hats to closed
+                # Intro density: skip claps/rims, fold open hats into closed
                 if s_type == "intro" and pitch in (CLAP, RIM):
                     continue
                 if s_type == "intro" and pitch == HH_OPEN:
                     pitch = HH_CLOSED
 
+                # Kick-less verse: suppress chord-onset kick on first verse bar
+                if is_verse_start and pitch == KICK and offset < 0.15:
+                    continue
+
                 onset = t + offset
                 if onset >= duration_beats:
                     continue
                 vel = int(base_vel * scale_factor)
-                # Kit character adjustments
+                # Kit character velocity adjustments
                 if pitch == KICK:
                     vel = int(char["kick_vel"] * scale_factor)
                 elif pitch == SNARE:
@@ -417,14 +425,20 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                 else:
                     vel = int(base_vel * scale_factor)
 
+                articulation = "808" if (self.transient_ducking and pitch == KICK) else None
+
                 notes.append(
                     NoteInfo(
                         pitch=pitch,
                         start=round(onset, 6),
                         duration=dur,
                         velocity=max(1, min(127, vel)),
+                        articulation=articulation,
                     )
                 )
+
+            if is_verse_start:
+                is_verse_start = False
 
             # Generate low-velocity snare ghost notes if requested (skip in intro and outro)
             if self.ghost_snare_prob > 0.0 and s_type not in ("intro", "outro"):
@@ -496,7 +510,21 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                             )
                         )
 
+            bar_idx += 1
             t += 4.0
+
+        # 808 transient-ducking post-processing
+        if self.transient_ducking and any(getattr(n, "articulation", None) == "808" for n in notes):
+            from melodica.generators._postprocess import post_process_808
+            notes = post_process_808(
+                notes,
+                chords,
+                duration_beats,
+                slide_curve="linear",
+                transient_ducking=True,
+                ducking_duration=self.ducking_duration,
+                envelope_gating=self.envelope_gating,
+            )
 
         # Pro-grade dynamic velocity and transient scaling
         for n in notes:
@@ -534,7 +562,163 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             )
         return notes
 
+    def _render_flam_drag(self, notes: list[NoteInfo]) -> None:
+        """Apply flam and drag rudiments in-place: add grace notes and shift parent hits."""
+        grace_notes = []
+        for n in notes:
+            if n.pitch in (SNARE, TOM_LOW, TOM_MID, TOM_HIGH) and getattr(n, "articulation", None) != "grace":
+                r_val = random.random()
+                if r_val < self.drag_probability:
+                    g1 = NoteInfo(pitch=n.pitch, start=n.start, duration=0.02, velocity=max(1, int(n.velocity * 0.30)), articulation="grace")
+                    g2 = NoteInfo(pitch=n.pitch, start=n.start + 0.02, duration=0.02, velocity=max(1, int(n.velocity * 0.45)), articulation="grace")
+                    grace_notes.extend([g1, g2])
+                    n.start += 0.04
+                elif r_val < self.drag_probability + self.flam_probability:
+                    g1 = NoteInfo(pitch=n.pitch, start=n.start, duration=0.02, velocity=max(1, int(n.velocity * 0.40)), articulation="grace")
+                    grace_notes.append(g1)
+                    n.start += 0.03
+        notes.extend(grace_notes)
+
+    @staticmethod
+    def _hat_pan_value(mode: str, alt_count: int, rate: float) -> int:
+        """Return a CC10 pan value (0-127) for a hi-hat note."""
+        r = alt_count % 2
+        if mode == "off":
+            return 64
+        elif mode == "mono":
+            return 64
+        elif mode == "alternate":
+            return 76 if r == 0 else 52
+        elif mode == "sweep_lr":
+            # Gradual sweep left to right across 4 hits
+            target = 52 + int((alt_count % 4) * 8)   # 52, 60, 68, 76
+            return min(76, max(52, target))
+        elif mode == "sweep_rl":
+            target = 76 - int((alt_count % 4) * 8)   # 76, 68, 60, 52
+            return min(76, max(52, target))
+        else:
+            return 64
+
     def _apply_pro_features(self, notes: list[NoteInfo]) -> list[NoteInfo]:
+        # 0. Flam & drag rudiments (renders grace notes and shifts parent hits by 3-4 ms)
+        self._render_flam_drag(notes)
+
+        # 1. Swing / Groove Timing & Pocket Timing Offsets
+        for n in notes:
+            shift = 0.0
+
+            # Apply groove template if present
+            if self.groove_template is not None:
+                frac = n.start % 1.0
+                for slot in self.groove_template.slots:
+                    if abs(frac - slot.position) < 0.05:
+                        shift += slot.timing_offset * 0.01
+                        n.velocity = max(1, min(127, int(n.velocity * slot.velocity_factor)))
+                        break
+            elif self.groove_swing > 0.5 and self.swing_grid > 0:
+                # Apply standard swing delay
+                swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
+                grid_pos = n.start % (2.0 * self.swing_grid)
+                is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
+                if is_offbeat:
+                    shift += swing_delay
+
+            # Apply pocket delays
+            if n.pitch in (SNARE, CLAP, RIM):
+                shift += self.snare_delay
+            elif n.pitch in (HH_CLOSED, HH_OPEN):
+                shift += self.hihat_delay
+
+            n.start = round(max(0.0, n.start + shift), 6)
+
+        # 1.5. Physical Hand-to-Foot Coordination Limits Safeguard
+        hand_struck_pitches = {
+            SNARE,
+            CLAP,
+            HH_CLOSED,
+            HH_OPEN,
+            TOM_LOW,
+            TOM_MID,
+            TOM_HIGH,
+            CRASH,
+            RIM,
+            51,
+        }
+        notes.sort(key=lambda x: x.start)
+
+        groups: list[list[NoteInfo]] = []
+        for n in notes:
+            added = False
+            for group in groups:
+                if abs(n.start - group[0].start) < 0.01:
+                    group.append(n)
+                    added = True
+                    break
+            if not added:
+                groups.append([n])
+
+        priority_map = {
+            SNARE: 1,
+            CLAP: 1,
+            CRASH: 2,
+            TOM_HIGH: 3,
+            TOM_MID: 3,
+            TOM_LOW: 3,
+            RIM: 4,
+            HH_OPEN: 5,
+            HH_CLOSED: 5,
+        }
+
+        filtered_notes = []
+        for group in groups:
+            hand_struck = [n for n in group if n.pitch in hand_struck_pitches]
+            other = [n for n in group if n.pitch not in hand_struck_pitches]
+
+            if len(hand_struck) > 2:
+                hand_struck.sort(key=lambda n: priority_map.get(n.pitch, 99))
+                filtered_notes.extend(hand_struck[:2])
+                filtered_notes.extend(other)
+            else:
+                filtered_notes.extend(group)
+
+        notes = filtered_notes
+
+        # 2. Hi-Hat Auto-Choking
+        if self.choke_hats:
+            notes.sort(key=lambda x: x.start)
+            for i, n in enumerate(notes):
+                if n.pitch == HH_OPEN:
+                    for j in range(i + 1, len(notes)):
+                        next_n = notes[j]
+                        if next_n.start >= n.start + n.duration:
+                            break
+                        if next_n.pitch == HH_CLOSED:
+                            n.duration = round(max(0.01, next_n.start - n.start - 0.005), 6)
+                            break
+
+        # 3. CC10 Hi-Hat Stereo Panning
+        if self.pan_mode != "off":
+            _hat_alt = 0
+            for n in notes:
+                if n.pitch in (HH_CLOSED, HH_OPEN):
+                    n.expression = {**(n.expression or {}), "cc10": self._hat_pan_value(self.pan_mode, _hat_alt, self.pan_alternation_rate)}
+                    _hat_alt += 1
+
+        # 4. Post-Process Sidechain / Transient Ducking Pass
+        depth = self.sidechain_depth
+        if self.sidechain and depth == 0.0:
+            depth = 0.5
+
+        if depth > 0.0:
+            kick_onsets = [n.start for n in notes if n.pitch == KICK and getattr(n, "articulation", None) != "808"]
+            for n in notes:
+                if n.pitch != KICK:
+                    for kick_start in kick_onsets:
+                        if abs(n.start - kick_start) < 0.20 or (n.start <= kick_start < n.start + n.duration):
+                            n.velocity = max(1, int(n.velocity * (1.0 - depth)))
+                            break
+
+        return notes
         # 1. Swing / Groove Timing & Pocket Timing Offsets
         for n in notes:
             shift = 0.0
