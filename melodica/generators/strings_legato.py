@@ -30,6 +30,7 @@ Section sizes:
 from __future__ import annotations
 
 import random
+import math
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
@@ -135,6 +136,20 @@ class StringsLegatoGenerator(PhraseGenerator):
                     pb_list.append((t_rel, bend))
                 expression["pitch_bend"] = pb_list
 
+            # Add dynamic vibrato LFO sweep on CC 1 (Modulation Wheel) for long notes
+            if event.duration >= 1.0:
+                lfo_freq = 6.0  # 6Hz typical vibrato speed
+                steps = int(event.duration * 20)
+                steps = max(5, steps)
+                cc1_list = []
+                for s in range(steps + 1):
+                    t_rel = (s / steps) * event.duration
+                    # Vibrato builds up: fades in over the first 1.0 second, then oscillates
+                    vibrato_fade_in = min(1.0, t_rel)
+                    val = int(vibrato_fade_in * 30 * (0.5 + 0.5 * math.sin(2 * math.pi * lfo_freq * t_rel)))
+                    cc1_list.append((t_rel, max(0, min(127, val))))
+                expression[1] = cc1_list
+
             note = NoteInfo(
                 pitch=pitch,
                 start=round(event.onset, 6),
@@ -153,11 +168,17 @@ class StringsLegatoGenerator(PhraseGenerator):
                     div_pitch = max(
                         self.params.key_range_low, min(self.params.key_range_high, div_pitch)
                     )
+                    
+                    # Humanize onset start times and durations to prevent Harmonic Fusion / Masking
+                    div_jitter = random.uniform(-0.015, 0.015)
+                    div_start = max(0.0, event.onset + div_jitter)
+                    div_duration = max(0.05, event.duration + random.uniform(-0.02, 0.02))
+                    
                     notes.append(
                         NoteInfo(
                             pitch=div_pitch,
-                            start=round(event.onset, 6),
-                            duration=event.duration,
+                            start=round(div_start, 6),
+                            duration=round(div_duration, 6),
                             velocity=max(1, int(vel * 0.7)),
                         )
                     )
