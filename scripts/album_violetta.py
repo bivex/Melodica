@@ -15,15 +15,15 @@
 album_violetta.py — "Violetta EP".
 
 A beautiful, high-fidelity four-movement modern electronic and acoustic EP
-utilizing our advanced 2025 modern bass generator styles.
+utilizing our advanced 2025 modern bass generator styles and expressive solo melody generators.
 Scale: C Aeolian (C=0, D=2, Eb=3, F=5, G=7, Ab=8, Bb=10) & C Dorian (C=0, D=2, Eb=3, F=5, G=7, A=9, Bb=10).
 Root: C (0) — warm, extremely rich register for modern basses.
 
 Movements:
-  I.   Violet Twilight (Фиолетовые сумерки)  — Neo Soul / Alt-R&B in C Aeolian (fingerstyle bass)
-  II.  Ultraviolet (Ультрафиолет)            — Syncopated Future Funk in C Dorian (slap bass)
-  III. Purple Horizon (Пурпурный горизонт)   — Cosmic Synthwave in C Aeolian (sidechain_reactive bass)
-  IV.  Amethyst Dream (Аметистовый сон)      — Evolving Cinematic Ambient in C Dorian (self_modifying bass)
+  I.   Violet Twilight (Фиолетовые сумерки)  — Neo Soul / Alt-R&B in C Aeolian (fingerstyle bass + neo_soul_keys solo)
+  II.  Ultraviolet (Ультрафиолет)            — Syncopated Future Funk in C Dorian (slap bass + vocal_mimic solo)
+  III. Purple Horizon (Пурпурный горизонт)   — Cosmic Synthwave in C Aeolian (sidechain_reactive bass + space_synth solo)
+  IV.  Amethyst Dream (Аметистовый сон)      — Evolving Cinematic Ambient in C Dorian (self_modifying bass + cinematic_strings solo)
 """
 
 import random
@@ -34,6 +34,7 @@ from melodica.types import NoteInfo, Scale, Mode, ChordLabel, Quality
 from melodica.generators import GeneratorParams
 from melodica.generators.melody import MelodyGenerator
 from melodica.generators.modern_bass_2025 import ModernBass2025Generator
+from melodica.generators.solo_melody import SoloMelodyGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -65,26 +66,18 @@ def _build_chords(progression: str, duration: float, key: Scale) -> list[ChordLa
 # ---------------------------------------------------------------------------
 
 def produce_track_1():
-    """Warm Neo-Soul / Alt-R&B in C Aeolian. Laid-back groove and fingerstyle bass."""
-    print("Producing I. Violet Twilight (Neo-Soul / Fingerstyle Bass)...")
+    """Warm Neo-Soul / Alt-R&B in C Aeolian. Fingerstyle bass + neo_soul_keys Rhodes solo."""
+    print("Producing I. Violet Twilight (Neo-Soul / Fingerstyle Bass + Rhodes Solo)...")
 
     duration = 96.0
     # i - iv - VII - v in C Aeolian
     progression = "i iv VII v" * 6
     chords = _build_chords(progression, duration, KEY_AEOLIAN)
 
-    # Melody: Smooth stepwise Rhodes piano lines
-    params = GeneratorParams(density=0.38, key_range_low=52, key_range_high=76)
-    melody_gen = MelodyGenerator(
-        params,
-        drama_shape="crescendo",
-        drama_peak=0.6,
-        motif_probability=0.75,
-        phrase_length=8.0,
-        groove_template=LAID_BACK,
-        beats_per_bar=4,
-    )
-    raw_melody = melody_gen.render(chords, KEY_AEOLIAN, duration)
+    # Solo: Rhodes single-note lines with offbeat backing stabs
+    solo_params = GeneratorParams(density=0.42, key_range_low=52, key_range_high=76)
+    solo_gen = SoloMelodyGenerator(solo_params, style="neo_soul_keys", vibrato_depth=0.7)
+    raw_melody = solo_gen.render(chords, KEY_AEOLIAN, duration)
 
     # Refine chords with predictive harmonizer and add light spice
     harmonizer = PredictiveHarmonizer(certainty_threshold=2.0)
@@ -110,25 +103,18 @@ def produce_track_1():
 # ---------------------------------------------------------------------------
 
 def produce_track_2():
-    """Future Funk / Alt-Pop. Dynamic, highly syncopated slap/pop bass in C Dorian."""
-    print("Producing II. Ultraviolet (Syncopated Future Funk / Slap Bass)...")
+    """Future Funk / Alt-Pop. Slap bass + vocal_mimic human lead solo in C Dorian."""
+    print("Producing II. Ultraviolet (Future Funk / Slap Bass + Vocal-Mimic Solo)...")
 
     duration = 120.0
-    # i - iv - bVI - V progression (bright natural 6th from Dorian makes bVI major and iv minor sound amazing)
+    # i - iv - bVI - V progression (bright major 6th from Dorian makes this feel amazing)
     progression = "i iv bVI V" * 8
     chords = _build_chords(progression, duration, KEY_DORIAN)
 
-    # Bright syncopated lead chords
-    params = GeneratorParams(density=0.65, key_range_low=55, key_range_high=80)
-    melody_gen = MelodyGenerator(
-        params,
-        drama_shape="dramatic",
-        drama_peak=0.8,
-        syncopation=0.75,
-        groove_template=SWING_60,
-        beats_per_bar=4,
-    )
-    raw_melody = melody_gen.render(chords, KEY_DORIAN, duration)
+    # Solo: Vocal mimic lead with melisma grace-note sweeps
+    solo_params = GeneratorParams(density=0.6, key_range_low=55, key_range_high=80)
+    solo_gen = SoloMelodyGenerator(solo_params, style="vocal_mimic", vibrato_depth=0.8)
+    raw_melody = solo_gen.render(chords, KEY_DORIAN, duration)
     melody = spiceup(raw_melody, KEY_DORIAN, depth=1)
 
     # Modern 2025 Slap Bass (peaks at 95, classic funk, avg 64)
