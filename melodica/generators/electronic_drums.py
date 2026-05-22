@@ -33,6 +33,7 @@ import random
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
+from melodica.generators._postprocess import post_process_808
 from melodica.rhythm import RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
@@ -49,6 +50,7 @@ TOM_MID = 45
 TOM_HIGH = 50
 CRASH = 49
 RIM = 37
+COWBELL = 56
 
 KIT_CHARACTER: dict[str, dict] = {
     "909": {"kick_vel": 115, "snare_vel": 110, "hat_vel": 70, "use_clap": True},
@@ -171,6 +173,69 @@ PATTERN_DEFS: dict[str, list[tuple[int, float, int, float]]] = {
         (KICK, 3.5, 100, 0.3),
         (HH_CLOSED, 3.75, 50, 0.1),
     ],
+    "trap_basic": [
+        (KICK, 0.0, 120, 0.25),
+        (HH_CLOSED, 0.0, 65, 0.1),
+        (HH_CLOSED, 0.5, 55, 0.1),
+        (SNARE, 1.0, 110, 0.2),
+        (CLAP, 1.0, 85, 0.15),
+        (HH_CLOSED, 1.0, 60, 0.1),
+        (HH_CLOSED, 1.5, 50, 0.1),
+        (KICK, 2.0, 115, 0.25),
+        (HH_CLOSED, 2.0, 60, 0.1),
+        (HH_CLOSED, 2.5, 50, 0.1),
+        (SNARE, 3.0, 108, 0.2),
+        (CLAP, 3.0, 82, 0.15),
+        (HH_CLOSED, 3.0, 55, 0.1),
+        (HH_CLOSED, 3.5, 48, 0.1),
+    ],
+    "trap_syncopated": [
+        (KICK, 0.0, 125, 0.25),
+        (HH_CLOSED, 0.0, 65, 0.1),
+        (HH_CLOSED, 0.5, 50, 0.1),
+        (SNARE, 1.0, 112, 0.2),
+        (CLAP, 1.0, 85, 0.15),
+        (HH_CLOSED, 1.5, 55, 0.1),
+        (KICK, 1.5, 90, 0.2),
+        (KICK, 2.0, 120, 0.25),
+        (HH_CLOSED, 2.0, 60, 0.1),
+        (HH_CLOSED, 2.5, 48, 0.1),
+        (SNARE, 3.0, 108, 0.2),
+        (CLAP, 3.0, 82, 0.15),
+        (HH_CLOSED, 3.25, 52, 0.1),
+        (KICK, 3.5, 85, 0.2),
+        (HH_CLOSED, 3.75, 45, 0.1),
+    ],
+    "drill_basic": [
+        (KICK, 0.0, 125, 0.25),
+        (HH_CLOSED, 0.0, 60, 0.08),
+        (HH_CLOSED, 0.33, 45, 0.08),
+        (HH_CLOSED, 0.66, 48, 0.08),
+        (SNARE, 1.0, 115, 0.2),
+        (HH_CLOSED, 1.0, 58, 0.08),
+        (KICK, 2.0, 115, 0.25),
+        (HH_CLOSED, 2.0, 55, 0.08),
+        (HH_CLOSED, 2.33, 48, 0.08),
+        (HH_CLOSED, 2.66, 52, 0.08),
+        (SNARE, 3.0, 112, 0.2),
+        (HH_CLOSED, 3.0, 56, 0.08),
+    ],
+    "phonk_cowbell": [
+        (KICK, 0.0, 120, 0.3),
+        (COWBELL, 0.0, 80, 0.15),
+        (HH_CLOSED, 0.5, 60, 0.08),
+        (SNARE, 1.0, 110, 0.25),
+        (COWBELL, 1.0, 75, 0.15),
+        (CLAP, 1.0, 85, 0.15),
+        (HH_CLOSED, 1.5, 50, 0.08),
+        (COWBELL, 2.0, 82, 0.15),
+        (KICK, 2.0, 115, 0.3),
+        (HH_CLOSED, 2.5, 55, 0.08),
+        (SNARE, 3.0, 108, 0.25),
+        (COWBELL, 3.0, 78, 0.15),
+        (CLAP, 3.0, 80, 0.15),
+        (HH_CLOSED, 3.5, 48, 0.08),
+    ],
 }
 
 
@@ -221,9 +286,23 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     swing_grid: float = 0.25
     choke_hats: bool = True
     ghost_snare_prob: float = 0.0
+    ghost_ride_prob: float = 0.0
     section_type: str = "verse"
     auto_fills: bool = True
     groove_template: any = None
+    # 808 / transient upgrades
+    transient_ducking: bool = False
+    ducking_duration: float = 0.02
+    envelope_gating: bool = True
+    # Arrangement
+    mute_boundaries: bool = False
+    kick_less_verse: bool = False
+    # CC10 hi-hat panning
+    pan_mode: str = "off"  # off | alternate | sweep_lr | sweep_rl | mono
+    pan_alternation_rate: float = 0.5
+    # Flam & drag rudiments
+    flam_probability: float = 0.0
+    drag_probability: float = 0.0
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -241,9 +320,19 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         swing_grid: float = 0.25,
         choke_hats: bool = True,
         ghost_snare_prob: float = 0.0,
+        ghost_ride_prob: float = 0.0,
         section_type: str = "verse",
         auto_fills: bool = True,
         groove_template: any = None,
+        transient_ducking: bool = False,
+        ducking_duration: float = 0.02,
+        envelope_gating: bool = True,
+        mute_boundaries: bool = False,
+        kick_less_verse: bool = False,
+        pan_mode: str = "off",
+        pan_alternation_rate: float = 0.5,
+        flam_probability: float = 0.0,
+        drag_probability: float = 0.0,
     ) -> None:
         super().__init__(params)
         self.kit = kit
@@ -257,9 +346,19 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         self.swing_grid = swing_grid
         self.choke_hats = choke_hats
         self.ghost_snare_prob = ghost_snare_prob
+        self.ghost_ride_prob = ghost_ride_prob
         self.section_type = section_type
         self.auto_fills = auto_fills
         self.groove_template = groove_template
+        self.transient_ducking = transient_ducking
+        self.ducking_duration = ducking_duration
+        self.envelope_gating = envelope_gating
+        self.mute_boundaries = mute_boundaries
+        self.kick_less_verse = kick_less_verse
+        self.pan_mode = pan_mode
+        self.pan_alternation_rate = pan_alternation_rate
+        self.flam_probability = flam_probability
+        self.drag_probability = drag_probability
 
     def render(
         self,
@@ -289,7 +388,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             scale_factor = 0.8 + self.params.density * 0.4
 
         while t < duration_beats:
-            is_final_bar = (fills_enabled and duration_beats > 4.0 and (t >= duration_beats - 4.0))
+            is_final_bar = fills_enabled and duration_beats > 4.0 and (t >= duration_beats - 4.0)
 
             for pitch, offset, base_vel, dur in pattern_def:
                 if is_final_bar and offset >= 2.0:
@@ -385,7 +484,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                 for pitch, offset, vel, dur in fill_notes:
                     if pitch == CLAP and not char["use_clap"]:
                         pitch = SNARE
-                    
+
                     onset = t + offset
                     if onset < duration_beats:
                         notes.append(
@@ -439,7 +538,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         # 1. Swing / Groove Timing & Pocket Timing Offsets
         for n in notes:
             shift = 0.0
-            
+
             # Apply groove template if present
             if self.groove_template is not None:
                 frac = n.start % 1.0
@@ -465,9 +564,20 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             n.start = round(max(0.0, n.start + shift), 6)
 
         # 1.5. Physical Hand-to-Foot Coordination Limits Safeguard
-        hand_struck_pitches = {SNARE, CLAP, HH_CLOSED, HH_OPEN, TOM_LOW, TOM_MID, TOM_HIGH, CRASH, RIM, 51}
+        hand_struck_pitches = {
+            SNARE,
+            CLAP,
+            HH_CLOSED,
+            HH_OPEN,
+            TOM_LOW,
+            TOM_MID,
+            TOM_HIGH,
+            CRASH,
+            RIM,
+            51,
+        }
         notes.sort(key=lambda x: x.start)
-        
+
         groups: list[list[NoteInfo]] = []
         for n in notes:
             added = False
@@ -478,7 +588,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                     break
             if not added:
                 groups.append([n])
-        
+
         priority_map = {
             SNARE: 1,
             CLAP: 1,
@@ -490,12 +600,12 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             HH_OPEN: 5,
             HH_CLOSED: 5,
         }
-        
+
         filtered_notes = []
         for group in groups:
             hand_struck = [n for n in group if n.pitch in hand_struck_pitches]
             other = [n for n in group if n.pitch not in hand_struck_pitches]
-            
+
             if len(hand_struck) > 2:
                 # Sort by priority
                 hand_struck.sort(key=lambda n: priority_map.get(n.pitch, 99))
@@ -504,7 +614,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                 filtered_notes.extend(other)
             else:
                 filtered_notes.extend(group)
-        
+
         notes = filtered_notes
 
         # 2. Hi-Hat Auto-Choking
@@ -530,9 +640,10 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             for n in notes:
                 if n.pitch != KICK:
                     for kick_start in kick_onsets:
-                        if abs(n.start - kick_start) < 0.20 or (n.start <= kick_start < n.start + n.duration):
+                        if abs(n.start - kick_start) < 0.20 or (
+                            n.start <= kick_start < n.start + n.duration
+                        ):
                             n.velocity = max(1, int(n.velocity * (1.0 - depth)))
                             break
 
         return notes
-
