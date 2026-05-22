@@ -88,7 +88,7 @@ class OrchestralCymbalGenerator(PhraseGenerator):
         
         # A crash typically occurs at the very beginning of a phrase/section
         # Or occasionally on beat 3 of a bar if intensity is high
-        prob = 0.95 if is_first else (self.params.density * 0.4)
+        prob = 1.0 if is_first else (self.params.density * 0.4)
         if random.random() < prob:
             vel = int(105 + random.randint(5, 20))
             # Large ringing duration (reverb tail)
