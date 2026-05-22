@@ -38,7 +38,7 @@ from melodica.generators.strings_pizzicato import StringsPizzicatoGenerator
 from melodica.generators.tremolo_strings import TremoloStringsGenerator
 from melodica.generators.brass_section import BrassSectionGenerator
 from melodica.generators.woodwinds_ensemble import WoodwindsEnsembleGenerator
-from melodica.generators.choir_ahhs import ChoirAhhsGenerator
+from melodica.generators.choir_ahhs import ChoirAahsGenerator
 from melodica.generators.orchestral_hit import OrchestralHitGenerator
 from melodica.generators.tuba import TubaGenerator
 from melodica.generators.snare_drum import SnareDrumGenerator
@@ -145,7 +145,7 @@ def produce_movement_2():
     
     # 3. Dynamic background Choir Aahs with formant vowel CC 74 changes
     choir_params = GeneratorParams(density=0.35, key_range_low=48, key_range_high=72)
-    choir_gen = ChoirAhhsGenerator(choir_params, voice_count=4, dynamics="p", syllable="aah")
+    choir_gen = ChoirAahsGenerator(choir_params, voice_count=4, dynamics="p", syllable="aah")
     choir = choir_gen.render(chords, KEY_EB_MAJOR, duration)
     
     # 4. Long tubular bell chimes ring-outs marking key cadential changes
@@ -176,7 +176,7 @@ def produce_movement_3():
     
     # 1. Playful Pizzicato Strings with arco/pizz mix and violent Bartók snap accents
     pizz_params = GeneratorParams(density=0.65, key_range_low=50, key_range_high=80)
-    pizz_gen = StringsPizzicatoGenerator(pizz_params, arco_mix=0.3, snap_pizzicato=True)
+    pizz_gen = StringsPizzicatoGenerator(pizz_params, pattern="arco_mix", snap_chance=0.3)
     pizz = pizz_gen.render(chords, KEY_G_MINOR, duration)
     
     # 2. Staccato Woodwinds responding in counterpoint dialogue
