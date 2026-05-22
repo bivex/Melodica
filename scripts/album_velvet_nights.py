@@ -111,6 +111,16 @@ def harmonize(scale, bars, bpb=4):
 # Arrangement generator — shared engine
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def map_section_type(name: str) -> str:
+    n = name.lower()
+    if "intro" in n: return "intro"
+    if "pre" in n: return "pre_chorus"
+    if "hook" in n or "chorus" in n: return "chorus"
+    if "outro" in n: return "outro"
+    if "break" in n or "bridge" in n: return "bridge"
+    return "verse"
+
+
 def generate_track(scale, sections, build_fn, bpb=4):
     tracks: dict[str, list[NoteInfo]] = {}
     contexts: dict[str, RenderContext] = {}
@@ -136,6 +146,8 @@ def generate_track(scale, sections, build_fn, bpb=4):
                 prev_pitches=list(prev.prev_pitches) if prev else [],
                 current_scale=scale,
             )
+            ctx.section_type = map_section_type(name)
+            ctx.auto_fills = True
 
             notes = gen.render(chords, scale, s_beats, ctx)
             if hasattr(gen, "_last_context") and gen._last_context is not None:
@@ -416,14 +428,16 @@ def build_1(name):
         case "riser":
             gen = FXRiserGenerator(
                 params=GeneratorParams(density=0.25), riser_type="synth",
-                length_beats=4.0, pitch_curve="exponential", peak_velocity=85,
+                length_beats=4.0, pitch_curve="exponential", peak_velocity=48,
             )
+            mods += [VelocityScalingModifier(scale=0.30)]
 
         case "impact":
             gen = FXImpactGenerator(
                 params=GeneratorParams(density=0.25), impact_type="boom",
                 tail_length=3.0, pitch_drop=12,
             )
+            mods += [VelocityScalingModifier(scale=0.35)]
 
         case _:
             return None
@@ -617,14 +631,16 @@ def build_2(name):
         case "riser":
             gen = FXRiserGenerator(
                 params=GeneratorParams(density=0.22), riser_type="synth",
-                length_beats=4.0, pitch_curve="exponential", peak_velocity=80,
+                length_beats=4.0, pitch_curve="exponential", peak_velocity=48,
             )
+            mods += [VelocityScalingModifier(scale=0.30)]
 
         case "impact":
             gen = FXImpactGenerator(
                 params=GeneratorParams(density=0.22), impact_type="boom",
                 tail_length=3.0, pitch_drop=10,
             )
+            mods += [VelocityScalingModifier(scale=0.35)]
 
         case _:
             return None
@@ -822,14 +838,16 @@ def build_3(name):
         case "riser":
             gen = FXRiserGenerator(
                 params=GeneratorParams(density=0.28), riser_type="synth",
-                length_beats=4.0, pitch_curve="exponential", peak_velocity=88,
+                length_beats=4.0, pitch_curve="exponential", peak_velocity=48,
             )
+            mods += [VelocityScalingModifier(scale=0.30)]
 
         case "impact":
             gen = FXImpactGenerator(
                 params=GeneratorParams(density=0.28), impact_type="boom",
                 tail_length=3.5, pitch_drop=14,
             )
+            mods += [VelocityScalingModifier(scale=0.35)]
 
         case _:
             return None
@@ -1053,14 +1071,16 @@ def build_4(name):
         case "riser":
             gen = FXRiserGenerator(
                 params=GeneratorParams(density=0.22), riser_type="synth",
-                length_beats=4.0, pitch_curve="exponential", peak_velocity=82,
+                length_beats=4.0, pitch_curve="exponential", peak_velocity=48,
             )
+            mods += [VelocityScalingModifier(scale=0.30)]
 
         case "impact":
             gen = FXImpactGenerator(
                 params=GeneratorParams(density=0.22), impact_type="boom",
                 tail_length=3.0, pitch_drop=10,
             )
+            mods += [VelocityScalingModifier(scale=0.35)]
 
         case _:
             return None
@@ -1241,14 +1261,16 @@ def build_5(name):
         case "riser":
             gen = FXRiserGenerator(
                 params=GeneratorParams(density=0.22), riser_type="synth",
-                length_beats=4.0, pitch_curve="exponential", peak_velocity=82,
+                length_beats=4.0, pitch_curve="exponential", peak_velocity=48,
             )
+            mods += [VelocityScalingModifier(scale=0.30)]
 
         case "impact":
             gen = FXImpactGenerator(
                 params=GeneratorParams(density=0.22), impact_type="boom",
                 tail_length=3.0, pitch_drop=10,
             )
+            mods += [VelocityScalingModifier(scale=0.35)]
 
         case _:
             return None
