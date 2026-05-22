@@ -346,6 +346,9 @@ from melodica.generators.orchestral_percussion import (
 )
 from melodica.generators.harp import HarpGenerator
 from melodica.generators.orchestral_score import OrchestralScoreGenerator
+from melodica.generators.film_score import FilmScoreGenerator
+from melodica.generators.texture_manager import TextureManager
+from melodica.generators.orchestral_transition import OrchestralTransitionGenerator
 
 __all__ = [
     "PhraseGenerator",
@@ -536,4 +539,7 @@ __all__ = [
     "MalletPercussionGenerator",
     "HarpGenerator",
     "OrchestralScoreGenerator",
+    "FilmScoreGenerator",
+    "TextureManager",
+    "OrchestralTransitionGenerator",
 ]

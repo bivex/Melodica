@@ -28,6 +28,8 @@ from melodica.generators import (
     FrenchHornGenerator,
     TimpaniGenerator,
     MalletPercussionGenerator,
+    FilmScoreGenerator,
+    OrchestralTransitionGenerator,
 )
 
 BASIC_GENERATORS = {
@@ -206,5 +208,19 @@ BASIC_GENERATORS = {
         instrument=cfg.get("instrument", "marimba"),
         pattern=cfg.get("pattern", "arpeggio"),
         mallet_count=cfg.get("mallet_count", 2),
+    ),
+    "film_score": lambda p, cfg: FilmScoreGenerator(
+        params=p,
+        hit_points=cfg.get("hit_points", []),
+        emotional_arcs=cfg.get("emotional_arcs", []),
+        default_mood=cfg.get("default_mood", "calm"),
+        include_choir=cfg.get("include_choir", True),
+        include_brass=cfg.get("include_brass", True),
+        include_harp=cfg.get("include_harp", True),
+    ),
+    "orchestral_transition": lambda p, cfg: OrchestralTransitionGenerator(
+        params=p,
+        transition_type=cfg.get("transition_type", "crescendo_build"),
+        intensity_curve=cfg.get("intensity_curve", "crescendo"),
     ),
 }
