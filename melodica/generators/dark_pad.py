@@ -30,6 +30,7 @@ Modes:
 from __future__ import annotations
 
 import random
+import math
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
@@ -145,18 +146,99 @@ class DarkPadGenerator(PhraseGenerator):
             dur = min(self.chord_dur, duration_beats - t)
             vel = int(self.velocity_level * 100)
 
-            # Micro-variation: slight velocity differences per voice
+            # Micro-timing onset staggering & LFO modulation for physical realism
             for i, p in enumerate(pitches):
-                v = max(10, min(127, vel + random.randint(-8, 8)))
+                # 1. Timing Jitter & Divisi Phase Staggering
+                onset_delay = i * 0.015  # Sequential blooming
+                jitter = random.uniform(-0.003, 0.003)
+                start_h = max(0.0, t + onset_delay + jitter)
+                
+                # Check bounds
+                if start_h >= duration_beats:
+                    continue
+                
                 note_dur = dur + dur * self.overlap  # overlap into next chord
-                notes.append(
-                    NoteInfo(
-                        pitch=p,
-                        start=round(t, 6),
-                        duration=min(note_dur, duration_beats - t),
-                        velocity=v,
-                    )
+                note_dur_h = min(note_dur, duration_beats - start_h)
+                if note_dur_h <= 0.01:
+                    continue
+
+                v = max(10, min(127, vel + random.randint(-8, 8)))
+
+                # 2. Continuous CC Modulations
+                expression = {}
+                steps = 12
+                
+                # CC 11: Dynamic volume breathing LFO (phase & freq offset per note)
+                freq_11 = 0.1 + (i * 0.02)
+                phase_11 = i * 0.5
+                cc11_list = []
+                for s in range(steps + 1):
+                    progress_t = s / steps
+                    t_rel = progress_t * note_dur_h
+                    lfo_factor = 0.85 + 0.15 * math.sin(2 * math.pi * freq_11 * t_rel + phase_11)
+                    cc11_list.append((round(t_rel, 6), max(1, min(127, int(127 * lfo_factor)))))
+                expression[11] = cc11_list
+
+                # CC 74: Evolving resonant cutoff sweep LFO
+                freq_74 = 0.05 + (i * 0.01)
+                phase_74 = i * 0.8
+                cc74_list = []
+                base_cutoff = 55 if self.mode == "minor_pad" else 45
+                for s in range(steps + 1):
+                    progress_t = s / steps
+                    t_rel = progress_t * note_dur_h
+                    lfo_val = base_cutoff + int(20 * math.sin(2 * math.pi * freq_74 * t_rel + phase_74))
+                    cc74_list.append((round(t_rel, 6), max(1, min(127, lfo_val))))
+                expression[74] = cc74_list
+
+                # Pitch Bend: Subtle analog tape drift / vibrato
+                freq_pb = 0.12
+                phase_pb = i * (math.pi / 2)
+                pb_list = []
+                for s in range(steps + 1):
+                    progress_t = s / steps
+                    t_rel = progress_t * note_dur_h
+                    pb_val = int(500 * math.sin(2 * math.pi * freq_pb * t_rel + phase_pb))
+                    pb_list.append((round(t_rel, 6), pb_val))
+                expression["pitch_bend"] = pb_list
+
+                note = NoteInfo(
+                    pitch=p,
+                    start=round(start_h, 6),
+                    duration=round(note_dur_h, 6),
+                    velocity=v,
                 )
+                note.expression = expression
+                notes.append(note)
+
+                # 3. Glassy Resonant Overtones (Octave or Fifth) for high complexity or specific modes
+                if (self.params.complexity >= 0.5 or self.mode in ("dim_cluster", "phrygian_pad")) and random.random() < 0.6:
+                    overtone_pitch = p + (19 if i % 2 == 1 else 12)  # Fifth or Octave
+                    if 0 <= overtone_pitch <= 127:
+                        overtone_vel = max(5, int(v * 0.35))
+                        overtone_start = round(start_h + 0.03, 6)  # Delayed strike
+                        overtone_dur = round(note_dur_h * 0.7, 6)
+                        
+                        overtone_expr = {}
+                        # Soft CC 11 fade out for glassy overtone shimmer
+                        cc11_overtone = []
+                        for s in range(steps + 1):
+                            t_rel = (s / steps) * overtone_dur
+                            val = int(80 * (1.0 - (s / steps) ** 1.5))
+                            cc11_overtone.append((round(t_rel, 6), max(0, val)))
+                        overtone_expr[11] = cc11_overtone
+                        
+                        # Soft CC 74 cutoff
+                        overtone_expr[74] = 40
+                        
+                        overtone_note = NoteInfo(
+                            pitch=overtone_pitch,
+                            start=overtone_start,
+                            duration=overtone_dur,
+                            velocity=overtone_vel,
+                        )
+                        overtone_note.expression = overtone_expr
+                        notes.append(overtone_note)
 
             t += self.chord_dur
 
