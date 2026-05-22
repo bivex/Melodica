@@ -110,24 +110,6 @@ class TremoloStringsGenerator(PhraseGenerator):
 
             base_vel = int(45 + self.params.density * 25)
 
-            # Calculate a continuous expression swell list for CC 11
-            cc11_list = []
-            steps = int(total_dur / 0.1)
-            steps = max(5, steps)
-            for s in range(steps + 1):
-                progress = s / steps
-                t_rel = progress * total_dur
-                
-                # Envelope calculations
-                attack_f = t_rel / self.attack_time if (t_rel < self.attack_time and self.attack_time > 0) else 1.0
-                time_left = total_dur - t_rel
-                decay_f = time_left / self.decay_time if (time_left < self.decay_time and self.decay_time > 0) else 1.0
-                swell_f = 0.7 + 0.3 * (1.0 - abs(2.0 * progress - 1.0)) if self.dynamic_swell else 1.0
-                
-                intensity = attack_f * decay_f * swell_f
-                cc11_val = int(40 + 80 * intensity)
-                cc11_list.append((t_rel, max(0, min(127, cc11_val))))
-
             while t < end:
                 elapsed = t - event.onset
 
@@ -158,6 +140,10 @@ class TremoloStringsGenerator(PhraseGenerator):
                 bow_vel_offset = 3 if is_down_bow else -3
                 bow_brightness = 85 if is_down_bow else 70
 
+                # Sample CC 11 value at this moment in the envelope
+                cc11_val = int(40 + 80 * intensity)
+                cc11_val = max(1, min(127, cc11_val))
+
                 for i, p in enumerate(pitches):
                     if t >= end:
                         break
@@ -169,10 +155,10 @@ class TremoloStringsGenerator(PhraseGenerator):
                     pitch_jitter = random.uniform(-0.005, 0.005)
                     onset = max(0.0, t + pitch_jitter)
 
-                    # Dynamic brightness sweep representing bow friction changes
+                    # Dynamic brightness and expression values for the bow stroke
                     expression = {
-                        11: [((s / steps) * n_dur, cc_val) for s, cc_val in cc11_list],
-                        74: [(0.0, bow_brightness), (n_dur * 0.8, bow_brightness - 10)]
+                        11: cc11_val,
+                        74: bow_brightness
                     }
 
                     note = NoteInfo(
