@@ -79,6 +79,20 @@ ORCHESTRAL_PROFILES = {
                                     sweet_spot=(41, 48),  spectral_centroid=150.0),
     "Harp":       InstrumentProfile("Harp",        40,  96, 30,  80, 70,  52,  8,  35, 90, 74, 55,
                                     sweet_spot=(43, 95),  spectral_centroid=700.0),
+    "Tuba":       InstrumentProfile("Tuba",        28,  55, 70, 110, 90,  48,  0,  66, 65, 55, 65,
+                                    sweet_spot=(32, 50),  spectral_centroid=180.0),
+    "Snare_Drum": InstrumentProfile("Snare Drum",   35,  84, 64,  95, 85,  45,  0,  20, 50, 70, 80,
+                                    sweet_spot=(38, 60),  spectral_centroid=800.0),
+    "SnareDrum":  InstrumentProfile("Snare Drum",   35,  84, 64,  95, 85,  45,  0,  20, 50, 70, 80,
+                                    sweet_spot=(38, 60),  spectral_centroid=800.0),
+    "Orchestral_Cymbal": InstrumentProfile("Orchestral Cymbal", 35,  84, 50, 100, 75,  60,  0,  15, 95, 85, 85,
+                                    sweet_spot=(35, 84),  spectral_centroid=3000.0),
+    "OrchestralCymbal":  InstrumentProfile("Orchestral Cymbal", 35,  84, 50, 100, 75,  60,  0,  15, 95, 85, 85,
+                                    sweet_spot=(35, 84),  spectral_centroid=3000.0),
+    "Tubular_Bells":     InstrumentProfile("Tubular Bells",     53,  80, 76,  95, 80,  65,  0,  20, 90, 80, 75,
+                                    sweet_spot=(53, 77),  spectral_centroid=1500.0),
+    "TubularBells":      InstrumentProfile("Tubular Bells",     53,  80, 76,  95, 80,  65,  0,  20, 90, 80, 75,
+                                    sweet_spot=(53, 77),  spectral_centroid=1500.0),
 }
 
 class OrchestralBalancer:

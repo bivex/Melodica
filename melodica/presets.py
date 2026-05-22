@@ -52,6 +52,10 @@ from melodica.generators import (
     StringsStaccatoGenerator,
     RestGenerator,
     AmbientPadGenerator,
+    TubaGenerator,
+    SnareDrumGenerator,
+    OrchestralCymbalGenerator,
+    TubularBellsGenerator,
 )
 from melodica.modifiers import (
     CrescendoModifier,
@@ -106,6 +110,10 @@ GENERATOR_CLASSES = {
     "PercussionGenerator": PercussionGenerator,
     "PhraseMorpher": PhraseMorpher,
     "RandomNoteGenerator": RandomNoteGenerator,
+    "TubaGenerator": TubaGenerator,
+    "SnareDrumGenerator": SnareDrumGenerator,
+    "OrchestralCymbalGenerator": OrchestralCymbalGenerator,
+    "TubularBellsGenerator": TubularBellsGenerator,
 }
 
 RHYTHM_CLASSES = {

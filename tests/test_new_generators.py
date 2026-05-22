@@ -483,3 +483,23 @@ class TestInstrumentAssigner:
         assert gm_map["Brass_Section_Chords"] == 61  # Brass Section
         assert gm_map["Timpani_Roll"] == 47  # Timpani
 
+    def test_new_generators_preset_serialization(self):
+        from melodica.presets import serialize_preset, deserialize_preset
+        from melodica.generators.tuba import TubaGenerator
+        from melodica.generators.snare_drum import SnareDrumGenerator
+        from melodica.generators.orchestral_cymbal import OrchestralCymbalGenerator
+        from melodica.generators.tubular_bells import TubularBellsGenerator
+
+        generators = [
+            TubaGenerator(),
+            SnareDrumGenerator(),
+            OrchestralCymbalGenerator(),
+            TubularBellsGenerator(),
+        ]
+
+        for gen in generators:
+            json_str = serialize_preset(gen, [])
+            reconstructed_gen, modifiers = deserialize_preset(json_str)
+            assert reconstructed_gen.__class__.__name__ == gen.__class__.__name__
+
+
