@@ -53,6 +53,8 @@ from melodica.generators.bass_808_sliding import Bass808SlidingGenerator
 from melodica.generators.trap_drums import TrapDrumsGenerator
 from melodica.generators.electronic_drums import ElectronicDrumsGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
+from melodica.generators.guitar_strumming import GuitarStrummingGenerator
+from melodica.generators.markov import MarkovMelodyGenerator
 from melodica.harmonize import HMM3Harmonizer
 from melodica.modifiers import (
     HumanizeModifier,
@@ -65,7 +67,7 @@ from melodica.modifiers import (
 from melodica.composer import ArticulationEngine
 from melodica.composer.album_pipeline import produce_track, Mood
 from melodica.render_context import RenderContext
-from melodica.rhythm.groove_template import SWING_60, LAID_BACK, HIP_HOP, SHUFFLE
+from melodica.rhythm.groove_template import SWING_60, LAID_BACK, HIP_HOP, SHUFFLE, FUNK, PUSH
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -176,20 +178,20 @@ def generate_track(scale, sections, build_fn, bpb=4):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TRACK 1 — Midnight Velvet (Slow Jam / Neo-Soul)
-# Eb Dorian | 72 BPM | 48 bars
+# TRACK 1 — Midnight Velvet (Upbeat Neo-Soul / Future R&B)
+# Eb Dorian | 108 BPM | 48 bars
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SCALE_1 = Scale(root=3, mode=Mode.DORIAN)
 
 SECTIONS_1 = [
-    ("Intro",    4, ["keys_warmup", "organ_soft", "bass_hint"]),
-    ("V1",       8, ["keys_comp", "organ", "bass", "backbeat", "ghost", "melody"]),
-    ("Pre",      4, ["keys_busy", "organ", "bass_walk", "backbeat_up", "ghost", "melody_pre", "riser"]),
-    ("Hook",     8, ["keys_hook", "organ", "bass", "backbeat_hook", "ghost_hook",
+    ("Intro",    4, ["keys_warmup", "organ_soft", "bass_hint", "groove_hint"]),
+    ("V1",       8, ["keys_comp", "organ", "bass", "groove", "ghost", "melody"]),
+    ("Pre",      4, ["keys_busy", "organ", "bass_slap", "groove_full", "ghost", "melody_pre", "riser"]),
+    ("Hook",     8, ["keys_hook", "organ", "bass_slap_hook", "groove_full", "guitar_funk", "ghost_hook",
                      "melody_hook", "counter", "chops"]),
-    ("V2",       8, ["keys_comp", "organ", "bass", "backbeat", "ghost", "melody", "chops"]),
-    ("Hook 2",   8, ["keys_hook", "organ", "bass", "backbeat_hook", "ghost_hook",
+    ("V2",       8, ["keys_comp", "organ", "bass", "groove", "guitar_funk", "ghost", "melody", "chops"]),
+    ("Hook 2",   8, ["keys_hook", "organ", "bass_slap_hook", "groove_full", "guitar_funk", "ghost_hook",
                      "melody_hook", "counter", "chops", "riser"]),
     ("Outro",    4, ["keys_soft", "organ_soft", "bass_walk", "impact"]),
 ]
@@ -197,15 +199,16 @@ SECTIONS_1 = [
 INSTRUMENTS_1 = {
     "keys_warmup": 4, "keys_comp": 4, "keys_busy": 4, "keys_hook": 4, "keys_soft": 4,
     "organ": 16, "organ_soft": 16,
-    "bass_hint": 33, "bass": 33, "bass_walk": 33,
-    "backbeat": 0, "backbeat_up": 0, "backbeat_hook": 0,
+    "bass_hint": 33, "bass": 33, "bass_walk": 33, "bass_slap": 33, "bass_slap_hook": 33,
+    "groove_hint": 0, "groove": 0, "groove_full": 0,
+    "guitar_funk": 27,
     "ghost": 0, "ghost_hook": 0,
     "melody": 82, "melody_hook": 82, "melody_pre": 82,
     "counter": 52, "chops": 54,
     "riser": 97, "impact": 103,
 }
 
-PERC_1 = {"backbeat", "backbeat_up", "backbeat_hook", "ghost", "ghost_hook"}
+PERC_1 = {"groove_hint", "groove", "groove_full", "ghost", "ghost_hook"}
 
 
 def build_1(name):
@@ -213,15 +216,15 @@ def build_1(name):
     match name:
         case "keys_warmup":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.12), comp_style="pop",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.35,
+                params=GeneratorParams(density=0.15), comp_style="pop",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.40,
             )
-            mods += [VelocityScalingModifier(scale=0.22), HumanizeModifier(timing_std=0.035, velocity_std=3)]
+            mods += [VelocityScalingModifier(scale=0.25), HumanizeModifier(timing_std=0.035, velocity_std=3)]
 
         case "keys_comp":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.35), comp_style="jazz",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.60,
+                params=GeneratorParams(density=0.38), comp_style="jazz",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.65,
             )
             mods += [LimitNoteRangeModifier(low=48, high=76), VelocityScalingModifier(scale=0.45),
                      HumanizeModifier(timing_std=0.02, velocity_std=5),
@@ -229,7 +232,7 @@ def build_1(name):
 
         case "keys_busy":
             gen = ModernChordPatternGenerator(
-                params=GeneratorParams(density=0.45), extension="min7",
+                params=GeneratorParams(density=0.48), extension="min7",
                 stab_pattern="dense", voicing="open",
             )
             mods += [LimitNoteRangeModifier(low=48, high=76), VelocityScalingModifier(scale=0.42),
@@ -237,17 +240,17 @@ def build_1(name):
 
         case "keys_hook":
             gen = ModernChordPatternGenerator(
-                params=GeneratorParams(density=0.40), extension="maj9",
+                params=GeneratorParams(density=0.44), extension="maj9",
                 stab_pattern="syncopated", voicing="open",
             )
             mods += [LimitNoteRangeModifier(low=48, high=76), VelocityScalingModifier(scale=0.48),
                      HumanizeModifier(timing_std=0.015, velocity_std=4),
-                     SwingController(swing_ratio=0.57, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "keys_soft":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.15), comp_style="pop",
-                voicing_type="shell", accent_pattern="2_4", chord_density=0.30,
+                params=GeneratorParams(density=0.18), comp_style="pop",
+                voicing_type="shell", accent_pattern="2_4", chord_density=0.35,
             )
             mods += [LimitNoteRangeModifier(low=48, high=72), VelocityScalingModifier(scale=0.25),
                      HumanizeModifier(timing_std=0.04, velocity_std=3),
@@ -268,49 +271,74 @@ def build_1(name):
 
         case "bass_hint":
             gen = WalkingBassGenerator(
-                params=GeneratorParams(density=0.12), approach_style="mixed",
-                connect_roots=True, add_chromatic_passing=False, swing_eighth_ratio=0.60,
+                params=GeneratorParams(density=0.15), approach_style="mixed",
+                connect_roots=True, add_chromatic_passing=False, swing_eighth_ratio=0.62,
             )
-            mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.28)]
+            mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.30)]
 
         case "bass":
             gen = WalkingBassGenerator(
-                params=GeneratorParams(density=0.40), approach_style="mixed",
-                connect_roots=True, add_chromatic_passing=True, swing_eighth_ratio=0.62,
+                params=GeneratorParams(density=0.45), approach_style="mixed",
+                connect_roots=True, add_chromatic_passing=True, swing_eighth_ratio=0.65,
             )
-            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.65),
+            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.68),
                      HumanizeModifier(timing_std=0.015, velocity_std=5)]
 
         case "bass_walk":
             gen = WalkingBassGenerator(
-                params=GeneratorParams(density=0.28), approach_style="diatonic",
-                connect_roots=True, add_chromatic_passing=False, swing_eighth_ratio=0.58,
+                params=GeneratorParams(density=0.30), approach_style="diatonic",
+                connect_roots=True, add_chromatic_passing=False, swing_eighth_ratio=0.60,
             )
-            mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.40),
-                     CrescendoModifier(start_vel=55, end_vel=28)]
+            mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.45),
+                     CrescendoModifier(start_vel=60, end_vel=30)]
 
-        case "backbeat":
-            gen = BackbeatGenerator(
-                params=GeneratorParams(density=0.30), mode="chop",
-                accent_velocity=0.85, ghost_velocity=0.30, subdivision=0.5,
-                pitch_strategy="chord_tone",
+        case "bass_slap":
+            gen = BassSlapGenerator(
+                params=GeneratorParams(density=0.50), slap_pattern="funky",
+                ghost_note_prob=0.35, pop_probability=0.40, octave_range=2,
             )
+            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.72),
+                     HumanizeModifier(timing_std=0.015, velocity_std=5)]
 
-        case "backbeat_up":
-            gen = BackbeatGenerator(
-                params=GeneratorParams(density=0.40), mode="ghost",
-                accent_velocity=1.0, ghost_velocity=0.38, subdivision=0.5,
-                pitch_strategy="chord_tone",
+        case "bass_slap_hook":
+            gen = BassSlapGenerator(
+                params=GeneratorParams(density=0.55), slap_pattern="slap_pop",
+                ghost_note_prob=0.40, pop_probability=0.50, octave_range=2,
             )
-            mods.append(VelocityScalingModifier(scale=0.50))
+            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.78),
+                     HumanizeModifier(timing_std=0.01, velocity_std=4)]
 
-        case "backbeat_hook":
-            gen = BackbeatGenerator(
-                params=GeneratorParams(density=0.45), mode="chop",
-                accent_velocity=1.05, ghost_velocity=0.38, subdivision=0.5,
-                pitch_strategy="chord_tone",
+        case "groove_hint":
+            gen = GrooveGenerator(
+                params=GeneratorParams(density=0.15), groove_pattern="soul",
+                ghost_note_vel=25, accent_vel=80,
             )
-            mods += [VelocityScalingModifier(scale=0.55), HumanizeModifier(timing_std=0.01, velocity_std=4)]
+            mods.append(VelocityScalingModifier(scale=0.25))
+
+        case "groove":
+            gen = GrooveGenerator(
+                params=GeneratorParams(density=0.45), groove_pattern="soul",
+                ghost_note_vel=30, accent_vel=105,
+            )
+            mods.append(HumanizeModifier(timing_std=0.01, velocity_std=6))
+
+        case "groove_full":
+            gen = GrooveGenerator(
+                params=GeneratorParams(density=0.55), groove_pattern="funk_1",
+                ghost_note_vel=32, accent_vel=110,
+            )
+            mods += [HumanizeModifier(timing_std=0.01, velocity_std=5),
+                     SwingController(swing_ratio=0.58, grid=0.5)]
+
+        case "guitar_funk":
+            gen = GuitarStrummingGenerator(
+                params=GeneratorParams(density=0.45), strum_pattern="funk",
+                palm_mute_ratio=0.35, accent_velocity=1.15, dead_strums=True,
+                strum_delay=0.012, string_count=6,
+            )
+            mods += [LimitNoteRangeModifier(low=40, high=67), VelocityScalingModifier(scale=0.48),
+                     HumanizeModifier(timing_std=0.015, velocity_std=5),
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "ghost":
             gen = GhostNotesGenerator(
@@ -338,7 +366,7 @@ def build_1(name):
             )
             mods += [LimitNoteRangeModifier(low=58, high=79), VelocityScalingModifier(scale=0.45),
                      HumanizeModifier(timing_std=0.02, velocity_std=5),
-                     SwingController(swing_ratio=0.57, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "melody_hook":
             gen = MelodyGenerator(
@@ -353,7 +381,7 @@ def build_1(name):
             )
             mods += [LimitNoteRangeModifier(low=60, high=82), VelocityScalingModifier(scale=0.52),
                      HumanizeModifier(timing_std=0.015, velocity_std=4),
-                     SwingController(swing_ratio=0.57, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "melody_pre":
             gen = MelodyGenerator(
@@ -375,7 +403,7 @@ def build_1(name):
             )
             mods += [LimitNoteRangeModifier(low=65, high=84), VelocityScalingModifier(scale=0.35),
                      HumanizeModifier(timing_std=0.025, velocity_std=4),
-                     SwingController(swing_ratio=0.57, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "chops":
             gen = VocalChopsGenerator(
@@ -383,7 +411,7 @@ def build_1(name):
                 density=0.40, chop_pattern="syncopated", source_pitch=65,
             )
             mods += [VelocityScalingModifier(scale=0.40), HumanizeModifier(timing_std=0.025, velocity_std=4),
-                     SwingController(swing_ratio=0.57, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "riser":
             gen = FXRiserGenerator(
@@ -404,34 +432,32 @@ def build_1(name):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TRACK 2 — Silk & Smoke (90s Quiet Storm)
-# Gb Major | 84 BPM | 40 bars
+# TRACK 2 — Silk & Smoke (90s New Jack Swing / R&B Bounce)
+# Gb Major | 114 BPM | 40 bars
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SCALE_2 = Scale(root=6, mode=Mode.MAJOR)
 
 SECTIONS_2 = [
-    ("Intro",    4, ["keys_warmup", "synth_bass_hint"]),
-    ("V1",       8, ["keys_comp", "chords_min7", "synth_bass", "backbeat", "melody"]),
-    ("Hook",     8, ["keys_hook", "chords_hook", "synth_bass", "backbeat_hook",
-                     "melody_hook", "chops"]),
-    ("Break",    4, ["keys_soft", "synth_bass_soft", "melody_solo"]),
-    ("V2",       8, ["keys_comp", "chords_min7", "synth_bass", "backbeat", "chops", "melody"]),
-    ("Hook 2",   8, ["keys_hook", "chords_hook", "synth_bass", "backbeat_hook",
-                     "melody_hook", "chops", "riser"]),
-    ("Outro",    4, ["keys_soft", "synth_bass_soft", "impact"]),
+    ("Intro",    4, ["keys_warmup", "synth_bass_hint", "drums_hint"]),
+    ("V1",       8, ["keys_comp", "chords_min7", "synth_bass", "drums", "melody"]),
+    ("Hook",     8, ["keys_hook", "chords_hook", "bass_slap", "drums", "melody_hook", "chops"]),
+    ("Break",    4, ["keys_soft", "synth_bass_soft", "drums_soft", "melody_solo"]),
+    ("V2",       8, ["keys_comp", "chords_min7", "synth_bass", "drums", "chops", "melody"]),
+    ("Hook 2",   8, ["keys_hook", "chords_hook", "bass_slap", "drums", "melody_hook", "chops", "riser"]),
+    ("Outro",    4, ["keys_soft", "synth_bass_soft", "drums_soft", "impact"]),
 ]
 
 INSTRUMENTS_2 = {
     "keys_warmup": 4, "keys_comp": 4, "keys_hook": 4, "keys_soft": 4,
     "chords_min7": 5, "chords_hook": 5,
-    "synth_bass_hint": 38, "synth_bass": 38, "synth_bass_soft": 38,
-    "backbeat": 0, "backbeat_hook": 0,
+    "synth_bass_hint": 38, "synth_bass": 38, "synth_bass_soft": 38, "bass_slap": 33,
+    "drums_hint": 0, "drums": 0, "drums_soft": 0,
     "melody": 56, "melody_hook": 56, "melody_solo": 56,
     "chops": 54, "riser": 97, "impact": 103,
 }
 
-PERC_2 = {"backbeat", "backbeat_hook"}
+PERC_2 = {"drums_hint", "drums", "drums_soft"}
 
 
 def build_2(name):
@@ -439,118 +465,138 @@ def build_2(name):
     match name:
         case "keys_warmup":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.10), comp_style="pop",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.30,
+                params=GeneratorParams(density=0.15), comp_style="pop",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.35,
             )
             mods += [VelocityScalingModifier(scale=0.20), HumanizeModifier(timing_std=0.04, velocity_std=3)]
 
         case "keys_comp":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.32), comp_style="pop",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.55,
+                params=GeneratorParams(density=0.35), comp_style="pop",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.60,
             )
             mods += [LimitNoteRangeModifier(low=50, high=74), VelocityScalingModifier(scale=0.42),
                      HumanizeModifier(timing_std=0.025, velocity_std=4),
-                     SwingController(swing_ratio=0.55, grid=0.5)]
+                     SwingController(swing_ratio=0.61, grid=0.5)]
 
         case "keys_hook":
             gen = ModernChordPatternGenerator(
-                params=GeneratorParams(density=0.38), extension="maj7",
+                params=GeneratorParams(density=0.42), extension="maj7",
                 stab_pattern="syncopated", voicing="open",
             )
             mods += [LimitNoteRangeModifier(low=50, high=74), VelocityScalingModifier(scale=0.48),
                      HumanizeModifier(timing_std=0.02, velocity_std=4),
-                     SwingController(swing_ratio=0.55, grid=0.5)]
+                     SwingController(swing_ratio=0.61, grid=0.5)]
 
         case "keys_soft":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.15), comp_style="pop",
-                voicing_type="shell", accent_pattern="2_4", chord_density=0.28,
+                params=GeneratorParams(density=0.18), comp_style="pop",
+                voicing_type="shell", accent_pattern="2_4", chord_density=0.32,
             )
             mods += [LimitNoteRangeModifier(low=50, high=72), VelocityScalingModifier(scale=0.22),
                      CrescendoModifier(start_vel=45, end_vel=22)]
 
         case "chords_min7":
             gen = ModernChordPatternGenerator(
-                params=GeneratorParams(density=0.30), extension="min7",
+                params=GeneratorParams(density=0.35), extension="min7",
                 stab_pattern="sparse", voicing="closed",
             )
             mods += [LimitNoteRangeModifier(low=48, high=72), VelocityScalingModifier(scale=0.38),
-                     HumanizeModifier(timing_std=0.02, velocity_std=3)]
+                     HumanizeModifier(timing_std=0.02, velocity_std=3),
+                     SwingController(swing_ratio=0.61, grid=0.5)]
 
         case "chords_hook":
             gen = ModernChordPatternGenerator(
-                params=GeneratorParams(density=0.35), extension="min9",
+                params=GeneratorParams(density=0.40), extension="min9",
                 stab_pattern="syncopated", voicing="open",
             )
             mods += [LimitNoteRangeModifier(low=48, high=72), VelocityScalingModifier(scale=0.42),
-                     SwingController(swing_ratio=0.55, grid=0.5)]
+                     SwingController(swing_ratio=0.61, grid=0.5)]
 
         case "synth_bass_hint":
             gen = SynthBassGenerator(
-                params=GeneratorParams(density=0.10), waveform="sine",
+                params=GeneratorParams(density=0.15), waveform="sine",
                 pattern="plucked", slide_probability=0.1, octave_variation=0.05,
             )
             mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.25)]
 
         case "synth_bass":
             gen = SynthBassGenerator(
-                params=GeneratorParams(density=0.38), waveform="saw",
+                params=GeneratorParams(density=0.42), waveform="saw",
                 pattern="plucked", slide_probability=0.25, octave_variation=0.12,
             )
-            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.60),
-                     HumanizeModifier(timing_std=0.015, velocity_std=4)]
+            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.62),
+                     HumanizeModifier(timing_std=0.015, velocity_std=4),
+                     SwingController(swing_ratio=0.61, grid=0.5)]
 
         case "synth_bass_soft":
             gen = SynthBassGenerator(
-                params=GeneratorParams(density=0.20), waveform="sine",
+                params=GeneratorParams(density=0.22), waveform="sine",
                 pattern="plucked", slide_probability=0.10, octave_variation=0.05,
             )
             mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.35),
                      CrescendoModifier(start_vel=45, end_vel=22)]
 
-        case "backbeat":
-            gen = BackbeatGenerator(
-                params=GeneratorParams(density=0.28), mode="chop",
-                accent_velocity=0.80, ghost_velocity=0.25, subdivision=0.5,
-                pitch_strategy="chord_tone",
+        case "bass_slap":
+            gen = BassSlapGenerator(
+                params=GeneratorParams(density=0.50), slap_pattern="funky",
+                ghost_note_prob=0.38, pop_probability=0.42, octave_range=2,
             )
+            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.72),
+                     HumanizeModifier(timing_std=0.015, velocity_std=5),
+                     SwingController(swing_ratio=0.61, grid=0.5)]
 
-        case "backbeat_hook":
-            gen = BackbeatGenerator(
-                params=GeneratorParams(density=0.38), mode="chop",
-                accent_velocity=0.95, ghost_velocity=0.32, subdivision=0.5,
-                pitch_strategy="chord_tone",
+        case "drums_hint":
+            gen = ElectronicDrumsGenerator(
+                params=GeneratorParams(density=0.22), kit="linn",
+                pattern="minimal", sidechain=False,
             )
-            mods += [VelocityScalingModifier(scale=0.50), HumanizeModifier(timing_std=0.01, velocity_std=3)]
+            mods += [VelocityScalingModifier(scale=0.35), HumanizeModifier(timing_std=0.025, velocity_std=3)]
+
+        case "drums":
+            gen = ElectronicDrumsGenerator(
+                params=GeneratorParams(density=0.48), kit="linn",
+                pattern="breakbeat", sidechain=True,
+            )
+            mods += [VelocityScalingModifier(scale=0.55), HumanizeModifier(timing_std=0.015, velocity_std=4),
+                     SwingController(swing_ratio=0.61, grid=0.5)]
+
+        case "drums_soft":
+            gen = ElectronicDrumsGenerator(
+                params=GeneratorParams(density=0.25), kit="linn",
+                pattern="minimal", sidechain=False,
+            )
+            mods += [VelocityScalingModifier(scale=0.35), HumanizeModifier(timing_std=0.025, velocity_std=3)]
 
         case "melody":
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.32), harmony_note_probability=0.72,
+                params=GeneratorParams(density=0.35), harmony_note_probability=0.72,
                 note_range_low=60, note_range_high=79, steps_probability=0.90,
                 random_movement=0.80, first_note="any_chord", last_note="last_chord_root",
-                after_leap="step_opposite", syncopation=0.30, phrase_length=8.0,
+                after_leap="step_opposite", syncopation=0.35, phrase_length=8.0,
                 drama_shape="crescendo", drama_peak=0.50,
                 groove_template=LAID_BACK, beats_per_bar=4, denominator=4,
             )
             mods += [LimitNoteRangeModifier(low=60, high=79), VelocityScalingModifier(scale=0.45),
-                     HumanizeModifier(timing_std=0.025, velocity_std=4)]
+                     HumanizeModifier(timing_std=0.025, velocity_std=4),
+                     SwingController(swing_ratio=0.61, grid=0.5)]
 
         case "melody_hook":
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.42), harmony_note_probability=0.74,
+                params=GeneratorParams(density=0.45), harmony_note_probability=0.74,
                 note_range_low=62, note_range_high=81, steps_probability=0.88,
                 random_movement=0.75, first_note="chord_root", last_note="last_chord_root",
                 after_leap="step_opposite", climax="up_5th", penultimate_step_above=True,
-                syncopation=0.35, phrase_length=8.0, motif_probability=0.55,
+                syncopation=0.40, phrase_length=8.0, motif_probability=0.55,
                 groove_template=LAID_BACK, beats_per_bar=4, denominator=4,
             )
             mods += [LimitNoteRangeModifier(low=62, high=81), VelocityScalingModifier(scale=0.50),
-                     HumanizeModifier(timing_std=0.02, velocity_std=4)]
+                     HumanizeModifier(timing_std=0.02, velocity_std=4),
+                     SwingController(swing_ratio=0.61, grid=0.5)]
 
         case "melody_solo":
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.28), harmony_note_probability=0.78,
+                params=GeneratorParams(density=0.30), harmony_note_probability=0.78,
                 note_range_low=58, note_range_high=77, steps_probability=0.92,
                 random_movement=0.82, first_note="scale", last_note="any",
                 after_leap="step_any", phrase_length=4.0,
@@ -562,10 +608,11 @@ def build_2(name):
 
         case "chops":
             gen = VocalChopsGenerator(
-                params=GeneratorParams(density=0.30), processing="pitch_shift",
-                density=0.35, chop_pattern="syncopated", source_pitch=65,
+                params=GeneratorParams(density=0.35), processing="pitch_shift",
+                density=0.40, chop_pattern="syncopated", source_pitch=65,
             )
-            mods += [VelocityScalingModifier(scale=0.38), HumanizeModifier(timing_std=0.03, velocity_std=3)]
+            mods += [VelocityScalingModifier(scale=0.38), HumanizeModifier(timing_std=0.03, velocity_std=3),
+                     SwingController(swing_ratio=0.61, grid=0.5)]
 
         case "riser":
             gen = FXRiserGenerator(
@@ -586,8 +633,8 @@ def build_2(name):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TRACK 3 — Drip (Modern Trap-Soul)
-# Bb Dorian | 96 BPM | 48 bars
+# TRACK 3 — Drip (Modern Trap-Soul / R&B Drill Hybrid)
+# Bb Dorian | 124 BPM | 48 bars
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SCALE_3 = Scale(root=10, mode=Mode.DORIAN)
@@ -596,7 +643,7 @@ SECTIONS_3 = [
     ("Intro",    4, ["keys_warmup", "bass808_hint", "trap_hint"]),
     ("Hook",     8, ["keys_comp", "bass808", "trap", "ghost", "melody_hook", "chops"]),
     ("V1",       8, ["keys_comp", "bass808", "trap", "ghost", "melody"]),
-    ("Pre",      4, ["keys_busy", "bass808", "trap_up", "ghost", "melody_pre", "riser"]),
+    ("Pre",      4, ["keys_busy", "bass808_hook", "trap_up", "ghost", "melody_pre", "riser"]),
     ("Hook 2",   8, ["keys_hook", "bass808_hook", "trap", "ghost_hook", "melody_hook",
                      "counter", "chops"]),
     ("V2",       8, ["keys_comp", "bass808", "trap", "ghost", "melody", "chops"]),
@@ -624,22 +671,22 @@ def build_3(name):
     match name:
         case "keys_warmup":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.10), comp_style="pop",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.30,
+                params=GeneratorParams(density=0.15), comp_style="pop",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.35,
             )
             mods += [VelocityScalingModifier(scale=0.18), HumanizeModifier(timing_std=0.04, velocity_std=3)]
 
         case "keys_comp":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.35), comp_style="jazz",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.55,
+                params=GeneratorParams(density=0.38), comp_style="jazz",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.60,
             )
             mods += [LimitNoteRangeModifier(low=48, high=76), VelocityScalingModifier(scale=0.40),
                      HumanizeModifier(timing_std=0.015, velocity_std=4)]
 
         case "keys_busy":
             gen = ModernChordPatternGenerator(
-                params=GeneratorParams(density=0.48), extension="min7",
+                params=GeneratorParams(density=0.52), extension="min7",
                 stab_pattern="dense", voicing="open",
             )
             mods += [LimitNoteRangeModifier(low=48, high=76), VelocityScalingModifier(scale=0.40),
@@ -647,7 +694,7 @@ def build_3(name):
 
         case "keys_hook":
             gen = ModernChordPatternGenerator(
-                params=GeneratorParams(density=0.42), extension="maj9",
+                params=GeneratorParams(density=0.45), extension="maj9",
                 stab_pattern="syncopated", voicing="open",
             )
             mods += [LimitNoteRangeModifier(low=48, high=76), VelocityScalingModifier(scale=0.45),
@@ -655,53 +702,53 @@ def build_3(name):
 
         case "keys_soft":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.12), comp_style="pop",
-                voicing_type="shell", accent_pattern="2_4", chord_density=0.25,
+                params=GeneratorParams(density=0.15), comp_style="pop",
+                voicing_type="shell", accent_pattern="2_4", chord_density=0.30,
             )
             mods += [LimitNoteRangeModifier(low=48, high=72), VelocityScalingModifier(scale=0.20),
                      CrescendoModifier(start_vel=42, end_vel=20)]
 
         case "bass808_hint":
             gen = Bass808SlidingGenerator(
-                params=GeneratorParams(density=0.10), pattern="trap_basic",
-                slide_probability=0.15, octave_range=1, accent_velocity=0.8,
+                params=GeneratorParams(density=0.15), pattern="trap_basic",
+                slide_probability=0.20, octave_range=1, accent_velocity=0.8,
             )
             mods += [LimitNoteRangeModifier(low=24, high=48), VelocityScalingModifier(scale=0.30)]
 
         case "bass808":
             gen = Bass808SlidingGenerator(
-                params=GeneratorParams(density=0.40), pattern="trap_syncopated",
-                slide_probability=0.35, octave_range=2, accent_velocity=1.05,
+                params=GeneratorParams(density=0.45), pattern="trap_syncopated",
+                slide_probability=0.40, octave_range=2, accent_velocity=1.05,
             )
             mods += [LimitNoteRangeModifier(low=24, high=52), VelocityScalingModifier(scale=0.62),
                      HumanizeModifier(timing_std=0.01, velocity_std=4)]
 
         case "bass808_hook":
             gen = Bass808SlidingGenerator(
-                params=GeneratorParams(density=0.45), pattern="trap_syncopated",
-                slide_probability=0.40, octave_range=2, accent_velocity=1.10,
+                params=GeneratorParams(density=0.50), pattern="drill_sliding",
+                slide_probability=0.45, octave_range=2, accent_velocity=1.12,
             )
             mods += [LimitNoteRangeModifier(low=24, high=52), VelocityScalingModifier(scale=0.68),
                      HumanizeModifier(timing_std=0.008, velocity_std=3)]
 
         case "trap_hint":
             gen = TrapDrumsGenerator(
-                params=GeneratorParams(density=0.15), variant="minimal",
-                hat_roll_density=0.15, kick_pattern="sparse", open_hat_probability=0.05,
+                params=GeneratorParams(density=0.18), variant="minimal",
+                hat_roll_density=0.15, kick_pattern="sparse", open_hat_probability=0.08,
             )
             mods.append(VelocityScalingModifier(scale=0.25))
 
         case "trap":
             gen = TrapDrumsGenerator(
-                params=GeneratorParams(density=0.42), variant="standard",
-                hat_roll_density=0.45, kick_pattern="standard", open_hat_probability=0.15,
+                params=GeneratorParams(density=0.45), variant="drill",
+                hat_roll_density=0.55, kick_pattern="syncopated", open_hat_probability=0.22,
             )
             mods += [VelocityScalingModifier(scale=0.55), HumanizeModifier(timing_std=0.008, velocity_std=4)]
 
         case "trap_up":
             gen = TrapDrumsGenerator(
-                params=GeneratorParams(density=0.50), variant="standard",
-                hat_roll_density=0.55, kick_pattern="syncopated", open_hat_probability=0.20,
+                params=GeneratorParams(density=0.52), variant="drill",
+                hat_roll_density=0.65, kick_pattern="syncopated", open_hat_probability=0.28,
             )
             mods += [VelocityScalingModifier(scale=0.58), HumanizeModifier(timing_std=0.008, velocity_std=4)]
 
@@ -720,7 +767,7 @@ def build_3(name):
 
         case "melody":
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.38), harmony_note_probability=0.68,
+                params=GeneratorParams(density=0.40), harmony_note_probability=0.68,
                 note_range_low=58, note_range_high=79, steps_probability=0.85,
                 random_movement=0.72, first_note="any_chord", last_note="last_chord_root",
                 after_leap="step_any", syncopation=0.50, rhythm_variety=0.6,
@@ -733,7 +780,7 @@ def build_3(name):
 
         case "melody_hook":
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.48), harmony_note_probability=0.72,
+                params=GeneratorParams(density=0.50), harmony_note_probability=0.72,
                 note_range_low=60, note_range_high=82, steps_probability=0.86,
                 random_movement=0.68, first_note="chord_root", last_note="last_chord_root",
                 after_leap="step_opposite", climax="up_5th", penultimate_step_above=True,
@@ -746,7 +793,7 @@ def build_3(name):
 
         case "melody_pre":
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.42), harmony_note_probability=0.65,
+                params=GeneratorParams(density=0.45), harmony_note_probability=0.65,
                 note_range_low=58, note_range_high=80, steps_probability=0.88,
                 random_movement=0.68, first_note="scale", last_note="any",
                 after_leap="step_any", syncopation=0.55, phrase_length=4.0,
@@ -791,19 +838,19 @@ def build_3(name):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TRACK 4 — Golden Hour (Gospel-Soul / Warm)
-# Db Lydian | 78 BPM | 40 bars
+# TRACK 4 — Golden Hour (Upbeat Gospel-Funk / Disco-Soul)
+# Db Lydian | 112 BPM | 40 bars
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SCALE_4 = Scale(root=1, mode=Mode.LYDIAN)
 
 SECTIONS_4 = [
-    ("Intro",    4, ["piano_warmup", "organ_soft", "bass_hint", "strings_pad"]),
-    ("V1",       8, ["piano_comp", "organ", "bass", "backbeat", "melody", "strings_swell"]),
-    ("Hook",     8, ["piano_hook", "organ_full", "bass", "backbeat_hook",
+    ("Intro",    4, ["piano_warmup", "organ_soft", "bass_hint", "strings_pad", "groove_hint"]),
+    ("V1",       8, ["piano_comp", "organ", "bass", "groove", "melody", "strings_swell"]),
+    ("Hook",     8, ["piano_hook", "organ_full", "bass_slap_hook", "groove_full",
                      "melody_hook", "counter", "strings_full"]),
-    ("Bridge",   4, ["piano_soft", "organ_soft", "bass_walk", "strings_pad", "melody_bridge"]),
-    ("Hook 2",   8, ["piano_hook", "organ_full", "bass", "backbeat_hook",
+    ("Bridge",   4, ["piano_soft", "organ_soft", "bass_walk", "groove_hint", "strings_pad", "melody_bridge"]),
+    ("Hook 2",   8, ["piano_hook", "organ_full", "bass_slap_hook", "groove_full",
                      "melody_hook", "counter", "strings_full", "riser"]),
     ("Outro",    4, ["piano_soft", "organ_soft", "bass_walk", "strings_pad", "impact"]),
 ]
@@ -811,15 +858,15 @@ SECTIONS_4 = [
 INSTRUMENTS_4 = {
     "piano_warmup": 1, "piano_comp": 1, "piano_hook": 1, "piano_soft": 1,
     "organ": 16, "organ_soft": 16, "organ_full": 16,
-    "bass_hint": 33, "bass": 33, "bass_walk": 33,
-    "backbeat": 0, "backbeat_hook": 0,
+    "bass_hint": 33, "bass": 33, "bass_walk": 33, "bass_slap_hook": 33,
+    "groove_hint": 0, "groove": 0, "groove_full": 0,
     "melody": 56, "melody_hook": 56, "melody_bridge": 56,
     "counter": 49,
     "strings_pad": 48, "strings_swell": 48, "strings_full": 48,
     "riser": 97, "impact": 103,
 }
 
-PERC_4 = {"backbeat", "backbeat_hook"}
+PERC_4 = {"groove_hint", "groove", "groove_full"}
 
 
 def build_4(name):
@@ -827,33 +874,33 @@ def build_4(name):
     match name:
         case "piano_warmup":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.10), comp_style="pop",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.28,
+                params=GeneratorParams(density=0.15), comp_style="pop",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.35,
             )
             mods += [VelocityScalingModifier(scale=0.20), HumanizeModifier(timing_std=0.04, velocity_std=3)]
 
         case "piano_comp":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.35), comp_style="jazz",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.58,
+                params=GeneratorParams(density=0.38), comp_style="jazz",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.62,
             )
             mods += [LimitNoteRangeModifier(low=48, high=76), VelocityScalingModifier(scale=0.45),
                      HumanizeModifier(timing_std=0.02, velocity_std=5),
-                     SwingController(swing_ratio=0.56, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "piano_hook":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.40), comp_style="jazz",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.65,
+                params=GeneratorParams(density=0.44), comp_style="jazz",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.70,
             )
             mods += [LimitNoteRangeModifier(low=48, high=76), VelocityScalingModifier(scale=0.50),
                      HumanizeModifier(timing_std=0.015, velocity_std=4),
-                     SwingController(swing_ratio=0.56, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "piano_soft":
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.12), comp_style="pop",
-                voicing_type="shell", accent_pattern="2_4", chord_density=0.25,
+                params=GeneratorParams(density=0.15), comp_style="pop",
+                voicing_type="shell", accent_pattern="2_4", chord_density=0.30,
             )
             mods += [LimitNoteRangeModifier(low=48, high=72), VelocityScalingModifier(scale=0.22),
                      CrescendoModifier(start_vel=42, end_vel=22)]
@@ -881,54 +928,70 @@ def build_4(name):
 
         case "bass_hint":
             gen = WalkingBassGenerator(
-                params=GeneratorParams(density=0.10), approach_style="diatonic",
-                connect_roots=True, add_chromatic_passing=False, swing_eighth_ratio=0.55,
+                params=GeneratorParams(density=0.15), approach_style="diatonic",
+                connect_roots=True, add_chromatic_passing=False, swing_eighth_ratio=0.58,
             )
-            mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.25)]
+            mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.30)]
 
         case "bass":
             gen = WalkingBassGenerator(
-                params=GeneratorParams(density=0.38), approach_style="mixed",
-                connect_roots=True, add_chromatic_passing=True, swing_eighth_ratio=0.58,
+                params=GeneratorParams(density=0.42), approach_style="mixed",
+                connect_roots=True, add_chromatic_passing=True, swing_eighth_ratio=0.62,
             )
-            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.60),
+            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.65),
                      HumanizeModifier(timing_std=0.015, velocity_std=5)]
 
         case "bass_walk":
             gen = WalkingBassGenerator(
-                params=GeneratorParams(density=0.25), approach_style="diatonic",
-                connect_roots=True, add_chromatic_passing=False, swing_eighth_ratio=0.55,
+                params=GeneratorParams(density=0.30), approach_style="diatonic",
+                connect_roots=True, add_chromatic_passing=False, swing_eighth_ratio=0.58,
             )
-            mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.38),
+            mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.45),
                      CrescendoModifier(start_vel=48, end_vel=25)]
 
-        case "backbeat":
-            gen = BackbeatGenerator(
-                params=GeneratorParams(density=0.28), mode="chop",
-                accent_velocity=0.82, ghost_velocity=0.28, subdivision=0.5,
-                pitch_strategy="chord_tone",
+        case "bass_slap_hook":
+            gen = BassSlapGenerator(
+                params=GeneratorParams(density=0.55), slap_pattern="funky",
+                ghost_note_prob=0.38, pop_probability=0.45, octave_range=2,
             )
+            mods += [LimitNoteRangeModifier(low=28, high=52), VelocityScalingModifier(scale=0.72),
+                     HumanizeModifier(timing_std=0.015, velocity_std=5),
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
-        case "backbeat_hook":
-            gen = BackbeatGenerator(
-                params=GeneratorParams(density=0.38), mode="chop",
-                accent_velocity=1.0, ghost_velocity=0.35, subdivision=0.5,
-                pitch_strategy="chord_tone",
+        case "groove_hint":
+            gen = GrooveGenerator(
+                params=GeneratorParams(density=0.15), groove_pattern="soul",
+                ghost_note_vel=25, accent_vel=80,
             )
-            mods += [VelocityScalingModifier(scale=0.52), HumanizeModifier(timing_std=0.01, velocity_std=4)]
+            mods.append(VelocityScalingModifier(scale=0.25))
+
+        case "groove":
+            gen = GrooveGenerator(
+                params=GeneratorParams(density=0.45), groove_pattern="soul",
+                ghost_note_vel=30, accent_vel=105,
+            )
+            mods.append(HumanizeModifier(timing_std=0.01, velocity_std=6))
+
+        case "groove_full":
+            gen = GrooveGenerator(
+                params=GeneratorParams(density=0.55), groove_pattern="funk_2",
+                ghost_note_vel=32, accent_vel=110,
+            )
+            mods += [HumanizeModifier(timing_std=0.01, velocity_std=5),
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "melody":
             gen = MelodyGenerator(
                 params=GeneratorParams(density=0.35), harmony_note_probability=0.74,
                 note_range_low=58, note_range_high=79, steps_probability=0.92,
                 random_movement=0.80, first_note="any_chord", last_note="last_chord_root",
-                after_leap="step_opposite", syncopation=0.25, phrase_length=8.0,
+                after_leap="step_opposite", syncopation=0.30, phrase_length=8.0,
                 drama_shape="crescendo", drama_peak=0.55, motif_probability=0.5,
                 groove_template=SHUFFLE, beats_per_bar=4, denominator=4,
             )
             mods += [LimitNoteRangeModifier(low=58, high=79), VelocityScalingModifier(scale=0.48),
                      HumanizeModifier(timing_std=0.02, velocity_std=5),
-                     SwingController(swing_ratio=0.55, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "melody_hook":
             gen = MelodyGenerator(
@@ -936,20 +999,20 @@ def build_4(name):
                 note_range_low=60, note_range_high=82, steps_probability=0.90,
                 random_movement=0.75, first_note="chord_root", last_note="last_chord_root",
                 after_leap="step_opposite", climax="up_5th", penultimate_step_above=True,
-                syncopation=0.30, phrase_length=8.0, motif_probability=0.65,
+                syncopation=0.35, phrase_length=8.0, motif_probability=0.65,
                 drama_shape="dramatic", drama_peak=0.65,
                 groove_template=SHUFFLE, beats_per_bar=4, denominator=4,
             )
             mods += [LimitNoteRangeModifier(low=60, high=82), VelocityScalingModifier(scale=0.52),
                      HumanizeModifier(timing_std=0.015, velocity_std=4),
-                     SwingController(swing_ratio=0.55, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "melody_bridge":
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.30), harmony_note_probability=0.70,
+                params=GeneratorParams(density=0.32), harmony_note_probability=0.70,
                 note_range_low=56, note_range_high=78, steps_probability=0.92,
                 random_movement=0.82, first_note="scale", last_note="any",
-                after_leap="step_any", syncopation=0.20, phrase_length=4.0,
+                after_leap="step_any", syncopation=0.25, phrase_length=4.0,
                 drama_shape="crescendo", drama_peak=0.50,
                 groove_template=SHUFFLE, beats_per_bar=4, denominator=4,
             )
@@ -964,7 +1027,7 @@ def build_4(name):
             )
             mods += [LimitNoteRangeModifier(low=65, high=84), VelocityScalingModifier(scale=0.32),
                      HumanizeModifier(timing_std=0.025, velocity_std=4),
-                     SwingController(swing_ratio=0.55, grid=0.5)]
+                     SwingController(swing_ratio=0.58, grid=0.5)]
 
         case "strings_pad":
             gen = StringsEnsembleGenerator(
@@ -1036,137 +1099,155 @@ def build_5(name):
     mods = []
     match name:
         case "keys_warmup":
+            # Dreamy warmup chord pad/EP, low density, soft
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.08), comp_style="pop",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.22,
+                params=GeneratorParams(density=0.15), comp_style="pop",
+                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.35,
             )
-            mods += [VelocityScalingModifier(scale=0.18), HumanizeModifier(timing_std=0.05, velocity_std=3)]
+            mods += [VelocityScalingModifier(scale=0.22), HumanizeModifier(timing_std=0.04, velocity_std=3)]
 
         case "keys_comp":
-            gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.28), comp_style="pop",
-                voicing_type="rootless", accent_pattern="syncopated", chord_density=0.48,
-            )
-            mods += [LimitNoteRangeModifier(low=50, high=74), VelocityScalingModifier(scale=0.38),
-                     HumanizeModifier(timing_std=0.03, velocity_std=4),
-                     SwingController(swing_ratio=0.56, grid=0.5)]
-
-        case "keys_hook":
+            # Active lo-fi house EP comping
             gen = ModernChordPatternGenerator(
-                params=GeneratorParams(density=0.32), extension="min9",
+                params=GeneratorParams(density=0.45), extension="min9",
                 stab_pattern="syncopated", voicing="open",
             )
-            mods += [LimitNoteRangeModifier(low=50, high=74), VelocityScalingModifier(scale=0.42),
-                     HumanizeModifier(timing_std=0.025, velocity_std=3),
-                     SwingController(swing_ratio=0.56, grid=0.5)]
+            mods += [LimitNoteRangeModifier(low=50, high=74), VelocityScalingModifier(scale=0.45),
+                     HumanizeModifier(timing_std=0.02, velocity_std=4),
+                     SwingController(swing_ratio=0.55, grid=0.25)]
+
+        case "keys_hook":
+            # Highly syncopated EP hook with 16th swing
+            gen = ModernChordPatternGenerator(
+                params=GeneratorParams(density=0.55), extension="min9",
+                stab_pattern="syncopated", voicing="open",
+            )
+            mods += [LimitNoteRangeModifier(low=50, high=76), VelocityScalingModifier(scale=0.50),
+                     HumanizeModifier(timing_std=0.015, velocity_std=4),
+                     SwingController(swing_ratio=0.55, grid=0.25)]
 
         case "keys_soft":
+            # Warm ambient bed keys
             gen = PianoCompGenerator(
-                params=GeneratorParams(density=0.10), comp_style="pop",
-                voicing_type="shell", accent_pattern="2_4", chord_density=0.20,
+                params=GeneratorParams(density=0.20), comp_style="pop",
+                voicing_type="shell", accent_pattern="2_4", chord_density=0.30,
             )
-            mods += [LimitNoteRangeModifier(low=50, high=72), VelocityScalingModifier(scale=0.18),
-                     HumanizeModifier(timing_std=0.05, velocity_std=2),
-                     CrescendoModifier(start_vel=40, end_vel=18)]
+            mods += [LimitNoteRangeModifier(low=50, high=72), VelocityScalingModifier(scale=0.25),
+                     HumanizeModifier(timing_std=0.035, velocity_std=3),
+                     CrescendoModifier(start_vel=42, end_vel=22)]
 
         case "synth_bass_hint":
-            gen = SynthBassGenerator(
-                params=GeneratorParams(density=0.08), waveform="sine",
-                pattern="plucked", slide_probability=0.08, octave_variation=0.03,
-            )
-            mods += [LimitNoteRangeModifier(low=28, high=46), VelocityScalingModifier(scale=0.22)]
-
-        case "synth_bass":
-            gen = SynthBassGenerator(
-                params=GeneratorParams(density=0.32), waveform="square",
-                pattern="plucked", slide_probability=0.18, octave_variation=0.08,
-            )
-            mods += [LimitNoteRangeModifier(low=28, high=50), VelocityScalingModifier(scale=0.55),
-                     HumanizeModifier(timing_std=0.02, velocity_std=4)]
-
-        case "synth_bass_soft":
+            # Bouncy minimal sine sub-bass hint
             gen = SynthBassGenerator(
                 params=GeneratorParams(density=0.15), waveform="sine",
-                pattern="plucked", slide_probability=0.08, octave_variation=0.03,
+                pattern="plucked", slide_probability=0.05, octave_variation=0.0,
             )
-            mods += [LimitNoteRangeModifier(low=28, high=46), VelocityScalingModifier(scale=0.30),
-                     CrescendoModifier(start_vel=42, end_vel=20)]
+            mods += [LimitNoteRangeModifier(low=28, high=46), VelocityScalingModifier(scale=0.35)]
+
+        case "synth_bass":
+            # Classic bouncy plucked lo-fi house bass (plucked square/sine mix, high density)
+            gen = SynthBassGenerator(
+                params=GeneratorParams(density=0.50), waveform="square",
+                pattern="plucked", slide_probability=0.15, octave_variation=0.08,
+            )
+            mods += [LimitNoteRangeModifier(low=28, high=48), VelocityScalingModifier(scale=0.65),
+                     HumanizeModifier(timing_std=0.015, velocity_std=5),
+                     SwingController(swing_ratio=0.55, grid=0.25)]
+
+        case "synth_bass_soft":
+            # Smooth warm sub-bass pad
+            gen = SynthBassGenerator(
+                params=GeneratorParams(density=0.25), waveform="sine",
+                pattern="plucked", slide_probability=0.05, octave_variation=0.0,
+            )
+            mods += [LimitNoteRangeModifier(low=28, high=46), VelocityScalingModifier(scale=0.45),
+                     CrescendoModifier(start_vel=48, end_vel=25)]
 
         case "drums_hint":
+            # Minimal four-on-the-floor kick & light percussion
             gen = ElectronicDrumsGenerator(
-                params=GeneratorParams(density=0.10), kit="808",
-                pattern="minimal", sidechain=False,
+                params=GeneratorParams(density=0.20), kit="909",
+                pattern="four_on_floor", sidechain=False,
             )
-            mods.append(VelocityScalingModifier(scale=0.20))
+            mods.append(VelocityScalingModifier(scale=0.30))
 
         case "drums":
+            # Full 909 four-on-the-floor house groove with sidechain ducking
             gen = ElectronicDrumsGenerator(
-                params=GeneratorParams(density=0.35), kit="808",
-                pattern="breakbeat", sidechain=True,
+                params=GeneratorParams(density=0.60), kit="909",
+                pattern="four_on_floor", sidechain=True,
             )
-            mods += [VelocityScalingModifier(scale=0.50), HumanizeModifier(timing_std=0.015, velocity_std=4)]
+            mods += [VelocityScalingModifier(scale=0.65), HumanizeModifier(timing_std=0.012, velocity_std=4)]
 
         case "drums_soft":
+            # Softer four-on-the-floor pocket
             gen = ElectronicDrumsGenerator(
-                params=GeneratorParams(density=0.18), kit="808",
-                pattern="minimal", sidechain=False,
+                params=GeneratorParams(density=0.40), kit="909",
+                pattern="four_on_floor", sidechain=True,
             )
-            mods += [VelocityScalingModifier(scale=0.30), HumanizeModifier(timing_std=0.025, velocity_std=3)]
+            mods += [VelocityScalingModifier(scale=0.45), HumanizeModifier(timing_std=0.018, velocity_std=4)]
 
         case "melody":
+            # Smooth late-night lead melody with PUSH groove template (pushed timing is perfect for dance R&B/house!)
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.28), harmony_note_probability=0.74,
-                note_range_low=60, note_range_high=77, steps_probability=0.92,
-                random_movement=0.85, first_note="any_chord", last_note="last_chord_root",
-                after_leap="step_opposite", syncopation=0.20, phrase_length=8.0,
-                drama_shape="crescendo", drama_peak=0.45, motif_probability=0.55,
-                groove_template=LAID_BACK, beats_per_bar=4, denominator=4,
+                params=GeneratorParams(density=0.38), harmony_note_probability=0.72,
+                note_range_low=60, note_range_high=78, steps_probability=0.92,
+                random_movement=0.82, first_note="any_chord", last_note="last_chord_root",
+                after_leap="step_opposite", syncopation=0.32, phrase_length=8.0,
+                drama_shape="crescendo", drama_peak=0.55, motif_probability=0.55,
+                groove_template=PUSH, beats_per_bar=4, denominator=4,
             )
-            mods += [LimitNoteRangeModifier(low=60, high=77), VelocityScalingModifier(scale=0.42),
-                     HumanizeModifier(timing_std=0.03, velocity_std=4)]
+            mods += [LimitNoteRangeModifier(low=60, high=78), VelocityScalingModifier(scale=0.48),
+                     HumanizeModifier(timing_std=0.02, velocity_std=4),
+                     SwingController(swing_ratio=0.55, grid=0.25)]
 
         case "melody_hook":
+            # Extremely catchy house hook melody
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.35), harmony_note_probability=0.76,
-                note_range_low=62, note_range_high=79, steps_probability=0.90,
-                random_movement=0.78, first_note="chord_root", last_note="last_chord_root",
+                params=GeneratorParams(density=0.48), harmony_note_probability=0.75,
+                note_range_low=62, note_range_high=80, steps_probability=0.90,
+                random_movement=0.76, first_note="chord_root", last_note="last_chord_root",
                 after_leap="step_opposite", climax="up_5th", penultimate_step_above=True,
-                syncopation=0.25, phrase_length=8.0, motif_probability=0.60,
-                drama_shape="crescendo", drama_peak=0.55,
-                groove_template=LAID_BACK, beats_per_bar=4, denominator=4,
+                syncopation=0.38, phrase_length=8.0, motif_probability=0.65,
+                drama_shape="crescendo", drama_peak=0.65,
+                groove_template=PUSH, beats_per_bar=4, denominator=4,
             )
-            mods += [LimitNoteRangeModifier(low=62, high=79), VelocityScalingModifier(scale=0.48),
-                     HumanizeModifier(timing_std=0.025, velocity_std=4)]
+            mods += [LimitNoteRangeModifier(low=62, high=80), VelocityScalingModifier(scale=0.55),
+                     HumanizeModifier(timing_std=0.015, velocity_std=4),
+                     SwingController(swing_ratio=0.55, grid=0.25)]
 
         case "melody_solo":
+            # Dreamy EP or lead solo
             gen = MelodyGenerator(
-                params=GeneratorParams(density=0.22), harmony_note_probability=0.78,
-                note_range_low=58, note_range_high=75, steps_probability=0.94,
-                random_movement=0.88, first_note="scale", last_note="any",
-                after_leap="step_any", syncopation=0.15, phrase_length=4.0,
-                groove_template=LAID_BACK, beats_per_bar=4, denominator=4,
+                params=GeneratorParams(density=0.32), harmony_note_probability=0.70,
+                note_range_low=58, note_range_high=76, steps_probability=0.94,
+                random_movement=0.85, first_note="scale", last_note="any",
+                after_leap="step_any", syncopation=0.25, phrase_length=4.0,
+                groove_template=PUSH, beats_per_bar=4, denominator=4,
             )
-            mods += [LimitNoteRangeModifier(low=58, high=75), VelocityScalingModifier(scale=0.32),
-                     HumanizeModifier(timing_std=0.035, velocity_std=3),
-                     CrescendoModifier(start_vel=45, end_vel=25)]
+            mods += [LimitNoteRangeModifier(low=58, high=76), VelocityScalingModifier(scale=0.40),
+                     HumanizeModifier(timing_std=0.025, velocity_std=3),
+                     CrescendoModifier(start_vel=45, end_vel=30)]
 
         case "chops":
+            # Vocal chops, stutter/pitch_shift style
             gen = VocalChopsGenerator(
-                params=GeneratorParams(density=0.25), processing="pitch_shift",
-                density=0.30, chop_pattern="syncopated", source_pitch=65,
+                params=GeneratorParams(density=0.30), processing="pitch_shift",
+                density=0.35, chop_pattern="syncopated", source_pitch=65,
             )
-            mods += [VelocityScalingModifier(scale=0.35), HumanizeModifier(timing_std=0.03, velocity_std=3)]
+            mods += [VelocityScalingModifier(scale=0.42), HumanizeModifier(timing_std=0.02, velocity_std=3),
+                     SwingController(swing_ratio=0.55, grid=0.25)]
 
         case "riser":
             gen = FXRiserGenerator(
-                params=GeneratorParams(density=0.18), riser_type="synth",
-                length_beats=4.0, pitch_curve="exponential", peak_velocity=75,
+                params=GeneratorParams(density=0.22), riser_type="synth",
+                length_beats=4.0, pitch_curve="exponential", peak_velocity=82,
             )
 
         case "impact":
             gen = FXImpactGenerator(
-                params=GeneratorParams(density=0.18), impact_type="boom",
-                tail_length=3.0, pitch_drop=8,
+                params=GeneratorParams(density=0.22), impact_type="boom",
+                tail_length=3.0, pitch_drop=10,
             )
 
         case _:
@@ -1183,31 +1264,31 @@ TRACKS = [
     {
         "title": "01_Midnight_Velvet",
         "scale": SCALE_1, "sections": SECTIONS_1, "build": build_1,
-        "instruments": INSTRUMENTS_1, "bpm": 72, "mood": Mood.INTIMATE,
+        "instruments": INSTRUMENTS_1, "bpm": 108, "mood": Mood.INTIMATE,
         "perc": PERC_1, "key_label": "Ebm",
     },
     {
         "title": "02_Silk_And_Smoke",
         "scale": SCALE_2, "sections": SECTIONS_2, "build": build_2,
-        "instruments": INSTRUMENTS_2, "bpm": 84, "mood": Mood.INTIMATE,
+        "instruments": INSTRUMENTS_2, "bpm": 114, "mood": Mood.INTIMATE,
         "perc": PERC_2, "key_label": "Gb",
     },
     {
         "title": "03_Drip",
         "scale": SCALE_3, "sections": SECTIONS_3, "build": build_3,
-        "instruments": INSTRUMENTS_3, "bpm": 96, "mood": Mood.CINEMATIC,
+        "instruments": INSTRUMENTS_3, "bpm": 124, "mood": Mood.CINEMATIC,
         "perc": PERC_3, "key_label": "Bbm",
     },
     {
         "title": "04_Golden_Hour",
         "scale": SCALE_4, "sections": SECTIONS_4, "build": build_4,
-        "instruments": INSTRUMENTS_4, "bpm": 78, "mood": Mood.INTIMATE,
+        "instruments": INSTRUMENTS_4, "bpm": 112, "mood": Mood.INTIMATE,
         "perc": PERC_4, "key_label": "Db",
     },
     {
         "title": "05_After_Hours",
         "scale": SCALE_5, "sections": SECTIONS_5, "build": build_5,
-        "instruments": INSTRUMENTS_5, "bpm": 68, "mood": Mood.AMBIENT,
+        "instruments": INSTRUMENTS_5, "bpm": 116, "mood": Mood.AMBIENT,
         "perc": PERC_5, "key_label": "Fm",
     },
 ]
@@ -1218,15 +1299,15 @@ def main():
     album_dir.mkdir(exist_ok=True, parents=True)
 
     print("\n" + "=" * 60)
-    print("   VELVET NIGHTS — R&B Beats Album")
-    print("   5 Cuts | Slow Jam · Quiet Storm · Trap-Soul · Gospel · Lo-Fi")
+    print("   VELVET NIGHTS — Modern High-Energy R&B Beats Album")
+    print("   5 Cuts | Neo-Soul · New Jack Swing · R&B Drill · Gospel-Funk · Lo-Fi House")
     print("=" * 60 + "\n")
 
     for t in TRACKS:
         title = t["title"]
         bpm = t["bpm"]
         bars = sum(s[1] for s in t["sections"])
-        mins = bars * 4 / bpm * 60
+        mins = (bars * 4) / bpm
         print(f"{'─' * 50}")
         print(f"  {title.replace('_', ' ')}")
         print(f"  {mins:.1f} min ({bars} bars @ {bpm} BPM)\n")
