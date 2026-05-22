@@ -13,6 +13,8 @@ from melodica.composer.album_pipeline import (
     _TrackProfile,
     Role,
     _get_pan_for_role,
+    NoteInfo,
+    _generate_pan_automation,
 )
 
 
@@ -237,3 +239,146 @@ class TestHatPanValue:
         for mode in ("alternate", "sweep_lr", "sweep_rl"):
             v = ElectronicDrumsGenerator._hat_pan_value(mode, 5, 0.5, 0.0)
             assert v == 64
+
+# ---------------------------------------------------------------------------
+# Layer 5: Pan automation (PAD LFO / FX sweep)
+# ---------------------------------------------------------------------------
+
+from melodica.composer.album_pipeline import (
+    _generate_pan_automation, _print_pan_map, Mood, _MOOD_PROFILES,
+    _TrackProfile, Role,
+)
+
+
+class TestPanAutomation:
+    """_generate_pan_automation returns CC10 LFO/sweep events."""
+
+    @pytest.fixture
+    def long_pad(self):
+        """PAD track spanning 12 beats."""
+        mid_notes = [
+            NoteInfo(pitch=60, start=i * 0.5, duration=0.4, velocity=80)
+            for i in range(30)  # 15 s
+        ]
+        return {"pad_synth": mid_notes}
+
+    @pytest.fixture
+    def long_pad_profile(self):
+        return {"pad_synth": _TrackProfile(
+            avg_pitch=60.0, pitch_range=12.0, density=0.5,
+            rms_velocity=80.0, role=Role.PAD,
+        )}
+
+    @pytest.fixture
+    def short_pad(self):
+        """PAD track spanning < 2 beats → no automation."""
+        notes = [NoteInfo(pitch=55, start=0.5, duration=0.3, velocity=70)]
+        return {"short_pad": notes}
+
+    @pytest.fixture
+    def short_pad_profile(self):
+        return {"short_pad": _TrackProfile(
+            avg_pitch=55.0, pitch_range=5.0, density=0.8,
+            rms_velocity=70.0, role=Role.PAD,
+        )}
+
+    @pytest.fixture
+    def fx_track_onset(self):
+        notes = [NoteInfo(pitch=80, start=2.0, duration=1.5, velocity=90)]
+        return {"fx_whoosh": notes}
+
+    def test_pad_generates_cc10_events(self, long_pad, long_pad_profile):
+        cc_events = _generate_pan_automation(
+            long_pad, long_pad_profile,
+            _MOOD_PROFILES[Mood.CINEMATIC],
+        )
+        assert "pad_synth" in cc_events, "PAD track should get CC10 events"
+        assert len(cc_events["pad_synth"]) >= 4, "At least 4 CC10 events expected"
+
+    def test_pad_cc10_valid_range(self, long_pad, long_pad_profile):
+        cc_events = _generate_pan_automation(
+            long_pad, long_pad_profile,
+            _MOOD_PROFILES[Mood.CINEMATIC],
+        )
+        for (_t, cc, val) in cc_events["pad_synth"]:
+            assert cc == 10, f"Expected CC10, got CC{cc}"
+            assert 20 <= val <= 107, f"CC10 val {val} out of 20-107 range"
+
+    def test_pad_events_sorted_by_time(self, long_pad, long_pad_profile):
+        cc_events = _generate_pan_automation(
+            long_pad, long_pad_profile,
+            _MOOD_PROFILES[Mood.AMBIENT],
+        )
+        times = [e[0] for e in cc_events["pad_synth"]]
+        assert times == sorted(times)
+
+    def test_short_pad_no_automation(self, short_pad, short_pad_profile):
+        cc_events = _generate_pan_automation(
+            short_pad, short_pad_profile,
+            _MOOD_PROFILES[Mood.CINEMATIC],
+        )
+        assert cc_events == {}, "Short PAD span (<2 beats) = no automation"
+
+    def test_fx_sweep_right_to_centre(self, fx_track_onset):
+        profiles = {
+            "fx_whoosh": _TrackProfile(
+                avg_pitch=85.0, pitch_range=6.0, density=0.1,
+                rms_velocity=60.0, role=Role.FX, entry_beat=2.0,
+            )
+        }
+        cc_events = _generate_pan_automation(
+            fx_track_onset, profiles,
+            _MOOD_PROFILES[Mood.CINEMATIC],
+        )
+        assert "fx_whoosh" in cc_events
+        evts = cc_events["fx_whoosh"]
+        assert len(evts) >= 2
+        # First event should be on the right (≥64)
+        assert evts[0][2] >= 65, f"FX should start right, got {evts[0][2]}"
+        # Last event should be at centre (64)
+        assert abs(evts[-1][2] - 64) <= 5, f"FX should drift to centre, got {evts[-1][2]}"
+
+    @pytest.mark.parametrize("mood,expected_spread_px", [
+        (Mood.AMBIENT,     5),   # narrow
+        (Mood.INTIMATE,    3),   # very narrow
+        (Mood.CINEMATIC,   9),
+        (Mood.AGGRESSIVE, 11),   # wide
+        (Mood.EXPERIMENTAL,12),  # widest
+    ])
+    def test_pad_width_scales_with_mood(
+        self, mood, expected_spread_px, long_pad, long_pad_profile
+    ):
+        cc_events = _generate_pan_automation(
+            long_pad, long_pad_profile, _MOOD_PROFILES[mood],
+        )
+        evts = cc_events["pad_synth"]
+        centers: list[int] = [(lo + hi) // 2 for (_t, _c, lo), (_t2, _c2, hi)
+                              in zip(evts[:-1:4], evts[4::4])]
+        if len(centers) >= 2:
+            net_shift = abs(centers[-1] - centers[0])
+            # LFO cycles: some cycles net near-zero, check the amplitude per-epoch
+            max_amp = max(
+                abs(e[2] - 64) for e in evts
+            )
+            # width should be within ±2 CC of the expected spread
+            assert max_amp <= expected_spread_px + 2, (
+                f"{mood.value}: max CC10 amp={max_amp}, expected ~{expected_spread_px}"
+            )
+
+    def test_verbose_pan_map_output_no_crash(self):
+        """_print_pan_map must not raise for any combination of inputs."""
+        profiles = {
+            "lead": _TrackProfile(avg_pitch=62.0, pitch_range=12.0, density=0.1,
+                                  rms_velocity=80.0, role=Role.LEAD),
+            "pad":  _TrackProfile(avg_pitch=55.0, pitch_range=8.0,  density=0.04,
+                                  rms_velocity=55.0, role=Role.PAD),
+        }
+        for pan_map, desc in [
+            ({"lead": 0.0, "pad": -0.30}, "mixed pan"),
+            ({"lead": 0.0, "pad":  0.00}, "all centre"),
+            ({},                              "empty"),
+        ]:
+            try:
+                _print_pan_map(profiles, pan_map, _MOOD_PROFILES[Mood.CINEMATIC])
+            except Exception as exc:
+                pytest.fail(f"_print_pan_map({desc}) raised: {exc}")

@@ -35,6 +35,7 @@ from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 from melodica.composer.psychoacoustic import psycho_verify, PsychoConfig, PsychoReport
+from melodica.composer.automation import AutomationCurve
 
 
 # ---------------------------------------------------------------------------
@@ -363,6 +364,53 @@ class PanValidator:
         return warnings
 
 
+
+
+# ---------------------------------------------------------------------------
+# Pretty-print pan map for verbose output
+# ---------------------------------------------------------------------------
+
+def _print_pan_map(
+    profiles: Dict[str, _TrackProfile],
+    pan_map: Dict[str, float],
+    mood_profile: _MoodProfile,
+) -> None:
+    """Print a human-readable pan map: bar-chart + per-track position."""
+    BAR_LEN = 10  # characters per half-width
+
+    def _bar(pan_norm: float) -> str:
+        """12-char bar: C=centre, L=left, R=right."""
+        mid = BAR_LEN
+        if abs(pan_norm) < 0.02:
+            centre = "█" * BAR_LEN
+            return f"  {centre}  C"
+        if pan_norm < 0:
+            left_px  = int(abs(pan_norm) * BAR_LEN)
+            rest     = BAR_LEN - left_px
+            bar = "█" * left_px + "░" * rest
+            return f"  {bar}  L({pan_norm:+.2f})"
+        else:
+            right_px = int(pan_norm * BAR_LEN)
+            rest     = BAR_LEN - right_px
+            bar = "░" * rest + "█" * right_px
+            return f"  {bar}  R({pan_norm:+.2f})"
+
+    print("   Pan Map:")
+    max_len = max((len(n) for n in pan_map), default=5)
+    for name in sorted(pan_map.keys()):
+        pan = pan_map[name]
+        role = profiles.get(name)
+        role_str = f"({role.role.value})" if role else ""
+        print(f"   {name:<{max_len+1}s} {_bar(pan)}  {role_str}")
+
+    non_centre = [abs(v) for v in pan_map.values() if abs(v) > 0.05]
+    if non_centre:
+        width = round(sum(non_centre) / len(non_centre), 3)
+        print(f"   Stereo Width: {width:.3f}")
+    else:
+        print("   Stereo Width: 0.000  (mono)")
+
+
 # ---------------------------------------------------------------------------
 # Auto-mix: role-based gain, density-adaptive, entry/exit, register shaping
 # ---------------------------------------------------------------------------
@@ -657,6 +705,7 @@ def _generate_reverb_sends(
     tracks: Dict[str, List[NoteInfo]],
     profiles: Dict[str, _TrackProfile],
     mood_profile: _MoodProfile,
+    mood: Mood | None = None,
 ) -> Dict[str, List[Tuple[float, int, int]]]:
     """Generate CC91 reverb send events per track."""
     cc_events: Dict[str, List[Tuple[float, int, int]]] = {}
@@ -708,6 +757,81 @@ def _generate_delay_sends(
         delay_level = 60 if "far" in name_lower else 40
         first_time = notes[0].start
         cc_events[tname] = [(first_time, 93, delay_level)]
+
+    return cc_events
+
+
+
+
+
+def _generate_pan_automation(
+    tracks: Dict[str, List[NoteInfo]],
+    profiles: Dict[str, _TrackProfile],
+    mood_profile: _MoodProfile,
+    mood: Mood | None = None,
+) -> Dict[str, List[Tuple[float, int, int]]]:
+    """Generate CC10 pan automation for PAD (cone-LFO swing) and FX (sweep).
+
+    Called from _stage_master after MasteringDesk sets the static pan map.
+    This adds time-varying CC10 on top of the static pan.
+
+    PAD  → sine-LFO on CC10 pulses over the note span.
+          Width is driven by Mood parameter (AMBIENT=narrow, AGGRESSIVE=wide).
+    FX   → single right-to-centre sweep at the entry beat.
+    """
+    cc_events: Dict[str, List[Tuple[float, int, int]]] = {}
+
+    _MOOD_WIDTH = {Mood.AMBIENT: 5, Mood.INTIMATE: 3,
+                   Mood.CHAMBER: 7, Mood.EXPERIMENTAL: 12,
+                   Mood.CINEMATIC: 9, Mood.AGGRESSIVE: 11}
+
+    if mood is not None:
+        eff_mood = mood
+        pad_cc_spread = _MOOD_WIDTH.get(eff_mood, 9)
+    else:  # derive from lufs when mood not explicitly provided
+        lufs = mood_profile.lufs
+        if   lufs <= -20:    eff_mood = Mood.AMBIENT
+        elif lufs <= -18:    eff_mood = Mood.INTIMATE
+        elif lufs <= -16:    eff_mood = Mood.CHAMBER
+        elif lufs <= -15:    eff_mood = Mood.EXPERIMENTAL
+        elif lufs <= -14:    eff_mood = Mood.CINEMATIC
+        else:                 eff_mood = Mood.AGGRESSIVE
+        pad_cc_spread = _MOOD_WIDTH.get(eff_mood, 9)
+    fx_cc_spread = 12
+
+    for tname, prof in profiles.items():
+        notes = tracks.get(tname, [])
+        if not notes:
+            continue
+
+        t_start = notes[0].start
+        t_end   = notes[-1].start + notes[-1].duration
+        span    = t_end - t_start
+
+        # PAD: sine-LFO across the full track span (only if >2 beats)
+        if prof.role == Role.PAD and span > 2.0:
+            ctr  = 64
+            lo   = max(20, ctr - pad_cc_spread)
+            hi   = min(107, ctr + pad_cc_spread)
+            period = max(4.0, span / 2)
+            lfo = AutomationCurve.sine_lfo(
+                cc_num=10, min_val=lo, max_val=hi,
+                start_beat=t_start, end_beat=t_end,
+                period=period, steps_per_period=8,
+            )
+            cc_events[tname] = lfo
+
+        # FX: right-to-centre sweep at entry beat
+        elif prof.role == Role.FX and prof.entry_beat < t_end:
+            entry    = prof.entry_beat
+            sweep_dur = min(1.5, t_end - entry)
+            sweep_end = entry + sweep_dur
+            right    = min(107, 64 + fx_cc_spread)
+            sweep = AutomationCurve.linear(
+                cc_num=10, start_val=right, end_val=64,
+                start_beat=entry, end_beat=sweep_end, steps=6,
+            )
+            cc_events[tname] = sweep
 
     return cc_events
 
@@ -1142,8 +1266,11 @@ def _stage_master(kw):
     entry_cc = _generate_entry_fades(mastered, kw["_profiles"], total_dur)
     reverb_cc = _generate_reverb_sends(mastered, kw["_profiles"], kw["mood_profile"])
     delay_cc = _generate_delay_sends(mastered, kw["_profiles"])
+    pan_auto_cc = _generate_pan_automation(
+        mastered, kw["_profiles"], kw["mood_profile"]
+    )
     all_cc = _merge_cc_events(
-        master_cc, entry_cc, reverb_cc, delay_cc, kw.get("cc_events", {})
+        master_cc, entry_cc, reverb_cc, delay_cc, pan_auto_cc, kw.get("cc_events", {})
     )
 
     # Pan validation
@@ -1195,9 +1322,29 @@ def _stage_report(kw):
         "cc_events": {k: len(v) for k, v in all_cc.items()},
     }
 
+    # Verbose output
     if kw.get("verbose"):
         roles = {name: p.role.value for name, p in profiles.items()}
+        pan_map = kw.get("_pan_spread_map", {})
         print(f"   Roles: {roles} | LUFS: {mood_profile.lufs}")
+        _print_pan_map(profiles, pan_map, mood_profile)
+
+    # Pan map in report
+    spread_map = kw.get("_pan_spread_map", {})
+    report["pan_map"] = {
+        name: {
+            "role":  profiles[name].role.value,
+            "pan":   round(spread_map.get(name, 0.0), 3),
+        }
+        for name in profiles
+    }
+    # Stereo width: avg absolute pan for all non-centre tracks
+    non_centre_pans = [abs(v) for v in spread_map.values()
+                       if abs(v) > 0.05]
+    if non_centre_pans:
+        report["stereo_width"] = round(sum(non_centre_pans) / len(non_centre_pans), 3)
+    else:
+        report["stereo_width"] = 0.0
 
     kw["_report"] = report
     return kw
