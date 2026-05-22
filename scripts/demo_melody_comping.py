@@ -22,6 +22,8 @@ from melodica.types import NoteInfo, Scale, Mode, ChordLabel
 from melodica.generators import GeneratorParams
 from melodica.generators.modern_bass_2025 import ModernBass2025Generator
 from melodica.generators.solo_melody import SoloMelodyGenerator
+from melodica.generators.countermelody import CountermelodyGenerator
+from melodica.rhythm import MarkovRhythmGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -211,6 +213,7 @@ def produce_demo_track():
     """
     print("Producing Demo Track: 'Harmony & Fire'...")
     lead_notes = []
+    counter_notes = []
     piano_notes = []
     bass_notes = []
     drums_notes = []
@@ -235,7 +238,7 @@ def produce_demo_track():
     # -----------------------------------------------------------------------
     # Section B: Verse (16.0 - 48.0)
     # -----------------------------------------------------------------------
-    print("  - Section B: Verse (Lyrical vocal_mimic solo melody + comping + walking bass)")
+    print("  - Section B: Verse (Lyrical vocal_mimic solo melody + countermelody + comping + walking bass)")
     chords_B = _build_chords("i iv VII III VI ii V i " * 2, 32.0, KEY_D_MINOR)
     
     # Render comping chords locally, then shift
@@ -251,9 +254,25 @@ def produce_demo_track():
     solo_gen_B = SoloMelodyGenerator(solo_params_B, style="vocal_mimic", vibrato_depth=0.7)
     # Render with local chords, then shift note start times
     melody_B = solo_gen_B.render(chords_B, KEY_D_MINOR, 32.0)
+    
+    # Countermelody: Swing style counterpoint against melody_B
+    counter_params_B = GeneratorParams(density=0.35, key_range_low=50, key_range_high=68, complexity=0.5)
+    counter_rhythm_B = MarkovRhythmGenerator(style="swing", syncopation=0.25, seed=42)
+    counter_gen_B = CountermelodyGenerator(
+        counter_params_B,
+        primary_melody=melody_B,
+        motion_preference="mixed",
+        rhythm=counter_rhythm_B
+    )
+    counter_B = counter_gen_B.render(chords_B, KEY_D_MINOR, 32.0)
+    
     for n in melody_B:
         n.start += 16.0
         lead_notes.append(n)
+        
+    for n in counter_B:
+        n.start += 16.0
+        counter_notes.append(n)
         
     # Walking Bassline
     bass_params_B = GeneratorParams(density=0.6, key_range_low=28, key_range_high=48)
@@ -272,7 +291,7 @@ def produce_demo_track():
     # -----------------------------------------------------------------------
     # Section C: Bridge (48.0 - 80.0)
     # -----------------------------------------------------------------------
-    print("  - Section C: Bridge (High-energy jazz_fusion solo + B3 Organ comping + Slap Bass)")
+    print("  - Section C: Bridge (High-energy jazz_fusion solo + contrary countermelody + B3 Organ comping + Slap Bass)")
     # Modulate to Dorian for bright energy
     chords_C = _build_chords("i i iv iv VI VI i i " * 2, 32.0, KEY_D_DORIAN)
     
@@ -288,10 +307,26 @@ def produce_demo_track():
     solo_params_C = GeneratorParams(density=0.68, key_range_low=55, key_range_high=80)
     solo_gen_C = SoloMelodyGenerator(solo_params_C, style="jazz_fusion", vibrato_depth=0.8)
     melody_C = solo_gen_C.render(chords_C, KEY_D_DORIAN, 32.0)
+    
+    # Countermelody: Active contrary motion counterpoint against melody_C
+    counter_params_C = GeneratorParams(density=0.5, key_range_low=48, key_range_high=65, complexity=0.6)
+    counter_rhythm_C = MarkovRhythmGenerator(style="swing", syncopation=0.3, seed=43)
+    counter_gen_C = CountermelodyGenerator(
+        counter_params_C,
+        primary_melody=melody_C,
+        motion_preference="contrary",
+        rhythm=counter_rhythm_C
+    )
+    counter_C = counter_gen_C.render(chords_C, KEY_D_DORIAN, 32.0)
+    
     for n in melody_C:
         n.start += 48.0
         n.velocity = min(115, n.velocity + 15)  # Make the solo pierce through
         lead_notes.append(n)
+        
+    for n in counter_C:
+        n.start += 48.0
+        counter_notes.append(n)
         
     # Slap Bassline
     bass_params_C = GeneratorParams(density=0.72, key_range_low=28, key_range_high=48)
@@ -310,7 +345,7 @@ def produce_demo_track():
     # -----------------------------------------------------------------------
     # Section D: Outro (80.0 - 96.0)
     # -----------------------------------------------------------------------
-    print("  - Section D: Outro (Ambient modal_ambient solo sax + fading comping)")
+    print("  - Section D: Outro (Ambient modal_ambient solo sax + oblique countermelody + fading comping)")
     chords_D = _build_chords("i i iv iv V V i i", 16.0, KEY_D_MINOR)
     
     # Comping Rhodes fades out gently from 70 to 15 velocity
@@ -332,10 +367,27 @@ def produce_demo_track():
     solo_params_D = GeneratorParams(density=0.25, key_range_low=58, key_range_high=72)
     solo_gen_D = SoloMelodyGenerator(solo_params_D, style="modal_ambient", vibrato_depth=0.8)
     melody_D = solo_gen_D.render(chords_D, KEY_D_MINOR, 16.0)
+    
+    # Countermelody: Oblique holding voice for spacious closing outro
+    counter_params_D = GeneratorParams(density=0.2, key_range_low=50, key_range_high=68, complexity=0.3)
+    counter_rhythm_D = MarkovRhythmGenerator(style="ballad", syncopation=0.1, seed=44)
+    counter_gen_D = CountermelodyGenerator(
+        counter_params_D,
+        primary_melody=melody_D,
+        motion_preference="oblique",
+        rhythm=counter_rhythm_D
+    )
+    counter_D = counter_gen_D.render(chords_D, KEY_D_MINOR, 16.0)
+    
     for n in melody_D:
         n.start += 80.0
         n.velocity = 45  # Quiet closing solo
         lead_notes.append(n)
+        
+    for n in counter_D:
+        n.start += 80.0
+        n.velocity = 40  # Quiet countermelody
+        counter_notes.append(n)
         
     # Bass fades out slowly
     for c in chords_D:
@@ -345,7 +397,13 @@ def produce_demo_track():
     # Minimal drum closing cymbal
     drums_notes.append(NoteInfo(pitch=51, start=80.0, duration=3.0, velocity=35))
 
-    raw_tracks = {"lead": lead_notes, "piano": piano_notes, "bass": bass_notes, "drums": drums_notes}
+    raw_tracks = {
+        "lead": lead_notes,
+        "counter": counter_notes,
+        "piano": piano_notes,
+        "bass": bass_notes,
+        "drums": drums_notes
+    }
     return raw_tracks, 85.0  # Song is in 85 BPM
 
 def apply_post_production(raw_tracks, bpm, lufs=-14.0):
@@ -353,6 +411,7 @@ def apply_post_production(raw_tracks, bpm, lufs=-14.0):
     desk.track_gains.update({
         "piano": 0.88,
         "lead": 0.92,
+        "counter": 0.86,  # Perfectly balanced counter-lead volume
         "bass": 1.10,
         "drums": 0.70,
     })
@@ -361,9 +420,9 @@ def apply_post_production(raw_tracks, bpm, lufs=-14.0):
     master = MasteringDesk(target_lufs=lufs)
     mastered, pan_events = master.apply_mastering(mixed)
 
-    # Legato humanization: slightly extend note durations for solo lead track
+    # Legato humanization: slightly extend note durations for solo lead and counter tracks
     for name, notes in mastered.items():
-        if name == "lead":
+        if name in ("lead", "counter"):
             for n in notes:
                 n.duration *= 1.08  # 8% sustain bleed to emulate legato articulation
 
@@ -378,6 +437,9 @@ def apply_post_production(raw_tracks, bpm, lufs=-14.0):
         if name == "lead":
             reverb_val = 90   # Warm hall reverb for the main solo melody
             chorus_val = 20
+        elif name == "counter":
+            reverb_val = 95   # Deep rich reverb for the counter-melody (e.g. Alto Sax)
+            chorus_val = 25
         elif name == "piano":
             reverb_val = 80   # Spacious Grand Piano/Rhodes
             chorus_val = 40   # Chorus widening
@@ -394,12 +456,13 @@ def apply_post_production(raw_tracks, bpm, lufs=-14.0):
             
         # Add dynamic CC automation (expression and cutoff filter sweeps) over time
         notes = mastered[name]
-        if name == "lead":
+        if name in ("lead", "counter"):
             total_duration = max(n.start + n.duration for n in notes) if notes else 100.0
             beat = 0.0
+            phase_offset = 0.0 if name == "lead" else math.pi  # Out of phase for independent breathing!
             while beat < total_duration:
                 # CC 11 expression breathing swell
-                val = int(77 + 15 * math.sin(beat * 2 * math.pi / 8.0))
+                val = int(77 + 15 * math.sin(beat * 2 * math.pi / 8.0 + phase_offset))
                 spatial_pan[name].append((beat, 11, val))
                 beat += 1.0
                 
@@ -420,7 +483,7 @@ def main():
 
     print("\n" + "=" * 60)
     print("   MELODY & ACCOMPANIMENT COORDINATION DEMO")
-    print("   Showcasing Interaction of Solo Melody + Comp Chords + Bass")
+    print("   Showcasing Interaction of Solo Melody + Countermelody + Comp Chords + Bass")
     print("=" * 60 + "\n")
 
     t_raw, t_bpm = produce_demo_track()
@@ -429,7 +492,7 @@ def main():
     export_multitrack_midi(
         t_m, str(demo_dir / "01_Harmony_&_Fire.mid"),
         bpm=t_bpm, cc_events=t_pan,
-        instruments={"lead": 57, "piano": 5, "bass": 33, "drums": 117},
+        instruments={"lead": 57, "counter": 65, "piano": 5, "bass": 33, "drums": 117},
     )
 
     print("\n" + "=" * 60)
