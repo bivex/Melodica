@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-scratch/verify_solo_melody.py — Validation script for all styles in SoloMelodyGenerator.
+scratch/verify_solo_melody.py — Validation script for all 9 styles in SoloMelodyGenerator.
 """
 
 import sys
@@ -15,12 +15,16 @@ from melodica.generators.solo_melody import SoloMelodyGenerator
 from melodica.generators import GeneratorParams
 from melodica.types import ChordLabel, Scale, Mode, Quality
 
-ALL_SOLO_STYLES = ["blues_lick", "shred_guitar", "jazz_fusion", "space_synth"]
+ALL_SOLO_STYLES = [
+    "blues_lick", "shred_guitar", "jazz_fusion", "space_synth",
+    "neo_soul_keys", "vocal_mimic", "cinematic_strings", "bebop_horn",
+    "modal_ambient"
+]
 
 
 def run_tests():
     print("=" * 80)
-    print("         VERIFYING EXPRESSIVE SOLO MELODY GENERATOR STYLES")
+    print("         VERIFYING ALL 9 EXPRESSIVE SOLO MELODY GENERATOR STYLES")
     print("=" * 80)
 
     # Setup sample key/chords
@@ -63,13 +67,28 @@ def run_tests():
 
         # Style-specific checks
         if style == "space_synth":
-            # Must contain CC 74 sweeping filter
             has_cutoff = any(74 in n.expression for n in notes)
             assert has_cutoff, "Space synth style should generate CC 74 expressions!"
         elif style == "blues_lick":
-            # Must contain CC 1 vibrato on sustained notes
             has_vibrato = any(1 in n.expression for n in notes if n.duration > 0.6)
             assert has_vibrato, "Blues lick style should generate CC 1 vibrato on sustained notes!"
+        elif style == "neo_soul_keys":
+            # Must generate backing chord stabs (multiple notes sharing same start onset)
+            starts = [n.start for n in notes]
+            has_stabs = len(starts) > len(set(starts))
+            assert has_stabs, "Neo-Soul Keys style should generate chord stabs (overlapping notes)!"
+        elif style == "vocal_mimic":
+            # Must generate melisma grace notes (notes with very short duration, e.g., 0.07 beats)
+            has_melisma = any(abs(n.duration - 0.07) < 0.01 for n in notes)
+            assert has_melisma, "Vocal Mimic style should generate rapid melisma grace notes!"
+        elif style == "cinematic_strings":
+            # Must generate sweeping tremolo on CC 1
+            has_tremolo = any(1 in n.expression for n in notes)
+            assert has_tremolo, "Cinematic Strings style should generate tremolo on CC 1!"
+        elif style == "modal_ambient":
+            # Must generate detune fine-tuning values on CC 98
+            has_detune = any(98 in n.expression for n in notes)
+            assert has_detune, "Modal Ambient style should generate analog detune LFOs on CC 98!"
 
         print(f"   ✓ Style '{style}' PASSED dynamic register and expressive modulation validation!")
         passed_count += 1
