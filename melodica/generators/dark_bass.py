@@ -30,6 +30,7 @@ Modes:
 from __future__ import annotations
 
 import random
+import math
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
@@ -120,14 +121,74 @@ class DarkBassGenerator(PhraseGenerator):
             if t + dur > duration_beats:
                 dur = duration_beats - t
 
-            notes.append(
-                NoteInfo(
-                    pitch=pitch,
-                    start=round(t, 6),
-                    duration=dur,
-                    velocity=vel,
-                )
+            # 1. Timing Jitter (scaled by velocity)
+            jitter = random.uniform(-0.005, 0.005) * (1.5 - vel / 127.0)
+            start_h = max(0.0, t + jitter)
+            dur_h = max(0.1, dur)
+
+            # 2. Continuous Expression Modeling
+            expression = {}
+            steps = 12
+
+            # CC 74: Low-End Growl LFO (Doom & Industrial) or decaying cutoff
+            cc74_list = []
+            base_cutoff = 40 if self.mode == "dub" else 65
+            freq_growl = 7.5  # Growl speed in Hz
+            for s in range(steps + 1):
+                progress = s / steps
+                t_rel = progress * dur_h
+                if self.mode in ("doom", "industrial"):
+                    # Low-end saturation growl LFO modulation
+                    cutoff_val = base_cutoff + int(12 * math.sin(2 * math.pi * freq_growl * t_rel))
+                elif self.mode == "trip_hop":
+                    cutoff_val = base_cutoff + int(25 * (1.0 - progress ** 0.5))
+                else:
+                    cutoff_val = base_cutoff
+                cc74_list.append((round(t_rel, 6), max(1, min(127, cutoff_val))))
+            expression[74] = cc74_list
+
+            # CC 11: Dynamic volume breathing sweeps
+            cc11_list = []
+            for s in range(steps + 1):
+                progress = s / steps
+                t_rel = progress * dur_h
+                if self.mode == "doom":
+                    # Swelling crescendo
+                    val = int(60 + 55 * progress)
+                elif self.mode == "dub":
+                    # Rhythmic sub swell
+                    val = int(80 + 35 * math.sin(math.pi * progress))
+                elif self.mode == "trip_hop":
+                    # Decay
+                    val = int(120 - 70 * (progress ** 0.6))
+                else:
+                    val = 110
+                cc11_list.append((round(t_rel, 6), max(1, min(127, val))))
+            expression[11] = cc11_list
+
+            # Pitch Bend: Subterranean release falls/slides
+            pb_list = []
+            slide_start_t = dur_h * 0.82
+            for s in range(steps + 1):
+                progress = s / steps
+                t_rel = progress * dur_h
+                if t_rel < slide_start_t:
+                    pb_val = 0
+                else:
+                    # Slide down to -2400 units (almost a whole step down)
+                    slide_progress = (t_rel - slide_start_t) / (dur_h - slide_start_t)
+                    pb_val = int(-2400 * (slide_progress ** 1.8))
+                pb_list.append((round(t_rel, 6), pb_val))
+            expression["pitch_bend"] = pb_list
+
+            note = NoteInfo(
+                pitch=pitch,
+                start=round(start_h, 6),
+                duration=round(dur_h, 6),
+                velocity=vel,
             )
+            note.expression = expression
+            notes.append(note)
 
             prev_pitch = pitch
             t += self._gap()
