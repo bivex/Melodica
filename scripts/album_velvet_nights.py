@@ -790,14 +790,14 @@ def build_3(name):
                 params=GeneratorParams(density=0.45), variant="drill",
                 hat_roll_density=0.55, kick_pattern="syncopated", open_hat_probability=0.22,
             )
-            mods += [VelocityScalingModifier(scale=0.55), HumanizeModifier(timing_std=0.008, velocity_std=4)]
+            mods.append(HumanizeModifier(timing_std=0.008, velocity_std=4))
 
         case "trap_up":
             gen = TrapDrumsGenerator(
                 params=GeneratorParams(density=0.52), variant="drill",
                 hat_roll_density=0.65, kick_pattern="syncopated", open_hat_probability=0.28,
             )
-            mods += [VelocityScalingModifier(scale=0.58), HumanizeModifier(timing_std=0.008, velocity_std=4)]
+            mods.append(HumanizeModifier(timing_std=0.008, velocity_std=4))
 
         case "ghost":
             gen = GhostNotesGenerator(

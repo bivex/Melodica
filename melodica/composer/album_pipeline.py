@@ -551,7 +551,7 @@ _ROLE_GAINS: Dict[Role, float] = {
     Role.LEAD: 0.85,
     Role.BASS: 0.55,
     Role.PAD: 0.35,
-    Role.PERC: 0.70,
+    Role.PERC: 1.00,
     Role.STRINGS: 0.65,
     Role.CHOIR: 0.45,
     Role.FX: 0.50,
