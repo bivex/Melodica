@@ -410,3 +410,4 @@ output/**/*.mid
 output/**/*.wav
 output/**/*.mp3
 /.antigravitycli
+.coverage_bass
