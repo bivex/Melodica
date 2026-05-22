@@ -48,6 +48,9 @@ class HarmonizationRequest:
             raise ValueError("Melody must not be empty.")
         if self.chord_rhythm <= 0:
             raise ValueError("chord_rhythm must be > 0.")
+        valid_engines = {0, 1, 2, 3, 4}
+        if not isinstance(self.engine, str) and self.engine not in valid_engines:
+            raise ValueError(f"Invalid engine: {self.engine}")
 
 class PhraseGeneratorProtocol(ABC):
     name: str

@@ -108,6 +108,69 @@ PATTERN_DEFS: dict[str, list[tuple[int, float, int, float]]] = {
         (HH_OPEN, 3.5, 65, 0.3),
         (HH_CLOSED, 3.75, 50, 0.08),
     ],
+    "garage_2step": [
+        (KICK, 0.0, 115, 0.3),
+        (HH_CLOSED, 0.0, 70, 0.1),
+        (HH_CLOSED, 0.5, 65, 0.1),
+        (HH_CLOSED, 0.75, 75, 0.1),
+        (SNARE, 1.0, 112, 0.2),
+        (HH_CLOSED, 1.0, 68, 0.1),
+        (HH_OPEN, 1.5, 80, 0.25),
+        (RIM, 1.5, 60, 0.1),
+        (KICK, 1.75, 95, 0.2),
+        (KICK, 2.0, 110, 0.3),
+        (HH_CLOSED, 2.0, 70, 0.1),
+        (HH_CLOSED, 2.5, 65, 0.1),
+        (HH_CLOSED, 2.75, 78, 0.1),
+        (RIM, 2.75, 65, 0.1),
+        (SNARE, 3.0, 115, 0.2),
+        (HH_CLOSED, 3.0, 68, 0.1),
+        (HH_OPEN, 3.5, 80, 0.25),
+    ],
+    "rnb_slowjam": [
+        (KICK, 0.0, 115, 0.3),
+        (HH_CLOSED, 0.0, 72, 0.12),
+        (HH_CLOSED, 0.5, 58, 0.12),
+        (SNARE, 1.0, 110, 0.25),
+        (HH_CLOSED, 1.0, 70, 0.12),
+        (KICK, 1.25, 90, 0.2),
+        (HH_CLOSED, 1.5, 60, 0.12),
+        (KICK, 2.0, 105, 0.3),
+        (HH_CLOSED, 2.0, 72, 0.12),
+        (KICK, 2.5, 95, 0.2),
+        (HH_CLOSED, 2.5, 58, 0.12),
+        (SNARE, 3.0, 112, 0.25),
+        (HH_CLOSED, 3.0, 70, 0.12),
+        (HH_CLOSED, 3.5, 62, 0.12),
+        (RIM, 3.75, 60, 0.12),
+    ],
+    "afrobeats_bounce": [
+        (KICK, 0.0, 115, 0.3),
+        (HH_CLOSED, 0.0, 60, 0.1),
+        (HH_CLOSED, 0.25, 50, 0.1),
+        (HH_CLOSED, 0.5, 58, 0.1),
+        (HH_CLOSED, 0.75, 50, 0.1),
+        (RIM, 0.75, 95, 0.2),
+        (HH_CLOSED, 1.0, 60, 0.1),
+        (HH_CLOSED, 1.25, 50, 0.1),
+        (HH_CLOSED, 1.5, 58, 0.1),
+        (KICK, 1.5, 105, 0.3),
+        (SNARE, 1.5, 105, 0.2),
+        (HH_CLOSED, 1.75, 50, 0.1),
+        (KICK, 2.0, 110, 0.3),
+        (HH_CLOSED, 2.0, 60, 0.1),
+        (HH_CLOSED, 2.25, 50, 0.1),
+        (RIM, 2.25, 90, 0.2),
+        (HH_CLOSED, 2.5, 58, 0.1),
+        (HH_CLOSED, 2.75, 50, 0.1),
+        (RIM, 2.75, 95, 0.2),
+        (HH_CLOSED, 3.0, 60, 0.1),
+        (SNARE, 3.0, 105, 0.2),
+        (HH_CLOSED, 3.25, 50, 0.1),
+        (HH_CLOSED, 3.5, 58, 0.1),
+        (KICK, 3.5, 100, 0.3),
+        (HH_CLOSED, 3.75, 50, 0.1),
+    ],
 }
 
 
@@ -119,7 +182,8 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     kit:
         "909", "808", "cr78", "linn"
     pattern:
-        "four_on_floor", "breakbeat", "minimal", "techno"
+        "four_on_floor", "breakbeat", "minimal", "techno",
+        "garage_2step", "rnb_slowjam", "afrobeats_bounce"
     sidechain:
         If True, simulate sidechain ducking by reducing velocity on
         non-kick hits that coincide with kick onsets.
@@ -130,6 +194,13 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     pattern: str = "four_on_floor"
     sidechain: bool = False
     rhythm: RhythmGenerator | None = None
+    sidechain_depth: float = 0.0
+    snare_delay: float = 0.0
+    hihat_delay: float = 0.0
+    groove_swing: float = 0.5
+    swing_grid: float = 0.25
+    choke_hats: bool = True
+    ghost_snare_prob: float = 0.0
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -140,12 +211,26 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         pattern: str = "four_on_floor",
         sidechain: bool = False,
         rhythm: RhythmGenerator | None = None,
+        sidechain_depth: float = 0.0,
+        snare_delay: float = 0.0,
+        hihat_delay: float = 0.0,
+        groove_swing: float = 0.5,
+        swing_grid: float = 0.25,
+        choke_hats: bool = True,
+        ghost_snare_prob: float = 0.0,
     ) -> None:
         super().__init__(params)
         self.kit = kit
         self.pattern = pattern
         self.sidechain = sidechain
         self.rhythm = rhythm
+        self.sidechain_depth = sidechain_depth
+        self.snare_delay = snare_delay
+        self.hihat_delay = hihat_delay
+        self.groove_swing = groove_swing
+        self.swing_grid = swing_grid
+        self.choke_hats = choke_hats
+        self.ghost_snare_prob = ghost_snare_prob
 
     def render(
         self,
@@ -166,14 +251,11 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         # Determine global velocity scaling
         if self.params.velocity_range:
             v_min, v_max = self.params.velocity_range
-            # 100 is roughly average base_vel in kits; normalize to it
             scale_factor = ((v_min + v_max) / 2) / 100.0
         else:
-            # Scale by density: 0.5 density = 1.0 scale
             scale_factor = 0.8 + self.params.density * 0.4
 
         while t < duration_beats:
-            kick_onsets: set[float] = set()
             for pitch, offset, base_vel, dur in pattern_def:
                 onset = t + offset
                 if onset >= duration_beats:
@@ -182,7 +264,6 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                 # Kit character adjustments
                 if pitch == KICK:
                     vel = int(char["kick_vel"] * scale_factor)
-                    kick_onsets.add(round(offset, 2))
                 elif pitch == SNARE:
                     vel = int(char["snare_vel"] * scale_factor)
                 elif pitch in (HH_CLOSED, HH_OPEN):
@@ -191,26 +272,55 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                     pitch = SNARE
                     vel = int(char["snare_vel"] * scale_factor)
                 else:
-                    # Apply scale factor to generic pattern base_vel
                     vel = int(base_vel * scale_factor)
-
-                vel = max(1, min(127, vel + random.randint(-5, 5)))
-
-                # Sidechain ducking
-                if self.sidechain and pitch != KICK:
-                    for kick_off in kick_onsets:
-                        if abs(offset - kick_off) < 0.25:
-                            vel = max(1, int(vel * 0.5))
 
                 notes.append(
                     NoteInfo(
                         pitch=pitch,
                         start=round(onset, 6),
                         duration=dur,
-                        velocity=vel,
+                        velocity=max(1, min(127, vel)),
                     )
                 )
+
+            # Generate low-velocity snare ghost notes if requested
+            if self.ghost_snare_prob > 0.0:
+                for sub in [0.75, 1.75, 2.25, 2.75, 3.75]:
+                    if random.random() < self.ghost_snare_prob:
+                        onset = t + sub
+                        if onset < duration_beats:
+                            notes.append(
+                                NoteInfo(
+                                    pitch=RIM if char.get("use_clap") else SNARE,
+                                    start=round(onset, 6),
+                                    duration=0.08,
+                                    velocity=random.randint(22, 38),
+                                )
+                            )
+
             t += 4.0
+
+        # Pro-grade dynamic velocity and transient scaling
+        for n in notes:
+            if n.pitch == KICK:
+                beat_in_bar = n.start % 4.0
+                if abs(beat_in_bar) < 0.01 or abs(beat_in_bar - 2.0) < 0.01:
+                    n.velocity = int(n.velocity * 1.12)
+            elif n.pitch in (SNARE, CLAP):
+                beat_in_bar = n.start % 4.0
+                if abs(beat_in_bar - 1.0) < 0.01 or abs(beat_in_bar - 3.0) < 0.01:
+                    n.velocity = int(n.velocity * 1.14)
+            elif n.pitch in (HH_CLOSED, HH_OPEN):
+                sub_pos = n.start % 1.0
+                if abs(sub_pos - 0.5) < 0.01:
+                    n.velocity = int(n.velocity * 0.85)
+                elif abs(sub_pos - 0.25) < 0.01 or abs(sub_pos - 0.75) < 0.01:
+                    n.velocity = int(n.velocity * 0.72)
+
+            n.velocity = max(1, min(127, n.velocity + random.randint(-4, 4)))
+
+        # Apply swing, pocket timing, hi-hat choking, and sidechain ducking passes
+        notes = self._apply_pro_features(notes)
 
         notes.sort(key=lambda n: n.start)
 
@@ -221,3 +331,56 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                 last_chord=last_chord,
             )
         return notes
+
+    def _apply_pro_features(self, notes: list[NoteInfo]) -> list[NoteInfo]:
+        # 1. Swing Timing & Pocket Timing Offsets
+        swing_delay = 0.0
+        if self.groove_swing > 0.5 and self.swing_grid > 0:
+            swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
+
+        for n in notes:
+            # Check swing
+            grid_pos = n.start % (2.0 * self.swing_grid)
+            is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
+
+            shift = 0.0
+            if is_offbeat:
+                shift += swing_delay
+
+            # Apply pocket delays
+            if n.pitch in (SNARE, CLAP, RIM):
+                shift += self.snare_delay
+            elif n.pitch in (HH_CLOSED, HH_OPEN):
+                shift += self.hihat_delay
+
+            n.start = round(max(0.0, n.start + shift), 6)
+
+        # 2. Hi-Hat Auto-Choking
+        if self.choke_hats:
+            notes.sort(key=lambda x: x.start)
+            for i, n in enumerate(notes):
+                if n.pitch == HH_OPEN:
+                    for j in range(i + 1, len(notes)):
+                        next_n = notes[j]
+                        if next_n.start >= n.start + n.duration:
+                            break
+                        if next_n.pitch == HH_CLOSED:
+                            n.duration = round(max(0.01, next_n.start - n.start - 0.005), 6)
+                            break
+
+        # 3. Post-Process Sidechain Ducking Pass
+        depth = self.sidechain_depth
+        if self.sidechain and depth == 0.0:
+            depth = 0.5  # Backward compatible sidechain ducking depth
+
+        if depth > 0.0:
+            kick_onsets = [n.start for n in notes if n.pitch == KICK]
+            for n in notes:
+                if n.pitch != KICK:
+                    for kick_start in kick_onsets:
+                        if abs(n.start - kick_start) < 0.20 or (n.start <= kick_start < n.start + n.duration):
+                            n.velocity = max(1, int(n.velocity * (1.0 - depth)))
+                            break
+
+        return notes
+

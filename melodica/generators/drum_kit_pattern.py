@@ -100,21 +100,29 @@ STYLE_PATTERNS: dict[str, list[tuple[int, float, int]]] = {
     ],
     "funk": [
         (KICK, 0.0, 110),
-        (HH_CLOSED, 0.0, 70),
-        (SNARE, 0.5, 60),
-        (HH_CLOSED, 0.25, 50),
-        (SNARE, 1.0, 110),
-        (HH_CLOSED, 0.5, 55),
-        (KICK, 1.25, 90),
-        (HH_CLOSED, 0.75, 50),
         (KICK, 2.0, 105),
-        (HH_CLOSED, 1.0, 65),
-        (SNARE, 2.5, 90),
-        (HH_CLOSED, 1.25, 50),
-        (SNARE, 3.0, 100),
-        (HH_CLOSED, 1.5, 55),
-        (KICK, 3.5, 95),
+        (KICK, 2.75, 95),
+        (SNARE, 1.0, 110),
+        (SNARE, 1.75, 50),
+        (SNARE, 2.25, 45),
+        (SNARE, 3.0, 112),
+        (SNARE, 3.75, 55),
+        (HH_CLOSED, 0.0, 75),
+        (HH_CLOSED, 0.25, 50),
+        (HH_CLOSED, 0.5, 65),
+        (HH_CLOSED, 0.75, 52),
+        (HH_CLOSED, 1.0, 72),
+        (HH_CLOSED, 1.25, 48),
+        (HH_CLOSED, 1.5, 68),
         (HH_CLOSED, 1.75, 50),
+        (HH_CLOSED, 2.0, 75),
+        (HH_CLOSED, 2.25, 52),
+        (HH_CLOSED, 2.5, 65),
+        (HH_CLOSED, 2.75, 48),
+        (HH_CLOSED, 3.0, 72),
+        (HH_CLOSED, 3.25, 50),
+        (HH_CLOSED, 3.5, 68),
+        (HH_CLOSED, 3.75, 52),
     ],
     "hiphop": [
         (KICK, 0.0, 115),
@@ -147,6 +155,12 @@ class DrumKitPatternGenerator(PhraseGenerator):
     hihat_pattern: str = "eighth"
     fill_frequency: float = 0.2
     rhythm: RhythmGenerator | None = None
+    sidechain_depth: float = 0.0
+    snare_delay: float = 0.0
+    hihat_delay: float = 0.0
+    groove_swing: float = 0.5
+    swing_grid: float = 0.25
+    choke_hats: bool = True
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
@@ -157,12 +171,24 @@ class DrumKitPatternGenerator(PhraseGenerator):
         hihat_pattern: str = "eighth",
         fill_frequency: float = 0.2,
         rhythm: RhythmGenerator | None = None,
+        sidechain_depth: float = 0.0,
+        snare_delay: float = 0.0,
+        hihat_delay: float = 0.0,
+        groove_swing: float = 0.5,
+        swing_grid: float = 0.25,
+        choke_hats: bool = True,
     ) -> None:
         super().__init__(params)
         self.style = style
         self.hihat_pattern = hihat_pattern
         self.fill_frequency = max(0.0, min(1.0, fill_frequency))
         self.rhythm = rhythm
+        self.sidechain_depth = sidechain_depth
+        self.snare_delay = snare_delay
+        self.hihat_delay = hihat_delay
+        self.groove_swing = groove_swing
+        self.swing_grid = swing_grid
+        self.choke_hats = choke_hats
 
     def render(
         self,
@@ -238,6 +264,30 @@ class DrumKitPatternGenerator(PhraseGenerator):
             t += 4.0
             bar_idx += 1
 
+        # Pro-grade dynamic velocity and transient scaling
+        for n in notes:
+            # 1. Structural transient accentuation
+            if n.pitch == KICK:
+                beat_in_bar = n.start % 4.0
+                if abs(beat_in_bar) < 0.01 or abs(beat_in_bar - 2.0) < 0.01:
+                    n.velocity = int(n.velocity * 1.12)
+            elif n.pitch == SNARE:
+                beat_in_bar = n.start % 4.0
+                if abs(beat_in_bar - 1.0) < 0.01 or abs(beat_in_bar - 3.0) < 0.01:
+                    n.velocity = int(n.velocity * 1.15)
+            # 2. Hi-hat/Ride dynamics (breathing offbeats)
+            elif n.pitch in (HH_CLOSED, HH_OPEN, RIDE):
+                sub_pos = n.start % 1.0
+                if abs(sub_pos - 0.5) < 0.01:
+                    n.velocity = int(n.velocity * 0.85)
+                elif abs(sub_pos - 0.25) < 0.01 or abs(sub_pos - 0.75) < 0.01:
+                    n.velocity = int(n.velocity * 0.72)
+
+            n.velocity = max(1, min(127, n.velocity + random.randint(-4, 4)))
+
+        # Apply swing, micro-timing pocket delays, hi-hat choking, and sidechain ducking passes
+        notes = self._apply_pro_features(notes)
+
         notes.sort(key=lambda n: n.start)
 
         if notes:
@@ -247,3 +297,52 @@ class DrumKitPatternGenerator(PhraseGenerator):
                 last_chord=last_chord,
             )
         return notes
+
+    def _apply_pro_features(self, notes: list[NoteInfo]) -> list[NoteInfo]:
+        # 1. Swing Timing & Pocket Timing Offsets
+        swing_delay = 0.0
+        if self.groove_swing > 0.5 and self.swing_grid > 0:
+            swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
+
+        for n in notes:
+            # Check swing
+            grid_pos = n.start % (2.0 * self.swing_grid)
+            is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
+
+            shift = 0.0
+            if is_offbeat:
+                shift += swing_delay
+
+            # Apply pocket delays
+            if n.pitch in (SNARE, TOM_LOW, TOM_MID, TOM_HIGH):
+                shift += self.snare_delay
+            elif n.pitch in (HH_CLOSED, HH_OPEN, RIDE):
+                shift += self.hihat_delay
+
+            n.start = round(max(0.0, n.start + shift), 6)
+
+        # 2. Hi-Hat Auto-Choking
+        if self.choke_hats:
+            notes.sort(key=lambda x: x.start)
+            for i, n in enumerate(notes):
+                if n.pitch == HH_OPEN:
+                    for j in range(i + 1, len(notes)):
+                        next_n = notes[j]
+                        if next_n.start >= n.start + n.duration:
+                            break
+                        if next_n.pitch in (HH_CLOSED, RIDE):
+                            n.duration = round(max(0.01, next_n.start - n.start - 0.005), 6)
+                            break
+
+        # 3. Post-Process Sidechain Ducking Pass
+        if self.sidechain_depth > 0.0:
+            kick_onsets = [n.start for n in notes if n.pitch == KICK]
+            for n in notes:
+                if n.pitch != KICK:
+                    for kick_start in kick_onsets:
+                        if abs(n.start - kick_start) < 0.20 or (n.start <= kick_start < n.start + n.duration):
+                            n.velocity = max(1, int(n.velocity * (1.0 - self.sidechain_depth)))
+                            break
+
+        return notes
+

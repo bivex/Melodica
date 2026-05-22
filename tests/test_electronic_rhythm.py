@@ -307,6 +307,40 @@ class TestTrapDrumsGenerator:
         notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
         assert len(notes) > 0
 
+    def test_hihat_choking(self):
+        gen = TrapDrumsGenerator(choke_hats=True, open_hat_probability=0.5, hat_roll_density=0.0)
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        hh_open = 46
+        hh_closed = 42
+        for i, n in enumerate(notes):
+            if n.pitch == hh_open:
+                for j in range(i + 1, len(notes)):
+                    next_n = notes[j]
+                    if next_n.pitch == hh_closed:
+                        if next_n.start < n.start + 0.25:
+                            assert n.duration < 0.25
+                        break
+
+    def test_swing_and_pocket_delays(self):
+        gen = TrapDrumsGenerator(groove_swing=0.6, swing_grid=0.25, snare_delay=0.05, hihat_delay=0.02, ghost_snare_prob=0.0)
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        snare_notes = [n for n in notes if n.pitch == 38]
+        for sn in snare_notes:
+            beat_in_bar = sn.start % 4.0
+            assert abs((beat_in_bar - 1.05) % 2.0) < 0.001 or abs((beat_in_bar - 3.05) % 2.0) < 0.001
+
+    def test_sidechain_ducking(self):
+        gen = TrapDrumsGenerator(sidechain_depth=0.5)
+        notes = gen.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        gen_no_sc = TrapDrumsGenerator(sidechain_depth=0.0)
+        notes_no_sc = gen_no_sc.render(_simple_chords()[:1], C_MAJOR, 4.0)
+        kick_onsets = [n.start for n in notes if n.pitch in (36,)]
+        for n in notes:
+            if n.pitch != 36 and n.start in kick_onsets:
+                matching = [m for m in notes_no_sc if m.pitch == n.pitch and m.start == n.start]
+                if matching:
+                    assert n.velocity < matching[0].velocity
+
 
 class TestFourOnFloorGenerator:
     def test_produces_notes(self):
