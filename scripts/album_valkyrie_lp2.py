@@ -68,9 +68,9 @@ def _build_chords(progression: str, duration: float, key: Scale) -> list[ChordLa
 def produce_track_1():
     """Cold awakening. Single Rhodes pedal line, low Upright E pedal, brushed snare."""
     print("Producing 01. Iron Wings (Intro / Cold D minor Awakening)...")
-    duration = 64.0
+    duration = 200.0  # 3:20 at 60 BPM
     # i - v - i - v progression (long pedal drone)
-    chords = _build_chords("i v i v" * 2, duration, KEY_D_MINOR)
+    chords = _build_chords("i v i v " * 5, duration, KEY_D_MINOR)
 
     # Slow cold Rhodes melody
     solo_params = GeneratorParams(density=0.25, key_range_low=55, key_range_high=74)
@@ -83,8 +83,8 @@ def produce_track_1():
 
     # Upright Bass holding E pedal
     bass = [
-        NoteInfo(pitch=16, start=i * 8.0, duration=7.5, velocity=45)
-        for i in range(int(duration / 8.0))
+        NoteInfo(pitch=16, start=i * 10.0, duration=9.5, velocity=45)
+        for i in range(int(duration / 10.0))
     ]
 
     # Soft brushed snare
@@ -100,15 +100,17 @@ def produce_track_1():
 def produce_track_2():
     """Aggressive Coltrane-style Tenor Sax + Broken Funk Slap Bass."""
     print("Producing 02. Chooser of the Slain (Coltrane Sax + Slap Broken Funk)...")
-    duration = 112.0
+    duration = 660.0  # 5:45 at 115 BPM is 661.25 beats (using 660)
     # i - iv - VII - i in D Dorian modulating to Phrygian at bridge (VII becomes bII)
-    progression = "i iv VII i " * 5 + "bII bII i i " * 2
+    progression = "i iv VII i " * 13 + "bII bII i i " * 3 + "bII bII "
     chords = _build_chords(progression, duration, KEY_D_DORIAN)
 
     # Tenor Sax virtuoso solo
     solo_params = GeneratorParams(density=0.6, key_range_low=50, key_range_high=78)
     solo_gen = SoloMelodyGenerator(solo_params, style="jazz_fusion", vibrato_depth=0.75)
     raw_sax = solo_gen.render(chords, KEY_D_DORIAN, duration)
+    # Tenor sax bursts in on bar 5 (beat 16.0)
+    raw_sax = [n for n in raw_sax if n.start >= 16.0]
     # Coltrane style peaks
     for n in raw_sax:
         if n.velocity > 80:
@@ -133,9 +135,9 @@ def produce_track_2():
 def produce_track_3():
     """Lyrical swing Flugelhorn, Vibraphone echo, Acoustic bass walking."""
     print("Producing 03. Mist & Armor (Flugelhorn Swing / Vibraphone echo)...")
-    duration = 96.0
+    duration = 468.0  # 6:10 at 76 BPM is 468.67 beats (using 468)
     # i - ii - V - i in F# Dorian
-    progression = "i ii V i " * 6
+    progression = "i ii V i " * 12
     chords = _build_chords(progression, duration, KEY_F_SHARP_DORIAN)
 
     # Soft singing flugelhorn
@@ -164,8 +166,8 @@ def produce_track_3():
 def produce_track_4():
     """Alto & Soprano Sax counterpoint, Prepared Piano, Sliding Fretless Bass."""
     print("Producing 04. Raven Protocol (Alto + Soprano counterpoint / Fretless Bass)...")
-    duration = 120.0
-    progression = "i i iv iv bII bII i i " * 3
+    duration = 580.0  # 5:55 at 98 BPM is 579.8 beats (using 580)
+    progression = "i i iv iv bII bII i i " * 10
     chords = _build_chords(progression, duration, KEY_F_SHARP_PHRYGIAN)
 
     # Alto Sax Lead
@@ -206,8 +208,8 @@ def produce_track_4():
 def produce_track_5():
     """Solo Upright Bass медленная импровизация, отдаленный Moog дрон."""
     print("Producing 05. The Battlefield (Solo Bass Improv + Moog Drone)...")
-    duration = 48.0
-    chords = _build_chords("i i iv iv v v i i", duration, KEY_F_SHARP_MINOR)
+    duration = 126.0  # 2:10 at 58 BPM is 125.67 beats (using 126)
+    chords = _build_chords("i i iv iv v v i i " * 3, duration, KEY_F_SHARP_MINOR)
 
     # Solo Upright Bass improvisation (Adaptive style)
     bass_params = GeneratorParams(density=0.5, key_range_low=32, key_range_high=55)
@@ -234,9 +236,9 @@ def produce_track_5():
 def produce_track_6():
     """Standard jazz trio + Harmon-muted trumpet entering at 2:30 + string quartet at 4:00."""
     print("Producing 06. Valhalla Calling (Jazz Trio + Harmon Mute + Cinematic Strings)...")
-    duration = 144.0
+    duration = 646.0  # 7:20 at 88 BPM is 645.33 beats (using 646)
     # i - iv - VII - III - VI - ii - V - i (grand circle of fifths)
-    progression = "i iv VII III VI ii V i " * 3
+    progression = "i iv VII III VI ii V i " * 10
     chords = _build_chords(progression, duration, KEY_B_FLAT_DORIAN)
 
     # Piano trio: Piano theme
@@ -249,20 +251,20 @@ def produce_track_6():
     bass_gen = ModernBass2025Generator(bass_params, style="walking")
     bass = bass_gen.render(chords, KEY_B_FLAT_DORIAN, duration)
 
-    # Harmon-muted Trumpet enters from afar (beat 48 onwards)
+    # Harmon-muted Trumpet enters from afar (beat 220.0 onwards, which is 2:30 at 88 BPM)
     trumpet = []
     trumpet_params = GeneratorParams(density=0.48, key_range_low=58, key_range_high=78)
     trumpet_gen = SoloMelodyGenerator(trumpet_params, style="bebop_horn", vibrato_depth=0.8)
     raw_trumpet = trumpet_gen.render(chords, KEY_B_FLAT_DORIAN, duration)
     for n in raw_trumpet:
-        if n.start >= 48.0:
+        if n.start >= 220.0:
             n.velocity = int(n.velocity * 0.85)  # muted feel
             trumpet.append(n)
 
-    # String Quartet transforms it into cinematic at beat 80 onwards
+    # String Quartet transforms it into cinematic at beat 352.0 onwards (which is 4:00 at 88 BPM)
     strings = []
     for c in chords:
-        if c.start >= 80.0:
+        if c.start >= 352.0:
             strings.extend([
                 NoteInfo(pitch=c.root + 48, start=c.start, duration=c.duration * 1.1, velocity=48),
                 NoteInfo(pitch=c.root + 52, start=c.start, duration=c.duration * 1.1, velocity=48),
@@ -276,8 +278,8 @@ def produce_track_6():
 def produce_track_7():
     """Baritone Sax, Hammond B3, Hard Bop high-energy drums."""
     print("Producing 07. Winged Fury (Baritone Sax + Hammond B3 Organ Max Energy)...")
-    duration = 120.0
-    progression = "i i iv iv v v i i " * 3
+    duration = 781.0  # 5:30 at 142 BPM is exactly 781.0 beats
+    progression = "i i iv iv v v i i " * 16
     chords = _build_chords(progression, duration, KEY_B_FLAT_MINOR)
 
     # Low, heavy Baritone Sax solo
@@ -310,8 +312,8 @@ def produce_track_7():
 def produce_track_8():
     """Lyrical Tenor Sax, Marimba woody comp, Arco bowed bass, mallets."""
     print("Producing 08. Between Worlds (Tenor Sax + Marimba + Arco Bass)...")
-    duration = 112.0
-    progression = "i i iv iv VI VI i i " * 2
+    duration = 472.0  # 6:45 at 70 BPM is 472.5 beats (using 472)
+    progression = "i i iv iv VI VI i i " * 8
     chords = _build_chords(progression, duration, KEY_B_FLAT_MINOR)
 
     # Lyrical Tenor Sax
@@ -339,8 +341,8 @@ def produce_track_8():
 def produce_track_9():
     """Solo Piano with complex extensions, Upright bass entering late, soft snare."""
     print("Producing 09. Norns' Thread (Solo Piano fate chords + Late Bass)...")
-    duration = 96.0
-    progression = "i iv VII III VI ii V i " * 2
+    duration = 314.0  # 4:50 at 65 BPM is 314.17 beats (using 314)
+    progression = "i iv VII III VI ii V i " * 6
     chords = _build_chords(progression, duration, KEY_D_MINOR)
 
     # Complex extended chord piano stabs (9ths, 11ths, 13ths)
@@ -354,20 +356,20 @@ def produce_track_9():
             NoteInfo(pitch=c.root + 59, start=c.start + 0.75, duration=c.duration * 0.85, velocity=68),
         ])
 
-    # Upright bass entering late (after beat 32.0)
+    # Upright bass entering late (after 2 minutes, which is beat 130.0 at 65 BPM)
     bass = []
     bass_params = GeneratorParams(density=0.45, key_range_low=28, key_range_high=48)
     bass_gen = ModernBass2025Generator(bass_params, style="walking")
     raw_bass = bass_gen.render(chords, KEY_D_MINOR, duration)
     for n in raw_bass:
-        if n.start >= 32.0:
+        if n.start >= 130.0:
             n.velocity = int(n.velocity * 0.8)
             bass.append(n)
 
-    # Brushed snare entering at very tail (after beat 80.0)
+    # Brushed snare entering at very tail (after 265.0 beats, which leaves last 45 seconds)
     drums = []
     for i in range(int(duration)):
-        if i >= 80:
+        if i >= 265:
             drums.append(NoteInfo(pitch=38, start=i + 0.5, duration=0.1, velocity=25))
 
     return {"piano": piano_solo, "bass": bass, "drums": drums}, 65.0
@@ -377,19 +379,21 @@ def produce_track_9():
 def produce_track_10():
     """Full ensemble homecoming, Rhodes, Upright, Drums, Flugelhorn, Strings. Rhodes fade."""
     print("Producing 10. Valkyrie's Return (Outro / Full Ensemble Homecoming)...")
-    duration = 96.0
-    progression = "i v i v " * 6
+    duration = 264.0  # 4:15 at 62 BPM is 263.5 beats (using 264)
+    progression = "i v i v " * 16
     chords = _build_chords(progression, duration, KEY_D_MINOR)
 
     # Flugelhorn leading the epic homecoming theme
     solo_params = GeneratorParams(density=0.38, key_range_low=55, key_range_high=76)
     solo_gen = SoloMelodyGenerator(solo_params, style="cinematic_strings", vibrato_depth=0.9)
     raw_flugel = solo_gen.render(chords, KEY_D_MINOR, duration)
+    # Stop flugelhorn early for Rhodes absolute solo (after 218.0 beats)
+    raw_flugel = [n for n in raw_flugel if n.start < 218.0]
 
-    # Rhodes keyboard (fades out solo in the final 20 beats)
+    # Rhodes keyboard (fades out solo in the final 46 beats, representing last 45 seconds)
     rhodes = []
     for c in chords:
-        vel = 75 if c.start < 76.0 else int(75 * (96.0 - c.start) / 20.0)
+        vel = 75 if c.start < 218.0 else int(75 * (264.0 - c.start) / 46.0)
         rhodes.extend([
             NoteInfo(pitch=c.root + 48, start=c.start, duration=c.duration * 0.95, velocity=vel),
             NoteInfo(pitch=c.root + 52, start=c.start + 0.5, duration=c.duration * 0.95, velocity=vel),
@@ -399,13 +403,13 @@ def produce_track_10():
     bass_params = GeneratorParams(density=0.5, key_range_low=28, key_range_high=48)
     bass_gen = ModernBass2025Generator(bass_params, style="fingerstyle")
     bass = bass_gen.render(chords, KEY_D_MINOR, duration)
-    # Stop bass early for Rhodes fadeout
-    bass = [n for n in bass if n.start < 76.0]
+    # Stop bass early for Rhodes fadeout (after 218.0 beats)
+    bass = [n for n in bass if n.start < 218.0]
 
     # String Quartet
     strings = []
     for c in chords:
-        if c.start < 76.0:
+        if c.start < 218.0:
             strings.extend([
                 NoteInfo(pitch=c.root + 48, start=c.start, duration=c.duration, velocity=48),
                 NoteInfo(pitch=c.root + 55, start=c.start, duration=c.duration, velocity=48),
@@ -414,7 +418,7 @@ def produce_track_10():
     # Brushed Drums
     drums = [
         NoteInfo(pitch=38, start=i * 2.0, duration=0.2, velocity=38)
-        for i in range(int(76.0 / 2.0))
+        for i in range(int(218.0 / 2.0))
     ]
 
     return {"lead": raw_flugel, "piano": rhodes, "bass": bass, "pad": strings, "drums": drums}, 62.0
