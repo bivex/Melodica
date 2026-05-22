@@ -137,15 +137,21 @@ def produce_track_2():
 # ---------------------------------------------------------------------------
 
 def produce_track_3():
-    """Atmospheric Synthwave / Dark Disco in C Aeolian. Volume-ducking sidechain bass."""
-    print("Producing III. Purple Horizon (Pumping Synthwave / Sidechain Bass)...")
+    """Atmospheric Synthwave / Dark Disco in C Aeolian. Sidechain bass + space_synth solo."""
+    print("Producing III. Purple Horizon (Synthwave / Pumping Bass + Detuned Space Solo)...")
 
     duration = 112.0
     # i - bVII - iv - i in C Aeolian
     progression = "i bVII iv i" * 7
     chords = _build_chords(progression, duration, KEY_AEOLIAN)
 
-    # Rapid 16th-note sparkling arpeggiator
+    # Solo: Space synth lead solo with CC 74 cutoff filter LFO
+    solo_params = GeneratorParams(density=0.35, key_range_low=58, key_range_high=86)
+    solo_gen = SoloMelodyGenerator(solo_params, style="space_synth", vibrato_depth=0.6)
+    raw_solo = solo_gen.render(chords, KEY_AEOLIAN, duration)
+    solo = spiceup(raw_solo, KEY_AEOLIAN, depth=1)
+
+    # Rapid 16th-note sparkling arpeggiator backing chords
     params = GeneratorParams(density=0.8, key_range_low=58, key_range_high=86)
     melody_gen = MelodyGenerator(
         params,
@@ -154,7 +160,7 @@ def produce_track_3():
         beats_per_bar=4,
     )
     raw_melody = melody_gen.render(chords, KEY_AEOLIAN, duration)
-    melody = spiceup(raw_melody, KEY_AEOLIAN, depth=1, single_pool=[OneToThree])
+    arp = spiceup(raw_melody, KEY_AEOLIAN, depth=1, single_pool=[OneToThree])
 
     # Modern 2025 Sidechain-Reactive Synth Bass (pumping volume CC 7, Avg 60, Max 84)
     bass_params = GeneratorParams(density=0.7, key_range_low=36, key_range_high=48)
@@ -167,7 +173,7 @@ def produce_track_3():
         for c in chords
     ]
 
-    return {"arp": melody, "bass": bass, "pad": pad}, 122.0
+    return {"lead": solo, "arp": arp, "bass": bass, "pad": pad}, 122.0
 
 
 # ---------------------------------------------------------------------------
@@ -175,25 +181,19 @@ def produce_track_3():
 # ---------------------------------------------------------------------------
 
 def produce_track_4():
-    """Orchestral Ambient Rise & Release in C Dorian. Evolving self-modifying bass."""
-    print("Producing IV. Amethyst Dream (Cinematic Ambient / Self-Modifying Bass)...")
+    """Orchestral Ambient Rise & Release in C Dorian. Self-modifying bass + cinematic_strings solo."""
+    print("Producing IV. Amethyst Dream (Cinematic Ambient / Evolving Bass + String Solo)...")
 
     duration = 128.0
     # Long drone progression: i - v - iv - i (4 bars per chord = 16 beats)
     progression = "i i v v iv iv i i" * 2
     chords = _build_chords(progression, duration, KEY_DORIAN)
 
-    # Expressive high lead melody theme
-    params = GeneratorParams(density=0.32, key_range_low=52, key_range_high=76)
-    melody_gen = MelodyGenerator(
-        params,
-        drama_shape="epic",
-        drama_peak=0.9,
-        phrase_length=16.0,
-        beats_per_bar=4,
-    )
-    raw_melody = melody_gen.render(chords, KEY_DORIAN, duration)
-    melody = spiceup(raw_melody, KEY_DORIAN, depth=1)
+    # Solo: Cinematic string solo with tension b9/#11 resolution and CC 1 tremolos
+    solo_params = GeneratorParams(density=0.36, key_range_low=52, key_range_high=82)
+    solo_gen = SoloMelodyGenerator(solo_params, style="cinematic_strings", vibrato_depth=0.9)
+    raw_solo = solo_gen.render(chords, KEY_DORIAN, duration)
+    melody = spiceup(raw_solo, KEY_DORIAN, depth=1)
 
     # Canon for massive orchestration depth
     canon = serialize_canon(
@@ -251,7 +251,7 @@ def main():
     print("\n" + "=" * 60)
     print("   VIOLETTA EP — Album in C Aeolian & C Dorian")
     print("   Scale: C D Eb F G Ab Bb / C D Eb F G A Bb")
-    print("   Featuring Modern 2025 Bass Generators")
+    print("   Featuring Expressive Solo & Bass Generators")
     print("=" * 60 + "\n")
 
     # I. Violet Twilight
@@ -278,7 +278,7 @@ def main():
     export_multitrack_midi(
         t3_m, str(album_dir / "03_Purple_Horizon.mid"),
         bpm=t3_bpm, cc_events=t3_pan,
-        instruments={"arp": 81, "bass": 39, "pad": 89},
+        instruments={"lead": 82, "arp": 81, "bass": 39, "pad": 89},
     )
 
     # IV. Amethyst Dream
