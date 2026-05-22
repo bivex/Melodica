@@ -84,6 +84,68 @@ class StringsPizzicatoGenerator(PhraseGenerator):
         self.snap_chance = max(0.0, min(1.0, snap_chance))
         self.rhythm = rhythm
 
+    def _render_pluck(
+        self,
+        base_pitch: int,
+        base_onset: float,
+        duration: float,
+        vel: int,
+        key: Scale,
+        alternating_idx: int = 0,
+    ) -> list[NoteInfo]:
+        """
+        Unified high-fidelity plucking renderer.
+        Implements timing jitter, Bartók snap fingerboard clacks, and alternating finger timbres.
+        """
+        notes = []
+        for d in range(self.section_divisi):
+            # 1. Divisi Micro-Onset Timing Jitter to prevent Harmonic Fusion / Masking
+            div_jitter = random.uniform(-0.012, 0.012)
+            onset = max(0.0, base_onset + div_jitter)
+            
+            # Stagger pitch slightly per voice
+            dp = base_pitch + d * random.choice([-3, -2, 2, 3])
+            dp = max(self.params.key_range_low, min(self.params.key_range_high, dp))
+            
+            # Humanize velocity
+            v = max(1, min(127, vel + random.randint(-5, 5) - d * 3))
+            
+            art = "pizzicato"
+            if random.random() < self.snap_chance or v >= 105:
+                art = "snap_pizzicato"
+                v = min(127, int(v * 1.25))
+                
+            # 2. Alternating Finger Timbre: slightly modulate brightness (CC 74) representing index/middle attack
+            expression = {}
+            base_cutoff = 80 if alternating_idx % 2 == 0 else 72
+            # Add dynamic decay on plucks
+            expression[74] = [(0.0, base_cutoff), (duration * 0.8, base_cutoff - 15)]
+            
+            pluck_note = NoteInfo(
+                pitch=dp,
+                start=round(onset, 6),
+                duration=round(max(0.02, duration), 6),
+                velocity=v,
+                articulation=art,
+            )
+            pluck_note.expression = expression
+            notes.append(pluck_note)
+            
+            # 3. Physical Bartók Snap clack (wood impact on fingerboard)
+            if art == "snap_pizzicato":
+                # High-pitched, extremely short mechanical click/wood-slap
+                clack_pitch = min(127, dp + 36)
+                notes.append(
+                    NoteInfo(
+                        pitch=clack_pitch,
+                        start=round(onset + random.uniform(0.001, 0.003), 6),
+                        duration=0.03,
+                        velocity=max(10, int(v * 0.45)),
+                        articulation="staccato",
+                    )
+                )
+        return notes
+
     def render(
         self,
         chords: list[ChordLabel],
@@ -121,32 +183,18 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                 pitch_b = nearest_pitch(int(pc_b), prev_pitch)
                 pitch_b = snap_to_scale(pitch_b, key)
                 use_a = True
+                step_count = 0
                 while t < end:
                     p = pitch_a if use_a else pitch_b
                     p = max(self.params.key_range_low, min(self.params.key_range_high, p))
                     n_dur = min(0.125, end - t)
                     vel = self._velocity()
-                    for d in range(self.section_divisi):
-                        dp = p + d * random.choice([-3, -2, 2, 3])
-                        dp = max(self.params.key_range_low, min(self.params.key_range_high, dp))
-                        
-                        v = max(1, vel - d * 3)
-                        art = "pizzicato"
-                        if random.random() < self.snap_chance or v >= 105:
-                            art = "snap_pizzicato"
-                            v = min(127, int(v * 1.25))
-                            
-                        notes.append(
-                            NoteInfo(
-                                pitch=dp,
-                                start=round(t, 6),
-                                duration=n_dur,
-                                velocity=v,
-                                articulation=art,
-                            )
-                        )
+                    
+                    notes.extend(self._render_pluck(p, t, n_dur, vel, key, step_count))
+                    
                     t += 0.125
                     use_a = not use_a
+                    step_count += 1
                 prev_pitch = pitch_a
             elif self.pattern == "arco_mix":
                 # Lower voice(s) = sustained arco
@@ -158,7 +206,7 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                     p = max(self.params.key_range_low, min(self.params.key_range_high, p))
                     pitches.append(p)
                 pitches = sorted(list(set(pitches)))
-                
+
                 if len(pitches) >= 3:
                     arco_pitches = pitches[:2]
                     pizz_pitches = pitches[2:]
@@ -168,7 +216,7 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                 else:
                     arco_pitches = [pitches[0]]
                     pizz_pitches = [pitches[0]]
-                
+
                 # Add sustained arco notes
                 vel = self._velocity()
                 for p in arco_pitches:
@@ -181,32 +229,19 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                             articulation="arco",
                         )
                     )
-                
+
                 # Add rhythmic pizzicato plucks on the upper voices
                 pluck_offsets = [0.0, 1.0, 1.5, 2.5, 3.0]
-                for offset in pluck_offsets:
+                for pluck_idx, offset in enumerate(pluck_offsets):
                     t = event.onset + offset
                     if t >= event.onset + event.duration:
                         break
-                    
+
                     for p in pizz_pitches:
                         if random.random() < 0.8:  # slightly sparse for organic feel
                             p_vel = self._velocity()
-                            art = "pizzicato"
-                            if random.random() < self.snap_chance or p_vel >= 105:
-                                art = "snap_pizzicato"
-                                p_vel = min(127, int(p_vel * 1.25))
-                            
-                            notes.append(
-                                NoteInfo(
-                                    pitch=p,
-                                    start=round(t, 6),
-                                    duration=self.staccato_length,
-                                    velocity=p_vel,
-                                    articulation=art,
-                                )
-                            )
-                
+                            notes.extend(self._render_pluck(p, t, self.staccato_length, p_vel, key, pluck_idx))
+
                 if pizz_pitches:
                     prev_pitch = pizz_pitches[-1]
             else:
@@ -217,25 +252,7 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                 pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
 
                 vel = self._velocity()
-                for d in range(self.section_divisi):
-                    dp = pitch + d * random.choice([-3, -2, 2, 3])
-                    dp = max(self.params.key_range_low, min(self.params.key_range_high, dp))
-                    v = max(1, min(127, vel + random.randint(-5, 5)))
-                    
-                    art = "pizzicato"
-                    if random.random() < self.snap_chance or v >= 105:
-                        art = "snap_pizzicato"
-                        v = min(127, int(v * 1.25))
-                        
-                    notes.append(
-                        NoteInfo(
-                            pitch=dp,
-                            start=round(event.onset, 6),
-                            duration=self.staccato_length,
-                            velocity=v,
-                            articulation=art,
-                        )
-                    )
+                notes.extend(self._render_pluck(pitch, event.onset, self.staccato_length, vel, key, 0))
                 prev_pitch = pitch
 
         if notes:
