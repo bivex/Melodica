@@ -300,6 +300,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     # CC10 hi-hat panning
     pan_mode: str = "off"  # off | alternate | sweep_lr | sweep_rl | mono
     pan_alternation_rate: float = 0.5
+    pan_width: float = 0.20  # 0.0=narrow (no spread) → 1.0=full stereo width
     # Flam & drag rudiments
     flam_probability: float = 0.0
     drag_probability: float = 0.0
@@ -357,6 +358,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         self.kick_less_verse = kick_less_verse
         self.pan_mode = pan_mode
         self.pan_alternation_rate = pan_alternation_rate
+        self.pan_width = 0.20
         self.flam_probability = flam_probability
         self.drag_probability = drag_probability
 
@@ -580,22 +582,45 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         notes.extend(grace_notes)
 
     @staticmethod
-    def _hat_pan_value(mode: str, alt_count: int, rate: float) -> int:
-        """Return a CC10 pan value (0-127) for a hi-hat note."""
-        r = alt_count % 2
+    def _hat_pan_value(mode: str, alt_count: int, rate: float, width: float = 0.20) -> int:
+        """Return a CC10 pan value (0-127) for a hi-hat note.
+
+        Parameters
+        ----------
+        mode   : alternate | sweep_lr | sweep_rl | random | mono | off
+        alt_count : sequential index of the current hi-hat hit (0-based)
+        rate   : alternation rate (kept for API compat, not used here)
+        width  : 0.0 = no spread (±0 CC units) → 1.0 = full stereo edge-to-edge (±63 CC)
+        """
+        spread = int(width * 63)   # max ± spread CC units around centre 64
+        L = 64 - spread             # left bound
+        R = 64 + spread             # right bound
+        # For multi-step patterns, compute a 4-step sub-increment
+        sub = min(3, int(spread // 32) * 4 or 4)   # 4 steps across the span
+        step = (R - L) // max(sub - 1, 1)
+
+        def _clamp(v: int) -> int:
+            return min(R, max(L, v))
+
         if mode == "off":
             return 64
         elif mode == "mono":
             return 64
         elif mode == "alternate":
-            return 76 if r == 0 else 52
+            return R if alt_count % 2 == 0 else L
         elif mode == "sweep_lr":
-            # Gradual sweep left to right across 4 hits
-            target = 52 + int((alt_count % 4) * 8)   # 52, 60, 68, 76
-            return min(76, max(52, target))
+            # 52, 60, 68, 76  ← 4-step left-to-right climb
+            target = L + (alt_count % sub) * step
+            return _clamp(L + target) if L == R else _clamp(target)
         elif mode == "sweep_rl":
-            target = 76 - int((alt_count % 4) * 8)   # 76, 68, 60, 52
-            return min(76, max(52, target))
+            # 76, 68, 60, 52  ← 4-step right-to-left
+            target = R - (alt_count % sub) * step
+            return _clamp(target)
+        elif mode == "random":
+            import random as _rnd
+            # True random across full width (re-seeded each call for variety)
+            _rnd.seed()
+            return int(_rnd.uniform(L, R))
         else:
             return 64
 
@@ -701,7 +726,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             _hat_alt = 0
             for n in notes:
                 if n.pitch in (HH_CLOSED, HH_OPEN):
-                    n.expression = {**(n.expression or {}), "cc10": self._hat_pan_value(self.pan_mode, _hat_alt, self.pan_alternation_rate)}
+                    n.expression = {**(n.expression or {}), "cc10": self._hat_pan_value(self.pan_mode, _hat_alt, self.pan_alternation_rate, self.pan_width)}
                     _hat_alt += 1
 
         # 4. Post-Process Sidechain / Transient Ducking Pass
