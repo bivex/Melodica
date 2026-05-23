@@ -63,6 +63,7 @@ class BrassSectionGenerator(PhraseGenerator):
     voicing: str = "closed"
     intensity: float = 0.8
     divisi_count: int = 3
+    ensemble_mode: str = "full"
     breath_gap: float = 0.25
     mute: str | None = None
     con_sordino: bool = False
@@ -77,6 +78,7 @@ class BrassSectionGenerator(PhraseGenerator):
         voicing: str = "closed",
         intensity: float = 0.8,
         divisi_count: int = 3,
+        ensemble_mode: str = "full",
         breath_gap: float = 0.25,
         mute: str | None = None,
         con_sordino: bool = False,
@@ -87,6 +89,7 @@ class BrassSectionGenerator(PhraseGenerator):
         self.voicing = voicing
         self.intensity = max(0.0, min(1.0, intensity))
         self.divisi_count = max(2, min(5, divisi_count))
+        self.ensemble_mode = ensemble_mode
         self.breath_gap = max(0.0, min(1.0, breath_gap))
         self.mute = mute
         self.con_sordino = con_sordino
@@ -109,6 +112,17 @@ class BrassSectionGenerator(PhraseGenerator):
         # Per-voice register offsets for divisi spread
         divisi_offsets = [0, 7, -12, 12, -7]
 
+        # Map ensemble_mode to local div_count
+        mode = getattr(self, "ensemble_mode", "full")
+        if mode == "solo":
+            div_count = 1
+        elif mode == "chamber":
+            div_count = 3
+        elif mode == "section":
+            div_count = 4
+        else:  # tutti
+            div_count = 5
+
         for event in events:
             chord = chord_at(chords, event.onset)
             if chord is None:
@@ -117,7 +131,7 @@ class BrassSectionGenerator(PhraseGenerator):
 
             # Voicing and instrument registers mapping — each divisi voice gets its own register offset
             voicing_sub = []
-            for v_idx in range(self.divisi_count):
+            for v_idx in range(div_count):
                 voice_anchor = mid + divisi_offsets[v_idx % len(divisi_offsets)]
                 raw_voicing = chord_pitches_closed(chord, voice_anchor)
                 raw_voicing = [snap_to_scale(p, key) for p in raw_voicing]

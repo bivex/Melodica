@@ -41,6 +41,7 @@ from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 SECTION_VOICINGS: dict[str, list[int]] = {
+    "solo": [0],
     "trio": [0, -1, 1],  # clarinet, oboe above, flute below anchor
     "quartet": [0, -1, 1, -2],  # + bassoon low
     "full": [0, 0, -1, 1, -2],  # doubled top + english horn
@@ -74,6 +75,7 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
 
     name: str = "Woodwinds Ensemble Generator"
     section: str = "quartet"
+    ensemble_mode: str = "full"
     articulation: str = "legato"
     dynamic_range: float = 0.5
     breath_interval: float = 6.0
@@ -86,6 +88,7 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
         params: GeneratorParams | None = None,
         *,
         section: str = "quartet",
+        ensemble_mode: str = "full",
         articulation: str = "legato",
         dynamic_range: float = 0.5,
         breath_interval: float = 6.0,
@@ -94,6 +97,7 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
     ) -> None:
         super().__init__(params)
         self.section = section
+        self.ensemble_mode = ensemble_mode
         self.articulation = articulation
         self.dynamic_range = max(0.0, min(1.0, dynamic_range))
         self.breath_interval = max(2.0, breath_interval)
@@ -119,7 +123,20 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
         notes: list[NoteInfo] = []
         mid = (self.params.key_range_low + self.params.key_range_high) // 2
         last_chord = chords[-1]
-        voicing_offsets = SECTION_VOICINGS.get(self.section, SECTION_VOICINGS["quartet"])
+
+        # Map ensemble_mode to section type
+        mode = getattr(self, "ensemble_mode", "full")
+        sec_type = self.section
+        if mode == "solo":
+            sec_type = "solo"
+        elif mode == "chamber":
+            sec_type = "trio"
+        elif mode == "section":
+            sec_type = "quartet"
+        elif mode == "tutti":
+            sec_type = "full"
+
+        voicing_offsets = SECTION_VOICINGS.get(sec_type, SECTION_VOICINGS["quartet"])
         dur_factor = ARTICULATION_DURATIONS.get(self.articulation, 0.95)
         vel_boost = ARTICULATION_VELOCITY_BOOST.get(self.articulation, 0)
 
