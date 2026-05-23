@@ -201,8 +201,9 @@ class PianoSoloGenerator(_PluckedSoloBase):
 
 class AcousticGuitarGenerator(_PluckedSoloBase):
     """
-    Solo Acoustic & Electric Clean Guitar generator.
-    Covers Nylon (24), Steel (25), Jazz (26), Clean Electric (27), Muted (28).
+    Solo Acoustic & Electric Guitar generator.
+    Covers Nylon (24), Steel (25), Jazz (26), Clean Electric (27), Muted (28),
+    Overdriven (29), Distortion (30), Guitar Harmonics (31).
     """
     name: str = "Acoustic Guitar Generator"
 
@@ -211,7 +212,7 @@ class AcousticGuitarGenerator(_PluckedSoloBase):
         params: GeneratorParams | None = None,
         *,
         style: str = "fingerpicking",  # fingerpicking, strumming, lead
-        acoustic_type: str = "nylon",  # nylon, steel, clean_electric, muted
+        acoustic_type: str = "nylon",  # nylon, steel, clean_electric, muted, overdriven, distortion, harmonics
         note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
@@ -239,7 +240,7 @@ class AcousticGuitarGenerator(_PluckedSoloBase):
             if not pcs:
                 continue
 
-            if self.style == "fingerpicking" and len(pcs) >= 3:
+            if self.style == "fingerpicking" and self.acoustic_type not in ("overdriven", "distortion", "harmonics") and len(pcs) >= 3:
                 # Pluck bass note first, then arpeggiated high tones
                 vel = self._velocity(75)
                 # Bass
@@ -262,7 +263,17 @@ class AcousticGuitarGenerator(_PluckedSoloBase):
                     ))
             else:
                 # Strumming/Lead
-                vel = self._velocity(85)
+                if self.acoustic_type == "overdriven":
+                    vel = self._velocity(90)
+                elif self.acoustic_type == "distortion":
+                    vel = self._velocity(98)
+                elif self.acoustic_type == "harmonics":
+                    vel = self._velocity(80)
+                elif self.acoustic_type == "muted":
+                    vel = self._velocity(75)
+                else:
+                    vel = self._velocity(85)
+
                 pc = random.choice(pcs)
                 pitch = nearest_pitch(pc, prev_pitch)
                 pitch = snap_to_scale(pitch, key)
@@ -270,12 +281,43 @@ class AcousticGuitarGenerator(_PluckedSoloBase):
                 prev_pitch = pitch
 
                 dur = chord.duration * 0.15 if self.acoustic_type == "muted" else chord.duration * 0.85
-                notes.append(NoteInfo(
+                if self.acoustic_type == "harmonics":
+                    # Transpose up to represent natural guitar bell harmonic
+                    pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch + 12))
+                    dur = chord.duration * 0.35
+
+                expression = {}
+                if self.acoustic_type in ("overdriven", "distortion"):
+                    # Aggressive pitch-vibrato sweep on CC 1 (Modulation Wheel)
+                    expression[1] = [(0.0, 70), (dur * 0.5, 95), (dur, 75)]
+                    if self.acoustic_type == "distortion":
+                        expression[93] = [(0.0, 85), (dur, 85)]
+
+                main_note = NoteInfo(
                     pitch=pitch,
                     start=round(chord.start, 6),
                     duration=round(dur, 6),
                     velocity=vel,
-                ))
+                )
+                if expression:
+                    main_note.expression = expression
+                notes.append(main_note)
+
+                # Rock/Metal heavy power chord layering (root + fifth + octave)
+                if self.acoustic_type in ("overdriven", "distortion") and len(pcs) >= 1:
+                    fifth_pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch + 7))
+                    octave_pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch + 12))
+
+                    for p in (fifth_pitch, octave_pitch):
+                        layer_note = NoteInfo(
+                            pitch=p,
+                            start=round(chord.start, 6),
+                            duration=round(dur, 6),
+                            velocity=max(1, vel - 10),
+                        )
+                        if expression:
+                            layer_note.expression = expression
+                        notes.append(layer_note)
 
         return sorted(notes, key=lambda x: x.start)
 

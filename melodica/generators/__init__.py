@@ -375,6 +375,9 @@ from melodica.generators.keyboard_sustained import (
     RockOrganGenerator,
     ReedOrganGenerator,
 )
+from melodica.generators.bass_solo import (
+    BassSoloGenerator,
+)
 
 __all__ = [
     "PhraseGenerator",
@@ -588,4 +591,5 @@ __all__ = [
     "PercussiveOrganGenerator",
     "RockOrganGenerator",
     "ReedOrganGenerator",
+    "BassSoloGenerator",
 ]
