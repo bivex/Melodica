@@ -104,6 +104,41 @@ def _harmonic_pitch(base_pitch: int, harmonic_number: int = 2) -> int:
 
 class _OrchestralStringBase(PhraseGenerator):
     """Base class shared by all orchestral string generators."""
+    note_density: float = 1.0
+
+    def _apply_note_density(self, chords: list[ChordLabel]) -> list[ChordLabel]:
+        note_density = getattr(self, "note_density", 1.0)
+        if not chords or note_density == 1.0:
+            return chords
+        
+        if note_density <= 0.0:
+            return []
+        
+        if note_density < 1.0:
+            new_chords = []
+            for i, chord in enumerate(chords):
+                prev_val = int((i - 1) * note_density) if i > 0 else -1
+                curr_val = int(i * note_density)
+                if curr_val > prev_val:
+                    new_chords.append(chord)
+            return new_chords
+        
+        subdivisions = max(1, round(note_density))
+        if subdivisions <= 1:
+            return chords
+            
+        import dataclasses
+        new_chords = []
+        for chord in chords:
+            sub_dur = chord.duration / subdivisions
+            for s in range(subdivisions):
+                new_chord = dataclasses.replace(
+                    chord,
+                    start=chord.start + s * sub_dur,
+                    duration=sub_dur
+                )
+                new_chords.append(new_chord)
+        return new_chords
 
     def _setup_range(self) -> None:
         self._range = STRING_RANGES.get(self.instrument, STRING_RANGES["violin"])
@@ -161,6 +196,7 @@ class ViolinGenerator(_OrchestralStringBase):
         con_sordino: bool = False,
         double_stops: bool = False,
         position: int = 1,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "violin"
@@ -170,6 +206,7 @@ class ViolinGenerator(_OrchestralStringBase):
         self.con_sordino = con_sordino
         self.double_stops = double_stops
         self.position = max(1, min(7, position))
+        self.note_density = note_density
         self._setup_range()
 
     def render(
@@ -179,6 +216,7 @@ class ViolinGenerator(_OrchestralStringBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 
@@ -290,6 +328,7 @@ class ViolaGenerator(_OrchestralStringBase):
         con_sordino: bool = False,
         double_stops: bool = False,
         position: int = 1,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "viola"
@@ -299,6 +338,7 @@ class ViolaGenerator(_OrchestralStringBase):
         self.con_sordino = con_sordino
         self.double_stops = double_stops
         self.position = max(1, min(5, position))
+        self.note_density = note_density
         self._setup_range()
 
     def render(
@@ -308,6 +348,7 @@ class ViolaGenerator(_OrchestralStringBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 
@@ -396,6 +437,7 @@ class CelloGenerator(_OrchestralStringBase):
         double_stops: bool = False,
         position: int = 1,
         bass_voice: bool = False,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "cello"
@@ -406,6 +448,7 @@ class CelloGenerator(_OrchestralStringBase):
         self.double_stops = double_stops
         self.position = max(1, min(5, position))
         self.bass_voice = bass_voice
+        self.note_density = note_density
         self._setup_range()
 
     def render(
@@ -415,6 +458,7 @@ class CelloGenerator(_OrchestralStringBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 
@@ -515,6 +559,7 @@ class ContrabassGenerator(_OrchestralStringBase):
         con_sordino: bool = False,
         position: int = 1,
         bass_voice: bool = True,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "contrabass"
@@ -525,6 +570,7 @@ class ContrabassGenerator(_OrchestralStringBase):
         self.double_stops = False
         self.position = max(1, min(4, position))
         self.bass_voice = bass_voice
+        self.note_density = note_density
         self._setup_range()
 
     def render(
@@ -534,6 +580,7 @@ class ContrabassGenerator(_OrchestralStringBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 

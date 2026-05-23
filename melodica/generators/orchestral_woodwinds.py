@@ -86,6 +86,41 @@ def _breath_gap_interval(density: float) -> int:
 
 class _OrchestralWoodwindBase(PhraseGenerator):
     """Base class shared by all orchestral woodwind generators."""
+    note_density: float = 1.0
+
+    def _apply_note_density(self, chords: list[ChordLabel]) -> list[ChordLabel]:
+        note_density = getattr(self, "note_density", 1.0)
+        if not chords or note_density == 1.0:
+            return chords
+        
+        if note_density <= 0.0:
+            return []
+        
+        if note_density < 1.0:
+            new_chords = []
+            for i, chord in enumerate(chords):
+                prev_val = int((i - 1) * note_density) if i > 0 else -1
+                curr_val = int(i * note_density)
+                if curr_val > prev_val:
+                    new_chords.append(chord)
+            return new_chords
+        
+        subdivisions = max(1, round(note_density))
+        if subdivisions <= 1:
+            return chords
+            
+        import dataclasses
+        new_chords = []
+        for chord in chords:
+            sub_dur = chord.duration / subdivisions
+            for s in range(subdivisions):
+                new_chord = dataclasses.replace(
+                    chord,
+                    start=chord.start + s * sub_dur,
+                    duration=sub_dur
+                )
+                new_chords.append(new_chord)
+        return new_chords
 
     def _setup_range(self) -> None:
         self._range = WOODWIND_RANGES.get(self.instrument, WOODWIND_RANGES["flute"])
@@ -145,6 +180,7 @@ class FluteGenerator(_OrchestralWoodwindBase):
         vibrato: bool = True,
         register: int = 2,
         breath_phrase: bool = True,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "flute"
@@ -153,6 +189,7 @@ class FluteGenerator(_OrchestralWoodwindBase):
         self.vibrato = vibrato
         self.register = max(1, min(3, register))
         self.breath_phrase = breath_phrase
+        self.note_density = note_density
         self._last_context = None
         self._setup_range()
 
@@ -163,6 +200,7 @@ class FluteGenerator(_OrchestralWoodwindBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 
@@ -292,6 +330,7 @@ class OboeGenerator(_OrchestralWoodwindBase):
         register: int = 2,
         breath_phrase: bool = True,
         cor_anglais: bool = False,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "oboe"
@@ -301,6 +340,7 @@ class OboeGenerator(_OrchestralWoodwindBase):
         self.register = max(1, min(3, register))
         self.breath_phrase = breath_phrase
         self.cor_anglais = cor_anglais
+        self.note_density = note_density
         self._last_context = None
         if cor_anglais:
             self._range = COR_ANGLAIS_RANGE.copy()
@@ -318,6 +358,7 @@ class OboeGenerator(_OrchestralWoodwindBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 
@@ -443,6 +484,7 @@ class ClarinetGenerator(_OrchestralWoodwindBase):
         register: int = 2,
         breath_phrase: bool = True,
         bass_voice: bool = False,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "clarinet"
@@ -452,6 +494,7 @@ class ClarinetGenerator(_OrchestralWoodwindBase):
         self.register = max(1, min(3, register))
         self.breath_phrase = breath_phrase
         self.bass_voice = bass_voice
+        self.note_density = note_density
         self._last_context = None
         if bass_voice:
             self._range = BASS_CLARINET_RANGE.copy()
@@ -469,6 +512,7 @@ class ClarinetGenerator(_OrchestralWoodwindBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 
@@ -596,6 +640,7 @@ class BassoonGenerator(_OrchestralWoodwindBase):
         vibrato: bool = False,
         register: int = 1,
         breath_phrase: bool = True,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "bassoon"
@@ -604,6 +649,7 @@ class BassoonGenerator(_OrchestralWoodwindBase):
         self.vibrato = vibrato
         self.register = max(1, min(3, register))
         self.breath_phrase = breath_phrase
+        self.note_density = note_density
         self._last_context = None
         self._setup_range()
 
@@ -614,6 +660,7 @@ class BassoonGenerator(_OrchestralWoodwindBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 

@@ -78,6 +78,41 @@ def _apply_dynamic_curve(vel: int, progress: float, curve: str, base: int) -> in
 
 class _OrchestralBrassBase(PhraseGenerator):
     """Base class shared by all orchestral brass generators."""
+    note_density: float = 1.0
+
+    def _apply_note_density(self, chords: list[ChordLabel]) -> list[ChordLabel]:
+        note_density = getattr(self, "note_density", 1.0)
+        if not chords or note_density == 1.0:
+            return chords
+        
+        if note_density <= 0.0:
+            return []
+        
+        if note_density < 1.0:
+            new_chords = []
+            for i, chord in enumerate(chords):
+                prev_val = int((i - 1) * note_density) if i > 0 else -1
+                curr_val = int(i * note_density)
+                if curr_val > prev_val:
+                    new_chords.append(chord)
+            return new_chords
+        
+        subdivisions = max(1, round(note_density))
+        if subdivisions <= 1:
+            return chords
+            
+        import dataclasses
+        new_chords = []
+        for chord in chords:
+            sub_dur = chord.duration / subdivisions
+            for s in range(subdivisions):
+                new_chord = dataclasses.replace(
+                    chord,
+                    start=chord.start + s * sub_dur,
+                    duration=sub_dur
+                )
+                new_chords.append(new_chord)
+        return new_chords
 
     def _setup_range(self) -> None:
         self._range = BRASS_RANGES.get(self.instrument, BRASS_RANGES["trumpet"])
@@ -228,6 +263,7 @@ class TrumpetGenerator(_OrchestralBrassBase):
         con_sordino: bool = False,
         register: int = 2,
         fanfare_mode: bool = False,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "trumpet"
@@ -236,6 +272,7 @@ class TrumpetGenerator(_OrchestralBrassBase):
         self.con_sordino = con_sordino
         self.register = max(1, min(3, register))
         self.fanfare_mode = fanfare_mode
+        self.note_density = note_density
         self._setup_range()
 
     def render(
@@ -245,6 +282,7 @@ class TrumpetGenerator(_OrchestralBrassBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 
@@ -374,6 +412,7 @@ class TromboneGenerator(_OrchestralBrassBase):
         register: int = 2,
         fanfare_mode: bool = False,
         bass_voice: bool = False,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.bass_voice = bass_voice
@@ -383,6 +422,7 @@ class TromboneGenerator(_OrchestralBrassBase):
         self.con_sordino = con_sordino
         self.register = max(1, min(3, register))
         self.fanfare_mode = fanfare_mode
+        self.note_density = note_density
         self._setup_range()
 
     def render(
@@ -392,6 +432,7 @@ class TromboneGenerator(_OrchestralBrassBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 
@@ -522,6 +563,7 @@ class FrenchHornGenerator(_OrchestralBrassBase):
         con_sordino: bool = False,
         register: int = 2,
         fanfare_mode: bool = False,
+        note_density: float = 1.0,
     ) -> None:
         super().__init__(params)
         self.instrument = "french_horn"
@@ -530,6 +572,7 @@ class FrenchHornGenerator(_OrchestralBrassBase):
         self.con_sordino = con_sordino
         self.register = max(1, min(3, register))
         self.fanfare_mode = fanfare_mode
+        self.note_density = note_density
         self._setup_range()
 
     def render(
@@ -539,6 +582,7 @@ class FrenchHornGenerator(_OrchestralBrassBase):
         duration_beats: float,
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
         if not chords:
             return []
 

@@ -60,6 +60,7 @@ class StringsLegatoGenerator(PhraseGenerator):
 
     name: str = "Strings Legato Generator"
     section_size: str = "ensemble"
+    ensemble_mode: str = "full"
     portamento_speed: float = 0.15
     dynamic_shape: str = "cresc_dim"
     interval_preference: str = "step"
@@ -72,6 +73,7 @@ class StringsLegatoGenerator(PhraseGenerator):
         params: GeneratorParams | None = None,
         *,
         section_size: str = "ensemble",
+        ensemble_mode: str = "full",
         portamento_speed: float = 0.15,
         dynamic_shape: str = "cresc_dim",
         interval_preference: str = "step",
@@ -80,6 +82,7 @@ class StringsLegatoGenerator(PhraseGenerator):
     ) -> None:
         super().__init__(params)
         self.section_size = section_size
+        self.ensemble_mode = ensemble_mode
         self.portamento_speed = max(0.0, min(0.5, portamento_speed))
         self.dynamic_shape = dynamic_shape
         self.interval_preference = interval_preference
@@ -180,14 +183,27 @@ class StringsLegatoGenerator(PhraseGenerator):
                     note.expression = expression
                 notes.append(note)
 
-            # Ensemble/full: add divisi voices snapped to chord tones
-            if self.section_size in ("ensemble", "full"):
-                divisi_count = 2 if self.section_size == "ensemble" else 3
+            # Determine the number of voices and their behavior based on ensemble_mode or legacy section_size
+            mode = getattr(self, "ensemble_mode", "full")
+
+            if mode == "solo":
+                voices_count = 1
+            elif mode == "chamber":
+                voices_count = 3
+            elif mode == "section":
+                voices_count = 6
+            else:  # tutti
+                voices_count = 8
+
+            if voices_count > 1:
                 chord_pcs = chord.pitch_classes()
-                for d in range(1, divisi_count):
-                    # Target an offset above or below the lead voice, then
-                    # snap to the nearest chord tone so divisi stays harmonic.
-                    offset = d * random.choice([3, 4, 5, 7])
+                for d in range(1, voices_count):
+                    # Spacing or unison offsets
+                    if mode == "chamber":
+                        offset = random.choice([0, 12, -12])
+                    else:
+                        offset = d * random.choice([3, 4, 5, 7, -12, 12])
+
                     target = pitch + offset
                     if chord_pcs:
                         div_pitch = min(
@@ -199,18 +215,21 @@ class StringsLegatoGenerator(PhraseGenerator):
                     div_pitch = max(
                         self.params.key_range_low, min(self.params.key_range_high, div_pitch)
                     )
-                    
-                    # Humanize onset start times and durations to prevent Harmonic Fusion / Masking
-                    div_jitter = random.uniform(-0.015, 0.015)
+
+                    # Humanize onset start times and durations
+                    jitter_range = 0.025 if mode in ("chamber", "tutti") else 0.015
+                    div_jitter = random.uniform(-jitter_range, jitter_range)
                     div_start = max(0.0, event.onset + div_jitter)
                     div_duration = max(0.05, event.duration + random.uniform(-0.02, 0.02))
-                    
+
+                    vel_mult = 0.85 if mode in ("chamber", "tutti") else 0.7
+
                     notes.append(
                         NoteInfo(
                             pitch=div_pitch,
                             start=round(div_start, 6),
                             duration=round(div_duration, 6),
-                            velocity=max(1, int(vel * 0.7)),
+                            velocity=max(1, int(vel * vel_mult)),
                         )
                     )
 
