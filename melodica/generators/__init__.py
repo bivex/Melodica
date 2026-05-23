@@ -388,6 +388,9 @@ from melodica.generators.wind_brass_solo import (
     SynthBrassGenerator,
     WoodwindSoloGenerator,
 )
+from melodica.generators.synth_effects import SynthEffectsGenerator
+from melodica.generators.ethnic_world import EthnicWorldGenerator
+from melodica.generators.sfx_percussion import SFXPercussionGenerator
 
 __all__ = [
     "PhraseGenerator",
@@ -608,4 +611,7 @@ __all__ = [
     "MutedTrumpetGenerator",
     "SynthBrassGenerator",
     "WoodwindSoloGenerator",
+    "SynthEffectsGenerator",
+    "EthnicWorldGenerator",
+    "SFXPercussionGenerator",
 ]
