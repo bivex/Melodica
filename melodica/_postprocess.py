@@ -110,7 +110,8 @@ def apply_velocity_shaping(
         shaped = []
         for n in result[track_cfg.name]:
             t_val = tension_curve.tension_at(n.start)  # 0.0–1.0
-            scale_factor = 0.6 + 0.4 * t_val  # 0.6–1.0
+            # Narrower range: 0.85–1.0 to avoid excessive volume drops
+            scale_factor = 0.85 + 0.15 * t_val  
             shaped.append(
                 NoteInfo(
                     pitch=n.pitch,
