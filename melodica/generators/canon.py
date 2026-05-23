@@ -209,7 +209,7 @@ class CanonGenerator(PhraseGenerator):
         self, chords: list[ChordLabel], key: Scale,
         context: RenderContext | None, anchor: int,
     ) -> list[NoteInfo]:
-        events = self._build_events(self.subject_length)
+        events = self._build_events(self.subject_length, self.lead_rhythm)
         notes: list[NoteInfo] = []
         prev = context.prev_pitch if context and context.prev_pitch is not None else anchor
         for ev in events:
