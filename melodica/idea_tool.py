@@ -503,17 +503,20 @@ class IdeaTool:
         if self.config.use_mixing:
             from melodica.shorts_mixing import MixingDesk
             # Dynamically segment total bars into typical sections (Hook -> Dynamics -> Loop)
-            bars = self.config.bars
+            bars = sum(p.bars for p in parts) if parts else self.config.bars
+            
             if bars <= 4:
                 sections = [("Dynamics", bars, [])]
             elif bars <= 8:
                 sections = [("Hook", 4, []), ("Dynamics", bars - 4, [])]
-            else:
+            elif bars <= 16:
                 sections = [("Hook", 4, []), ("Dynamics", bars - 8, []), ("Loop", 4, [])]
-            
+            else:
+                sections = [("Dynamics", bars, [])]
+
             desk = MixingDesk(niche_cfg={})
             result = desk.apply_mixing(result, sections, self.config.tempo)
-            
+
             # Apply loop end fade-out if we have a loop section
             if any(s[0] == "Loop" for s in sections):
                 loop_start_beat = (bars - 4) * self.config.time_signature[0]
