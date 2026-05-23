@@ -229,7 +229,7 @@ class IdeaToolConfig:
     parts: list[IdeaPart] = field(default_factory=list)
 
     # Progression
-    progression_type: str = "hmm3"  # "hmm3", "rules", "from_list", "random"
+    progression_type: str = "coupled_hmm"  # "coupled_hmm", "hmm3", "rules", "from_list", "random"
     progression_list: list[list[int]] | None = None
 
     # Harmonic risk: continuous 0.0–1.0 controlling how expected vs surprising

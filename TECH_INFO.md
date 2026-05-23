@@ -60,7 +60,8 @@
 | `engines/functional.py` | Engine 0 | Функциональная гармония (T-S-D-T каденции) |
 | `engines/rule_based.py` | Engine 1 | Взвешенный граф аккордовых переходов + Viterbi |
 | `engines/adaptive.py` | Engine 2 | Адаптивный движок, учитывающий простоту |
-| `engines/hmm_engine.py` | Engine 3 | Скрытая марковская модель с beam search (по умолчанию) |
+| `engines/hmm_engine.py` | Engine 3 | Скрытая марковская модель с beam search |
+| `harmonize/coupled_hmm.py` | Engine 4 | **По умолчанию.** Иерархический HMM (Key + Chord layers) по Тимошко |
 
 ### Generators (166+ файлов)
 Все наследуют `PhraseGenerator(ABC)` с методом `render()`. Factory: `create_generator()`.

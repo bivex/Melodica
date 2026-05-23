@@ -60,7 +60,13 @@ The output MIDI is exported directly to `output/demo_catchy/demo_catchy_melody.m
 | 0  | `functional` | 18th-century functional harmony, cadential T→S→D→T |
 | 1  | `rules` | Viterbi search over a weighted chord-progression rule graph |
 | 2  | `adaptive` | Heuristic candidate search: simplicity + melody fit + look-ahead |
-| 3  | `hmm` | **Default.** Advanced HMM-based search with cadential and functional layers |
+| 3  | `hmm` | Advanced HMM-based search with cadential and functional layers |
+| 4  | `coupled_hmm` | **Default.** Hierarchical "First Principles" HMM (Key + Chord layers) |
+
+### Coupled HMM (First Principles Harmony)
+Inspired by recent research (arXiv:2407.21130), this engine implements a dual-layer Hidden Markov Model:
+- **Chord Layer**: Learns interval-based (modulo 12) transition probabilities and probabilistic note emissions.
+- **Key Layer**: Tracks the tonality and manages natural modulations by analyzing the "weight" of chord sequences within a key center.
 
 ## Chord Detection
 
