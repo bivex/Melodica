@@ -362,6 +362,19 @@ from melodica.generators.chromatic_percussion import (
     XylophoneGenerator,
     DulcimerGenerator,
 )
+from melodica.generators.plucked_solo import (
+    PianoSoloGenerator,
+    AcousticGuitarGenerator,
+    EthnicPluckedGenerator,
+)
+from melodica.generators.keyboard_sustained import (
+    ChurchOrganGenerator,
+    AccordionGenerator,
+    HarmonicaGenerator,
+    PercussiveOrganGenerator,
+    RockOrganGenerator,
+    ReedOrganGenerator,
+)
 
 __all__ = [
     "PhraseGenerator",
@@ -566,4 +579,13 @@ __all__ = [
     "MarimbaGenerator",
     "XylophoneGenerator",
     "DulcimerGenerator",
+    "PianoSoloGenerator",
+    "AcousticGuitarGenerator",
+    "EthnicPluckedGenerator",
+    "ChurchOrganGenerator",
+    "AccordionGenerator",
+    "HarmonicaGenerator",
+    "PercussiveOrganGenerator",
+    "RockOrganGenerator",
+    "ReedOrganGenerator",
 ]

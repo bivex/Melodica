@@ -271,3 +271,208 @@ class HarmonicaGenerator(_KeyboardSustainedBase):
             notes.append(note)
 
         return sorted(notes, key=lambda x: x.start)
+
+
+class PercussiveOrganGenerator(_KeyboardSustainedBase):
+    """
+    Percussive Organ generator (GM 17).
+    Simulates a Hammond-style organ with a sharp, fast percussive key click.
+    """
+    name: str = "Percussive Organ Generator"
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        click_octave_offset: int = 2,  # percussive click is usually 2 octaves higher
+        note_density: float = 1.0,
+    ) -> None:
+        super().__init__(params)
+        self.click_octave_offset = click_octave_offset
+        self.note_density = note_density
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        mid = (self.params.key_range_low + self.params.key_range_high) // 2
+
+        for chord in chords:
+            pcs = chord.pitch_classes()
+            if not pcs:
+                continue
+
+            vel = self._velocity(80)
+            duration = chord.duration * 0.95
+
+            # Main organ note
+            pitch = max(self.params.key_range_low, min(self.params.key_range_high, nearest_pitch(pcs[0], mid)))
+            notes.append(NoteInfo(
+                pitch=pitch,
+                start=round(chord.start, 6),
+                duration=round(duration, 6),
+                velocity=vel,
+            ))
+
+            # Percussive click: super short high-velocity transient note at a higher octave
+            click_pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch + self.click_octave_offset * 12))
+            notes.append(NoteInfo(
+                pitch=click_pitch,
+                start=round(chord.start, 6),
+                duration=0.08,  # very short transient click
+                velocity=max(1, min(127, vel + 25)),
+            ))
+
+            # Companion chord tones (drawbars)
+            if len(pcs) >= 3:
+                for pc in pcs[1:3]:
+                    drawbar_pitch = max(self.params.key_range_low, min(self.params.key_range_high, nearest_pitch(pc, mid)))
+                    notes.append(NoteInfo(
+                        pitch=drawbar_pitch,
+                        start=round(chord.start, 6),
+                        duration=round(duration, 6),
+                        velocity=max(1, vel - 12),
+                    ))
+
+        return sorted(notes, key=lambda x: x.start)
+
+
+class RockOrganGenerator(_KeyboardSustainedBase):
+    """
+    Rock Organ generator (GM 18).
+    Simulates aggressive overdrive rock organ with a spinning Leslie rotary speaker rotary modulation.
+    """
+    name: str = "Rock Organ Generator"
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        leslie_speed_hz: float = 6.5,  # Leslie rotor speed in Hz
+        note_density: float = 1.0,
+    ) -> None:
+        super().__init__(params)
+        self.leslie_speed_hz = leslie_speed_hz
+        self.note_density = note_density
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        mid = (self.params.key_range_low + self.params.key_range_high) // 2
+
+        for chord in chords:
+            pcs = chord.pitch_classes()
+            if not pcs:
+                continue
+
+            vel = self._velocity(92)  # Aggressive and loud rock dynamic
+            duration = chord.duration * 0.98
+
+            # Rock organ voicing (often fat 3-voice blocks: Root, 5th, and Octave)
+            pitch = max(self.params.key_range_low, min(self.params.key_range_high, nearest_pitch(pcs[0], mid)))
+            fifth_pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch + 7))
+            octave_pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch + 12))
+
+            # Simulate spinning Leslie speaker effect using rapid volume LFO sweep on CC 11 and modulation wheel CC 1
+            expression = {}
+            step = 0.05
+            expr_points = []
+            t = 0.0
+            while t < duration:
+                # 6.5Hz LFO rotary sweep
+                lfo_val = int(80 + 20 * math.sin(t * self.leslie_speed_hz * 2.0 * math.pi))
+                expr_points.append((t, lfo_val))
+                t += step
+            if expr_points:
+                expression[11] = expr_points
+                # Set a high modulation wheel value (CC 1) for standard rotary speaker simulation
+                expression[1] = [(0.0, 95), (duration, 95)]
+
+            for p in (pitch, fifth_pitch, octave_pitch):
+                note = NoteInfo(
+                    pitch=p,
+                    start=round(chord.start, 6),
+                    duration=round(duration, 6),
+                    velocity=vel,
+                )
+                if expression:
+                    note.expression = expression
+                notes.append(note)
+
+        return sorted(notes, key=lambda x: x.start)
+
+
+class ReedOrganGenerator(_KeyboardSustainedBase):
+    """
+    Reed Organ / Harmonium generator (GM 20).
+    Continuous reed sound with slow pump bellows pressure sweeps.
+    """
+    name: str = "Reed Organ Generator"
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        note_density: float = 1.0,
+    ) -> None:
+        super().__init__(params)
+        self.note_density = note_density
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        mid = (self.params.key_range_low + self.params.key_range_high) // 2
+
+        for chord in chords:
+            pcs = chord.pitch_classes()
+            if not pcs:
+                continue
+
+            vel = self._velocity(72)  # Mellow nasal reed volume
+            duration = chord.duration * 0.96
+
+            # Mellow 2-voice reed stops (root & third/fifth depending on chord size)
+            pitch1 = max(self.params.key_range_low, min(self.params.key_range_high, nearest_pitch(pcs[0], mid)))
+            pitch2 = max(self.params.key_range_low, min(self.params.key_range_high, nearest_pitch(pcs[1 % len(pcs)], mid + 4)))
+
+            # Harmonium bellows air pump swell LFO
+            expression = {}
+            expression[11] = [(0.0, 40), (duration * 0.4, 90), (duration * 0.8, 50), (duration, 35)]
+
+            for p in (pitch1, pitch2):
+                note = NoteInfo(
+                    pitch=p,
+                    start=round(chord.start, 6),
+                    duration=round(duration, 6),
+                    velocity=vel,
+                )
+                note.expression = expression
+                notes.append(note)
+
+        return sorted(notes, key=lambda x: x.start)
