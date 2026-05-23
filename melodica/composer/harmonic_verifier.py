@@ -6,7 +6,7 @@
 # https://github.com/bivex
 #
 # Created: 2026-04-02 03:04
-# Last Updated: 2026-04-02 03:04
+# Last Updated: 2026-05-23
 #
 # Licensed under the MIT License.
 # Commercial licensing available upon request.
@@ -23,12 +23,14 @@ Checks:
     3. Unresolved dissonances (dissonant interval persists too long)
     4. Parallel fifths/octaves between adjacent-register tracks
     5. Excessive polyphony (too many notes at once)
+    6. Low-end spacing (Acoustic series rules)
 
 Fixes:
     - Transpose clashing notes by octave (prefer lower register)
     - Remove weakest note in unresolvable clashes
     - Reduce velocity of dissonant notes
     - Shorten duration of clashing notes
+    - Velocity shading (reinforce stability)
 """
 
 from __future__ import annotations
@@ -47,6 +49,10 @@ _CONSONANT = {0, 3, 4, 5, 7, 8, 9, 12}  # P1, m3, M3, P4, P5, m6, M6, P8
 _MILD_DISSONANT = {2, 10}  # M2, m7 — acceptable with resolution
 _STRONG_DISSONANT = {1, 6, 11}  # m2, tritone, M7 — needs justification
 
+# Register thresholds for Ideal Harmony
+BASS_THRESHOLD = 48  # Below C3: strict consonance required
+MID_THRESHOLD = 60   # C3 to C4: standard balance
+
 # Maximum tolerable simultaneous notes
 _DEFAULT_MAX_POLYPHONY = 10
 
@@ -64,7 +70,7 @@ class ClashEvent:
     note_b: NoteInfo
     track_b: str
     interval: int
-    severity: str  # "mild", "strong"
+    severity: str  # "mild", "strong", "critical" (for bass)
 
 
 @dataclass
@@ -78,6 +84,7 @@ class VerifierConfig:
     fix_remove: bool = True
     fix_velocity: bool = True
     fix_shorten: bool = True
+    apply_shading: bool = True  # Subtle velocity adjustments for stability
 
 
 @dataclass
@@ -90,6 +97,7 @@ class VerifierReport:
     notes_transposed: int = 0
     notes_velocity_reduced: int = 0
     notes_shortened: int = 0
+    notes_shaded: int = 0
     polyphony_reduced: int = 0
     events: list[ClashEvent] = field(default_factory=list)
 
@@ -131,7 +139,6 @@ def detect_clashes(
     tolerance = config.dissonance_tolerance
 
     # Pre-build active track density array for mid-range (36-60)
-    # We'll use a simple sweep-line approach to record density at note start boundaries.
     mid_range_events = []
     for tname, notes in valid_tracks.items():
         for n in notes:
@@ -153,106 +160,94 @@ def detect_clashes(
 
     # Find overlapping notes using sweep-line
     all_events = []
-    # Use id(n) to break ties and ensure we can remove the exact note from the active set
     for tname, notes in valid_tracks.items():
         for n in notes:
-            # interval: [start - window, start + duration]
             all_events.append((n.start - config.window, 1, tname, id(n), n))
             all_events.append((n.start + n.duration, -1, tname, id(n), n))
             
     all_events.sort(key=lambda x: (x[0], x[1]))
     
-    active_notes = {}  # dict mapping (tname, id(n)) -> n
+    active_notes = {}
 
     for _, event_type, ta, na_id, na in all_events:
         if event_type == 1:
             for (tb, nb_id), nb in active_notes.items():
                 if ta == tb:
-                    continue  # We only check cross-track
+                    continue
 
                 iv = _interval(na.pitch, nb.pitch)
                 if iv == 0:
-                    continue  # unison/octave — fine
+                    continue
 
                 severity = None
-                if iv in _STRONG_DISSONANT:
-                    severity = "strong"
-                elif iv in _MILD_DISSONANT:
-                    severity = "mild"
+                
+                # Register-aware severity (Bass Rule)
+                is_low_clash = (na.pitch < BASS_THRESHOLD or nb.pitch < BASS_THRESHOLD)
+                if is_low_clash:
+                    if iv not in {0, 5, 7}: # P1, P4, P5 only
+                        severity = "critical"
+                    elif iv in {3, 4} and (na.pitch < 36 or nb.pitch < 36):
+                        severity = "strong" # Thirds in sub-bass
+                
+                if severity is None:
+                    if iv in _STRONG_DISSONANT:
+                        severity = "strong"
+                    elif iv in _MILD_DISSONANT:
+                        severity = "mild"
 
                 if severity is None:
-                    continue  # consonant
+                    continue
 
                 beat = max(na.start, nb.start)
-
-                # 1. Dynamic Mid-Range Clash Penalty (Golden Mean Rule)
                 current_tolerance = tolerance
+
+                # Dynamic Mid-Range Penalty
                 if 36 <= na.pitch <= 60 and 36 <= nb.pitch <= 60:
-                    # Find density at 'beat'
                     if density_times:
                         idx = bisect.bisect_right(density_times, beat) - 1
                         mid_active_tracks = density_values[idx] if idx >= 0 else 0
                     else:
                         mid_active_tracks = 0
-                        
                     if mid_active_tracks > 3:
                         current_tolerance = max(0.0, tolerance - 0.3)
 
-                # 2. Functional Dissonance Awareness
+                # Functional Awareness
                 if chords:
-                    active_chord = None
-                    for c in chords:
-                        if c.start <= beat < c.start + c.duration:
-                            active_chord = c
-                            break
+                    from melodica.utils import chord_at
+                    active_chord = chord_at(chords, beat)
                     
                     if active_chord:
-                        pc_a = na.pitch % 12
-                        pc_b = nb.pitch % 12
-                        
-                        # A. Both notes are chord tones (e.g. C and B in Cmaj7)
+                        pc_a, pc_b = na.pitch % 12, nb.pitch % 12
                         chord_pcs = active_chord.pitch_classes() if hasattr(active_chord, "pitch_classes") else []
+                        
                         if pc_a in chord_pcs and pc_b in chord_pcs:
-                            continue
+                            if not is_low_clash:
+                                continue
+                            else:
+                                current_tolerance = max(0.0, current_tolerance - 0.2)
                             
-                        # B. Tritone in dominant chord (e.g. B and F in G7)
                         if iv == 6 and getattr(active_chord, "quality", None) == Quality.DOMINANT7:
                             if (pc_a == (active_chord.root + 4) % 12 and pc_b == (active_chord.root + 10) % 12) or \
                                (pc_b == (active_chord.root + 4) % 12 and pc_a == (active_chord.root + 10) % 12):
-                                continue
-                                
-                        # C. Leading tone resolution clash (e.g. B and C when C is root/tonic)
-                        lt = (active_chord.root - 1) % 12
-                        if (pc_a == lt and pc_b == active_chord.root) or (pc_b == lt and pc_a == active_chord.root):
-                            if current_tolerance > 0.2:
-                                continue
+                                if not is_low_clash:
+                                    continue
 
-                # Tolerance check: high tolerance = allow more
                 if severity == "mild" and current_tolerance > 0.7:
                     continue
                 if severity == "strong" and current_tolerance > 0.9:
                     continue
+                if severity == "critical" and current_tolerance > 0.1:
+                    # Critical (bass) clashes are very strictly enforced
+                    pass
 
-                # Skip very brief notes (MIDI artifacts)
                 if na.duration < 0.05 or nb.duration < 0.05:
                     continue
 
-                overlap_dur = min(na.start + na.duration, nb.start + nb.duration) - max(
-                    na.start, nb.start
-                )
-                min_dur = min(na.duration, nb.duration)
-                if overlap_dur < min_dur * 0.5:
-                    continue  # overlap less than half the shorter note
-
                 events.append(
                     ClashEvent(
-                        beat=beat,
-                        note_a=na,
-                        track_a=ta,
-                        note_b=nb,
-                        track_b=tb,
-                        interval=iv,
-                        severity=severity,
+                        beat=beat, note_a=na, track_a=ta,
+                        note_b=nb, track_b=tb,
+                        interval=iv, severity=severity,
                     )
                 )
             active_notes[(ta, na_id)] = na
@@ -260,9 +255,6 @@ def detect_clashes(
             active_notes.pop((ta, na_id), None)
 
     return events
-
-    # Second pass: check for parallel fifths/octaves
-
 
 def detect_parallel_fifths(
     tracks: dict[str, list[NoteInfo]],
@@ -320,6 +312,64 @@ def detect_parallel_fifths(
                             )
 
     return events
+
+
+# ---------------------------------------------------------------------------
+# Shading: Ideal Harmony dynamic depth
+# ---------------------------------------------------------------------------
+
+def apply_harmonic_shading(
+    tracks: dict[str, list[NoteInfo]],
+    chords: list[Any] | None = None,
+    report: VerifierReport | None = None
+) -> dict[str, list[NoteInfo]]:
+    """
+    Subtly adjust note velocities based on harmonic stability.
+    Stable (root, fifth) -> +3-5% velocity.
+    Dissonant (m2, tritone) -> -5-10% velocity.
+    """
+    from melodica.utils import chord_at
+    
+    result = {}
+    for tname, notes in tracks.items():
+        shaded_notes = []
+        for n in notes:
+            chord = chord_at(chords, n.start) if chords else None
+            pc = n.pitch % 12
+            factor = 1.0
+            
+            if chord:
+                # 1. Relation to underlying chord
+                chord_pcs = chord.pitch_classes() if hasattr(chord, "pitch_classes") else []
+                if pc == chord.root % 12:
+                    factor *= 1.05 # Boost root
+                elif pc == (chord.root + 7) % 12:
+                    factor *= 1.03 # Boost fifth
+                elif pc not in chord_pcs:
+                    factor *= 0.95 # Slights soften non-chord tones
+            
+            # 2. Velocity shading based on pitch height (Airiness)
+            if n.pitch > 84: # High register
+                factor *= 0.98 # Subtly soften piercing highs
+            elif n.pitch < 36: # Deep bass
+                factor *= 1.02 # Subtly boost fundamental warmth
+                
+            new_vel = int(n.velocity * factor)
+            if new_vel != n.velocity:
+                if report: report.notes_shaded += 1
+                
+            shaded_notes.append(
+                NoteInfo(
+                    pitch=n.pitch,
+                    start=n.start,
+                    duration=n.duration,
+                    velocity=max(1, min(127, new_vel)),
+                    articulation=n.articulation,
+                    expression=n.expression,
+                )
+            )
+        result[tname] = shaded_notes
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -498,7 +548,11 @@ def verify_and_fix(
                 report.notes_shortened += 1
             report.clashes_fixed += 1
 
-    # Phase 4: Polyphony check
+    # Phase 4: Shading (Subtle reinforcement)
+    if config.apply_shading:
+        fixed = apply_harmonic_shading(fixed, chords=chords, report=report)
+
+    # Phase 5: Polyphony check
     fixed = _reduce_polyphony(fixed, config.max_polyphony, report)
 
     # Re-sort all tracks in-place using fast native C-level attribute getter

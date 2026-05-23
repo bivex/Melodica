@@ -496,15 +496,16 @@ class IdeaTool:
             # Merge fixed tracks back (preserving _chords and other non-note entries)
             for k, v in fixed_tracks.items():
                 result[k] = v
-            if report.clashes_detected > 0:
+            if report.clashes_detected > 0 or report.notes_shaded > 0:
                 import logging
 
                 logging.getLogger(__name__).info(
-                    "HarmonicVerifier: %d clashes detected, %d fixed (%d transposed, %d vel-reduced)",
+                    "HarmonicVerifier: %d clashes detected, %d fixed (%d transposed, %d vel-reduced), %d shaded",
                     report.clashes_detected,
                     report.clashes_fixed,
                     report.notes_transposed,
                     report.notes_velocity_reduced,
+                    report.notes_shaded,
                 )
 
         # ---- Psychoacoustic verification (perceptual masking check) ----
