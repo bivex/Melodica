@@ -383,6 +383,11 @@ from melodica.generators.synth_choir_strings import (
     VoiceOohsGMGenerator,
     SynthChoirGenerator,
 )
+from melodica.generators.wind_brass_solo import (
+    MutedTrumpetGenerator,
+    SynthBrassGenerator,
+    WoodwindSoloGenerator,
+)
 
 __all__ = [
     "PhraseGenerator",
@@ -600,4 +605,7 @@ __all__ = [
     "SynthStringsGenerator",
     "VoiceOohsGMGenerator",
     "SynthChoirGenerator",
+    "MutedTrumpetGenerator",
+    "SynthBrassGenerator",
+    "WoodwindSoloGenerator",
 ]
