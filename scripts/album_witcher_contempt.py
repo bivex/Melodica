@@ -6,7 +6,7 @@
 scripts/album_witcher_contempt.py — "Time of Contempt: A Witcher Saga Symphony"
 Inspired by Andrzej Sapkowski's fourth book.
 Features Slavic folk elements, Imperial Nilfgaardian brass, and the tragic theme of Ciri.
-Bar-aware: 4/4 via BarGrid.
+Bar-aware: per-track time signatures via BarGrid (6/8, 3/4, 4/4, 5/4, 7/8).
 """
 
 import random
@@ -56,6 +56,7 @@ def generate_witcher_album():
             "description": "Fast, anxious path of the royal messenger. High-tension violins.",
             "style_hint": "frantic_strings",
             "progression_type": "coupled_hmm",
+            "time_signature": (6, 8),
         },
         {
             "name": "02_Cintras_Legacy",
@@ -65,6 +66,7 @@ def generate_witcher_album():
             "description": "Tragic theme for Ciri. Solo cello and breathy vocal.",
             "style_hint": "lyrical_tragedy",
             "progression_type": "coupled_hmm",
+            "time_signature": (3, 4),
         },
         {
             "name": "03_The_Black_Wings",
@@ -74,6 +76,7 @@ def generate_witcher_album():
             "description": "Nilfgaardian theme. Heavy brass and industrial drones.",
             "style_hint": "imperial_industrial",
             "progression_type": "coupled_hmm",
+            "time_signature": (4, 4),
         },
         {
             "name": "04_Thanedd_The_Coup",
@@ -83,6 +86,7 @@ def generate_witcher_album():
             "description": "Magic betrayal. Dissonance, choir, and sharp hits.",
             "style_hint": "magic_chaos",
             "progression_type": "coupled_hmm",
+            "time_signature": (5, 4),
         },
         {
             "name": "05_The_White_Wolf",
@@ -92,6 +96,7 @@ def generate_witcher_album():
             "description": "Geralt's battle theme. Aggressive staccato and taiko.",
             "style_hint": "witcher_combat",
             "progression_type": "coupled_hmm",
+            "time_signature": (6, 8),
         },
         {
             "name": "06_Falkas_Fire",
@@ -101,6 +106,7 @@ def generate_witcher_album():
             "description": "Madness theme. Trembling vocal and dark pads.",
             "style_hint": "madness_folk",
             "progression_type": "coupled_hmm",
+            "time_signature": (7, 8),
         },
         {
             "name": "07_The_Hour_of_Contempt",
@@ -110,6 +116,7 @@ def generate_witcher_album():
             "description": "Final requiem. Full orchestra, organ, and fading drone.",
             "style_hint": "epic_requiem",
             "progression_type": "coupled_hmm",
+            "time_signature": (3, 4),
         },
     ]
 
@@ -123,7 +130,7 @@ def generate_witcher_album():
                 bars=cfg["bars"],
                 scale=cfg["scale"],
                 tempo=cfg["tempo"],
-                time_signature=(4, 4),
+                time_signature=cfg["time_signature"],
                 progression_type=cfg.get("progression_type", "hmm3"),
             )
         ]
@@ -329,7 +336,7 @@ def generate_witcher_album():
 
         tool_config = IdeaToolConfig(
             style="cinematic_hybrid",
-            time_signature=(4, 4),
+            time_signature=cfg["time_signature"],
             workflow="generate_all",
             use_tension_curve=True,
             use_voice_leading=True,
