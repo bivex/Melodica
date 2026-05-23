@@ -214,6 +214,9 @@ def generate_witcher_album():
             tracks=track_list
         )
 
+        # Get explicit GM instrument mapping for high-fidelity playback
+        from melodica.idea_tool import _GM_PROGRAMS
+        instruments_map = {t.name: _GM_PROGRAMS.get(t.instrument, 0) for t in track_list}
         
         # Generate with the tool
         notes_dict = IdeaTool(tool_config).generate()
@@ -225,6 +228,7 @@ def generate_witcher_album():
             tracks_data,
             str(album_dir / f"{cfg['name']}.mid"),
             bpm=cfg['tempo'],
+            instruments=instruments_map,
             cc_events=notes_dict.get("_cc_events", {}),
             mpe_tracks=notes_dict.get("_mpe_tracks", set())
         )
