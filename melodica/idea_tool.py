@@ -688,7 +688,7 @@ class IdeaTool:
         return all_chords
 
     def _build_melody_contour(self, scale, bars, beats_per_bar) -> list[NoteInfo]:
-        """Build a synthetic melody contour for harmonizers."""
+        """Build a synthetic melody contour for harmonizers using a smooth random walk."""
         degs = scale.degrees()
         if not degs:
             return [NoteInfo(pitch=60, start=0.0, duration=beats_per_bar, velocity=80)]
@@ -696,36 +696,64 @@ class IdeaTool:
         notes = []
         t = 0.0
         total = bars * beats_per_bar
-        prev_pc = int(degs[0])
-
+        
+        # Start on root
+        current_pitch = 60 + int(degs[0])
+        
         while t < total:
-            # On strong beats (every 2 beats), use root or chord tone
+            # On strong beats (every 2 beats), favor triad tones
             beat_in_bar = t % beats_per_bar
-            if beat_in_bar < 0.01:
-                pc = int(degs[0])  # root on beat 1
-            elif beat_in_bar < beats_per_bar / 2 + 0.01:
-                pc = int(random.choice(degs[:3])) if len(degs) >= 3 else int(degs[0])
+            is_strong = beat_in_bar < 0.01 or abs(beat_in_bar - beats_per_bar/2) < 0.01
+            
+            # Simple random walk: step -1, 0, or +1 scale degree
+            step = random.choices([-2, -1, 0, 1, 2], weights=[0.1, 0.3, 0.2, 0.3, 0.1])[0]
+            
+            # Find current degree index
+            current_pc = current_pitch % 12
+            if current_pc in degs:
+                idx = degs.index(current_pc)
             else:
-                pc = int(random.choice(degs))
+                # Snap to closest
+                idx = min(range(len(degs)), key=lambda i: abs(degs[i] - current_pc))
+            
+            new_idx = (idx + step) % len(degs)
+            new_pc = int(degs[new_idx])
+            
+            # Apply octave crossing
+            octave_shift = 0
+            if step > 0 and new_pc < current_pc:
+                octave_shift = 12
+            elif step < 0 and new_pc > current_pc:
+                octave_shift = -12
+                
+            current_pitch = (current_pitch // 12) * 12 + new_pc + octave_shift
+            
+            # Bound the pitch to a reasonable vocal range
+            if current_pitch > 79:
+                current_pitch -= 12
+            elif current_pitch < 55:
+                current_pitch += 12
 
-            pitch = 60 + pc
-            while pitch - prev_pc > 7:
-                pitch -= 12
-            while prev_pc - pitch > 7:
-                pitch += 12
-            pitch = max(36, min(84, pitch))
-
+            # If strong beat, try to snap to 1, 3, 5 if we drifted
+            if is_strong and new_idx not in (0, 2, 4) and len(degs) >= 5:
+                if random.random() < 0.5:
+                    new_idx = min((0, 2, 4), key=lambda x: abs(x - new_idx))
+                    new_pc = int(degs[new_idx])
+                    current_pitch = (current_pitch // 12) * 12 + new_pc
+            
             dur = min(2.0, total - t)
+            if not is_strong and random.random() < 0.3:
+                dur = min(1.0, total - t) # occasional passing tones
+                
             notes.append(
                 NoteInfo(
-                    pitch=pitch,
+                    pitch=current_pitch,
                     start=round(t, 6),
                     duration=round(max(0.5, dur), 6),
                     velocity=80,
                 )
             )
-            prev_pc = pitch
-            t += 2.0
+            t += dur
 
         return notes
 
@@ -810,24 +838,18 @@ class IdeaTool:
                     for c in section_chords
                 ]
 
-                section_notes = gen.render(adjusted, scale, section_length, ctx)
-
-                # Phrase memory: store first occurrence, recall on repeat sections
-                from melodica._postprocess import handle_phrase_memory
+                # Seed the random generator to ensure that repeating sections (e.g., A, A)
+                # generate the exact same rhythmic and melodic contours, but perfectly
+                # adapted to the current underlying chords.
+                import hashlib
+                seed_str = f"{cfg.name}:{part.name}:{section}"
+                seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
+                random.seed(seed_val)
                 
-                # Add part name to mem_key so that A in Part 1 is different from A in Part 2, unless desired otherwise.
-                # Usually we want a fresh arrangement cycle per part, so we namespace it by part name.
-                mem_key = f"{cfg.name}:{part.name}:{section}"
-                section_notes = handle_phrase_memory(
-                    section_notes,
-                    self._phrase_memory,
-                    mem_key,
-                    section,
-                    i,
-                    adjusted,
-                    cfg,
-                    scale.root,
-                )
+                section_notes = gen.render(adjusted, scale, section_length, ctx)
+                
+                # Restore true randomness
+                random.seed()
 
                 # Offset to global time (including the part's offset)
                 for n in section_notes:
