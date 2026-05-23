@@ -7,11 +7,12 @@ scripts/album_arabic_sikah.py — "Arabic Sikah: The Voice of the Desert"
 A microtonal ethnic album based on Arabic Sikah scale (including quarter-tones).
 Inspired by classical Arabic poetry.
 Uses CoupledHMM with microtonal support.
+Bar-aware: 6/8 (3 quarter-note beats per bar) via BarGrid.
 """
 
 from pathlib import Path
 from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart
-from melodica.types import Scale, Mode
+from melodica.types import Scale, Mode, BarGrid
 from melodica.midi import export_multitrack_midi
 from melodica.tracer import EngineTracer
 
@@ -50,6 +51,7 @@ def generate_arabic_sikah():
         
         parts = [IdeaPart(
             name=cfg['name'], bars=48, scale=sikah_scale, tempo=cfg['tempo'],
+            time_signature=(6, 8),
             progression_type="coupled_hmm"
         )]
 
@@ -64,6 +66,7 @@ def generate_arabic_sikah():
 
         tool_config = IdeaToolConfig(
             style="cinematic_hybrid",
+            time_signature=(6, 8),
             use_tension_curve=True,
             use_harmonic_verifier=True,
             parts=parts,
