@@ -123,24 +123,26 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
         dur_factor = ARTICULATION_DURATIONS.get(self.articulation, 0.95)
         vel_boost = ARTICULATION_VELOCITY_BOOST.get(self.articulation, 0)
 
-        # Natural instrument ranges (low, high MIDI pitch)
-        if self.section == "trio":
-            # Trio: Flute (60-96), Oboe (58-91), Clarinet (50-89)
-            ranges = [(60, 96), (58, 91), (50, 89)]
-        elif self.section == "quartet":
-            # Quartet: Flute (60-96), Oboe (58-91), Clarinet (50-89), Bassoon (26-67)
-            ranges = [(60, 96), (58, 91), (50, 89), (26, 67)]
-        else:
-            # Full: Flute 1 (60-96), Flute 2 (60-96), Oboe (58-91), Clarinet (50-89), Bassoon (26-67)
-            ranges = [(60, 96), (60, 96), (58, 91), (50, 89), (26, 67)]
+        # Per-instrument ranges: voice_idx maps to instrument regardless of section
+        # 0=Flute, 1=Clarinet, 2=Oboe, 3=Bassoon, 4=English Horn
+        instrument_ranges = {
+            0: (60, 96),   # Flute
+            1: (50, 91),   # Clarinet
+            2: (58, 91),   # Oboe
+            3: (34, 72),   # Bassoon
+            4: (52, 84),   # English Horn
+        }
 
-        # Track cumulative play duration per voice index to insert breaths
+        # Track cumulative play duration per voice to insert breath pauses
+        # Higher density = longer before breath (4 + density*4 beats, range 4–8)
+        breath_threshold_base = 4.0 + self.params.density * 4.0
         voice_accumulators = {v_idx: 0.0 for v_idx in range(len(voicing_offsets))}
-        # Give each voice its own slightly humanized breath threshold
         voice_breath_thresholds = {
-            v_idx: self.breath_interval + random.uniform(-1.0, 1.0)
+            v_idx: breath_threshold_base + random.uniform(-0.5, 0.5)
             for v_idx in range(len(voicing_offsets))
         }
+        # Track which voices are currently breathing (skip their event)
+        voice_breathing = set()
 
         for chord in chords:
             pcs = chord.pitch_classes()
@@ -148,12 +150,20 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
                 continue
 
             for voice_idx, offset in enumerate(voicing_offsets):
+                # Breath mark: check if this voice needs to breathe and skip the event
+                accum = voice_accumulators[voice_idx]
+                if accum >= voice_breath_thresholds[voice_idx]:
+                    # Skip this chord event to simulate breathing
+                    voice_accumulators[voice_idx] = 0.0
+                    voice_breath_thresholds[voice_idx] = breath_threshold_base + random.uniform(-0.5, 0.5)
+                    continue
+                voice_accumulators[voice_idx] += chord.duration
                 pc = pcs[voice_idx % len(pcs)]
                 anchor = mid + offset * 12
                 pitch = nearest_pitch(int(pc), anchor)
 
                 # Transpose to natural instrument register range
-                low_r, high_r = ranges[voice_idx % len(ranges)]
+                low_r, high_r = instrument_ranges.get(voice_idx, (34, 96))
                 while pitch < low_r:
                     pitch += 12
                 while pitch > high_r:
@@ -176,16 +186,6 @@ class WoodwindsEnsembleGenerator(PhraseGenerator):
 
                 onset = chord.start + inst_delay + random.uniform(0.0, 0.005 * self.dynamic_range)
                 note_dur = chord.duration * dur_factor
-
-                # Breath mark logic with humanized thresholds and gaps:
-                accum = voice_accumulators[voice_idx]
-                if accum >= voice_breath_thresholds[voice_idx]:
-                    gap = self.breath_gap + random.uniform(-0.05, 0.05)
-                    note_dur = max(0.1, note_dur - max(0.05, gap))
-                    voice_accumulators[voice_idx] = 0.0
-                    voice_breath_thresholds[voice_idx] = self.breath_interval + random.uniform(-1.0, 1.0)
-                else:
-                    voice_accumulators[voice_idx] += chord.duration
 
                 # Acoustic Air Pressure LFO (CC 11 Expression fluctuations) on long legato notes
                 expression = {}

@@ -110,10 +110,18 @@ class TremoloStringsGenerator(PhraseGenerator):
 
             base_vel = int(45 + self.params.density * 25)
 
+            # Pre-compute total stroke count so _dynamic knows event length
+            total_strokes = max(1, int(total_dur / self.bow_speed))
+
             while t < end:
                 elapsed = t - event.onset
 
-                # Attack/decay envelope factors
+                # Per-stroke dynamic envelope returns velocity and speed factors
+                vel_factor, speed_factor = self._dynamic(
+                    note_idx, total_strokes, elapsed, total_dur,
+                )
+
+                # Phrase-level attack/decay envelope factors
                 attack_factor = 1.0
                 if elapsed < self.attack_time and self.attack_time > 0:
                     attack_factor = elapsed / self.attack_time
@@ -131,9 +139,9 @@ class TremoloStringsGenerator(PhraseGenerator):
 
                 intensity = attack_factor * decay_factor * swell_factor
 
-                # Dynamic bow speed based on intensity (louder/more intense = faster bow)
-                current_bow_speed = self.bow_speed * (2.0 - intensity)
-                current_bow_speed = max(0.02, min(0.3, current_bow_speed))
+                # Effective bow speed: base speed * dynamic speed factor
+                effective_speed = self.bow_speed * speed_factor
+                effective_speed = max(0.02, min(0.3, effective_speed))
 
                 # Alternating bow direction (down-bow is heavy, up-bow is light)
                 is_down_bow = (note_idx % 2 == 0)
@@ -147,8 +155,8 @@ class TremoloStringsGenerator(PhraseGenerator):
                 for i, p in enumerate(pitches):
                     if t >= end:
                         break
-                    n_dur = min(current_bow_speed, end - t)
-                    vel = int(base_vel * intensity) + bow_vel_offset
+                    n_dur = min(effective_speed, end - t)
+                    vel = int(base_vel * intensity * vel_factor) + bow_vel_offset
                     vel += random.randint(-2, 2)
                     
                     # Micro-timing jitter per pitch to prevent Harmonic Fusion
@@ -170,7 +178,7 @@ class TremoloStringsGenerator(PhraseGenerator):
                     note.expression = expression
                     notes.append(note)
                     
-                t += current_bow_speed
+                t += effective_speed
                 note_idx += 1
 
         if notes:
@@ -180,6 +188,44 @@ class TremoloStringsGenerator(PhraseGenerator):
                 last_chord=last_chord,
             )
         return notes
+
+    def _dynamic(
+        self,
+        note_idx: int,
+        total_strokes: int,
+        elapsed: float,
+        total_dur: float,
+    ) -> tuple[float, float]:
+        """Return (velocity_factor, speed_factor) for a single bow stroke.
+
+        velocity_factor: multiplier applied to base velocity for per-stroke envelope.
+        speed_factor:    multiplier applied to self.bow_speed for phrasing shape.
+        """
+        # --- Phrase-level speed envelope (attack/release) ---
+        speed_factor = 1.0
+        if total_dur > 0:
+            progress = elapsed / total_dur
+            if progress < 0.1:
+                speed_factor = 1.5      # slower attack
+            elif progress > 0.9:
+                speed_factor = 1.3      # slower release
+
+        # --- Per-stroke velocity envelope ---
+        if total_strokes <= 6:
+            # Short event: skip per-stroke envelope
+            vel_factor = 1.0
+        elif note_idx < 3:
+            # Attack: first 3 strokes get +10 each (2, 1, 0 offset)
+            vel_factor = 1.0 + (3 - note_idx) * (10 / 45)
+        elif note_idx >= total_strokes - 3:
+            # Decay: last 3 strokes get -8 per stroke from the end
+            strokes_from_end = total_strokes - note_idx
+            vel_factor = 1.0 - strokes_from_end * (8 / 45)
+            vel_factor = max(0.2, vel_factor)
+        else:
+            vel_factor = 1.0
+
+        return vel_factor, speed_factor
 
     def _pick_pitches(self, chord: ChordLabel, anchor: int, key: Scale) -> list[int]:
         low = self.params.key_range_low

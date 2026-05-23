@@ -122,6 +122,12 @@ class ChoirAahsGenerator(PhraseGenerator):
                 vel += random.randint(-int(self.vibrato * 10), int(self.vibrato * 10))
                 vel = max(1, min(127, vel))
 
+                # Syllable affects velocity and duration
+                if self.syllable == "oh":
+                    vel = max(1, vel - 5)
+                elif self.syllable == "mm":
+                    vel = max(1, vel - 15)
+
                 # 1. Advanced SATB Attack Staggering based on voice index
                 onset = chord.start
                 if voice_idx == 0:    # Soprano (immediate)
@@ -137,7 +143,8 @@ class ChoirAahsGenerator(PhraseGenerator):
                 cutoff_base = 95 if self.syllable == "aah" else (65 if self.syllable == "oh" else 35)
                 
                 expression = {}
-                note_dur = chord.duration * 0.92
+                dur_factors = {"aah": 0.92, "oh": 0.88, "mm": 0.80}
+                note_dur = chord.duration * dur_factors.get(self.syllable, 0.92)
                 
                 if chord.duration >= 1.2:
                     steps = 15
@@ -155,16 +162,18 @@ class ChoirAahsGenerator(PhraseGenerator):
                     expression[74] = cc74_list
                     
                     # 3. Voice Pitch Vibrato LFO: natural pitch vibrato sweep (Modulation/Pitch Bend)
-                    pb_list = []
-                    for s in range(steps + 1):
-                        progress = s / steps
-                        t_rel = progress * note_dur
-                        # Pitch vibrato slowly sweeps/fades in over the first 0.8 seconds
-                        vibrato_fade = min(1.0, t_rel / 0.8)
-                        # ±120 Pitch Bend units (approx 15 cents vibrato) at 5.5 Hz
-                        pb_osc = int(vibrato_fade * 120 * math.sin(2 * math.pi * 5.5 * t_rel))
-                        pb_list.append((t_rel, pb_osc))
-                    expression["pitch_bend"] = pb_list
+                    # No vibrato for "mm" (humming)
+                    if self.syllable != "mm":
+                        pb_list = []
+                        for s in range(steps + 1):
+                            progress = s / steps
+                            t_rel = progress * note_dur
+                            # Pitch vibrato slowly sweeps/fades in over the first 0.8 seconds
+                            vibrato_fade = min(1.0, t_rel / 0.8)
+                            # ±120 Pitch Bend units (approx 15 cents vibrato) at 5.5 Hz
+                            pb_osc = int(vibrato_fade * 120 * math.sin(2 * math.pi * 5.5 * t_rel))
+                            pb_list.append((t_rel, pb_osc))
+                        expression["pitch_bend"] = pb_list
                 else:
                     expression[74] = cutoff_base
 
@@ -189,11 +198,11 @@ class ChoirAahsGenerator(PhraseGenerator):
         return notes
 
     def _velocity(self) -> int:
+        base = self.base_velocity()
         if self.dynamics == "pp":
-            base = 40
+            vel = int(base * 0.5)
         elif self.dynamics == "ff":
-            base = 110
+            vel = int(base * 1.0)
         else:  # mf
-            base = 75
-        base += int(self.params.density * 10)
-        return max(1, min(127, base))
+            vel = int(base * 0.8)
+        return max(1, min(127, vel))

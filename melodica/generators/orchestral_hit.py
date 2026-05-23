@@ -96,80 +96,99 @@ class OrchestralHitGenerator(PhraseGenerator):
 
         for chord in chords:
             if self.hit_type == "braam":
-                # Deep, low brass impact
-                hit_pitches = self._get_hit_pitches(chord, mid - 24, key)
-            else:
-                hit_pitches = self._get_hit_pitches(chord, mid, key)
+                # Multi-layered braam: sub-bass, low brass, mid layers
+                braam_layers = []
+                # Sub-bass layer: root at anchor-24, very high velocity
+                root_pitch = snap_to_scale(nearest_pitch(int(chord.root), mid - 24), key)
+                root_pitch = max(self.params.key_range_low, min(self.params.key_range_high, root_pitch))
+                braam_layers.append((root_pitch, min(127, int(120 + self.params.density * 7)), self.duration * 2.2))
+
+                # Low brass layer: root + fifth at anchor-12
+                pcs = chord.pitch_classes()
+                if len(pcs) >= 2:
+                    fifth_pitch = snap_to_scale(nearest_pitch(int(pcs[1 % len(pcs)]), mid - 12), key)
+                else:
+                    fifth_pitch = snap_to_scale(root_pitch + 7, mid - 12)
+                fifth_pitch = max(self.params.key_range_low, min(self.params.key_range_high, fifth_pitch))
+                braam_layers.append((fifth_pitch, 110, self.duration * 1.8))
+
+                # Mid layer: full chord at anchor
+                mid_pitches = self._get_hit_pitches(chord, mid, key)
+                for p in mid_pitches:
+                    braam_layers.append((p, 95, self.duration * 1.5))
+
+                hit_onset = chord.start
+                for p, vel, dur in braam_layers:
+                    note = NoteInfo(
+                        pitch=p,
+                        start=round(hit_onset, 6),
+                        duration=dur,
+                        velocity=vel,
+                        articulation="braam",
+                    )
+                    notes.append(note)
+
+                # Reverb tail for braam
+                if self.reverb_tail > 0 and braam_layers:
+                    tail_pitch = braam_layers[0][0]
+                    tail_note = NoteInfo(
+                        pitch=tail_pitch,
+                        start=round(hit_onset + braam_layers[0][2], 6),
+                        duration=self.reverb_tail,
+                        velocity=max(1, int(120 * 0.2)),
+                        articulation="sustain",
+                    )
+                    tail_note.expression = {74: 40}
+                    notes.append(tail_note)
+                continue
 
             if self.hit_type == "riser_hit":
-                # Rising continuous buildup note before the hit
+                # Scale-degree riser: walk up scale degrees with increasing velocity
                 riser_dur = min(chord.duration * 0.6, 2.0)
                 riser_start = chord.start
-                
-                # Single continuous note sweeping up in pitch and volume
-                riser_pitch = nearest_pitch(int(chord.root), mid - 12)
-                riser_pitch = snap_to_scale(riser_pitch, key)
-                riser_pitch = max(self.params.key_range_low, min(self.params.key_range_high, riser_pitch))
-                
-                riser_expr = {}
-                pb_list = []
-                cc11_list = []
-                steps = 20
-                for s in range(steps + 1):
-                    t_rel = (s / steps) * riser_dur
-                    # Pitch sweep: exponential curve up an octave (8191 units)
-                    bend = int(8191 * (s / steps)**2.0)
-                    pb_list.append((t_rel, bend))
-                    
-                    # Expression crescendo from 20 to 125
-                    val = int(20 + 105 * (s / steps))
-                    cc11_list.append((t_rel, val))
-                    
-                riser_expr["pitch_bend"] = pb_list
-                riser_expr[11] = cc11_list
-                
-                riser_note = NoteInfo(
-                    pitch=riser_pitch,
-                    start=round(riser_start, 6),
-                    duration=riser_dur,
-                    velocity=40,
-                )
-                riser_note.expression = riser_expr
-                notes.append(riser_note)
-                
+                scale_degrees = key.degrees()
+                step_spacing = 0.125  # beat spacing for smooth buildup
+
+                if scale_degrees:
+                    # Find starting degree nearest to mid - 12
+                    start_pitch = snap_to_scale(nearest_pitch(int(chord.root), mid - 12), key)
+                    # Walk up scale degrees for the riser duration
+                    t = riser_start
+                    deg_idx = 0
+                    while t < riser_start + riser_dur - step_spacing:
+                        deg_pitch = scale_degrees[deg_idx % len(scale_degrees)]
+                        # Place in register, ascending
+                        octave_shift = (deg_idx // len(scale_degrees)) * 12
+                        p = deg_pitch + octave_shift
+                        p = max(self.params.key_range_low, min(self.params.key_range_high, p))
+
+                        progress = (t - riser_start) / riser_dur
+                        vel = int(30 + 80 * progress)
+
+                        note = NoteInfo(
+                            pitch=p,
+                            start=round(t, 6),
+                            duration=step_spacing,
+                            velocity=max(1, min(127, vel)),
+                            articulation="riser",
+                        )
+                        notes.append(note)
+                        t += step_spacing
+                        deg_idx += 1
+
                 # The hit itself starts at the end of the riser
-                hit_onset = chord.start + riser_dur
+                hit_onset = riser_start + riser_dur
+                hit_pitches = self._get_hit_pitches(chord, mid, key)
             else:
                 hit_onset = chord.start
+                hit_pitches = self._get_hit_pitches(chord, mid, key)
 
             # Main hit duration
             hit_dur = self.duration
-            if self.hit_type == "braam":
-                hit_dur = self.duration * 1.8
-            elif self.hit_type == "sustain":
+            if self.hit_type == "sustain":
                 hit_dur = chord.duration * 0.9
 
             expression = {}
-            if self.hit_type == "braam":
-                # Deep low growl with a pitch fall:
-                # Starts at +200 cents (1365 units) and falls to -2000 cents (-13653 units)
-                pb_list = []
-                steps = 15
-                for s in range(steps + 1):
-                    t_rel = (s / steps) * hit_dur
-                    bend = int(1365 - 15018 * (s / steps)**1.5)
-                    pb_list.append((t_rel, bend))
-                expression["pitch_bend"] = pb_list
-
-                # Growling CC 74 Filter Cutoff LFO modulation
-                cc74_list = []
-                cc_steps = 25
-                for s in range(cc_steps + 1):
-                    t_rel = (s / cc_steps) * hit_dur
-                    base_cutoff = 110 - 65 * (s / cc_steps)
-                    growl = math.sin((s / cc_steps) * hit_dur * 14 * math.pi * 2) * 15
-                    cc74_list.append((t_rel, max(10, min(127, int(base_cutoff + growl)))))
-                expression[74] = cc74_list
 
             for p in hit_pitches:
                 vel = self._hit_velocity()

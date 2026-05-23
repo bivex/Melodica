@@ -120,21 +120,40 @@ class StringsLegatoGenerator(PhraseGenerator):
             vel += random.randint(-int(self.vibrato_amount * 8), int(self.vibrato_amount * 8))
             vel = max(1, min(127, vel))
 
-            # Portamento: slide note before target
+            # Portamento: legato overlap with reduced attack velocity
             expression = {}
-            if self.portamento_speed > 0 and abs(pitch - prev_pitch) > 1:
-                slide_dur = min(self.portamento_speed, event.duration * 0.5)
-                pb_range = 12
-                diff_semitones = prev_pitch - pitch
-                steps = 10
-                pb_list = []
-                for s in range(steps + 1):
-                    t_rel = (s / steps) * slide_dur
-                    factor = 1.0 - (s / steps)
-                    bend = int(diff_semitones * factor * (8192.0 / pb_range))
-                    bend = max(-8192, min(8191, bend))
-                    pb_list.append((t_rel, bend))
-                expression["pitch_bend"] = pb_list
+            if self.portamento_speed > 0 and abs(pitch - prev_pitch) > 2:
+                overlap_beats = min(self.portamento_speed, event.duration * 0.4)
+                # Soften the attack during the overlap window so the
+                # transition from the previous (sustained) note blends
+                # smoothly instead of re-articulating sharply.
+                attack_reduction = 0.55
+                overlap_vel = max(1, int(vel * attack_reduction))
+
+                # Emit the overlap portion first (softer attack)
+                notes.append(
+                    NoteInfo(
+                        pitch=pitch,
+                        start=round(event.onset, 6),
+                        duration=round(overlap_beats, 6),
+                        velocity=overlap_vel,
+                    )
+                )
+                # Emit the remainder of the note at full velocity
+                remainder = event.duration - overlap_beats
+                if remainder > 0.01:
+                    notes.append(
+                        NoteInfo(
+                            pitch=pitch,
+                            start=round(event.onset + overlap_beats, 6),
+                            duration=round(remainder, 6),
+                            velocity=vel,
+                        )
+                    )
+                # Skip the default note emission below
+                skip_note = True
+            else:
+                skip_note = False
 
             # Add dynamic vibrato LFO sweep on CC 1 (Modulation Wheel) for long notes
             if event.duration >= 1.0:
@@ -150,21 +169,33 @@ class StringsLegatoGenerator(PhraseGenerator):
                     cc1_list.append((t_rel, max(0, min(127, val))))
                 expression[1] = cc1_list
 
-            note = NoteInfo(
-                pitch=pitch,
-                start=round(event.onset, 6),
-                duration=event.duration,
-                velocity=vel,
-            )
-            if expression:
-                note.expression = expression
-            notes.append(note)
+            if not skip_note:
+                note = NoteInfo(
+                    pitch=pitch,
+                    start=round(event.onset, 6),
+                    duration=event.duration,
+                    velocity=vel,
+                )
+                if expression:
+                    note.expression = expression
+                notes.append(note)
 
-            # Ensemble/full: add divisi voices
+            # Ensemble/full: add divisi voices snapped to chord tones
             if self.section_size in ("ensemble", "full"):
                 divisi_count = 2 if self.section_size == "ensemble" else 3
+                chord_pcs = chord.pitch_classes()
                 for d in range(1, divisi_count):
-                    div_pitch = pitch + random.choice([-3, -4, 3, 4]) * d
+                    # Target an offset above or below the lead voice, then
+                    # snap to the nearest chord tone so divisi stays harmonic.
+                    offset = d * random.choice([3, 4, 5, 7])
+                    target = pitch + offset
+                    if chord_pcs:
+                        div_pitch = min(
+                            (nearest_pitch(int(pc), target) for pc in chord_pcs),
+                            key=lambda p: abs(p - target),
+                        )
+                    else:
+                        div_pitch = target
                     div_pitch = max(
                         self.params.key_range_low, min(self.params.key_range_high, div_pitch)
                     )

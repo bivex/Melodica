@@ -113,7 +113,7 @@ class CanonGenerator(PhraseGenerator):
         super().__init__(params)
         if canon_type not in _VALID_CANON_TYPES:
             raise ValueError(
-                f"canon_type must be one of {_VALID_CANON_TYPES}; got {canon_type!r}"
+                f"canon_type must be one of {sorted(_VALID_CANON_TYPES)}; got {canon_type!r}"
             )
         self.canon_type = canon_type
         self.delay_beats = max(0.25, delay_beats)
@@ -138,16 +138,17 @@ class CanonGenerator(PhraseGenerator):
         if not chords:
             return []
 
-        lead = self._generate_lead(chords, key, duration_beats, context)
-        all_notes = list(lead)
-
-        for cfg in self._follower_configs(key):
-            follower = self._generate_follower(lead, chords, key, duration_beats, cfg)
-            all_notes.extend(follower)
+        if self.canon_type == "fugue":
+            all_notes = self._render_fugue(chords, key, duration_beats, context)
+        else:
+            lead = self._generate_lead(chords, key, duration_beats, context)
+            all_notes = list(lead)
+            for cfg in self._follower_configs(key):
+                follower = self._generate_follower(lead, chords, key, duration_beats, cfg)
+                all_notes.extend(follower)
 
         all_notes.sort(key=lambda n: n.start)
         last_chord = chords[-1] if chords else None
-
         if all_notes:
             self._last_context = (context or RenderContext()).with_end_state(
                 last_pitch=all_notes[-1].pitch,
@@ -155,6 +156,111 @@ class CanonGenerator(PhraseGenerator):
                 last_chord=last_chord,
             )
         return all_notes
+
+    # ------------------------------------------------------------------
+    # Fugue rendering
+    # ------------------------------------------------------------------
+
+    def _render_fugue(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None,
+    ) -> list[NoteInfo]:
+        low = self.params.key_range_low
+        high = self.params.key_range_high
+        anchor = (low + high) // 2
+        all_notes: list[NoteInfo] = []
+
+        # Generate subject from first chord
+        subject = self._generate_subject(chords, key, context, anchor)
+
+        # Entry plan: subject entries at staggered intervals (stretto overlap possible)
+        entries = self._fugue_entry_plan(duration_beats)
+
+        for entry_idx, (entry_delay, entry_interval, entry_aug) in enumerate(entries):
+            voice_anchor = anchor + entry_idx * 5  # separate registers
+            voice_low = max(low, voice_anchor - 12)
+            voice_high = min(high, voice_anchor + 12)
+
+            for note in subject:
+                onset = note.start + entry_delay
+                if onset >= duration_beats:
+                    break
+                # Transpose to entry interval
+                pitch = _tonal_transpose(note.pitch, entry_interval, key)
+                # Apply augmentation: stretch duration
+                dur = note.duration * entry_aug
+                pitch = max(voice_low, min(voice_high, pitch))
+                vel = max(1, min(127, int(note.velocity * (0.9 - entry_idx * 0.1))))
+                all_notes.append(NoteInfo(
+                    pitch=pitch, start=round(onset, 6),
+                    duration=dur, velocity=vel,
+                ))
+
+        # Episode: free counterpoint between subject entries
+        episode_notes = self._fugue_episode(chords, key, subject, entries, duration_beats)
+        all_notes.extend(episode_notes)
+
+        return all_notes
+
+    def _generate_subject(
+        self, chords: list[ChordLabel], key: Scale,
+        context: RenderContext | None, anchor: int,
+    ) -> list[NoteInfo]:
+        events = self._build_events(self.subject_length)
+        notes: list[NoteInfo] = []
+        prev = context.prev_pitch if context and context.prev_pitch is not None else anchor
+        for ev in events:
+            chord = chord_at(chords, ev.onset)
+            if chord is None:
+                continue
+            pitch = _pick_lead_pitch(chord, key, prev,
+                                     self.params.key_range_low, self.params.key_range_high)
+            vel = int(65 + self.params.density * 30)
+            notes.append(NoteInfo(
+                pitch=pitch, start=round(ev.onset, 6),
+                duration=ev.duration, velocity=max(1, min(127, vel)),
+            ))
+            prev = pitch
+        return notes
+
+    def _fugue_entry_plan(self, duration: float) -> list[tuple[float, int, float]]:
+        plan: list[tuple[float, int, float]] = []
+        delay = 0.0
+        for i in range(self.num_followers + 1):
+            ivl = self.interval if i % 2 == 0 else (self.interval + 7) % 12
+            aug = 1.0 if i == 0 or random.random() > 0.3 else self.augmentation
+            plan.append((delay, ivl, aug))
+            delay += self.delay_beats
+            if delay >= duration * 0.8:
+                break
+        return plan
+
+    def _fugue_episode(
+        self, chords: list[ChordLabel], key: Scale,
+        subject: list[NoteInfo], entries: list[tuple],
+        duration: float,
+    ) -> list[NoteInfo]:
+        if not entries or not subject:
+            return []
+        notes: list[NoteInfo] = []
+        low = self.params.key_range_low
+        high = self.params.key_range_high
+        # Countersubject: invert subject direction
+        for note in subject:
+            onset = note.start + entries[-1][0] + self.delay_beats
+            if onset >= duration:
+                break
+            inverted_pitch = note.pitch - (note.pitch - (low + high) // 2) * 2
+            inverted_pitch = max(low, min(high, inverted_pitch))
+            vel = max(1, min(127, note.velocity - 15))
+            notes.append(NoteInfo(
+                pitch=inverted_pitch, start=round(onset, 6),
+                duration=note.duration, velocity=vel,
+            ))
+        return notes
 
     # ------------------------------------------------------------------
     # Follower configs

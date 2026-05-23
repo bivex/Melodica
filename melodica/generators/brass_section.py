@@ -65,6 +65,7 @@ class BrassSectionGenerator(PhraseGenerator):
     divisi_count: int = 3
     breath_gap: float = 0.25
     mute: str | None = None
+    con_sordino: bool = False
     rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
@@ -78,6 +79,7 @@ class BrassSectionGenerator(PhraseGenerator):
         divisi_count: int = 3,
         breath_gap: float = 0.25,
         mute: str | None = None,
+        con_sordino: bool = False,
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
@@ -87,6 +89,7 @@ class BrassSectionGenerator(PhraseGenerator):
         self.divisi_count = max(2, min(5, divisi_count))
         self.breath_gap = max(0.0, min(1.0, breath_gap))
         self.mute = mute
+        self.con_sordino = con_sordino
         self.rhythm = rhythm
 
     def render(
@@ -103,6 +106,8 @@ class BrassSectionGenerator(PhraseGenerator):
         notes: list[NoteInfo] = []
         mid = (self.params.key_range_low + self.params.key_range_high) // 2
         last_chord: ChordLabel | None = None
+        # Per-voice register offsets for divisi spread
+        divisi_offsets = [0, 7, -12, 12, -7]
 
         for event in events:
             chord = chord_at(chords, event.onset)
@@ -110,13 +115,14 @@ class BrassSectionGenerator(PhraseGenerator):
                 continue
             last_chord = chord
 
-            # Voicing and instrument registers mapping
-            raw_voicing = chord_pitches_closed(chord, mid)
-            raw_voicing = [snap_to_scale(p, key) for p in raw_voicing]
-            
-            # Sort descending (highest voice first)
-            raw_voicing = sorted(raw_voicing, reverse=True)
-            voicing_sub = raw_voicing[:self.divisi_count]
+            # Voicing and instrument registers mapping — each divisi voice gets its own register offset
+            voicing_sub = []
+            for v_idx in range(self.divisi_count):
+                voice_anchor = mid + divisi_offsets[v_idx % len(divisi_offsets)]
+                raw_voicing = chord_pitches_closed(chord, voice_anchor)
+                raw_voicing = [snap_to_scale(p, key) for p in raw_voicing]
+                raw_voicing = sorted(raw_voicing, reverse=True)
+                voicing_sub.append(raw_voicing[0] if raw_voicing else voice_anchor)
 
             # Place each voice in its corresponding instrument's natural register:
             # Voice 0 (highest): Trumpet (58-84)
@@ -172,6 +178,8 @@ class BrassSectionGenerator(PhraseGenerator):
             if self.articulation == "hit":
                 for idx, p in enumerate(voicing):
                     vel = int(self.intensity * 110)
+                    if self.con_sordino:
+                        vel = int(vel * 0.7)
                     # Staggered physical entry delay based on instrument voice
                     inst_delay = 0.0 if idx == 0 else random.uniform(0.005, 0.015)
                     note_onset = max(0.0, event.onset + inst_delay)
@@ -186,19 +194,25 @@ class BrassSectionGenerator(PhraseGenerator):
                     notes.append(note)
 
             elif self.articulation == "swell":
+                segments = 4
+                seg_dur = event.duration / segments
                 for idx, p in enumerate(voicing):
-                    vel = int(self.intensity * 50)  # Start soft
                     inst_delay = 0.0 if idx == 0 else random.uniform(0.008, 0.020)
-                    note_onset = max(0.0, event.onset + inst_delay)
-                    note = NoteInfo(
-                        pitch=p,
-                        start=round(note_onset, 6),
-                        duration=event.duration,
-                        velocity=max(1, min(127, vel)),
-                    )
-                    if expression:
-                        note.expression = expression.copy()
-                    notes.append(note)
+                    for seg in range(segments):
+                        t_frac = seg / max(segments - 1, 1)
+                        vel = int(self.intensity * (40 + 80 * t_frac))
+                        if self.con_sordino:
+                            vel = int(vel * 0.7)
+                        note_onset = max(0.0, event.onset + inst_delay + seg * seg_dur)
+                        note = NoteInfo(
+                            pitch=p,
+                            start=round(note_onset, 6),
+                            duration=seg_dur,
+                            velocity=max(1, min(127, vel)),
+                        )
+                        if expression:
+                            note.expression = expression.copy()
+                        notes.append(note)
 
             elif self.articulation == "fanfare":
                 # Ascending arpeggio with micro-staggering
@@ -206,6 +220,8 @@ class BrassSectionGenerator(PhraseGenerator):
                 step = event.duration / max(len(voicing), 1)
                 for idx, p in enumerate(voicing):
                     vel = int(self.intensity * (80 + idx * 10))
+                    if self.con_sordino:
+                        vel = int(vel * 0.7)
                     inst_delay = 0.0 if idx == 0 else random.uniform(0.004, 0.012)
                     note_onset = max(0.0, t + inst_delay)
                     note = NoteInfo(
@@ -222,6 +238,8 @@ class BrassSectionGenerator(PhraseGenerator):
             elif self.articulation == "sustained":
                 for idx, p in enumerate(voicing):
                     vel = int(self.intensity * 90)
+                    if self.con_sordino:
+                        vel = int(vel * 0.7)
                     inst_delay = 0.0 if idx == 0 else random.uniform(0.008, 0.020)
                     note_onset = max(0.0, event.onset + inst_delay)
                     note = NoteInfo(
@@ -237,6 +255,8 @@ class BrassSectionGenerator(PhraseGenerator):
             elif self.articulation in ("falls", "doits"):
                 for idx, p in enumerate(voicing):
                     vel = int(self.intensity * 95)
+                    if self.con_sordino:
+                        vel = int(vel * 0.7)
                     # Staggered physical entry delay based on instrument voice
                     inst_delay = 0.0
                     if idx == 1:    # French Horn

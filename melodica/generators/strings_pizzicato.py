@@ -26,6 +26,7 @@ Patterns:
     "random"    — random placement of plucks
     "waltz"     — pizzicato waltz pattern
     "tremolo"   — fast alternating between two notes
+    "bartok"    — Bartok snap pizzicato with harmonic ring
     "arco_mix"  — mixed arco/pizzicato (sustained + plucked)
 """
 
@@ -47,7 +48,7 @@ class StringsPizzicatoGenerator(PhraseGenerator):
     Pizzicato string section generator.
 
     pattern:
-        "ostinato", "random", "waltz", "tremolo", "arco_mix"
+        "ostinato", "random", "waltz", "tremolo", "bartok", "arco_mix"
     staccato_length:
         Duration of each pizz note (typically very short: 0.1–0.3 beats).
     velocity_variation:
@@ -161,6 +162,7 @@ class StringsPizzicatoGenerator(PhraseGenerator):
         mid = (self.params.key_range_low + self.params.key_range_high) // 2
         last_chord: ChordLabel | None = None
         prev_pitch = mid
+        event_counter = 0
 
         for event in events:
             chord = chord_at(chords, event.onset)
@@ -196,54 +198,62 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                     use_a = not use_a
                     step_count += 1
                 prev_pitch = pitch_a
+            elif self.pattern == "bartok":
+                # Bartok snap pizzicato: very high velocity, very short, with harmonic snap
+                pc = random.choice(pcs)
+                pitch = nearest_pitch(int(pc), prev_pitch)
+                pitch = snap_to_scale(pitch, key)
+                pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+
+                # Very high initial velocity
+                vel = random.randint(110, 127)
+                # Very short duration
+                snap_dur = random.uniform(0.05, 0.1)
+
+                notes.extend(self._render_pluck(pitch, event.onset, snap_dur, vel, key, 0))
+
+                # Secondary snap harmonic at pitch+12 (octave harmonic ring)
+                snap_pitch = min(127, pitch + 12)
+                snap_vel = random.randint(20, 30)
+                notes.append(
+                    NoteInfo(
+                        pitch=snap_pitch,
+                        start=round(event.onset + snap_dur * 0.5, 6),
+                        duration=round(max(0.02, snap_dur * 0.8), 6),
+                        velocity=snap_vel,
+                        articulation="pizzicato",
+                    )
+                )
+                prev_pitch = pitch
+
             elif self.pattern == "arco_mix":
-                # Lower voice(s) = sustained arco
-                # Upper voice(s) = rhythmic pizzicato plucks
-                pitches = []
-                for pc in pcs:
-                    p = nearest_pitch(int(pc), mid)
-                    p = snap_to_scale(p, key)
-                    p = max(self.params.key_range_low, min(self.params.key_range_high, p))
-                    pitches.append(p)
-                pitches = sorted(list(set(pitches)))
+                # Alternate between sustained arco (even events) and short pizzicato (odd events)
+                pc = random.choice(pcs)
+                pitch = nearest_pitch(int(pc), prev_pitch)
+                pitch = snap_to_scale(pitch, key)
+                pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
 
-                if len(pitches) >= 3:
-                    arco_pitches = pitches[:2]
-                    pizz_pitches = pitches[2:]
-                elif len(pitches) == 2:
-                    arco_pitches = [pitches[0]]
-                    pizz_pitches = [pitches[1]]
-                else:
-                    arco_pitches = [pitches[0]]
-                    pizz_pitches = [pitches[0]]
-
-                # Add sustained arco notes
-                vel = self._velocity()
-                for p in arco_pitches:
+                event_idx = event_counter
+                if event_idx % 2 == 0:
+                    # Even index: sustained arco note
+                    arco_dur = event.duration * 0.9
+                    vel = self._velocity()
+                    arco_vel = max(1, int(vel * 0.9))
                     notes.append(
                         NoteInfo(
-                            pitch=p,
+                            pitch=pitch,
                             start=round(event.onset, 6),
-                            duration=event.duration,
-                            velocity=max(1, int(vel * 0.85)),
+                            duration=round(arco_dur, 6),
+                            velocity=arco_vel,
                             articulation="arco",
                         )
                     )
+                else:
+                    # Odd index: normal short pizzicato pluck
+                    vel = self._velocity()
+                    notes.extend(self._render_pluck(pitch, event.onset, self.staccato_length, vel, key, 0))
 
-                # Add rhythmic pizzicato plucks on the upper voices
-                pluck_offsets = [0.0, 1.0, 1.5, 2.5, 3.0]
-                for pluck_idx, offset in enumerate(pluck_offsets):
-                    t = event.onset + offset
-                    if t >= event.onset + event.duration:
-                        break
-
-                    for p in pizz_pitches:
-                        if random.random() < 0.8:  # slightly sparse for organic feel
-                            p_vel = self._velocity()
-                            notes.extend(self._render_pluck(p, t, self.staccato_length, p_vel, key, pluck_idx))
-
-                if pizz_pitches:
-                    prev_pitch = pizz_pitches[-1]
+                prev_pitch = pitch
             else:
                 # Single pluck event
                 pc = random.choice(pcs)
@@ -254,6 +264,8 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                 vel = self._velocity()
                 notes.extend(self._render_pluck(pitch, event.onset, self.staccato_length, vel, key, 0))
                 prev_pitch = pitch
+
+            event_counter += 1
 
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(
@@ -298,6 +310,19 @@ class StringsPizzicatoGenerator(PhraseGenerator):
                 num = random.randint(2, 8)
                 for _ in range(num):
                     off = round(random.uniform(0, 3.9), 2)
+                    onset = t + off
+                    if onset < duration_beats:
+                        events.append(
+                            RhythmEvent(onset=round(onset, 6), duration=self.staccato_length)
+                        )
+                t += 4.0
+            return events
+
+        elif self.pattern == "bartok":
+            # Same rhythmic grid as ostinato: eighth-note pacing
+            t, events = 0.0, []
+            while t < duration_beats:
+                for off in [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5]:
                     onset = t + off
                     if onset < duration_beats:
                         events.append(
