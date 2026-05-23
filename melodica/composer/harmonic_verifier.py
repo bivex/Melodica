@@ -130,19 +130,41 @@ def detect_clashes(
     track_names = list(valid_tracks.keys())
     tolerance = config.dissonance_tolerance
 
+    # Pre-build active track density array for mid-range (36-60)
+    # We'll use a simple sweep-line approach to record density at note start boundaries.
+    mid_range_events = []
+    for tname, notes in valid_tracks.items():
+        for n in notes:
+            if 36 <= n.pitch <= 60:
+                mid_range_events.append((n.start, 1))
+                mid_range_events.append((n.start + n.duration, -1))
+    
+    mid_range_events.sort(key=lambda x: (x[0], x[1]))
+    density_times = []
+    density_values = []
+    current_density = 0
+    for time, change in mid_range_events:
+        current_density += change
+        if not density_times or density_times[-1] != time:
+            density_times.append(time)
+            density_values.append(current_density)
+        else:
+            density_values[-1] = current_density
+
     for i in range(len(track_names)):
         for j in range(i + 1, len(track_names)):
             ta, tb = track_names[i], track_names[j]
             notes_a = valid_tracks[ta]
             notes_b = valid_tracks[tb]
             starts_b = [n.start for n in notes_b]
+            max_b_dur = max([n.duration for n in notes_b] + [0])
 
             for na in notes_a:
                 # Find all nb that could overlap with na
                 # na.start - window <= nb.end  =>  nb.start + nb.duration >= na.start - window
                 # This is hard to bisect exactly on start, but we can bound nb.start
                 # nb.start <= na.end + window
-                lo = bisect.bisect_left(starts_b, na.start - 10.0) # Conservative bound for duration
+                lo = bisect.bisect_left(starts_b, na.start - max_b_dur - config.window - 0.1)
                 hi = bisect.bisect_right(starts_b, na.start + na.duration + config.window)
                 
                 for nb in notes_b[lo:hi]:
@@ -167,13 +189,13 @@ def detect_clashes(
                     # 1. Dynamic Mid-Range Clash Penalty (Golden Mean Rule)
                     current_tolerance = tolerance
                     if 36 <= na.pitch <= 60 and 36 <= nb.pitch <= 60:
-                        mid_active_tracks = 0
-                        for tname, notes in valid_tracks.items():
-                            for n in notes:
-                                if n.start <= beat < n.start + n.duration:
-                                    if 36 <= n.pitch <= 60:
-                                        mid_active_tracks += 1
-                                        break
+                        # Find density at 'beat'
+                        if density_times:
+                            idx = bisect.bisect_right(density_times, beat) - 1
+                            mid_active_tracks = density_values[idx] if idx >= 0 else 0
+                        else:
+                            mid_active_tracks = 0
+                            
                         if mid_active_tracks > 3:
                             current_tolerance = max(0.0, tolerance - 0.3)
 

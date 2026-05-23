@@ -44,17 +44,25 @@ def apply_texture_control(
         return
     from melodica.composer import TextureController
 
+    import bisect
+
     ctrl = TextureController(tension_curve=tension_curve)
 
     # Build index of all non-chord notes (melody, bass, etc.) for clash checking
     reference_notes: list[tuple[float, float, int]] = []
     chord_track_names = set()
+    max_ref_duration = 0.0
     for track_cfg in tracks:
         if track_cfg.generator_type in ("chord", "strum", "arpeggiator"):
             chord_track_names.add(track_cfg.name)
         elif track_cfg.name in result:
             for n in result[track_cfg.name]:
                 reference_notes.append((n.start, n.start + n.duration, n.pitch))
+                if n.duration > max_ref_duration:
+                    max_ref_duration = n.duration
+
+    reference_notes.sort(key=lambda x: x[0])
+    ref_starts = [x[0] for x in reference_notes]
 
     for track_cfg in tracks:
         if track_cfg.name not in result or track_cfg.name not in chord_track_names:
@@ -66,7 +74,10 @@ def apply_texture_control(
 
             # Check if this note clashes with any reference note
             creates_clash = False
-            for ref_start, ref_end, ref_pitch in reference_notes:
+            lo = bisect.bisect_left(ref_starts, n.start - max_ref_duration - 0.1)
+            hi = bisect.bisect_right(ref_starts, n.start + n.duration)
+            
+            for ref_start, ref_end, ref_pitch in reference_notes[lo:hi]:
                 if n.start < ref_end and (n.start + n.duration) > ref_start:
                     interval = abs(n.pitch - ref_pitch) % 12
                     if interval in (1, 6, 11):  # m2, tritone, M7

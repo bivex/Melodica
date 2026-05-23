@@ -1,0 +1,38 @@
+         771814 function calls (771730 primitive calls) in 0.142 seconds
+
+   Ordered by: cumulative time
+   List reduced from 363 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.145    0.145 /Volumes/External/Code/Melodica/melodica/idea_tool.py:312(generate)
+        1    0.000    0.000    0.067    0.067 /Volumes/External/Code/Melodica/melodica/idea_tool.py:947(_generate_all_tracks)
+        5    0.002    0.000    0.067    0.013 /Volumes/External/Code/Melodica/melodica/idea_tool.py:780(_generate_track)
+        8    0.006    0.001    0.040    0.005 /Volumes/External/Code/Melodica/melodica/generators/melody.py:243(render)
+        1    0.002    0.002    0.037    0.037 /Volumes/External/Code/Melodica/melodica/composer/harmonic_verifier.py:385(verify_and_fix)
+        2    0.014    0.007    0.025    0.012 /Volumes/External/Code/Melodica/melodica/composer/harmonic_verifier.py:112(detect_clashes)
+      685    0.001    0.000    0.013    0.000 /Volumes/External/Code/Melodica/melodica/generators/_melody_pitch.py:78(pick_pitch)
+        1    0.001    0.001    0.012    0.012 /Volumes/External/Code/Melodica/melodica/composer/psychoacoustic.py:430(psycho_verify)
+     1157    0.009    0.000    0.012    0.000 /Volumes/External/Code/Melodica/melodica/composer/harmonic_verifier.py:324(_try_transpose)
+        4    0.001    0.000    0.009    0.002 /Volumes/External/Code/Melodica/melodica/generators/chord_gen.py:90(render)
+        8    0.000    0.000    0.009    0.001 /Volumes/External/Code/Melodica/melodica/generators/_melody_rhythm.py:89(build_events)
+        8    0.003    0.000    0.009    0.001 /Volumes/External/Code/Melodica/melodica/generators/_melody_rhythm.py:104(_build_groove_events)
+      739    0.004    0.000    0.008    0.000 /Volumes/External/Code/Melodica/melodica/generators/_melody_pitch.py:361(build_candidates)
+        2    0.004    0.002    0.007    0.004 /Volumes/External/Code/Melodica/melodica/composer/psychoacoustic.py:209(detect_temporal_masking)
+     14/3    0.000    0.000    0.007    0.002 <frozen importlib._bootstrap>:1360(_find_and_load)
+     14/3    0.000    0.000    0.007    0.002 <frozen importlib._bootstrap>:1308(_find_and_load_unlocked)
+     14/3    0.000    0.000    0.007    0.002 <frozen importlib._bootstrap>:914(_load_unlocked)
+     12/3    0.000    0.000    0.007    0.002 <frozen importlib._bootstrap_external>:753(exec_module)
+   176380    0.007    0.000    0.007    0.000 {built-in method builtins.abs}
+        2    0.003    0.002    0.006    0.003 /Volumes/External/Code/Melodica/melodica/composer/psychoacoustic.py:165(detect_frequency_masking)
+        1    0.004    0.004    0.006    0.006 /Volumes/External/Code/Melodica/melodica/composer/harmonic_verifier.py:263(detect_parallel_fifths)
+     40/7    0.000    0.000    0.006    0.001 <frozen importlib._bootstrap>:483(_call_with_frames_removed)
+      256    0.001    0.000    0.005    0.000 /Volumes/External/Code/Melodica/melodica/generators/chord_gen.py:200(_best_inversion)
+     12/3    0.000    0.000    0.005    0.002 {built-in method builtins.exec}
+    56993    0.005    0.000    0.005    0.000 {built-in method _bisect.bisect_left}
+    57834    0.005    0.000    0.005    0.000 {built-in method _bisect.bisect_right}
+        4    0.000    0.000    0.005    0.001 /Volumes/External/Code/Melodica/melodica/_postprocess.py:206(apply_voice_leading)
+        4    0.002    0.000    0.005    0.001 /Volumes/External/Code/Melodica/melodica/modifiers/voice_leading.py:45(modify)
+     5189    0.003    0.000    0.005    0.000 /Volumes/External/Code/Melodica/melodica/types_pkg/_theory.py:371(pitch_classes)
+    55636    0.004    0.000    0.004    0.000 {built-in method builtins.min}
+
+
