@@ -480,10 +480,10 @@ def verify_and_fix(
         # Strategy 2: Reduce velocity
         if config.fix_velocity:
             if na.velocity <= nb.velocity:
-                fixed[ta][idx_a] = _reduce_velocity(na, 0.4)
+                fixed[ta][idx_a] = _reduce_velocity(na, 0.7)
                 report.notes_velocity_reduced += 1
             else:
-                fixed[tb][idx_b] = _reduce_velocity(nb, 0.4)
+                fixed[tb][idx_b] = _reduce_velocity(nb, 0.7)
                 report.notes_velocity_reduced += 1
             report.clashes_fixed += 1
             continue

@@ -508,7 +508,7 @@ def psycho_verify(
                     actions[(tb, id(evt.note_b))] = _REMOVE
                     report.notes_removed += 1
                 else:
-                    actions[(tb, id(evt.note_b))] = _reduce_vel(evt.note_b, 0.3)
+                    actions[(tb, id(evt.note_b))] = _reduce_vel(evt.note_b, 0.75)
                     report.notes_velocity_reduced += 1
             report.issues_fixed += 1
 
@@ -518,7 +518,7 @@ def psycho_verify(
                     actions[(tb, id(evt.note_b))] = _transpose_octave(evt.note_b)
                     report.notes_transposed += 1
                 else:
-                    actions[(tb, id(evt.note_b))] = _reduce_vel(evt.note_b, 0.35)
+                    actions[(tb, id(evt.note_b))] = _reduce_vel(evt.note_b, 0.8)
                     report.notes_velocity_reduced += 1
                 report.issues_fixed += 1
 
@@ -529,7 +529,7 @@ def psycho_verify(
 
         elif evt.issue == "reg_mask":
             if evt.note_b and tb:
-                actions[(tb, id(evt.note_b))] = _reduce_vel(evt.note_b, 0.4)
+                actions[(tb, id(evt.note_b))] = _reduce_vel(evt.note_b, 0.7)
                 report.notes_velocity_reduced += 1
                 report.issues_fixed += 1
 
@@ -538,7 +538,7 @@ def psycho_verify(
                 actions[(ta, id(evt.note_a))] = _REMOVE
                 report.notes_removed += 1
             else:
-                actions[(ta, id(evt.note_a))] = _reduce_vel(evt.note_a, 0.3)
+                actions[(ta, id(evt.note_a))] = _reduce_vel(evt.note_a, 0.75)
                 report.notes_velocity_reduced += 1
             report.issues_fixed += 1
 

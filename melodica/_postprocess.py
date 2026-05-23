@@ -85,8 +85,8 @@ def apply_texture_control(
                         break
 
             if creates_clash:
-                # Higher chance of dropping clashing notes
-                keep_prob = density * 0.5
+                # Slightly higher chance of dropping clashing notes, but not extreme
+                keep_prob = density * 0.8
             else:
                 keep_prob = density
 
