@@ -165,84 +165,87 @@ def _is_blurry(note: NoteInfo, min_dur: float) -> bool:
 def detect_frequency_masking(
     tracks: dict[str, list[NoteInfo]],
 ) -> list[PsychoEvent]:
-    """Detect frequency masking across track pairs.
-
-    [FIX 6] Uses a time-sorted index + bisect for O(N log N) candidate
-    selection instead of the O(N²) full cross-product.
-    """
-    import bisect
-
+    """Detect frequency masking across track pairs."""
     events = []
     valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
-    names = list(valid.keys())
+    
+    all_events = []
+    for tname, notes in valid.items():
+        for n in notes:
+            all_events.append((n.start, 1, tname, id(n), n))
+            all_events.append((n.start + n.duration, -1, tname, id(n), n))
+            
+    all_events.sort(key=lambda x: (x[0], x[1]))
+    active_notes = {}
 
-    for i in range(len(names)):
-        for j in range(i + 1, len(names)):
-            ta, tb = names[i], names[j]
-            notes_b = valid[tb]
-            # Build start-time index for notes_b
-            starts_b = [n.start for n in notes_b]
-
-            for na in valid[ta]:
-                # Only check notes_b whose start overlaps na's sounding range
-                lo = bisect.bisect_left(starts_b, na.start - na.duration)
-                hi = bisect.bisect_right(starts_b, na.start + na.duration)
-                for nb in notes_b[lo:hi]:
-                    # Confirm actual overlap
-                    if not (na.start < nb.start + nb.duration and nb.start < na.start + na.duration):
-                        continue
-                    if _freq_masked(na, nb):
-                        events.append(PsychoEvent(
-                            beat=nb.start, track_a=ta, note_a=na,
-                            track_b=tb, note_b=nb,
-                            issue="freq_mask", severity="strong",
-                        ))
-                    elif _freq_masked(nb, na):
-                        events.append(PsychoEvent(
-                            beat=na.start, track_a=tb, note_a=nb,
-                            track_b=ta, note_b=na,
-                            issue="freq_mask", severity="strong",
-                        ))
+    for _, event_type, ta, na_id, na in all_events:
+        if event_type == 1:
+            for (tb, nb_id), nb in active_notes.items():
+                if ta == tb:
+                    continue
+                
+                if _freq_masked(na, nb):
+                    events.append(PsychoEvent(
+                        beat=nb.start, track_a=ta, note_a=na,
+                        track_b=tb, note_b=nb,
+                        issue="freq_mask", severity="strong",
+                    ))
+                elif _freq_masked(nb, na):
+                    events.append(PsychoEvent(
+                        beat=na.start, track_a=tb, note_a=nb,
+                        track_b=ta, note_b=na,
+                        issue="freq_mask", severity="strong",
+                    ))
+            active_notes[(ta, na_id)] = na
+        else:
+            active_notes.pop((ta, na_id), None)
+            
     return events
 
 
 def detect_temporal_masking(
     tracks: dict[str, list[NoteInfo]],
 ) -> list[PsychoEvent]:
-    """Detect temporal masking across track pairs.
-
-    [FIX 6] bisect-based windowing: only compare notes within the temporal
-    masking window (pre + post = 0.15 s) rather than all N×M pairs.
-    """
-    import bisect
-
-    _WINDOW = _PRE_MASKING + _POST_MASKING  # total search radius in seconds
+    """Detect temporal masking across track pairs."""
+    _WINDOW = _PRE_MASKING + _POST_MASKING
     events = []
     valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
-    names = list(valid.keys())
+    
+    all_events = []
+    for tname, notes in valid.items():
+        for n in notes:
+            # We must be active if we could MASK or BE MASKED.
+            # Masking range for loud note: [start - PRE, end + POST]
+            # Being masked range for quiet note: [start, start] (actually we only care about quiet note start)
+            # So expanding everything by _WINDOW is safe.
+            all_events.append((n.start - _WINDOW, 1, tname, id(n), n))
+            all_events.append((n.start + n.duration + _WINDOW, -1, tname, id(n), n))
+            
+    all_events.sort(key=lambda x: (x[0], x[1]))
+    active_notes = {}
 
-    for i in range(len(names)):
-        for j in range(i + 1, len(names)):
-            ta, tb = names[i], names[j]
-            notes_b = valid[tb]
-            starts_b = [n.start for n in notes_b]
-
-            for na in valid[ta]:
-                lo = bisect.bisect_left(starts_b, na.start - _WINDOW)
-                hi = bisect.bisect_right(starts_b, na.start + na.duration + _WINDOW)
-                for nb in notes_b[lo:hi]:
-                    if _temporal_masked(na, nb):
-                        events.append(PsychoEvent(
-                            beat=nb.start, track_a=ta, note_a=na,
-                            track_b=tb, note_b=nb,
-                            issue="temporal_mask", severity="mild",
-                        ))
-                    elif _temporal_masked(nb, na):
-                        events.append(PsychoEvent(
-                            beat=na.start, track_a=tb, note_a=nb,
-                            track_b=ta, note_b=na,
-                            issue="temporal_mask", severity="mild",
-                        ))
+    for _, event_type, ta, na_id, na in all_events:
+        if event_type == 1:
+            for (tb, nb_id), nb in active_notes.items():
+                if ta == tb:
+                    continue
+                
+                if _temporal_masked(na, nb):
+                    events.append(PsychoEvent(
+                        beat=nb.start, track_a=ta, note_a=na,
+                        track_b=tb, note_b=nb,
+                        issue="temporal_mask", severity="mild",
+                    ))
+                elif _temporal_masked(nb, na):
+                    events.append(PsychoEvent(
+                        beat=na.start, track_a=tb, note_a=nb,
+                        track_b=ta, note_b=na,
+                        issue="temporal_mask", severity="mild",
+                    ))
+            active_notes[(ta, na_id)] = na
+        else:
+            active_notes.pop((ta, na_id), None)
+            
     return events
 
 
@@ -250,32 +253,41 @@ def detect_fusion(
     tracks: dict[str, list[NoteInfo]],
 ) -> list[PsychoEvent]:
     """Detect harmonic fusion (octave/unison/fifth with same onset)."""
-    import bisect
     events = []
     valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
-    names = list(valid.keys())
+    
+    all_events = []
+    for tname, notes in valid.items():
+        for n in notes:
+            # interval: [start - 0.02, start + 0.02]
+            all_events.append((n.start - 0.02, 1, tname, id(n), n))
+            all_events.append((n.start + 0.02, -1, tname, id(n), n))
+            
+    all_events.sort(key=lambda x: (x[0], x[1]))
+    active_notes = {}
 
-    for i in range(len(names)):
-        for j in range(i + 1, len(names)):
-            ta, tb = names[i], names[j]
-            notes_b = valid[tb]
-            starts_b = [n.start for n in notes_b]
-            for na in valid[ta]:
-                lo = bisect.bisect_left(starts_b, na.start - 0.02)
-                hi = bisect.bisect_right(starts_b, na.start + 0.02)
-                for nb in notes_b[lo:hi]:
-                    if _is_fusion(na, nb):
-                        events.append(
-                            PsychoEvent(
-                                beat=na.start,
-                                track_a=ta,
-                                note_a=na,
-                                track_b=tb,
-                                note_b=nb,
-                                issue="fusion",
-                                severity="mild",
-                            )
+    for _, event_type, ta, na_id, na in all_events:
+        if event_type == 1:
+            for (tb, nb_id), nb in active_notes.items():
+                if ta == tb:
+                    continue
+                
+                if _is_fusion(na, nb):
+                    events.append(
+                        PsychoEvent(
+                            beat=na.start,
+                            track_a=ta,
+                            note_a=na,
+                            track_b=tb,
+                            note_b=nb,
+                            issue="fusion",
+                            severity="mild",
                         )
+                    )
+            active_notes[(ta, na_id)] = na
+        else:
+            active_notes.pop((ta, na_id), None)
+            
     return events
 
 

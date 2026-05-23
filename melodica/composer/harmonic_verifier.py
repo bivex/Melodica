@@ -151,113 +151,117 @@ def detect_clashes(
         else:
             density_values[-1] = current_density
 
-    for i in range(len(track_names)):
-        for j in range(i + 1, len(track_names)):
-            ta, tb = track_names[i], track_names[j]
-            notes_a = valid_tracks[ta]
-            notes_b = valid_tracks[tb]
-            starts_b = [n.start for n in notes_b]
-            max_b_dur = max([n.duration for n in notes_b] + [0])
+    # Find overlapping notes using sweep-line
+    all_events = []
+    # Use id(n) to break ties and ensure we can remove the exact note from the active set
+    for tname, notes in valid_tracks.items():
+        for n in notes:
+            # interval: [start - window, start + duration]
+            all_events.append((n.start - config.window, 1, tname, id(n), n))
+            all_events.append((n.start + n.duration, -1, tname, id(n), n))
+            
+    all_events.sort(key=lambda x: (x[0], x[1]))
+    
+    active_notes = {}  # dict mapping (tname, id(n)) -> n
 
-            for na in notes_a:
-                # Find all nb that could overlap with na
-                # na.start - window <= nb.end  =>  nb.start + nb.duration >= na.start - window
-                # This is hard to bisect exactly on start, but we can bound nb.start
-                # nb.start <= na.end + window
-                lo = bisect.bisect_left(starts_b, na.start - max_b_dur - config.window - 0.1)
-                hi = bisect.bisect_right(starts_b, na.start + na.duration + config.window)
-                
-                for nb in notes_b[lo:hi]:
-                    if not _notes_overlap(na, nb, config.window):
-                        continue
+    for _, event_type, ta, na_id, na in all_events:
+        if event_type == 1:
+            for (tb, nb_id), nb in active_notes.items():
+                if ta == tb:
+                    continue  # We only check cross-track
 
-                    iv = _interval(na.pitch, nb.pitch)
-                    if iv == 0:
-                        continue  # unison/octave — fine
+                iv = _interval(na.pitch, nb.pitch)
+                if iv == 0:
+                    continue  # unison/octave — fine
 
-                    severity = None
-                    if iv in _STRONG_DISSONANT:
-                        severity = "strong"
-                    elif iv in _MILD_DISSONANT:
-                        severity = "mild"
+                severity = None
+                if iv in _STRONG_DISSONANT:
+                    severity = "strong"
+                elif iv in _MILD_DISSONANT:
+                    severity = "mild"
 
-                    if severity is None:
-                        continue  # consonant
+                if severity is None:
+                    continue  # consonant
 
-                    beat = max(na.start, nb.start)
+                beat = max(na.start, nb.start)
 
-                    # 1. Dynamic Mid-Range Clash Penalty (Golden Mean Rule)
-                    current_tolerance = tolerance
-                    if 36 <= na.pitch <= 60 and 36 <= nb.pitch <= 60:
-                        # Find density at 'beat'
-                        if density_times:
-                            idx = bisect.bisect_right(density_times, beat) - 1
-                            mid_active_tracks = density_values[idx] if idx >= 0 else 0
-                        else:
-                            mid_active_tracks = 0
-                            
-                        if mid_active_tracks > 3:
-                            current_tolerance = max(0.0, tolerance - 0.3)
-
-                    # 2. Functional Dissonance Awareness
-                    if chords:
-                        active_chord = None
-                        for c in chords:
-                            if c.start <= beat < c.start + c.duration:
-                                active_chord = c
-                                break
+                # 1. Dynamic Mid-Range Clash Penalty (Golden Mean Rule)
+                current_tolerance = tolerance
+                if 36 <= na.pitch <= 60 and 36 <= nb.pitch <= 60:
+                    # Find density at 'beat'
+                    if density_times:
+                        idx = bisect.bisect_right(density_times, beat) - 1
+                        mid_active_tracks = density_values[idx] if idx >= 0 else 0
+                    else:
+                        mid_active_tracks = 0
                         
-                        if active_chord:
-                            pc_a = na.pitch % 12
-                            pc_b = nb.pitch % 12
+                    if mid_active_tracks > 3:
+                        current_tolerance = max(0.0, tolerance - 0.3)
+
+                # 2. Functional Dissonance Awareness
+                if chords:
+                    active_chord = None
+                    for c in chords:
+                        if c.start <= beat < c.start + c.duration:
+                            active_chord = c
+                            break
+                    
+                    if active_chord:
+                        pc_a = na.pitch % 12
+                        pc_b = nb.pitch % 12
+                        
+                        # A. Both notes are chord tones (e.g. C and B in Cmaj7)
+                        chord_pcs = active_chord.pitch_classes() if hasattr(active_chord, "pitch_classes") else []
+                        if pc_a in chord_pcs and pc_b in chord_pcs:
+                            continue
                             
-                            # A. Both notes are chord tones (e.g. C and B in Cmaj7)
-                            chord_pcs = active_chord.pitch_classes() if hasattr(active_chord, "pitch_classes") else []
-                            if pc_a in chord_pcs and pc_b in chord_pcs:
+                        # B. Tritone in dominant chord (e.g. B and F in G7)
+                        if iv == 6 and getattr(active_chord, "quality", None) == Quality.DOMINANT7:
+                            if (pc_a == (active_chord.root + 4) % 12 and pc_b == (active_chord.root + 10) % 12) or \
+                               (pc_b == (active_chord.root + 4) % 12 and pc_a == (active_chord.root + 10) % 12):
                                 continue
                                 
-                            # B. Tritone in dominant chord (e.g. B and F in G7)
-                            if iv == 6 and getattr(active_chord, "quality", None) == Quality.DOMINANT7:
-                                if (pc_a == (active_chord.root + 4) % 12 and pc_b == (active_chord.root + 10) % 12) or \
-                                   (pc_b == (active_chord.root + 4) % 12 and pc_a == (active_chord.root + 10) % 12):
-                                    continue
-                                    
-                            # C. Leading tone resolution clash (e.g. B and C when C is root/tonic)
-                            lt = (active_chord.root - 1) % 12
-                            if (pc_a == lt and pc_b == active_chord.root) or (pc_b == lt and pc_a == active_chord.root):
-                                if current_tolerance > 0.2:
-                                    continue
+                        # C. Leading tone resolution clash (e.g. B and C when C is root/tonic)
+                        lt = (active_chord.root - 1) % 12
+                        if (pc_a == lt and pc_b == active_chord.root) or (pc_b == lt and pc_a == active_chord.root):
+                            if current_tolerance > 0.2:
+                                continue
 
-                    # Tolerance check: high tolerance = allow more
-                    if severity == "mild" and current_tolerance > 0.7:
-                        continue
-                    if severity == "strong" and current_tolerance > 0.9:
-                        continue
+                # Tolerance check: high tolerance = allow more
+                if severity == "mild" and current_tolerance > 0.7:
+                    continue
+                if severity == "strong" and current_tolerance > 0.9:
+                    continue
 
-                    # Skip very brief notes (MIDI artifacts)
-                    if na.duration < 0.05 or nb.duration < 0.05:
-                        continue
+                # Skip very brief notes (MIDI artifacts)
+                if na.duration < 0.05 or nb.duration < 0.05:
+                    continue
 
-                    overlap_dur = min(na.start + na.duration, nb.start + nb.duration) - max(
-                        na.start, nb.start
+                overlap_dur = min(na.start + na.duration, nb.start + nb.duration) - max(
+                    na.start, nb.start
+                )
+                min_dur = min(na.duration, nb.duration)
+                if overlap_dur < min_dur * 0.5:
+                    continue  # overlap less than half the shorter note
+
+                events.append(
+                    ClashEvent(
+                        beat=beat,
+                        note_a=na,
+                        track_a=ta,
+                        note_b=nb,
+                        track_b=tb,
+                        interval=iv,
+                        severity=severity,
                     )
-                    min_dur = min(na.duration, nb.duration)
-                    if overlap_dur < min_dur * 0.5:
-                        continue  # overlap less than half the shorter note
-
-                    events.append(
-                        ClashEvent(
-                            beat=beat,
-                            note_a=na,
-                            track_a=ta,
-                            note_b=nb,
-                            track_b=tb,
-                            interval=iv,
-                            severity=severity,
-                        )
-                    )
+                )
+            active_notes[(ta, na_id)] = na
+        else:
+            active_notes.pop((ta, na_id), None)
 
     return events
+
+    # Second pass: check for parallel fifths/octaves
 
 
 def detect_parallel_fifths(
@@ -321,27 +325,51 @@ def detect_parallel_fifths(
 # ---------------------------------------------------------------------------
 # Fix strategies
 # ---------------------------------------------------------------------------
+# Global lookup table for transpositions: (current_pc, other_pc) -> list of consonant pitch classes
+_TRANSPOSE_LOOKUP: dict[tuple[int, int], list[int]] = {}
+
+def _get_consonant_pcs(current_pc: int, other_pc: int) -> list[int]:
+    key = (current_pc, other_pc)
+    if key in _TRANSPOSE_LOOKUP:
+        return _TRANSPOSE_LOOKUP[key]
+    
+    res = []
+    # Find all pitch classes that are consonant or mild dissonant with other_pc
+    for pc in range(12):
+        iv = abs(pc - other_pc) % 12
+        if iv in _CONSONANT or iv in _MILD_DISSONANT:
+            res.append(pc)
+            
+    # Sort by distance from current_pc (modulo 12)
+    res.sort(key=lambda pc: min(abs(pc - current_pc), 12 - abs(pc - current_pc)))
+    _TRANSPOSE_LOOKUP[key] = res
+    return res
+
 def _try_transpose(note: NoteInfo, other_pitch: int) -> NoteInfo:
     """Transpose note to nearest pitch that avoids clash with other_pitch."""
     current_pc = note.pitch % 12
     other_pc = other_pitch % 12
 
-    # Try all 12 pitch classes, find the nearest consonant one
+    consonant_pcs = _get_consonant_pcs(current_pc, other_pc)
+    
     best_pitch = note.pitch
     best_dist = 999
 
-    for pc_offset in range(12):
-        new_pc = (current_pc + pc_offset) % 12
-        iv = abs(new_pc - other_pc) % 12
-        if iv in _CONSONANT or iv in _MILD_DISSONANT:
-            # Try staying in same octave first, then shift
-            for oct_shift in [0, -12, 12, -24, 24]:
-                candidate = (note.pitch // 12) * 12 + new_pc + oct_shift
-                if 0 <= candidate <= 127 and candidate != note.pitch:
-                    dist = abs(candidate - note.pitch)
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_pitch = candidate
+    # Try only valid pitch classes
+    for new_pc in consonant_pcs:
+        # Optimization: if the closest possible note with this PC is already worse than best_dist, skip
+        # Try staying in same octave first, then shift
+        for oct_shift in [0, -12, 12, -24, 24]:
+            candidate = (note.pitch // 12) * 12 + new_pc + oct_shift
+            if 0 <= candidate <= 127 and candidate != note.pitch:
+                dist = abs(candidate - note.pitch)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_pitch = candidate
+                    
+        # If we found a very close note (within a few semitones), we can stop
+        if best_dist < 4:
+            break
 
     if best_pitch != note.pitch:
         return NoteInfo(

@@ -412,3 +412,4 @@ output/**/*.mp3
 /.antigravitycli
 .coverage_bass
 output/dark_souls.prof
+output/dark_souls_optimized.prof
