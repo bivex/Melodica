@@ -69,7 +69,8 @@ class _PluckedSoloBase(PhraseGenerator, ABC):
 class PianoSoloGenerator(_PluckedSoloBase):
     """
     Solo Piano & Harpsichord generator.
-    Covers Acoustic Grand (0), Harpsichord (6), Clavinet (7), Electric Piano (4).
+    Covers Acoustic Grand (0), Bright Acoustic (1), Electric Grand (2), Honky-tonk (3),
+    Electric Piano 1 (4), Electric Piano 2 (5), Harpsichord (6), Clavinet (7).
     """
     name: str = "Piano Solo Generator"
 
@@ -77,7 +78,7 @@ class PianoSoloGenerator(_PluckedSoloBase):
         self,
         params: GeneratorParams | None = None,
         *,
-        instrument: str = "grand_piano",  # grand_piano, harpsichord, clavinet, electric_piano
+        instrument: str = "grand_piano",  # grand_piano, bright_piano, electric_grand, honky_tonk, electric_piano_1, electric_piano_2, harpsichord, clavinet
         pedal: bool = True,
         note_density: float = 1.0,
     ) -> None:
@@ -114,19 +115,57 @@ class PianoSoloGenerator(_PluckedSoloBase):
             prev_pitch = pitch
 
             # Generate dynamic levels
-            vel = self._velocity(80)
+            if self.instrument == "bright_piano":
+                vel = self._velocity(90)
+            elif self.instrument in ("electric_piano", "electric_piano_1"):
+                vel = self._velocity(80)
+            elif self.instrument == "electric_piano_2":
+                vel = self._velocity(72)
+            elif self.instrument == "electric_grand":
+                vel = self._velocity(82)
+            else:
+                vel = self._velocity(80)
 
             # Pedal sustains notes longer
-            dur_mult = 1.8 if self.pedal and self.instrument != "harpsichord" else 0.9
+            if self.instrument == "harpsichord":
+                dur_mult = 0.4
+            elif self.instrument == "clavinet":
+                dur_mult = 0.6
+            elif self.instrument == "bright_piano":
+                dur_mult = 1.5 if self.pedal else 0.85
+            elif self.instrument == "electric_grand":
+                dur_mult = 1.3 if self.pedal else 0.8
+            elif self.instrument == "honky_tonk":
+                dur_mult = 1.6 if self.pedal else 0.9
+            elif self.instrument == "electric_piano_2":
+                dur_mult = 2.0 if self.pedal else 1.1
+            elif self.instrument in ("electric_piano", "electric_piano_1"):
+                dur_mult = 1.8 if self.pedal else 0.95
+            else:
+                dur_mult = 1.8 if self.pedal else 0.9
+
             duration = max(0.1, chord.duration * dur_mult)
 
             # Harpsichord and Clavinet have rapid release transients, E-Piano has mellow decays
             expression = {}
             if self.instrument == "harpsichord":
                 duration = min(duration, 0.4)
-            elif self.instrument == "electric_piano":
+            elif self.instrument == "clavinet":
+                duration = min(duration, 0.6)
+            elif self.instrument in ("electric_piano", "electric_piano_1"):
                 # Add expression chorus LFO sweep
                 expression[11] = [(0.0, 70), (duration * 0.5, 95), (duration, 60)]
+            elif self.instrument == "electric_piano_2":
+                # High chorus send (93) and rich tremolo sweep
+                expression[93] = [(0.0, 105), (duration, 105)]
+                expression[11] = [(0.0, 80), (duration * 0.25, 95), (duration * 0.5, 80), (duration * 0.75, 95), (duration, 80)]
+            elif self.instrument == "electric_grand":
+                # CP-70 type metallic chorus
+                expression[93] = [(0.0, 80), (duration, 80)]
+                expression[11] = [(0.0, 75), (duration * 0.5, 90), (duration, 70)]
+            elif self.instrument == "honky_tonk":
+                # Out-of-tune chorus send
+                expression[93] = [(0.0, 95), (duration, 95)]
 
             note = NoteInfo(
                 pitch=pitch,
@@ -137,6 +176,15 @@ class PianoSoloGenerator(_PluckedSoloBase):
             if expression:
                 note.expression = expression
             notes.append(note)
+
+            # Add honky-tonk double strike companion note
+            if self.instrument == "honky_tonk":
+                notes.append(NoteInfo(
+                    pitch=pitch,
+                    start=round(chord.start + random.uniform(0.01, 0.025), 6),
+                    duration=round(duration * 0.8, 6),
+                    velocity=max(1, int(vel * 0.75)),
+                ))
 
             # Left-hand/Bass companion chords
             if random.random() < 0.5:
