@@ -198,11 +198,11 @@ def generate_track_06():
         use_voice_leading=True, use_texture_control=True, use_mixing=True, use_mastering=True, target_lufs=-12.5,
         parts=parts,
         tracks=[
-            TrackConfig(name="Solo Piano", generator=PianoRunGenerator(), instrument="piano", arrangement="ABCD", density=0.7),
-            TrackConfig(name="Cello Solo", generator=CelloGenerator(), instrument="cello", arrangement="ABAC", density=0.6),
-            TrackConfig(name="Strings Legato", generator=StringsLegatoGenerator(), instrument="strings", arrangement="AABB", density=0.8),
+            TrackConfig(name="Solo Piano", generator=PianoRunGenerator(), instrument="piano", arrangement="ABCD", density=0.7, mpe=True),
+            TrackConfig(name="Cello Solo", generator=CelloGenerator(), instrument="cello", arrangement="ABAC", density=0.6, mpe=True),
+            TrackConfig(name="Strings Legato", generator=StringsLegatoGenerator(), instrument="strings", arrangement="AABB", density=0.8, mpe=True),
             TrackConfig(name="Brass Section", generator=FrenchHornGenerator(), instrument="brass", arrangement="ABCD", density=0.7),
-            TrackConfig(name="Choir Epic", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=0.8),
+            TrackConfig(name="Choir Epic", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=0.8, mpe=True),
             TrackConfig(name="Timpani", generator=TimpaniGenerator(), instrument="timpani", arrangement="AABB", density=0.7),
             TrackConfig(name="Contrabass", generator=ContrabassGenerator(), instrument="contrabass", arrangement="AABB", density=0.8, octave_shift=-1),
         ]
@@ -226,8 +226,8 @@ def generate_track_07():
         parts=parts,
         tracks=[
             TrackConfig(name="Harp", generator=HarpGenerator(), instrument="harp", arrangement="AABB", density=0.4),
-            TrackConfig(name="Choir Whispers", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=0.5),
-            TrackConfig(name="Violins High", generator=ViolinGenerator(), instrument="violin", arrangement="AABB", density=0.6, octave_shift=2),
+            TrackConfig(name="Choir Whispers", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=0.5, mpe=True),
+            TrackConfig(name="Violins High", generator=ViolinGenerator(), instrument="violin", arrangement="AABB", density=0.6, octave_shift=2, mpe=True),
             TrackConfig(name="Contrabass Drone", generator=ContrabassGenerator(), instrument="contrabass", arrangement="AABB", density=0.8, octave_shift=-2),
         ]
     )
