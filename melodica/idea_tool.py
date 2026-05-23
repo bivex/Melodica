@@ -199,6 +199,10 @@ class IdeaPart:
     style: str | None = None
     progression_type: str | None = None
     progression_list: list[list[int]] | None = None
+    # Per-part track overrides (None = use track default)
+    track_density: dict[str, float] | None = None        # {"TrackName": 0.3}
+    track_mute: list[str] | None = None                   # ["TrackName1", ...]
+    track_velocity_scale: dict[str, float] | None = None  # {"TrackName": 0.5}
 
 
 @dataclass
@@ -507,29 +511,82 @@ class IdeaTool:
         # ---- Mixing Desk (Gain staging & Section faders) ----
         if self.config.use_mixing:
             from melodica.shorts_mixing import MixingDesk
-            # Dynamically segment total bars into typical sections (Hook -> Dynamics -> Loop)
-            bars = sum(p.bars for p in parts) if parts else self.config.bars
-            
-            if bars <= 4:
-                sections = [("Dynamics", bars, [])]
-            elif bars <= 8:
-                sections = [("Hook", 4, []), ("Dynamics", bars - 4, [])]
-            elif bars <= 16:
-                sections = [("Hook", 4, []), ("Dynamics", bars - 8, []), ("Loop", 4, [])]
-            else:
-                sections = [("Dynamics", bars, [])]
+            # Part-aware section segmentation mapped to mixing roles
+            # First part → Hook (intro energy), last part → Loop (outro fade), middle → Dynamics
+            sections = []
+            for i, part in enumerate(parts):
+                if len(parts) == 1:
+                    role = "Dynamics"
+                elif i == 0:
+                    role = "Hook"
+                elif i == len(parts) - 1:
+                    role = "Loop"
+                else:
+                    role = "Dynamics"
+                sections.append((role, part.bars, []))
 
             desk = MixingDesk(niche_cfg={})
             result = desk.apply_mixing(result, sections, self.config.tempo)
 
-            # Apply loop end fade-out if we have a loop section
-            if any(s[0] == "Loop" for s in sections):
-                loop_start_beat = (bars - 4) * self.config.time_signature[0]
-                result = desk.apply_fade_loop_end(result, loop_start_beat, fade_beats=2.0)
+            # Apply fade-out on the last part
+            total_beats_all = sum(p.bars * p.time_signature[0] for p in parts)
+            last_part_beats = parts[-1].bars * parts[-1].time_signature[0]
+            fade_start = total_beats_all - min(4.0, last_part_beats * 0.25)
+            result = desk.apply_fade_loop_end(result, fade_start, fade_beats=min(2.0, last_part_beats * 0.15))
 
         # ---- Artistic Post-processing (Tension-based swell) ----
         # Apply this AFTER all verifiers so the swells are preserved
         apply_velocity_shaping(result, self.config.tracks, tension_curve)
+
+        # ---- Production Pipeline (humanization, sidechain, dynamics, polyphony, CC) ----
+        cc_events: dict[str, list[tuple[float, int, int]]] = {}
+        if self.config.use_mixing or self.config.use_mastering:
+            from melodica.composer.album_pipeline import (
+                _analyze_track, _apply_humanization, _sidechain_duck,
+                _polyphony_limit, _shape_dynamics, _generate_reverb_sends,
+                _generate_entry_fades, Mood, _MOOD_PROFILES,
+            )
+
+            total_dur = sum(p.bars * p.time_signature[0] for p in parts)
+            profiles = {}
+            for track_cfg in self.config.tracks:
+                if track_cfg.name in result and not track_cfg.name.startswith("_"):
+                    profiles[track_cfg.name] = _analyze_track(
+                        track_cfg.name, result[track_cfg.name], total_dur
+                    )
+
+            if profiles:
+                # Humanization: timing + velocity jitter for dense tracks
+                result = _apply_humanization(result, profiles)
+
+                # Sidechain ducking: bass/pad duck when percussion hits
+                result = _sidechain_duck(result, profiles)
+
+                # Mood-aware dynamics shaping
+                mood = Mood.CINEMATIC if self.config.style in ("cinematic", "epic") else Mood.CHAMBER
+                mood_profile = _MOOD_PROFILES[mood]
+                result = _shape_dynamics(result, mood_profile)
+
+                # Polyphony limiting: cap simultaneous voices at 16
+                result = _polyphony_limit(result, profiles, max_voices=16)
+
+                # CC11 expression ramps for late-entering instruments
+                entry_cc = _generate_entry_fades(result, profiles, total_dur)
+                cc_events.update(entry_cc)
+
+                # CC91 reverb sends (role-based)
+                reverb_cc = _generate_reverb_sends(result, profiles, mood_profile)
+                for tname, evts in reverb_cc.items():
+                    cc_events.setdefault(tname, []).extend(evts)
+
+        # CC11 ramps at part boundaries for muted/unmuted track transitions
+        if self.config.parts:
+            part_boundary_cc = self._generate_part_transition_cc(parts)
+            for tname, evts in part_boundary_cc.items():
+                cc_events.setdefault(tname, []).extend(evts)
+
+        if cc_events:
+            result["_cc_events"] = cc_events
 
         # ---- Mastering Desk (LUFS target, Multiband Comp, Imaging, Limiter) ----
         if self.config.use_mastering:
@@ -808,6 +865,11 @@ class IdeaTool:
             scale = part.scale
             part_beats = part.bars * part.time_signature[0]
 
+            # Per-part mute: skip rendering this track in this part entirely
+            if part.track_mute and cfg.name in part.track_mute:
+                offset_beats += part_beats
+                continue
+
             # Apply arrangement pattern per part
             pattern = ARRANGEMENT_PATTERNS.get(cfg.arrangement, ["A", "B", "A", "B"])
             part_notes: list[NoteInfo] = []
@@ -897,6 +959,29 @@ class IdeaTool:
                 # Need to map chords for this part only if variation needs it, but _apply_variation signature uses chords.
                 part_chords = [c for c in chords if c.start >= offset_beats and c.start < offset_beats + part_beats]
                 part_notes = self._apply_variation(var_name, part_notes, part_chords)
+
+            # Per-part density thinning: reduce notes in sparse sections
+            effective_density = cfg.density
+            if part.track_density and cfg.name in part.track_density:
+                effective_density = part.track_density[cfg.name]
+            if effective_density < cfg.density:
+                keep_prob = effective_density / cfg.density
+                rng = random.Random(hash(f"{cfg.name}:{part.name}:density") & 0xFFFFFFFF)
+                part_notes = [n for n in part_notes if rng.random() < keep_prob]
+
+            # Per-part velocity scaling: adjust dynamics per section
+            vel_scale = 1.0
+            if part.track_velocity_scale and cfg.name in part.track_velocity_scale:
+                vel_scale = part.track_velocity_scale[cfg.name]
+            if vel_scale != 1.0:
+                part_notes = [
+                    NoteInfo(
+                        pitch=n.pitch, start=n.start, duration=n.duration,
+                        velocity=max(1, min(127, int(n.velocity * vel_scale))),
+                        articulation=n.articulation, expression=dict(n.expression),
+                    )
+                    for n in part_notes
+                ]
 
             all_notes.extend(part_notes)
             offset_beats += part_beats
@@ -1099,6 +1184,53 @@ class IdeaTool:
         from melodica.factory import apply_variation
 
         return apply_variation(var_name, notes)
+
+    def _generate_part_transition_cc(
+        self,
+        parts: list[IdeaPart],
+    ) -> dict[str, list[tuple[float, int, int]]]:
+        """Generate CC11 expression ramps at part boundaries where tracks enter or exit."""
+        cc_events: dict[str, list[tuple[float, int, int]]] = {}
+        offset_beats = 0.0
+        fade_beats = 4.0
+
+        for part_idx, part in enumerate(parts):
+            part_beats = part.bars * part.time_signature[0]
+
+            for track_cfg in self.config.tracks:
+                tname = track_cfg.name
+
+                is_muted_here = part.track_mute is not None and tname in part.track_mute
+                was_muted = False
+                if part_idx > 0:
+                    prev_part = parts[part_idx - 1]
+                    was_muted = prev_part.track_mute is not None and tname in prev_part.track_mute
+
+                # Entry: was muted, now unmuted → CC11 fade in
+                if was_muted and not is_muted_here:
+                    events = []
+                    steps = max(4, int(fade_beats / 0.5))
+                    for i in range(steps + 1):
+                        t = offset_beats + (i / steps) * fade_beats
+                        val = int(20 + (80 * i / steps))
+                        events.append((round(t, 6), 11, val))
+                    events.append((round(offset_beats + fade_beats + 0.01, 6), 11, 100))
+                    cc_events.setdefault(tname, []).extend(events)
+
+                # Exit: was unmuted, now muted → CC11 fade out
+                elif not was_muted and is_muted_here:
+                    events = []
+                    steps = max(4, int(fade_beats / 0.5))
+                    for i in range(steps + 1):
+                        t = offset_beats + (i / steps) * fade_beats
+                        val = int(100 - (80 * i / steps))
+                        events.append((round(t, 6), 11, val))
+                    events.append((round(offset_beats + fade_beats + 0.01, 6), 11, 20))
+                    cc_events.setdefault(tname, []).extend(events)
+
+            offset_beats += part_beats
+
+        return cc_events
 
 
 # ---------------------------------------------------------------------------

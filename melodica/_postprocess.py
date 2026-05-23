@@ -101,7 +101,11 @@ def apply_velocity_shaping(
     tracks,
     tension_curve: TensionCurve,
 ) -> None:
-    """Scale all track velocities by tension level (0.6–1.0 factor)."""
+    """Scale all track velocities by tension level (0.4–1.0 factor).
+
+    Low tension (quiet sections) → velocity scaled down to 40%.
+    High tension (climaxes) → velocity at 100%.
+    """
     if not tension_curve:
         return
     for track_cfg in tracks:
@@ -110,8 +114,8 @@ def apply_velocity_shaping(
         shaped = []
         for n in result[track_cfg.name]:
             t_val = tension_curve.tension_at(n.start)  # 0.0–1.0
-            # Very narrow range: 0.9–1.0. Let mastering handle the loudness.
-            scale_factor = 0.9 + 0.1 * t_val  
+            # Full dynamic range: 0.4 (piano) to 1.0 (forte)
+            scale_factor = 0.4 + 0.6 * t_val
             shaped.append(
                 NoteInfo(
                     pitch=n.pitch,

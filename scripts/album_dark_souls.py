@@ -276,12 +276,16 @@ def main():
             # Filter out non-track keys
             tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
 
-            # Export with tempo automation!
+            # Extract CC automation events (expression, reverb, etc.)
+            cc_events = notes_dict.get("_cc_events", {})
+
+            # Export with tempo automation and CC events!
             export_multitrack_midi(
                 tracks_data,
                 str(album_dir / filename),
                 bpm=parts_config[0].tempo, # Base BPM
                 tempo_events=tempo_map,    # Dynamic BPM automation!
+                cc_events=cc_events,       # CC11 expression + CC91 reverb!
             )
             
             # Count notes
