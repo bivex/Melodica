@@ -982,10 +982,15 @@ class IdeaTool:
             bpb = part.time_signature[0]
             # Align sections to bar boundaries: distribute bars evenly across sections
             n_sections = len(pattern)
-            base_section_bars = max(1, part.bars // n_sections)
-            remainder_bars = part.bars - base_section_bars * n_sections
-            # Compute section bar counts: first sections get the extra remainder bars
-            section_bar_counts = [base_section_bars + (1 if i < remainder_bars else 0) for i in range(n_sections)]
+            if part.bars < n_sections:
+                # More sections than bars: merge — treat the whole part as one section
+                section_bar_counts = [part.bars]
+                pattern = [pattern[0]]
+                n_sections = 1
+            else:
+                base_section_bars = max(1, part.bars // n_sections)
+                remainder_bars = part.bars - base_section_bars * n_sections
+                section_bar_counts = [base_section_bars + (1 if i < remainder_bars else 0) for i in range(n_sections)]
             ctx = self._track_contexts.get(cfg.name, RenderContext())
 
             section_offset_beats = 0.0

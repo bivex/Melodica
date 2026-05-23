@@ -73,6 +73,7 @@ class BassGenerator(PhraseGenerator):
     note_movement: str = "alternating"
     transpose_octaves: int = 0
     rhythm: RhythmGenerator | None = None
+    beats_per_bar: float = 4.0
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
