@@ -8,6 +8,8 @@ scripts/piano_roll.py — Lightweight piano-roll visualizer for Melodica MIDI fi
 Usage:
     python3 scripts/piano_roll.py output/album_rave_metal/
     python3 scripts/piano_roll.py output/album_rave_metal/ --dark
+    python3 scripts/piano_roll.py output/album_rave_metal/ --format md
+    python3 scripts/piano_roll.py output/album_rave_metal/ --format png+md
     python3 scripts/piano_roll.py some_file.mid
 """
 
@@ -55,6 +57,190 @@ DARK_PALETTE = [
 ]
 
 
+NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def _pitch_name(p: int) -> str:
+    return f"{NOTE_NAMES[p % 12]}{p // 12 - 1}"
+
+
+def _fmt_dur(d: float) -> str:
+    if d < 0.01:
+        return "<0.01s"
+    if d < 1.0:
+        return f"{d:.2f}s"
+    return f"{d:.1f}s"
+
+
+def _ascii_roll(tracks: list[dict], width: int = 72, height: int = 16) -> str:
+    """Generate a compact ASCII piano roll representation."""
+    all_notes = [(n["start_s"], n["pitch"], n["end_s"], ti)
+                 for ti, t in enumerate(tracks) for n in t["notes"]]
+    if not all_notes:
+        return "  (no notes)"
+
+    t_min = min(n[0] for n in all_notes)
+    t_max = max(n[2] for n in all_notes)
+    p_min = min(n[1] for n in all_notes)
+    p_max = max(n[1] for n in all_notes)
+    t_range = max(t_max - t_min, 0.01)
+    p_range = max(p_max - p_min, 1)
+
+    symbols = ["█", "▓", "░", "▪", "●", "◆", "▲", "■", "◇", "△", "○", "□"]
+    grid = [[" " for _ in range(width)] for _ in range(height)]
+
+    for start, pitch, end, ti in all_notes:
+        col_s = int((start - t_min) / t_range * (width - 1))
+        col_e = int((end - t_min) / t_range * (width - 1))
+        row = height - 1 - int((pitch - p_min) / p_range * (height - 1))
+        row = max(0, min(height - 1, row))
+        for c in range(max(0, col_s), min(width, col_e + 1)):
+            grid[row][c] = symbols[ti % len(symbols)]
+
+    lines = []
+    for r in range(height):
+        pitch_at_row = p_max - int(r / (height - 1) * p_range) if height > 1 else p_min
+        label = _pitch_name(pitch_at_row) if r % 4 == 0 else "   "
+        lines.append(f"  {label} │{''.join(grid[r])}│")
+    lines.append(f"      └{'─' * width}┘")
+    lines.append(f"       {'0s':<{width // 2}}  {t_range:.1f}s")
+    return "\n".join(lines)
+
+
+def _detect_geometry(tracks: list[dict]) -> list[dict]:
+    """Classify each track's geometric pattern on the piano roll."""
+    results = []
+    for t in sorted(tracks, key=lambda x: x["index"]):
+        notes = t["notes"]
+        n = len(notes)
+        if n == 0:
+            continue
+
+        pitches = [nn["pitch"] for nn in notes]
+        durs = [nn["dur_s"] for nn in notes]
+        starts = [nn["start_s"] for nn in notes]
+        vel = [nn["velocity"] for nn in notes]
+
+        p_range = max(pitches) - min(pitches)
+        dur_range = max(durs) - min(durs)
+        avg_dur = sum(durs) / n
+        avg_vel = sum(vel) / n
+
+        # Pitch motion: how much pitch changes between consecutive notes
+        if n > 1:
+            deltas = [abs(pitches[i + 1] - pitches[i]) for i in range(n - 1)]
+            avg_delta = sum(deltas) / len(deltas)
+            direction_changes = sum(
+                1 for i in range(1, len(deltas))
+                if (pitches[i + 1] - pitches[i]) * (pitches[i] - pitches[i - 1]) < 0
+            )
+        else:
+            avg_delta = 0
+            direction_changes = 0
+
+        # Rhythm regularity
+        if n > 1:
+            gaps = [starts[i + 1] - starts[i] for i in range(n - 1)]
+            gap_std = (sum((g - sum(gaps) / len(gaps)) ** 2 for g in gaps) / len(gaps)) ** 0.5
+        else:
+            gaps = []
+            gap_std = 0
+
+        # Classify geometry
+        shape = "unknown"
+        if p_range <= 2 and avg_dur < 0.1 and n > 50:
+            shape = "horizontal stripe"
+        elif p_range <= 2 and avg_dur > 2.0:
+            shape = "sustained bar"
+        elif avg_delta > 5 and direction_changes > n * 0.3:
+            shape = "zigzag / wave"
+        elif avg_delta > 3 and direction_changes < n * 0.15:
+            shape = "diagonal sweep"
+        elif direction_changes > n * 0.2 and avg_delta > 2:
+            shape = "staircase"
+        elif p_range <= 8 and gap_std < 0.05 and n > 20:
+            shape = "regular grid"
+        elif p_range >= 20 and avg_dur > 1.5:
+            shape = "wall of sound"
+        elif p_range <= 4 and avg_dur < 0.5:
+            shape = "rhythmic dots"
+        elif p_range <= 12 and avg_dur < 0.2:
+            shape = "scatter"
+        elif avg_dur > 1.0:
+            shape = "block chords"
+        else:
+            shape = "mixed pattern"
+
+        results.append({
+            "name": t["name"],
+            "notes": n,
+            "pitch_lo": min(pitches),
+            "pitch_hi": max(pitches),
+            "pitch_range": p_range,
+            "dur_min": min(durs),
+            "dur_max": max(durs),
+            "dur_avg": avg_dur,
+            "vel_min": min(vel),
+            "vel_max": max(vel),
+            "vel_avg": avg_vel,
+            "shape": shape,
+            "density": n / max(starts[-1] - starts[0], 0.01) if n > 1 else 0,
+        })
+    return results
+
+
+def generate_markdown(album_data: list[dict], output_path: str, dark: bool = False):
+    """Generate a markdown report for all processed MIDI files."""
+    lines = []
+    lines.append("# Piano Roll Analysis\n")
+    lines.append(f"Theme: {'dark' if dark else 'light'} | "
+                 f"Files: {len(album_data)}\n")
+
+    for entry in album_data:
+        title = entry["title"]
+        tracks = entry["tracks"]
+        geo = _detect_geometry(tracks)
+        total_notes = sum(g["notes"] for g in geo)
+        all_starts = [n["start_s"] for t in tracks for n in t["notes"]]
+        all_ends = [n["end_s"] for t in tracks for n in t["notes"]]
+        duration = max(all_ends) - min(all_starts) if all_ends else 0
+        bpm = tracks[0].get("bpm", 120) if tracks else 0
+
+        lines.append(f"## {title}\n")
+        lines.append(f"**{total_notes} notes** | **{bpm:.0f} BPM** | "
+                     f"**{duration:.1f}s** | **{len(tracks)} tracks**\n")
+
+        # ASCII piano roll
+        lines.append("### Overview\n")
+        lines.append("```")
+        lines.append(_ascii_roll(tracks))
+        lines.append("```\n")
+
+        # Track details table
+        lines.append("### Tracks\n")
+        lines.append("| Track | Shape | Notes | Pitch | Duration | Vel | Density |")
+        lines.append("|-------|-------|------:|-------|----------|-----|--------:|")
+        for g in geo:
+            pitch_str = f"{_pitch_name(g['pitch_lo'])}–{_pitch_name(g['pitch_hi'])} ({g['pitch_range']})"
+            dur_str = f"{_fmt_dur(g['dur_min'])}–{_fmt_dur(g['dur_max'])} (avg {_fmt_dur(g['dur_avg'])})"
+            vel_str = f"{g['vel_min']}–{g['vel_max']} ({g['vel_avg']:.0f})"
+            lines.append(f"| {g['name']} | {g['shape']} | {g['notes']} "
+                         f"| {pitch_str} | {dur_str} | {vel_str} "
+                         f"| {g['density']:.1f} n/s |")
+        lines.append("")
+
+        # PNG reference
+        png_name = entry.get("png_name", "")
+        if png_name:
+            lines.append(f"![{title}]({png_name})\n")
+
+        lines.append("---\n")
+
+    text = "\n".join(lines)
+    Path(output_path).write_text(text, encoding="utf-8")
+    print(f"  Saved: {output_path}")
+
+
 def parse_midi(path: str) -> list[dict]:
     """Parse MIDI file into list of track dicts with notes."""
     mid = MidiFile(path)
@@ -82,17 +268,14 @@ def parse_midi(path: str) -> list[dict]:
                     })
 
         if notes:
-            tempo_msgs = [m for m in track if m.type == "set_tempo"]
-            tempo = tempo_msgs[0].tempo if tempo_msgs else 500000
-            bpm = 60_000_000 / tempo if tempo else 120
             tracks.append({
                 "name": track.name or f"Track {i}",
                 "notes": notes,
                 "index": i,
-                "bpm": bpm,
+                "bpm": 0,
             })
 
-    # Convert ticks to seconds using first track's tempo
+    # Find global tempo from any track (conductor track usually has it)
     if tracks:
         tempo = 500000
         for track in mid.tracks:
@@ -103,9 +286,11 @@ def parse_midi(path: str) -> list[dict]:
             if tempo != 500000:
                 break
 
-        sec_per_tick = (tempo / 1_000_000) / ticks_per_beat / ticks_per_beat
-        # mido uses absolute ticks — convert via cumsum
+        bpm = 60_000_000 / tempo if tempo else 120
+        sec_per_tick = (tempo / 1_000_000) / ticks_per_beat
+
         for t in tracks:
+            t["bpm"] = bpm
             for n in t["notes"]:
                 n["start_s"] = n["start"] * sec_per_tick
                 n["end_s"] = n["end"] * sec_per_tick
@@ -221,6 +406,9 @@ def main():
     parser.add_argument("input", help="MIDI file or directory of MIDI files")
     parser.add_argument("--dark", action="store_true", help="Dark theme")
     parser.add_argument("--output", "-o", help="Output directory (default: same as input)")
+    parser.add_argument("--format", "-f", default="png",
+                        choices=["png", "md", "png+md"],
+                        help="Output format: png, md, or png+md (default: png)")
     args = parser.parse_args()
 
     src = Path(args.input)
@@ -239,16 +427,34 @@ def main():
     out_dir = Path(args.output) if args.output else (src.parent if src.is_file() else src)
     out_dir.mkdir(exist_ok=True, parents=True)
 
+    do_png = args.format in ("png", "png+md")
+    do_md = args.format in ("md", "png+md")
     theme = "dark" if args.dark else "light"
-    print(f"Piano Roll Visualizer ({theme} theme)")
+    fmt_label = args.format.upper()
+
+    print(f"Piano Roll Visualizer ({theme}, {fmt_label})")
     print(f"  Processing {len(midis)} file(s)...\n")
 
+    album_data = []
     for midi_path in midis:
         print(f"  {midi_path.name}")
         tracks, tpq = parse_midi(str(midi_path))
-        out_name = midi_path.stem + "_pianoroll.png"
-        out_path = out_dir / out_name
-        plot_piano_roll(tracks, str(out_path), midi_path.stem.replace("_", " "), dark=args.dark)
+        title = midi_path.stem.replace("_", " ")
+        png_name = ""
+
+        if do_png:
+            png_name = midi_path.stem + "_pianoroll.png"
+            plot_piano_roll(tracks, str(out_dir / png_name), title, dark=args.dark)
+
+        album_data.append({
+            "title": title,
+            "tracks": tracks,
+            "png_name": png_name,
+        })
+
+    if do_md:
+        md_name = (src.stem if src.is_dir() else src.stem) + "_pianoroll.md"
+        generate_markdown(album_data, str(out_dir / md_name), dark=args.dark)
 
     print(f"\n  Done. Output: {out_dir.resolve()}")
 
