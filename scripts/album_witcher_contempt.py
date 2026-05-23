@@ -119,40 +119,49 @@ def generate_witcher_album():
             generator=ContrabassGenerator(), 
             instrument="contrabass", 
             arrangement="AABB",
-            density=0.9 if cfg['style_hint'] == "imperial_industrial" else 0.7, 
-            octave_shift=-1 if cfg['style_hint'] != "imperial_industrial" else -2
+            density=0.8 if cfg['style_hint'] == "imperial_industrial" else 0.6, 
+            octave_shift=-2 if cfg['style_hint'] == "imperial_industrial" else -1
         ))
         
         # 2. Percussion
         if cfg['style_hint'] == "witcher_combat":
-            track_list.append(TrackConfig(name="Taiko Drums", generator=TimpaniGenerator(), instrument="taiko", arrangement="ABAB", density=1.0))
+            track_list.append(TrackConfig(name="Taiko Drums", generator=TimpaniGenerator(), instrument="taiko", arrangement="ABAB", density=0.8))
         else:
-            track_list.append(TrackConfig(name="Orchestral Perc", generator=TimpaniGenerator(), instrument="timpani", arrangement="ABAB", density=0.6))
+            track_list.append(TrackConfig(name="Orchestral Perc", generator=TimpaniGenerator(), instrument="timpani", arrangement="ABAB", density=0.5))
         
         if cfg['style_hint'] in ["frantic_strings", "witcher_combat"]:
-            track_list.append(TrackConfig(name="Military Snare", generator=SnareDrumGenerator(pattern_type="march"), instrument="drums", arrangement="AABB", density=0.8))
+            # Reduced density to fix register masking and blur
+            track_list.append(TrackConfig(name="Military Snare", generator=SnareDrumGenerator(pattern_type="march"), instrument="drums", arrangement="AABB", density=0.5))
 
         # 3. Melodic layers
         if cfg['style_hint'] == "lyrical_tragedy":
-            track_list.append(TrackConfig(name="Solo Cello", generator=CelloGenerator(), instrument="cello", arrangement="ABCD", density=0.6, mpe=True))
+            track_list.append(TrackConfig(
+                name="Solo Cello", 
+                generator=CelloGenerator(), 
+                instrument="cello", 
+                arrangement="ABCD",
+                density=0.5, 
+                mpe=True
+            ))
         
         if cfg['style_hint'] == "frantic_strings":
-            track_list.append(TrackConfig(name="Fast Violins", generator=ViolinGenerator(), instrument="violin", arrangement="AABC", density=0.9))
+            track_list.append(TrackConfig(name="Fast Violins", generator=ViolinGenerator(), instrument="violin", arrangement="AABC", density=0.8))
         else:
-            track_list.append(TrackConfig(name="Violins Ensemble", generator=ViolinGenerator(), instrument="violin", arrangement="AABC", density=0.7))
+            track_list.append(TrackConfig(name="Violins Ensemble", generator=ViolinGenerator(), instrument="violin", arrangement="AABC", density=0.6))
 
         # 4. Brass & Choir
         if cfg['style_hint'] == "imperial_industrial":
-            track_list.append(TrackConfig(name="Cimbasso Heavy", generator=BrassSectionGenerator(), instrument="tuba", arrangement="AABB", density=0.8, octave_shift=-1))
-            track_list.append(TrackConfig(name="Imperial Trombones", generator=TromboneGenerator(), instrument="trombone", arrangement="AABB", density=0.7))
+            # Reduced density to fix rhythmic blur in low brass
+            track_list.append(TrackConfig(name="Cimbasso Heavy", generator=BrassSectionGenerator(), instrument="tuba", arrangement="AABB", density=0.5, octave_shift=-1))
+            track_list.append(TrackConfig(name="Imperial Trombones", generator=TromboneGenerator(), instrument="trombone", arrangement="AABB", density=0.6))
         elif cfg['style_hint'] == "epic_requiem":
-            track_list.append(TrackConfig(name="Brass Majesty", generator=BrassSectionGenerator(), instrument="brass", arrangement="AABC", density=0.8))
-            track_list.append(TrackConfig(name="Cathedral Organ", generator=PianoCompGenerator(), instrument="organ", arrangement="AAAA", density=0.6))
+            track_list.append(TrackConfig(name="Brass Majesty", generator=BrassSectionGenerator(), instrument="brass", arrangement="AABC", density=0.7))
+            track_list.append(TrackConfig(name="Cathedral Organ", generator=PianoCompGenerator(), instrument="organ", arrangement="AAAA", density=0.5))
         else:
-            track_list.append(TrackConfig(name="French Horns", generator=FrenchHornGenerator(), instrument="french_horn", arrangement="AABC", density=0.5))
+            track_list.append(TrackConfig(name="French Horns", generator=FrenchHornGenerator(), instrument="french_horn", arrangement="AABC", density=0.4))
 
         if cfg['style_hint'] in ["magic_chaos", "epic_requiem"]:
-            track_list.append(TrackConfig(name="Prophecy Choir", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=0.8, mpe=True))
+            track_list.append(TrackConfig(name="Prophecy Choir", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=0.6, mpe=True))
 
         # 5. Specialized (Vocals, Industrial)
         if cfg['style_hint'] in ["lyrical_tragedy", "madness_folk"]:
@@ -160,20 +169,24 @@ def generate_witcher_album():
                 name="Vocal Lead", 
                 generator=MelodyGenerator(
                     phrase_length=8.0,
-                    phrase_rest_probability=0.4 if cfg['style_hint'] == "madness_folk" else 0.2,
-                    ornament_probability=0.5 if cfg['style_hint'] == "madness_folk" else 0.2
+                    phrase_rest_probability=0.5,
+                    ornament_probability=0.4,
+                    # Capping range to fix Brightness Overload (C3-C5 range roughly)
+                    note_range_low=55,
+                    note_range_high=82 
                 ), 
                 instrument="voice", 
                 arrangement="ABCD",
-                density=0.4, 
+                density=0.35, 
                 mpe=True
             ))
 
         if cfg['style_hint'] == "imperial_industrial":
-            track_list.append(TrackConfig(name="War Drones", generator=DroneGenerator(), instrument="synth_pad", arrangement="AAAA", density=1.0, octave_shift=-2))
+            # Lower density for drones to prevent frequency masking
+            track_list.append(TrackConfig(name="War Drones", generator=DroneGenerator(), instrument="synth_pad", arrangement="AAAA", density=0.7, octave_shift=-2))
         elif cfg['style_hint'] == "magic_chaos":
-            track_list.append(TrackConfig(name="Dissonant Magic", generator=DroneGenerator(), instrument="synth_fx", arrangement="ABCD", density=0.8))
-            track_list.append(TrackConfig(name="Magic Impacts", generator=FXImpactGenerator(), instrument="percussion", arrangement="ABCD", density=0.6))
+            track_list.append(TrackConfig(name="Dissonant Magic", generator=DroneGenerator(), instrument="synth_fx", arrangement="ABCD", density=0.6))
+            track_list.append(TrackConfig(name="Magic Impacts", generator=FXImpactGenerator(), instrument="percussion", arrangement="ABCD", density=0.5))
 
         tool_config = IdeaToolConfig(
             style="cinematic_hybrid",
