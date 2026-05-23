@@ -52,7 +52,8 @@ def generate_witcher_album():
             "scale": Scale(root=2, mode=Mode.DORIAN),
             "bars": 64,
             "description": "Fast, anxious path of the royal messenger. High-tension violins.",
-            "style_hint": "frantic_strings"
+            "style_hint": "frantic_strings",
+            "progression_type": "coupled_hmm"
         },
         {
             "name": "02_Cintras_Legacy",
@@ -60,7 +61,8 @@ def generate_witcher_album():
             "scale": Scale(root=2, mode=Mode.AEOLIAN),
             "bars": 48,
             "description": "Tragic theme for Ciri. Solo cello and breathy vocal.",
-            "style_hint": "lyrical_tragedy"
+            "style_hint": "lyrical_tragedy",
+            "progression_type": "coupled_hmm"
         },
         {
             "name": "03_The_Black_Wings",
@@ -68,7 +70,8 @@ def generate_witcher_album():
             "scale": Scale(root=2, mode=Mode.PHRYGIAN),
             "bars": 56,
             "description": "Nilfgaardian theme. Heavy brass and industrial drones.",
-            "style_hint": "imperial_industrial"
+            "style_hint": "imperial_industrial",
+            "progression_type": "coupled_hmm"
         },
         {
             "name": "04_Thanedd_The_Coup",
@@ -76,7 +79,8 @@ def generate_witcher_album():
             "scale": Scale(root=7, mode=Mode.LOCRIAN),
             "bars": 80,
             "description": "Magic betrayal. Dissonance, choir, and sharp hits.",
-            "style_hint": "magic_chaos"
+            "style_hint": "magic_chaos",
+            "progression_type": "coupled_hmm"
         },
         {
             "name": "05_The_White_Wolf",
@@ -84,7 +88,8 @@ def generate_witcher_album():
             "scale": Scale(root=2, mode=Mode.HARMONIC_MINOR),
             "bars": 72,
             "description": "Geralt's battle theme. Aggressive staccato and taiko.",
-            "style_hint": "witcher_combat"
+            "style_hint": "witcher_combat",
+            "progression_type": "coupled_hmm"
         },
         {
             "name": "06_Falkas_Fire",
@@ -92,7 +97,8 @@ def generate_witcher_album():
             "scale": Scale(root=4, mode=Mode.HUNGARIAN_MINOR),
             "bars": 48,
             "description": "Madness theme. Trembling vocal and dark pads.",
-            "style_hint": "madness_folk"
+            "style_hint": "madness_folk",
+            "progression_type": "coupled_hmm"
         },
         {
             "name": "07_The_Hour_of_Contempt",
@@ -100,7 +106,8 @@ def generate_witcher_album():
             "scale": Scale(root=2, mode=Mode.PHRYGIAN),
             "bars": 64,
             "description": "Final requiem. Full orchestra, organ, and fading drone.",
-            "style_hint": "epic_requiem"
+            "style_hint": "epic_requiem",
+            "progression_type": "coupled_hmm"
         }
     ]
 
@@ -108,7 +115,13 @@ def generate_witcher_album():
         print(f"\n--- {cfg['name']} ---")
         print(f"  {cfg['description']}")
         
-        parts = [IdeaPart(name=cfg['name'], bars=cfg['bars'], scale=cfg['scale'], tempo=cfg['tempo'])]
+        parts = [IdeaPart(
+            name=cfg['name'], 
+            bars=cfg['bars'], 
+            scale=cfg['scale'], 
+            tempo=cfg['tempo'],
+            progression_type=cfg.get('progression_type', 'hmm3')
+        )]
         
         # Dynamic track selection based on track intent
         track_list = []

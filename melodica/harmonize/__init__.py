@@ -29,6 +29,7 @@ from melodica.harmonize.advanced import (
     ChromaticMediantHarmonizer,
     ModalInterchangeHarmonizer,
 )
+from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
 
 __all__ = [
     "FunctionalHarmonizer",
@@ -36,6 +37,7 @@ __all__ = [
     "HMMHarmonizer",
     "HMM2Harmonizer",
     "HMM3Harmonizer",
+    "CoupledHMMHarmonizer",
     "GraphSearchHarmonizer",
     "GeneticHarmonizer",
     "ChromaticMediantHarmonizer",

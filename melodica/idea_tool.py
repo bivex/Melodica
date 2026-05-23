@@ -750,6 +750,15 @@ class IdeaTool:
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
                 part_chords = harmonizer.harmonize(contour, scale, part_beats)
 
+            # Coupled HMM (Tymoczko/Newman First Principles)
+            elif part.progression_type == "coupled_hmm":
+                from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
+                harmonizer = CoupledHMMHarmonizer(
+                    chord_change=self.config.hmm3_chord_change,
+                )
+                contour = self._build_melody_contour(scale, bars, beats_per_bar)
+                part_chords = harmonizer.harmonize(contour, scale, part_beats)
+
             # Rules-based harmonizer
             elif part.progression_type == "rules":
                 harmonizer = RuleBasedHarmonizer(
