@@ -26,7 +26,7 @@ from melodica.harmonize._hmm_helpers import (
     _CADENCE_BONUSES, _FUNCTION_MAP, _FUNCTION_RULES_HMM2, _EXTENSIONS,
     _get_cadence_bonus, MODAL_GRAVITY, STYLE_MATRICES,
 )
-from melodica.types import ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
+from melodica.types import BarGrid, ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
 
 class SecondaryDominantDegree(int):
     """A custom int subclass that evaluates to 0 but carries target_degree metadata."""
@@ -71,6 +71,7 @@ class HMMHarmonizer:
     transition_weight: float = 0.3
     allow_extensions: bool = False
     chord_change: str = "bars"
+    bar_grid: BarGrid | None = None
 
     def harmonize(
         self,
@@ -244,11 +245,12 @@ class HMMHarmonizer:
         return observations
 
     def _get_change_points(self, duration: float) -> list[float]:
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
         points = []
         step = (
-            4.0
+            bpb
             if self.chord_change == "bars"
-            else 2.0
+            else bpb / 2.0
             if self.chord_change == "strong_beats"
             else 1.0
         )
@@ -281,6 +283,7 @@ class HMM2Harmonizer:
     repetition_penalty: float = 0.10
     phrase_length: int = 4
     chord_change: str = "bars"
+    bar_grid: BarGrid | None = None
 
     def harmonize(
         self,
@@ -299,7 +302,8 @@ class HMM2Harmonizer:
         if T == 0:
             return []
 
-        bars_per_change = 4.0 / (4.0 if self.chord_change == "bars" else 2.0)
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
+        bars_per_change = bpb / (bpb if self.chord_change == "bars" else bpb / 2.0)
 
         # Transition matrix
         trans = self._build_transition_matrix(n, scale)
@@ -381,7 +385,8 @@ class HMM2Harmonizer:
 
         # Phrase-end cadence bonus
         beat_pos = change_points[t] if t < len(change_points) else 0
-        bar_pos = beat_pos / 4.0
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
+        bar_pos = beat_pos / bpb
         is_phrase_end = bar_pos > 0 and bar_pos % self.phrase_length == 0
         if is_phrase_end and state == 0:  # end on tonic
             cadence_bonus += 0.3 * self.cadence_weight
@@ -442,10 +447,11 @@ class HMM2Harmonizer:
         return obs
 
     def _get_change_points(self, duration):
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
         step = (
-            4.0
+            bpb
             if self.chord_change == "bars"
-            else 2.0
+            else bpb / 2.0
             if self.chord_change == "strong_beats"
             else 1.0
         )
@@ -485,6 +491,7 @@ class HMM3Harmonizer:
     allow_chromatic_mediants: bool = True
     phrase_length: int = 4
     chord_change: str = "bars"
+    bar_grid: BarGrid | None = None
 
     def harmonize(
         self,
@@ -713,7 +720,8 @@ class HMM3Harmonizer:
             pair = (prev_deg - 1 if prev_deg > 0 else -1, degree - 1 if degree > 0 else -1)
             cadence = _get_cadence_bonus(pair[0], pair[1], scale) * self.cadence_weight
         beat_pos = change_points[t] if t < len(change_points) else 0
-        is_phrase_end = beat_pos > 0 and (beat_pos / 4.0) % self.phrase_length == 0
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
+        is_phrase_end = beat_pos > 0 and (beat_pos / bpb) % self.phrase_length == 0
         if is_phrase_end and degree == 1:
             cadence += 0.3 * self.cadence_weight
 
@@ -749,7 +757,8 @@ class HMM3Harmonizer:
     def _beat_strength(self, t, change_points, melody):
         """Rhythm-aware: strong beats get higher melody weight."""
         beat_pos = change_points[t] if t < len(change_points) else 0
-        beat_in_bar = beat_pos % 4.0
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
+        beat_in_bar = beat_pos % bpb
         if beat_in_bar < 0.1:
             return 1.3  # beat 1 = strongest
         elif abs(beat_in_bar - 2.0) < 0.1:
@@ -766,10 +775,11 @@ class HMM3Harmonizer:
         return obs
 
     def _get_change_points(self, duration):
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
         step = (
-            4.0
+            bpb
             if self.chord_change == "bars"
-            else 2.0
+            else bpb / 2.0
             if self.chord_change == "strong_beats"
             else 1.0
         )
@@ -799,6 +809,7 @@ class HMM4Harmonizer:
     allow_secondary_dom: bool = True
     allow_borrowed: bool = True
     chord_change: str = "bars"
+    bar_grid: BarGrid | None = None
 
     def harmonize(self, melody: list[NoteInfo], scale: Scale, duration: float) -> list[ChordLabel]:
         if not melody: return []
@@ -890,7 +901,8 @@ class HMM4Harmonizer:
         fit = (match_count / len(window_obs)) * self.melody_weight
         
         # Beat 1 bonus
-        if (pts[t] % 4.0) < 0.1: fit *= 1.3
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
+        if (pts[t] % bpb) < 0.1: fit *= 1.3
         return fit
 
     def _score_transition_1st(self, p, c, catalog, style_mat, scale):
@@ -954,4 +966,4 @@ class HMM4Harmonizer:
         return HMM3Harmonizer()._extract_observations(melody, change_points)
 
     def _get_change_points(self, duration):
-        return HMM3Harmonizer(chord_change=self.chord_change)._get_change_points(duration)
+        return HMM3Harmonizer(chord_change=self.chord_change, bar_grid=self.bar_grid)._get_change_points(duration)

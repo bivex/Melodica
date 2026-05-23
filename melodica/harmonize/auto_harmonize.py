@@ -24,7 +24,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 
-from melodica.types import ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
+from melodica.types import BarGrid, ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
 
 # ---------------------------------------------------------------------------
 # Roman numeral → chord quality mapping (major key)
@@ -136,6 +136,7 @@ class FunctionalHarmonizer:
     start_with: str = "any"
     end_with: str = "I"
     is_minor_key: bool = False
+    bar_grid: BarGrid | None = None
 
     def harmonize(
         self,
@@ -227,18 +228,19 @@ class FunctionalHarmonizer:
 
     def _get_change_points(self, duration: float) -> list[float]:
         """Generate chord change points based on chord_change setting."""
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
         points = []
         if self.chord_change == "bars":
             t = 0.0
             while t < duration:
                 points.append(t)
-                t += 4.0
+                t += bpb
         elif self.chord_change == "strong_beats":
             t = 0.0
             while t < duration:
                 points.append(t)
-                points.append(t + 2.0)
-                t += 4.0
+                points.append(t + bpb / 2.0)
+                t += bpb
         elif self.chord_change == "beats":
             t = 0.0
             while t < duration:
@@ -287,6 +289,7 @@ class RuleBasedHarmonizer:
     end_with: str = "I"
     is_minor_key: bool = False
     harmonic_risk: float | None = None
+    bar_grid: BarGrid | None = None
 
     # Transition weights: degree -> {next_degree: weight}
     transitions: dict[int, dict[int, float]] = field(
@@ -410,18 +413,19 @@ class RuleBasedHarmonizer:
             return random.choice(list(compatible))
 
     def _get_change_points(self, duration: float) -> list[float]:
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
         points = []
         if self.chord_change == "bars":
             t = 0.0
             while t < duration:
                 points.append(t)
-                t += 4.0
+                t += bpb
         elif self.chord_change == "strong_beats":
             t = 0.0
             while t < duration:
                 points.append(t)
-                points.append(t + 2.0)
-                t += 4.0
+                points.append(t + bpb / 2.0)
+                t += bpb
         elif self.chord_change == "beats":
             t = 0.0
             while t < duration:

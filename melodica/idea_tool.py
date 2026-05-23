@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from melodica.types import (
+    BarGrid,
     ChordLabel,
     NoteInfo,
     Scale,
@@ -77,42 +78,84 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _GM_PROGRAMS: dict[str, int] = {
     "piano": 0,
+    "bright_piano": 1,
     "electric_piano": 4,
     "harpsichord": 6,
+    "celesta": 8,
+    "glockenspiel": 9,
+    "music_box": 10,
     "vibraphone": 11,
     "marimba": 12,
+    "xylophone": 13,
+    "tubular_bells": 14,
     "organ": 19,
     "accordion": 21,
+    "harmonica": 22,
     "nylon_guitar": 24,
     "guitar": 25,
+    "steel_guitar": 25,
+    "jazz_guitar": 26,
     "electric_guitar": 27,
     "muted_guitar": 28,
+    "overdrive_guitar": 29,
+    "distortion_guitar": 30,
     "acoustic_bass": 32,
     "bass": 33,
     "electric_bass": 34,
+    "fretless_bass": 35,
+    "slap_bass": 36,
+    "synth_bass": 38,
     "violin": 40,
     "viola": 41,
     "cello": 42,
     "contrabass": 43,
-    "strings": 48,
+    "tremolo_strings": 44,
     "pizzicato": 45,
     "harp": 46,
+    "timpani": 47,
+    "strings": 48,
     "choir": 52,
+    "voice": 54,
+    "synth_voice": 54,
+    "orchestra_hit": 55,
     "trumpet": 56,
     "trombone": 57,
     "tuba": 58,
+    "french_horn": 60,
     "brass": 61,
-    "sax": 66,
+    "synth_brass": 62,
+    "soprano_sax": 64,
+    "alto_sax": 65,
+    "tenor_sax": 66,
+    "baritone_sax": 67,
     "oboe": 68,
+    "english_horn": 69,
     "bassoon": 70,
     "clarinet": 71,
+    "piccolo": 72,
     "flute": 73,
-    "pad": 89,
+    "recorder": 74,
+    "pan_flute": 75,
+    "shakuhachi": 77,
+    "whistle": 78,
+    "ocarina": 79,
     "synth_lead": 80,
-    "synth_bass": 38,
-    "drums": 0,  # channel 9 (0-indexed) is percussion
+    "pad": 89,
+    "dark_pad": 88,
+    "synth_fx": 102,
+    "sitar": 104,
+    "banjo": 105,
+    "shamisen": 106,
+    "koto": 107,
+    "kalimba": 108,
+    "bagpipe": 109,
+    "fiddle": 110,
+    "shanai": 111,
+    "tinkle_bell": 112,
+    "steel_drums": 114,
+    "taiko": 116,
+    "drums": 0,  # channel 9 is percussion
     "percussion": 0,
-    "timpani": 47,
 }
 
 
@@ -372,7 +415,8 @@ class IdeaTool:
         if self.config.workflow == "harmonize_melody":
             # Caller supplied a melody; harmonize it, then render other tracks
             seed = self.config.seed_melody or []
-            harmonizer = HMM3Harmonizer()
+            bar_grid = BarGrid(numerator=self.config.time_signature[0], denominator=self.config.time_signature[1])
+            harmonizer = HMM3Harmonizer(bar_grid=bar_grid)
             chords = (
                 harmonizer.harmonize(seed, self.config.scale, total_beats)
                 if seed
@@ -455,7 +499,8 @@ class IdeaTool:
                 all_melody_notes.extend(mel_notes)
 
             # Step 2: harmonize the combined melody output
-            harmonizer = HMM3Harmonizer()
+            bar_grid = BarGrid(numerator=self.config.time_signature[0], denominator=self.config.time_signature[1])
+            harmonizer = HMM3Harmonizer(bar_grid=bar_grid)
             chords = harmonizer.harmonize(
                 sorted(all_melody_notes, key=lambda n: n.start),
                 self.config.scale,
@@ -738,6 +783,7 @@ class IdeaTool:
             bars = part.bars
             part_beats = bars * beats_per_bar
             style_profile = get_style(part.style)
+            bar_grid = BarGrid(numerator=part.time_signature[0], denominator=part.time_signature[1])
 
             # HMM3 harmonizer — beam-search over diatonic + secondary dominants
             if part.progression_type == "hmm3":
@@ -746,6 +792,7 @@ class IdeaTool:
                     chord_change=self.config.hmm3_chord_change,
                     allow_extensions=self.config.hmm3_allow_extensions,
                     allow_secondary_dom=self.config.hmm3_allow_secondary_dom,
+                    bar_grid=bar_grid,
                 )
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
                 part_chords = harmonizer.harmonize(contour, scale, part_beats)
@@ -755,6 +802,7 @@ class IdeaTool:
                 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
                 harmonizer = CoupledHMMHarmonizer(
                     chord_change=self.config.hmm3_chord_change,
+                    bar_grid=bar_grid,
                 )
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
                 part_chords = harmonizer.harmonize(contour, scale, part_beats)
@@ -765,6 +813,7 @@ class IdeaTool:
                     start_with="I",
                     end_with="I",
                     harmonic_risk=self.config.harmonic_risk,
+                    bar_grid=bar_grid,
                 )
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
                 part_chords = harmonizer.harmonize(contour, scale, part_beats)
@@ -930,12 +979,19 @@ class IdeaTool:
             # Apply arrangement pattern per part
             pattern = ARRANGEMENT_PATTERNS.get(cfg.arrangement, ["A", "B", "A", "B"])
             part_notes: list[NoteInfo] = []
-            section_length = part_beats / len(pattern)
+            bpb = part.time_signature[0]
+            # Align sections to bar boundaries: distribute bars evenly across sections
+            n_sections = len(pattern)
+            base_section_bars = max(1, part.bars // n_sections)
+            remainder_bars = part.bars - base_section_bars * n_sections
+            # Compute section bar counts: first sections get the extra remainder bars
+            section_bar_counts = [base_section_bars + (1 if i < remainder_bars else 0) for i in range(n_sections)]
             ctx = self._track_contexts.get(cfg.name, RenderContext())
 
-            n_sections = len(pattern)
+            section_offset_beats = 0.0
             for i, section in enumerate(pattern):
-                section_start = offset_beats + i * section_length
+                section_length = section_bar_counts[i] * bpb
+                section_start = offset_beats + section_offset_beats
                 phrase_pos = i / max(1, n_sections - 1) if n_sections > 1 else 0.0
 
                 # Rebuild context preserving continuity but updating phrase_position
@@ -1007,6 +1063,8 @@ class IdeaTool:
                         last_velocity=part_notes[-1].velocity,
                         last_chord=section_chords[-1] if section_chords else None,
                     )
+
+                section_offset_beats += section_length
 
             # Persist context for next generate() call
             self._track_contexts[cfg.name] = ctx

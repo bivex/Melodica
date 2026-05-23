@@ -71,6 +71,7 @@ class BassRhythmGenerator:
     """
 
     pattern_name: str = "syncopated"
+    beats_per_bar: float = 4.0
 
     def generate(self, duration_beats: float) -> list[RhythmEvent]:
         pattern = BASS_PATTERNS.get(self.pattern_name, BASS_PATTERNS["straight"])
@@ -88,5 +89,5 @@ class BassRhythmGenerator:
                             velocity_factor=vel,
                         )
                     )
-            t += 4.0
+            t += self.beats_per_bar
         return events

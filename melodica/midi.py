@@ -38,41 +38,86 @@ from melodica.types import ChordLabel, Note, NoteInfo, Track, Scale, MusicTimeli
 # GM Instrument Map — track name → GM program number (0-127)
 # ---------------------------------------------------------------------------
 GM_INSTRUMENTS: dict[str, int] = {
-    # Melody / Lead
-    "melody": 49,  # String Ensemble 1
-    "melody2": 51,  # Synth Strings 1
-    "counter": 52,  # Synth Strings 2
-    "lead": 80,  # Lead Square
-    # Bass
-    "bass": 33,  # Electric Bass (finger)
-    "walking_bass": 32,  # Acoustic Bass
-    "dark_bass": 38,  # Synth Bass 1
-    # Chords / Pads
-    "chords": 49,  # String Ensemble 1
-    "dark_pad": 88,  # New Age Pad
-    "ambient": 89,  # Warm Pad
-    "pad": 89,  # Warm Pad
-    "supersaw_pad": 81,  # Sawtooth Lead
-    # Arpeggio
-    "arp": 46,  # Harp
-    "harp_gliss": 46,  # Harp
-    # Percussion
-    "percussion": 0,  # Channel 10 for drums
-    # Other
-    "ostinato": 45,  # Pizzicato Strings
-    "dyads": 46,  # Harp
-    "riff": 30,  # Overdriven Guitar
-    "fingerpicking": 25,  # Nylon Guitar
-    "piano_sweep": 0,  # Acoustic Grand Piano
-    "call_response": 49,  # String Ensemble 1
-    "groove": 45,  # Pizzicato Strings
-    "swing": 45,  # Pizzicato Strings
-    "choir": 52,  # Synth Choir
-    "tremolo": 44,  # Tremolo Strings
-    "staccato": 45,  # Pizzicato Strings
-    "canon": 49,  # String Ensemble 1
-    "strum": 25,  # Nylon Guitar
-    "neural_melody": 54,  # Synth Voice
+    # Standard
+    "piano": 0,
+    "bright_piano": 1,
+    "electric_piano": 4,
+    "harpsichord": 6,
+    "celesta": 8,
+    "glockenspiel": 9,
+    "music_box": 10,
+    "vibraphone": 11,
+    "marimba": 12,
+    "xylophone": 13,
+    "tubular_bells": 14,
+    "organ": 19,
+    "accordion": 21,
+    "harmonica": 22,
+    "nylon_guitar": 24,
+    "guitar": 25,
+    "steel_guitar": 25,
+    "jazz_guitar": 26,
+    "electric_guitar": 27,
+    "muted_guitar": 28,
+    "overdrive_guitar": 29,
+    "distortion_guitar": 30,
+    "acoustic_bass": 32,
+    "bass": 33,
+    "electric_bass": 34,
+    "fretless_bass": 35,
+    "slap_bass": 36,
+    "synth_bass": 38,
+    "violin": 40,
+    "viola": 41,
+    "cello": 42,
+    "contrabass": 43,
+    "tremolo_strings": 44,
+    "pizzicato": 45,
+    "harp": 46,
+    "timpani": 47,
+    "strings": 48,
+    "choir": 52,
+    "voice": 54,
+    "synth_voice": 54,
+    "orchestra_hit": 55,
+    "trumpet": 56,
+    "trombone": 57,
+    "tuba": 58,
+    "french_horn": 60,
+    "brass": 61,
+    "synth_brass": 62,
+    "soprano_sax": 64,
+    "alto_sax": 65,
+    "tenor_sax": 66,
+    "baritone_sax": 67,
+    "oboe": 68,
+    "english_horn": 69,
+    "bassoon": 70,
+    "clarinet": 71,
+    "piccolo": 72,
+    "flute": 73,
+    "recorder": 74,
+    "pan_flute": 75,
+    "shakuhachi": 77,
+    "whistle": 78,
+    "ocarina": 79,
+    "synth_lead": 80,
+    "pad": 89,
+    "dark_pad": 88,
+    "synth_fx": 102,
+    "sitar": 104,
+    "banjo": 105,
+    "shamisen": 106,
+    "koto": 107,
+    "kalimba": 108,
+    "bagpipe": 109,
+    "fiddle": 110,
+    "shanai": 111,
+    "tinkle_bell": 112,
+    "steel_drums": 114,
+    "taiko": 116,
+    "drums": 0,
+    "percussion": 0,
 }
 
 
@@ -459,8 +504,29 @@ def export_multitrack_midi(
         # Program change and controllers: broadcast to all channels in the pool
         is_mpe_track = name in mpe_set
         for ci, channel in enumerate(pool):
-            program = (instruments or {}).get(name, 0)
+            # Resolve GM program:
+            # 1. Explicit instruments map
+            # 2. Case-insensitive track name lookup in GM_INSTRUMENTS
+            # 3. Substring match in GM_INSTRUMENTS (e.g. "Solo_Oud" -> "oud" if added)
+            # 4. Fallback to 0 (Piano)
+            program = 0
+            if instruments and name in instruments:
+                program = instruments[name]
+            else:
+                low_name = name.lower()
+                # Exact match
+                if low_name in GM_INSTRUMENTS:
+                    program = GM_INSTRUMENTS[low_name]
+                else:
+                    # Fuzzy match: find if any GM key is part of the track name
+                    # Sort keys by length descending to match "dark_pad" before "pad"
+                    for key in sorted(GM_INSTRUMENTS.keys(), key=len, reverse=True):
+                        if key in low_name:
+                            program = GM_INSTRUMENTS[key]
+                            break
+
             tr.append(mido.Message("program_change", program=program, channel=channel, time=0))
+
 
             if volumes and name in volumes:
                 tr.append(

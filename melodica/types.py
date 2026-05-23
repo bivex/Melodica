@@ -62,6 +62,8 @@ from melodica.types_pkg._scenes import (
     SceneGraph,
 )
 
+from melodica.types_pkg._bargrid import BarGrid
+
 from melodica.types_pkg._theory import parse_progression
 from melodica.theory.modulation import ModulationEngine
 
@@ -99,4 +101,5 @@ __all__ = [
     "SceneTransition",
     "Scene",
     "SceneGraph",
+    "BarGrid",
 ]

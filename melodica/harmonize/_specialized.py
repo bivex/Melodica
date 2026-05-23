@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from melodica.harmonize._hmm_helpers import (
     _chord_pcs_for_degree, _voice_leading_cost, _build_diatonic_chords,
 )
-from melodica.types import ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
+from melodica.types import BarGrid, ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
 
 @dataclass
 class GraphSearchHarmonizer:
@@ -42,6 +42,7 @@ class GraphSearchHarmonizer:
     voice_weight: float = 0.3
     harmonic_weight: float = 0.2
     chord_change: str = "bars"
+    bar_grid: BarGrid | None = None
 
     def harmonize(
         self,
@@ -171,11 +172,12 @@ class GraphSearchHarmonizer:
         return observations
 
     def _get_change_points(self, duration: float) -> list[float]:
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
         points = []
         step = (
-            4.0
+            bpb
             if self.chord_change == "bars"
-            else 2.0
+            else bpb / 2.0
             if self.chord_change == "strong_beats"
             else 1.0
         )
@@ -192,6 +194,7 @@ class GeneticHarmonizer:
     generations: int = 100
     mutation_rate: float = 0.15
     chord_change: str = "bars"
+    bar_grid: BarGrid | None = None
 
     def harmonize(
         self, melody: list[NoteInfo], scale: Scale, duration_beats: float
@@ -297,7 +300,8 @@ class GeneticHarmonizer:
         return obs
 
     def _get_cp(self, duration):
-        pts, t, step = [], 0.0, 4.0 if self.chord_change == "bars" else 2.0
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
+        pts, t, step = [], 0.0, bpb if self.chord_change == "bars" else bpb / 2.0
         while t < duration:
             pts.append(t)
             t += step
@@ -308,6 +312,7 @@ class ChromaticMediantHarmonizer:
 
     chromatic_prob: float = 0.4
     chord_change: str = "bars"
+    bar_grid: BarGrid | None = None
 
     def harmonize(
         self, melody: list[NoteInfo], scale: Scale, duration_beats: float
@@ -355,7 +360,8 @@ class ChromaticMediantHarmonizer:
         return result
 
     def _get_cp(self, duration):
-        pts, t, step = [], 0.0, 4.0 if self.chord_change == "bars" else 2.0
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
+        pts, t, step = [], 0.0, bpb if self.chord_change == "bars" else bpb / 2.0
         while t < duration:
             pts.append(t)
             t += step
@@ -366,6 +372,7 @@ class ModalInterchangeHarmonizer:
 
     borrow_prob: float = 0.3
     chord_change: str = "bars"
+    bar_grid: BarGrid | None = None
 
     def harmonize(
         self, melody: list[NoteInfo], scale: Scale, duration_beats: float
@@ -408,7 +415,8 @@ class ModalInterchangeHarmonizer:
         return result
 
     def _get_cp(self, duration):
-        pts, t, step = [], 0.0, 4.0 if self.chord_change == "bars" else 2.0
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
+        pts, t, step = [], 0.0, bpb if self.chord_change == "bars" else bpb / 2.0
         while t < duration:
             pts.append(t)
             t += step

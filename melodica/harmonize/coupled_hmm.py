@@ -19,7 +19,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Any
 
-from melodica.types import ChordLabel, Quality, Scale, Mode, NoteInfo
+from melodica.types import BarGrid, ChordLabel, Quality, Scale, Mode, NoteInfo
 from melodica.theory import CHORD_TEMPLATES
 
 # ---------------------------------------------------------------------------
@@ -109,6 +109,7 @@ class CoupledHMMHarmonizer:
     """
     beam_width: int = 12
     chord_change: str = "bars"
+    bar_grid: BarGrid | None = None
     
     # State Mapping
     # Chord States: 12 roots * 3 types = 36 states
@@ -280,8 +281,9 @@ class CoupledHMMHarmonizer:
         return math.log(prob)
 
     def _get_change_points(self, duration: float) -> list[float]:
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
         points = []
-        step = 4.0 if self.chord_change == "bars" else 2.0
+        step = bpb if self.chord_change == "bars" else bpb / 2.0
         t = 0.0
         while t < duration:
             points.append(t)

@@ -38,10 +38,11 @@ class PolyrhythmGenerator:
     ratio_a: int = 3
     ratio_b: int = 4
     include_both: bool = True
+    beats_per_bar: float = 4.0
 
     def generate(self, duration_beats: float) -> list[RhythmEvent]:
         events: list[RhythmEvent] = []
-        bar_dur = 4.0  # one bar
+        bar_dur = self.beats_per_bar
 
         t = 0.0
         while t < duration_beats:

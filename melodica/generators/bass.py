@@ -437,7 +437,7 @@ class BassGenerator(PhraseGenerator):
             else:
                 base_vel = int(70 + self.params.density * 30)
 
-            if event.onset % 4.0 < 0.1:
+            if event.onset % self.beats_per_bar < 0.1:
                 base_vel = min(127, int(base_vel * 1.15))
 
             notes.append(

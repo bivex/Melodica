@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from melodica.types import ChordLabel, Scale
+from melodica.types import BarGrid, ChordLabel, Scale
 
 
 @dataclass
@@ -40,6 +40,7 @@ class RenderContext:
     current_scale: Scale | None = None  # active key; set by MusicDirector on modulation
     bass_pitch: int | None = None  # lowest sounding pitch for counterpoint
     prev_bass_pitch: int | None = None  # previous bass pitch for voice leading
+    bar_grid: BarGrid | None = None  # time signature grid for bar-aware rendering
 
     def with_end_state(
         self,
@@ -66,4 +67,5 @@ class RenderContext:
             current_scale=current_scale if current_scale is not None else self.current_scale,
             bass_pitch=last_bass_pitch if last_bass_pitch is not None else self.bass_pitch,
             prev_bass_pitch=self.bass_pitch,
+            bar_grid=self.bar_grid,
         )
