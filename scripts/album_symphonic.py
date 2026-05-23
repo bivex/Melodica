@@ -171,7 +171,7 @@ def track_01_overture():
 
     # Solo oboe melody — the first voice to awaken
     oboe_p = GeneratorParams(density=0.6, key_range_low=58, key_range_high=84)
-    oboe = OboeGenerator(oboe_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo")
+    oboe = OboeGenerator(oboe_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo", note_density=2.0)
     oboe_notes = _clamp(oboe.render(chords, D_MAJOR, dur), 40, 90)
 
     # Harp arpeggios — shimmering morning light
@@ -181,12 +181,12 @@ def track_01_overture():
 
     # Strings emerge softly
     strings_p = GeneratorParams(density=0.55, key_range_low=48, key_range_high=76)
-    strings = StringsLegatoGenerator(strings_p, section_size="ensemble", dynamic_shape="crescendo")
+    strings = StringsLegatoGenerator(strings_p, ensemble_mode="section", dynamic_shape="crescendo")
     strings_notes = _clamp(strings.render(chords, D_MAJOR, dur), 30, 80)
 
     # French horns — noble fanfare undertone
     horn_p = GeneratorParams(density=0.4, key_range_low=40, key_range_high=65)
-    horn = FrenchHornGenerator(horn_p, articulation="sustained", dynamic_curve="crescendo")
+    horn = FrenchHornGenerator(horn_p, articulation="sustained", dynamic_curve="crescendo", note_density=2.0)
     horn_notes = _clamp(horn.render(chords, D_MAJOR, dur), 35, 75)
 
     # Timpani — soft rhythmic foundation
@@ -211,22 +211,22 @@ def track_02_awakening():
 
     # Solo violin cadenza
     violin_p = GeneratorParams(density=0.7, key_range_low=55, key_range_high=96)
-    violin = ViolinGenerator(violin_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo")
+    violin = ViolinGenerator(violin_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo", note_density=3.0)
     violin_notes = _clamp(violin.render(chords, G_MAJOR, dur), 40, 95)
 
     # Cello counter-melody
     cello_p = GeneratorParams(density=0.55, key_range_low=36, key_range_high=60)
-    cello = CelloGenerator(cello_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo")
+    cello = CelloGenerator(cello_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo", note_density=2.2)
     cello_notes = _clamp(cello.render(chords, G_MAJOR, dur), 35, 80)
 
     # Viola harmony
     viola_p = GeneratorParams(density=0.5, key_range_low=48, key_range_high=72)
-    viola = ViolaGenerator(viola_p, articulation="sustained", vibrato=True)
+    viola = ViolaGenerator(viola_p, articulation="sustained", vibrato=True, note_density=2.0)
     viola_notes = _clamp(viola.render(chords, G_MAJOR, dur), 35, 75)
 
     # Contrabass pedal
     bass_p = GeneratorParams(density=0.35, key_range_low=28, key_range_high=43)
-    bass = ContrabassGenerator(bass_p, articulation="sustained", dynamic_curve="flat")
+    bass = ContrabassGenerator(bass_p, articulation="sustained", dynamic_curve="flat", note_density=1.5)
     bass_notes = _clamp(bass.render(chords, G_MAJOR, dur), 30, 60)
 
     return {
@@ -288,12 +288,12 @@ def track_04_scherzo():
 
     # Flute — bright, dancing melody
     flute_p = GeneratorParams(density=0.65, key_range_low=60, key_range_high=96)
-    flute = FluteGenerator(flute_p, articulation="staccato", vibrato=True, dynamic_curve="flat")
+    flute = FluteGenerator(flute_p, articulation="staccato", vibrato=True, dynamic_curve="flat", note_density=3.0)
     flute_notes = _clamp(flute.render(chords, G_MAJOR, dur), 45, 85)
 
     # Clarinet — playful counter
     clar_p = GeneratorParams(density=0.55, key_range_low=50, key_range_high=79)
-    clar = ClarinetGenerator(clar_p, articulation="staccato", dynamic_curve="flat")
+    clar = ClarinetGenerator(clar_p, articulation="staccato", dynamic_curve="flat", note_density=3.0)
     clar_notes = _clamp(clar.render(chords, G_MAJOR, dur), 40, 80)
 
     # Pizzicato strings — rhythmic bounce
@@ -327,7 +327,7 @@ def track_05_dance():
 
     # Contrabass — driving bass
     bass_p = GeneratorParams(density=0.45, key_range_low=28, key_range_high=45)
-    bass = ContrabassGenerator(bass_p, articulation="pizzicato", dynamic_curve="flat")
+    bass = ContrabassGenerator(bass_p, articulation="pizzicato", dynamic_curve="flat", note_density=2.0)
     bass_notes = _clamp(bass.render(chords, E_HUNGARIAN, dur), 40, 70)
 
     # Timpani rolls — dramatic accents
@@ -374,12 +374,12 @@ def track_07_carnival():
 
     # Trumpet — bright fanfare calls
     trp_p = GeneratorParams(density=0.55, key_range_low=55, key_range_high=82)
-    trumpet = TrumpetGenerator(trp_p, articulation="sustained", fanfare_mode=True, dynamic_curve="flat")
+    trumpet = TrumpetGenerator(trp_p, articulation="sustained", fanfare_mode=True, dynamic_curve="flat", note_density=2.5)
     trumpet_notes = _clamp(trumpet.render(chords, E_PHRYGIAN, dur), 45, 90)
 
     # Trombone — brassy response
     trb_p = GeneratorParams(density=0.45, key_range_low=40, key_range_high=65)
-    trombone = TromboneGenerator(trb_p, articulation="sustained", dynamic_curve="flat")
+    trombone = TromboneGenerator(trb_p, articulation="sustained", dynamic_curve="flat", note_density=2.0)
     trombone_notes = _clamp(trombone.render(chords, E_PHRYGIAN, dur), 40, 80)
 
     # Ostinato strings
@@ -418,14 +418,14 @@ def track_08_adagio():
 
     # Cello — singing lament
     cello_p = GeneratorParams(density=0.55, key_range_low=36, key_range_high=60)
-    cello = CelloGenerator(cello_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo")
+    cello = CelloGenerator(cello_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo", note_density=2.2)
     cello_notes = _clamp(cello.render(chords, F_MINOR, dur), 30, 80)
     for n in cello_notes:
         _expr_swell(n, min(n.duration, 4.0))
 
     # Bassoon — dark woodwind commentary
     bsn_p = GeneratorParams(density=0.45, key_range_low=34, key_range_high=58)
-    bassoon = BassoonGenerator(bsn_p, articulation="legato", dynamic_curve="flat", breath_phrase=True)
+    bassoon = BassoonGenerator(bsn_p, articulation="legato", dynamic_curve="flat", breath_phrase=True, note_density=2.2)
     bsn_notes = _clamp(bassoon.render(chords, F_MINOR, dur), 30, 65)
 
     # Drone — atmospheric pedal
@@ -465,7 +465,7 @@ def track_09_counterpoint():
 
     # Viola — gentle harmonic support
     viola_p = GeneratorParams(density=0.4, key_range_low=48, key_range_high=68)
-    viola = ViolaGenerator(viola_p, articulation="sustained", vibrato=True, con_sordino=True)
+    viola = ViolaGenerator(viola_p, articulation="sustained", vibrato=True, con_sordino=True, note_density=2.0)
     viola_notes = _clamp(viola.render(chords, BB_MINOR, dur), 30, 55)
 
     return {
@@ -494,7 +494,7 @@ def track_10_lament():
 
     # French horn — mournful solo
     horn_p = GeneratorParams(density=0.4, key_range_low=34, key_range_high=60)
-    horn = FrenchHornGenerator(horn_p, articulation="sustained", dynamic_curve="decrescendo", con_sordino=True)
+    horn = FrenchHornGenerator(horn_p, articulation="sustained", dynamic_curve="decrescendo", con_sordino=True, note_density=2.0)
     horn_notes = _clamp(horn.render(chords, CS_MINOR, dur), 30, 60)
 
     return {
@@ -595,7 +595,7 @@ def track_13_resolution():
 
     # Violin — lyrical solo transforming from minor to major
     v_p = GeneratorParams(density=0.6, key_range_low=55, key_range_high=96)
-    violin = ViolinGenerator(v_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo")
+    violin = ViolinGenerator(v_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo", note_density=2.5)
     v_minor = _clamp(violin.render(minor_chords, D_HARM_MINOR, minor_dur), 35, 80)
     v_major = _clamp(violin.render(major_chords, D_MAJOR, major_dur), 50, 95)
     for n in v_major:
@@ -603,7 +603,7 @@ def track_13_resolution():
 
     # Cello — warm support
     c_p = GeneratorParams(density=0.5, key_range_low=36, key_range_high=60)
-    cello = CelloGenerator(c_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo")
+    cello = CelloGenerator(c_p, articulation="sustained", vibrato=True, dynamic_curve="crescendo", note_density=2.0)
     c_minor = _clamp(cello.render(minor_chords, D_HARM_MINOR, minor_dur), 30, 70)
     c_major = _clamp(cello.render(major_chords, D_MAJOR, major_dur), 40, 80)
     for n in c_major:
