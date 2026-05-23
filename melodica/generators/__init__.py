@@ -378,6 +378,11 @@ from melodica.generators.keyboard_sustained import (
 from melodica.generators.bass_solo import (
     BassSoloGenerator,
 )
+from melodica.generators.synth_choir_strings import (
+    SynthStringsGenerator,
+    VoiceOohsGMGenerator,
+    SynthChoirGenerator,
+)
 
 __all__ = [
     "PhraseGenerator",
@@ -592,4 +597,7 @@ __all__ = [
     "RockOrganGenerator",
     "ReedOrganGenerator",
     "BassSoloGenerator",
+    "SynthStringsGenerator",
+    "VoiceOohsGMGenerator",
+    "SynthChoirGenerator",
 ]
