@@ -55,7 +55,7 @@ from melodica.generators import (
 )
 from melodica.generators.phrase_container import PhraseContainer
 from melodica.generators.motive import MotiveGenerator
-from melodica.harmonize import HMM3Harmonizer, FunctionalHarmonizer
+from melodica.harmonize import HMM3Harmonizer, FunctionalHarmonizer, RuleBasedHarmonizer
 from melodica.composer import (
     TensionCurve,
     StyleProfile,
@@ -180,7 +180,7 @@ class TrackConfig:
     depends_on: str | None = None
     # Key inside params where the dependency notes are injected.
     depends_on_param: str = "primary_melody"
-    
+
     # Rhythm Processing
     rhythm_rotate: float = 0.0  # -1.0 to 1.0 (percent of total duration)
     rhythm_dotted: bool = False
@@ -194,6 +194,7 @@ class TrackConfig:
 @dataclass
 class IdeaPart:
     """A structural section of a composition (e.g., Intro, Verse, Chorus)."""
+
     name: str = "Part"
     bars: int | None = None
     scale: Scale | None = None
@@ -203,8 +204,8 @@ class IdeaPart:
     progression_type: str | None = None
     progression_list: list[list[int]] | None = None
     # Per-part track overrides (None = use track default)
-    track_density: dict[str, float] | None = None        # {"TrackName": 0.3}
-    track_mute: list[str] | None = None                   # ["TrackName1", ...]
+    track_density: dict[str, float] | None = None  # {"TrackName": 0.3}
+    track_mute: list[str] | None = None  # ["TrackName1", ...]
     track_velocity_scale: dict[str, float] | None = None  # {"TrackName": 0.5}
 
 
@@ -228,8 +229,13 @@ class IdeaToolConfig:
     parts: list[IdeaPart] = field(default_factory=list)
 
     # Progression
-    progression_type: str = "from_list"  # "from_list", "rules", "hmm3", "random"
+    progression_type: str = "hmm3"  # "hmm3", "rules", "from_list", "random"
     progression_list: list[list[int]] | None = None
+
+    # Harmonic risk: continuous 0.0–1.0 controlling how expected vs surprising
+    # the chord progression is. Only affects RuleBasedHarmonizer.
+    # 0.0 = always pick the most expected next chord, 1.0 = fully random.
+    harmonic_risk: float | None = None
 
     # HMM3 harmonizer options (used when progression_type="hmm3")
     hmm3_beam_width: int = 5
@@ -299,28 +305,38 @@ class IdeaTool:
         if self.config.parts:
             parts = []
             for i, p in enumerate(self.config.parts):
-                parts.append(IdeaPart(
-                    name=p.name or f"Part {i+1}",
-                    bars=p.bars if p.bars is not None else self.config.bars,
-                    scale=p.scale if p.scale is not None else self.config.scale,
-                    tempo=p.tempo if p.tempo is not None else self.config.tempo,
-                    time_signature=p.time_signature if p.time_signature is not None else self.config.time_signature,
-                    style=p.style if p.style is not None else self.config.style,
-                    progression_type=p.progression_type if p.progression_type is not None else self.config.progression_type,
-                    progression_list=p.progression_list if p.progression_list is not None else self.config.progression_list,
-                ))
+                parts.append(
+                    IdeaPart(
+                        name=p.name or f"Part {i + 1}",
+                        bars=p.bars if p.bars is not None else self.config.bars,
+                        scale=p.scale if p.scale is not None else self.config.scale,
+                        tempo=p.tempo if p.tempo is not None else self.config.tempo,
+                        time_signature=p.time_signature
+                        if p.time_signature is not None
+                        else self.config.time_signature,
+                        style=p.style if p.style is not None else self.config.style,
+                        progression_type=p.progression_type
+                        if p.progression_type is not None
+                        else self.config.progression_type,
+                        progression_list=p.progression_list
+                        if p.progression_list is not None
+                        else self.config.progression_list,
+                    )
+                )
             return parts
         else:
-            return [IdeaPart(
-                name="Main",
-                bars=self.config.bars,
-                scale=self.config.scale,
-                tempo=self.config.tempo,
-                time_signature=self.config.time_signature,
-                style=self.config.style,
-                progression_type=self.config.progression_type,
-                progression_list=self.config.progression_list,
-            )]
+            return [
+                IdeaPart(
+                    name="Main",
+                    bars=self.config.bars,
+                    scale=self.config.scale,
+                    tempo=self.config.tempo,
+                    time_signature=self.config.time_signature,
+                    style=self.config.style,
+                    progression_type=self.config.progression_type,
+                    progression_list=self.config.progression_list,
+                )
+            ]
 
     def generate(self) -> dict[str, Any]:
         """
@@ -329,7 +345,7 @@ class IdeaTool:
         "_tempo_map" key contains the tempo changes if applicable.
         """
         parts = self._get_resolved_parts()
-        
+
         # Calculate total beats across all parts
         total_beats = 0.0
         for p in parts:
@@ -491,7 +507,6 @@ class IdeaTool:
                     report.notes_velocity_reduced,
                 )
 
-
         # ---- Psychoacoustic verification (perceptual masking check) ----
         if self.config.use_harmonic_verifier:
             from melodica.composer.psychoacoustic import psycho_verify, PsychoConfig
@@ -514,6 +529,7 @@ class IdeaTool:
         # ---- Mixing Desk (Gain staging & Section faders) ----
         if self.config.use_mixing:
             from melodica.shorts_mixing import MixingDesk
+
             # Part-aware section segmentation mapped to mixing roles
             # First part → Hook (intro energy), last part → Loop (outro fade), middle → Dynamics
             sections = []
@@ -535,7 +551,9 @@ class IdeaTool:
             total_beats_all = sum(p.bars * p.time_signature[0] for p in parts)
             last_part_beats = parts[-1].bars * parts[-1].time_signature[0]
             fade_start = total_beats_all - min(4.0, last_part_beats * 0.25)
-            result = desk.apply_fade_loop_end(result, fade_start, fade_beats=min(2.0, last_part_beats * 0.15))
+            result = desk.apply_fade_loop_end(
+                result, fade_start, fade_beats=min(2.0, last_part_beats * 0.15)
+            )
 
         # ---- Artistic Post-processing (Tension-based swell) ----
         # Apply this AFTER all verifiers so the swells are preserved
@@ -543,6 +561,7 @@ class IdeaTool:
 
         # ---- MPE Expression (per-note CC11/CC74/CC1 curves) ----
         from melodica._postprocess import apply_mpe_expression, apply_portamento
+
         apply_mpe_expression(result, self.config.tracks)
         apply_portamento(result, self.config.tracks)
 
@@ -550,9 +569,15 @@ class IdeaTool:
         cc_events: dict[str, list[tuple[float, int, int]]] = {}
         if self.config.use_mixing or self.config.use_mastering:
             from melodica.composer.album_pipeline import (
-                _analyze_track, _apply_humanization, _sidechain_duck,
-                _polyphony_limit, _shape_dynamics, _generate_reverb_sends,
-                _generate_entry_fades, Mood, _MOOD_PROFILES,
+                _analyze_track,
+                _apply_humanization,
+                _sidechain_duck,
+                _polyphony_limit,
+                _shape_dynamics,
+                _generate_reverb_sends,
+                _generate_entry_fades,
+                Mood,
+                _MOOD_PROFILES,
             )
 
             total_dur = sum(p.bars * p.time_signature[0] for p in parts)
@@ -571,7 +596,9 @@ class IdeaTool:
                 result = _sidechain_duck(result, profiles)
 
                 # Mood-aware dynamics shaping
-                mood = Mood.CINEMATIC if self.config.style in ("cinematic", "epic") else Mood.CHAMBER
+                mood = (
+                    Mood.CINEMATIC if self.config.style in ("cinematic", "epic") else Mood.CHAMBER
+                )
                 mood_profile = _MOOD_PROFILES[mood]
                 result = _shape_dynamics(result, mood_profile)
 
@@ -604,6 +631,7 @@ class IdeaTool:
         # ---- Mastering Desk (LUFS target, Multiband Comp, Imaging, Limiter) ----
         if self.config.use_mastering:
             from melodica.shorts_mastering import MasteringDesk
+
             mastering_desk = MasteringDesk(target_lufs=self.config.target_lufs)
             result, pan_cc_events = mastering_desk.apply_mastering(result)
             self._pan_cc_events = pan_cc_events
@@ -723,7 +751,11 @@ class IdeaTool:
 
             # Rules-based harmonizer
             elif part.progression_type == "rules":
-                harmonizer = FunctionalHarmonizer(start_with="I", end_with="I")
+                harmonizer = RuleBasedHarmonizer(
+                    start_with="I",
+                    end_with="I",
+                    harmonic_risk=self.config.harmonic_risk,
+                )
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
                 part_chords = harmonizer.harmonize(contour, scale, part_beats)
 
@@ -756,11 +788,11 @@ class IdeaTool:
                             degree=deg,
                         )
                     )
-            
+
             # Shift the start times
             for c in part_chords:
                 c.start += offset_beats
-            
+
             all_chords.extend(part_chords)
             offset_beats += part_beats
 
@@ -775,18 +807,18 @@ class IdeaTool:
         notes = []
         t = 0.0
         total = bars * beats_per_bar
-        
+
         # Start on root
         current_pitch = 60 + int(degs[0])
-        
+
         while t < total:
             # On strong beats (every 2 beats), favor triad tones
             beat_in_bar = t % beats_per_bar
-            is_strong = beat_in_bar < 0.01 or abs(beat_in_bar - beats_per_bar/2) < 0.01
-            
+            is_strong = beat_in_bar < 0.01 or abs(beat_in_bar - beats_per_bar / 2) < 0.01
+
             # Simple random walk: step -1, 0, or +1 scale degree
             step = random.choices([-2, -1, 0, 1, 2], weights=[0.1, 0.3, 0.2, 0.3, 0.1])[0]
-            
+
             # Find current degree index
             current_pc = current_pitch % 12
             if current_pc in degs:
@@ -794,19 +826,19 @@ class IdeaTool:
             else:
                 # Snap to closest
                 idx = min(range(len(degs)), key=lambda i: abs(degs[i] - current_pc))
-            
+
             new_idx = (idx + step) % len(degs)
             new_pc = int(degs[new_idx])
-            
+
             # Apply octave crossing
             octave_shift = 0
             if step > 0 and new_pc < current_pc:
                 octave_shift = 12
             elif step < 0 and new_pc > current_pc:
                 octave_shift = -12
-                
+
             current_pitch = (current_pitch // 12) * 12 + new_pc + octave_shift
-            
+
             # Bound the pitch to a reasonable vocal range
             if current_pitch > 79:
                 current_pitch -= 12
@@ -819,11 +851,11 @@ class IdeaTool:
                     new_idx = min((0, 2, 4), key=lambda x: abs(x - new_idx))
                     new_pc = int(degs[new_idx])
                     current_pitch = (current_pitch // 12) * 12 + new_pc
-            
+
             dur = min(2.0, total - t)
             if not is_strong and random.random() < 0.3:
-                dur = min(1.0, total - t) # occasional passing tones
-                
+                dur = min(1.0, total - t)  # occasional passing tones
+
             notes.append(
                 NoteInfo(
                     pitch=current_pitch,
@@ -836,7 +868,9 @@ class IdeaTool:
 
         return notes
 
-    def _quality_for_degree(self, degree: int, style_profile: StyleProfile | None = None) -> Quality:
+    def _quality_for_degree(
+        self, degree: int, style_profile: StyleProfile | None = None
+    ) -> Quality:
         """Get chord quality for a degree based on style."""
         style = style_profile or self._style
         if style.extensions and degree in (1, 4):
@@ -893,7 +927,7 @@ class IdeaTool:
             for i, section in enumerate(pattern):
                 section_start = offset_beats + i * section_length
                 phrase_pos = i / max(1, n_sections - 1) if n_sections > 1 else 0.0
-                
+
                 # Rebuild context preserving continuity but updating phrase_position
                 ctx = RenderContext(
                     prev_pitch=ctx.prev_pitch,
@@ -903,9 +937,11 @@ class IdeaTool:
                     phrase_position=phrase_pos,
                 )
                 section_end = section_start + section_length
-                
+
                 # Find chords for this section (in global time)
-                section_chords = [c for c in chords if c.start < section_end and c.end > section_start]
+                section_chords = [
+                    c for c in chords if c.start < section_end and c.end > section_start
+                ]
                 if not section_chords:
                     before = [c for c in chords if c.start < section_end]
                     section_chords = [before[-1]] if before else (chords[:1] if chords else [])
@@ -926,12 +962,13 @@ class IdeaTool:
                 # generate the exact same rhythmic and melodic contours, but perfectly
                 # adapted to the current underlying chords.
                 import hashlib
+
                 seed_str = f"{cfg.name}:{part.name}:{section}"
                 seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
                 random.seed(seed_val)
-                
+
                 section_notes = gen.render(adjusted, scale, section_length, ctx)
-                
+
                 # Restore true randomness
                 random.seed()
 
@@ -970,7 +1007,11 @@ class IdeaTool:
             # But we must shift chords to match part_notes start times. Wait, apply_variation doesn't take chords.
             for var_name in cfg.variations:
                 # Need to map chords for this part only if variation needs it, but _apply_variation signature uses chords.
-                part_chords = [c for c in chords if c.start >= offset_beats and c.start < offset_beats + part_beats]
+                part_chords = [
+                    c
+                    for c in chords
+                    if c.start >= offset_beats and c.start < offset_beats + part_beats
+                ]
                 part_notes = self._apply_variation(var_name, part_notes, part_chords)
 
             # Per-part density thinning: reduce notes in sparse sections
@@ -989,9 +1030,12 @@ class IdeaTool:
             if vel_scale != 1.0:
                 part_notes = [
                     NoteInfo(
-                        pitch=n.pitch, start=n.start, duration=n.duration,
+                        pitch=n.pitch,
+                        start=n.start,
+                        duration=n.duration,
                         velocity=max(1, min(127, int(n.velocity * vel_scale))),
-                        articulation=n.articulation, expression=dict(n.expression),
+                        articulation=n.articulation,
+                        expression=dict(n.expression),
                     )
                     for n in part_notes
                 ]
@@ -1009,8 +1053,8 @@ class IdeaTool:
         total_beats = offset_beats
         # It's safer to use the global scale for global post-processing, but note that scale changed per part.
         # This is a limitation of the global post-processing.
-        scale = self.config.scale 
-        
+        scale = self.config.scale
+
         all_notes = apply_track_modifiers(
             all_notes, cfg, chords, scale, self.config.time_signature, total_beats
         )
@@ -1039,13 +1083,13 @@ class IdeaTool:
         """Apply rhythmic processing to a list of notes."""
         if not notes:
             return notes
-            
+
         import random
 
         # 1. Rests (Density)
         if cfg.rhythm_rests < 1.0:
             notes = [n for n in notes if random.random() < cfg.rhythm_rests]
-            
+
         if not notes:
             return []
 
@@ -1073,20 +1117,31 @@ class IdeaTool:
             i = 0
             while i < len(notes):
                 if i + 1 < len(notes):
-                    n1, n2 = notes[i], notes[i+1]
+                    n1, n2 = notes[i], notes[i + 1]
                     # If they are adjacent and equal length
-                    if abs(n1.duration - n2.duration) < 0.01 and abs((n1.start + n1.duration) - n2.start) < 0.01:
+                    if (
+                        abs(n1.duration - n2.duration) < 0.01
+                        and abs((n1.start + n1.duration) - n2.start) < 0.01
+                    ):
                         total_dur = n1.duration + n2.duration
                         processed.append(
                             NoteInfo(
-                                pitch=n1.pitch, start=n1.start, duration=total_dur * 0.75,
-                                velocity=n1.velocity, articulation=n1.articulation, expression=dict(n1.expression)
+                                pitch=n1.pitch,
+                                start=n1.start,
+                                duration=total_dur * 0.75,
+                                velocity=n1.velocity,
+                                articulation=n1.articulation,
+                                expression=dict(n1.expression),
                             )
                         )
                         processed.append(
                             NoteInfo(
-                                pitch=n2.pitch, start=n1.start + total_dur * 0.75, duration=total_dur * 0.25,
-                                velocity=n2.velocity, articulation=n2.articulation, expression=dict(n2.expression)
+                                pitch=n2.pitch,
+                                start=n1.start + total_dur * 0.75,
+                                duration=total_dur * 0.25,
+                                velocity=n2.velocity,
+                                articulation=n2.articulation,
+                                expression=dict(n2.expression),
                             )
                         )
                         i += 2
@@ -1105,8 +1160,12 @@ class IdeaTool:
                     new_start = (n.start // 1.0) + cfg.rhythm_swing
                     swung.append(
                         NoteInfo(
-                            pitch=n.pitch, start=round(new_start, 6), duration=n.duration,
-                            velocity=n.velocity, articulation=n.articulation, expression=dict(n.expression)
+                            pitch=n.pitch,
+                            start=round(new_start, 6),
+                            duration=n.duration,
+                            velocity=n.velocity,
+                            articulation=n.articulation,
+                            expression=dict(n.expression),
                         )
                     )
                 else:

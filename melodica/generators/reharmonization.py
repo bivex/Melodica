@@ -39,6 +39,18 @@ from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, HarmonicFunction, NoteInfo, Quality, Scale
 from melodica.utils import nearest_pitch, chord_pitches_closed, chord_at
 
+# Negative harmony quality inversion: dominant <-> subdominant mirror
+_NEGATIVE_QUALITY_MAP: dict[Quality, Quality] = {
+    Quality.MAJOR: Quality.MINOR,
+    Quality.MINOR: Quality.MAJOR,
+    Quality.DOMINANT7: Quality.HALF_DIM7,
+    Quality.HALF_DIM7: Quality.DOMINANT7,
+    Quality.MAJOR7: Quality.MINOR7,
+    Quality.MINOR7: Quality.MAJOR7,
+    Quality.DIMINISHED: Quality.AUGMENTED,
+    Quality.AUGMENTED: Quality.DIMINISHED,
+}
+
 
 @dataclass
 class ReharmonizationGenerator(PhraseGenerator):

@@ -286,6 +286,7 @@ class RuleBasedHarmonizer:
     start_with: str = "any"
     end_with: str = "I"
     is_minor_key: bool = False
+    harmonic_risk: float | None = None
 
     # Transition weights: degree -> {next_degree: weight}
     transitions: dict[int, dict[int, float]] = field(
@@ -373,6 +374,22 @@ class RuleBasedHarmonizer:
 
         # Sort by weight descending
         sorted_candidates = sorted(candidates.items(), key=lambda x: -x[1])
+
+        if self.harmonic_risk is not None:
+            if self.harmonic_risk <= 0.05:
+                return sorted_candidates[0][0]
+            elif self.harmonic_risk >= 0.95:
+                return random.choice([d for d, _ in sorted_candidates])
+            else:
+                exponent = (1.0 - self.harmonic_risk) / self.harmonic_risk
+                new_candidates = []
+                for d, w in sorted_candidates:
+                    new_candidates.append((d, w ** exponent))
+                return random.choices(
+                    [d for d, _ in new_candidates],
+                    weights=[w for _, w in new_candidates],
+                    k=1
+                )[0]
 
         if self.expectedness == "most_expected":
             return sorted_candidates[0][0]
