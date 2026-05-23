@@ -168,13 +168,6 @@ class Orchestrator:
         return notes
 
     def _apply_tempo(self, notes: list[NoteInfo], multiplier: float, section_start: float) -> None:
-        """Stretches/squeezes note onsets and durations inside the section."""
-        if multiplier == 1.0:
-            return
-        
-        for note in notes:
-            # Relative onset within the section
-            rel_onset = note.start - section_start
-            # Scale start and duration
-            note.start = round(section_start + rel_onset * multiplier, 6)
-            note.duration = round(note.duration * multiplier, 6)
+        """Tempo changes are handled globally by the MIDI tempo map, keeping beat durations stable."""
+        return
+
