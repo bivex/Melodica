@@ -98,7 +98,7 @@ def track_01_industrial():
     arc = DynamicsArc.from_form(form)
 
     guitars = PowerChordGenerator(pattern="chug", palm_mute_ratio=0.7)
-    bass = BassSoloGenerator(instrument="pick_bass")
+    bass = BassSoloGenerator(instrument="pick", note_density=3.0)
     drums = DrumKitPatternGenerator(style="rock", hihat_pattern="eighth")
     ambient = SynthEffectsGenerator(fx_type="goblins")
 
@@ -133,8 +133,8 @@ def track_02_gallop():
     form = MusicalForm._create_with_tempo_map(sections, 140.0)
     arc = DynamicsArc.from_form(form)
 
-    guitars = PowerChordGenerator(pattern="gallop", palm_mute_ratio=0.5)
-    bass = BassSoloGenerator(instrument="pick_bass")
+    guitars = PowerChordGenerator(pattern="gallop", palm_mute_ratio=0.5, gallop_speed=0.22)
+    bass = BassSoloGenerator(instrument="pick", note_density=3.0)
     drums = DrumKitPatternGenerator(style="rock", hihat_pattern="open")
     strings = StringsLegatoGenerator(ensemble_mode="section")
     solo = SynthLeadGenerator(lead_type="sawtooth")
@@ -172,7 +172,7 @@ def track_03_shred():
 
     tapping = GuitarTappingGenerator(pattern="arpeggio", width_interval=12)
     riffs = PowerChordGenerator(pattern="syncopated", palm_mute_ratio=0.8)
-    bass = BassSoloGenerator(instrument="pick_bass")
+    bass = BassSoloGenerator(instrument="pick", note_density=3.0)
     drums = DrumKitPatternGenerator(style="rock", hihat_pattern="sixteenth")
 
     orchestrator = Orchestrator(
@@ -206,7 +206,7 @@ def track_04_wrath():
     arc = DynamicsArc.from_form(form)
 
     riffs = RiffGenerator(scale_type="blues", riff_pattern="gallop")
-    bass = BassSoloGenerator(instrument="pick_bass")
+    bass = BassSoloGenerator(instrument="pick", note_density=3.0)
     drums = DrumKitPatternGenerator(style="rock")
     sweep = SynthEffectsGenerator(fx_type="sci_fi")
 
