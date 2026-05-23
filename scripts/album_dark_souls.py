@@ -35,6 +35,10 @@ from melodica.generators.piano_run import PianoRunGenerator
 from melodica.generators.strings_pizzicato import StringsPizzicatoGenerator
 
 
+from melodica.generators.tremolo_strings import TremoloStringsGenerator
+from melodica.generators.countermelody import CountermelodyGenerator
+from melodica.generators.brass_section import BrassSectionGenerator
+
 # ---------------------------------------------------------------------------
 # Track Builders
 # ---------------------------------------------------------------------------
@@ -54,11 +58,13 @@ def generate_track_01():
         use_voice_leading=True, use_texture_control=True, use_mixing=True, target_lufs=-16.0,
         parts=parts,
         tracks=[
-            TrackConfig(name="Harp", generator=HarpGenerator(), instrument="harp", arrangement="ABAB", density=0.5),
-            TrackConfig(name="Woodwinds", generator=WoodwindsEnsembleGenerator(), instrument="oboe", arrangement="AABB", density=0.6, octave_shift=1),
-            TrackConfig(name="Cello Solo", generator=CelloGenerator(), instrument="cello", arrangement="ABCD", density=0.7),
-            TrackConfig(name="Choir", generator=ChoirAahsGenerator(), instrument="choir", arrangement="AABB", density=0.4),
-            TrackConfig(name="Contrabass", generator=ContrabassGenerator(), instrument="contrabass", arrangement="AABB", density=0.8, octave_shift=-1),
+            TrackConfig(name="Harp Arpeggios", generator=HarpGenerator(), instrument="harp", arrangement="ABAB", density=0.7),
+            TrackConfig(name="Woodwinds Motif", generator=WoodwindsEnsembleGenerator(), instrument="oboe", arrangement="AABB", density=0.5, octave_shift=1, variations=["humanize"]),
+            TrackConfig(name="Cello Solo", generator=CelloGenerator(), instrument="cello", arrangement="ABCD", density=0.6, variations=["humanize"]),
+            TrackConfig(name="Viola Counter", generator=CountermelodyGenerator(motion_preference="contrary"), instrument="viola", arrangement="ABCD", density=0.5, depends_on="Cello Solo"),
+            TrackConfig(name="Tremolo Tension", generator=TremoloStringsGenerator(), instrument="strings", arrangement="AABB", density=0.8, octave_shift=1),
+            TrackConfig(name="Choir Ahhs", generator=ChoirAahsGenerator(), instrument="choir", arrangement="AABB", density=0.4),
+            TrackConfig(name="Contrabass Sub", generator=ContrabassGenerator(), instrument="contrabass", arrangement="AABB", density=0.8, octave_shift=-1),
         ]
     )
     return IdeaTool(config).generate(), parts
@@ -106,11 +112,14 @@ def generate_track_03():
         tracks=[
             TrackConfig(name="Ostinato Cellos", generator=OstinatoGenerator(pattern="driving"), instrument="cello", arrangement="ABAB", density=1.0, octave_shift=-1),
             TrackConfig(name="Ostinato Violas", generator=OstinatoGenerator(pattern="gallop"), instrument="viola", arrangement="ABAB", density=1.0),
-            TrackConfig(name="French Horns", generator=FrenchHornGenerator(), instrument="brass", arrangement="AABC", density=0.9),
-            TrackConfig(name="Trumpets", generator=TrumpetGenerator(), instrument="trumpet", arrangement="AABB", density=0.8, octave_shift=1),
+            TrackConfig(name="Tremolo Violins", generator=TremoloStringsGenerator(), instrument="strings", arrangement="ABCD", density=1.0, octave_shift=1),
+            TrackConfig(name="Brass Section", generator=BrassSectionGenerator(), instrument="brass", arrangement="AABC", density=0.9),
+            TrackConfig(name="French Horns", generator=FrenchHornGenerator(), instrument="french_horn", arrangement="AABC", density=0.8, octave_shift=-1),
+            TrackConfig(name="Trumpets Lead", generator=TrumpetGenerator(), instrument="trumpet", arrangement="AABB", density=0.8, octave_shift=1, variations=["octave_double"]),
+            TrackConfig(name="Trombone Counter", generator=CountermelodyGenerator(motion_preference="oblique"), instrument="trombone", arrangement="AABB", density=0.7, depends_on="Trumpets Lead"),
             TrackConfig(name="Timpani", generator=TimpaniGenerator(), instrument="timpani", arrangement="ABCD", density=1.0),
-            TrackConfig(name="Orchestral Hits", generator=OrchestralHitGenerator(hit_type="staccato"), instrument="orchestral_hit", arrangement="ABAB", density=0.5),
-            TrackConfig(name="Choir Epic", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=0.9),
+            TrackConfig(name="Orchestral Hits", generator=OrchestralHitGenerator(hit_type="staccato"), instrument="orchestral_hit", arrangement="ABAB", density=0.6),
+            TrackConfig(name="Choir Epic", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=1.0),
         ]
     )
     return IdeaTool(config).generate(), parts
@@ -157,10 +166,14 @@ def generate_track_05():
         use_voice_leading=True, use_texture_control=True, use_mixing=True, target_lufs=-11.5,
         parts=parts,
         tracks=[
-            TrackConfig(name="Piano Runs", generator=PianoRunGenerator(), instrument="piano", arrangement="ABCD", density=0.8, octave_shift=1),
+            TrackConfig(name="Piano Runs", generator=PianoRunGenerator(), instrument="piano", arrangement="ABCD", density=0.8, octave_shift=1, variations=["humanize"]),
+            TrackConfig(name="Violins Melody", generator=ViolinGenerator(), instrument="violin", arrangement="AABC", density=0.9, octave_shift=1, variations=["octave_double"]),
             TrackConfig(name="Strings Legato", generator=StringsLegatoGenerator(), instrument="strings", arrangement="AABC", density=1.0, octave_shift=1),
-            TrackConfig(name="French Horns", generator=FrenchHornGenerator(), instrument="brass", arrangement="AABB", density=0.9),
+            TrackConfig(name="Viola Counter", generator=CountermelodyGenerator(motion_preference="mixed"), instrument="viola", arrangement="AABC", density=0.7, depends_on="Violins Melody"),
+            TrackConfig(name="Brass Section", generator=BrassSectionGenerator(), instrument="brass", arrangement="AABB", density=1.0),
+            TrackConfig(name="French Horns", generator=FrenchHornGenerator(), instrument="french_horn", arrangement="AABB", density=0.9),
             TrackConfig(name="Trombones", generator=TromboneGenerator(), instrument="trombone", arrangement="AABB", density=0.9, octave_shift=-1),
+            TrackConfig(name="Tremolo Tension", generator=TremoloStringsGenerator(), instrument="strings", arrangement="ABCD", density=0.9, octave_shift=2),
             TrackConfig(name="Timpani", generator=TimpaniGenerator(), instrument="timpani", arrangement="ABCD", density=1.0),
             TrackConfig(name="Choir Epic", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=1.0),
             TrackConfig(name="Contrabass", generator=ContrabassGenerator(), instrument="contrabass", arrangement="AABB", density=1.0, octave_shift=-2),
