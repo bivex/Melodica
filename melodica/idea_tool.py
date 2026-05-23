@@ -183,6 +183,19 @@ class TrackConfig:
 
 
 @dataclass
+class IdeaPart:
+    """A structural section of a composition (e.g., Intro, Verse, Chorus)."""
+    name: str = "Part"
+    bars: int | None = None
+    scale: Scale | None = None
+    tempo: int | None = None
+    time_signature: tuple[int, int] | None = None
+    style: str | None = None
+    progression_type: str | None = None
+    progression_list: list[list[int]] | None = None
+
+
+@dataclass
 class IdeaToolConfig:
     """Full Idea Tool configuration."""
 
@@ -197,6 +210,9 @@ class IdeaToolConfig:
     bars: int = 8
     time_signature: tuple[int, int] = (4, 4)
     tempo: int = 120
+
+    # Parts (Hierarchical Structure)
+    parts: list[IdeaPart] = field(default_factory=list)
 
     # Progression
     progression_type: str = "from_list"  # "from_list", "rules", "hmm3", "random"
@@ -266,17 +282,45 @@ class IdeaTool:
         self._phrase_memory = PhraseMemory()
         self._pan_cc_events: dict[str, list[tuple[float, int, int]]] = {}
 
+    def _get_resolved_parts(self) -> list[IdeaPart]:
+        if self.config.parts:
+            parts = []
+            for i, p in enumerate(self.config.parts):
+                parts.append(IdeaPart(
+                    name=p.name or f"Part {i+1}",
+                    bars=p.bars if p.bars is not None else self.config.bars,
+                    scale=p.scale if p.scale is not None else self.config.scale,
+                    tempo=p.tempo if p.tempo is not None else self.config.tempo,
+                    time_signature=p.time_signature if p.time_signature is not None else self.config.time_signature,
+                    style=p.style if p.style is not None else self.config.style,
+                    progression_type=p.progression_type if p.progression_type is not None else self.config.progression_type,
+                    progression_list=p.progression_list if p.progression_list is not None else self.config.progression_list,
+                ))
+            return parts
+        else:
+            return [IdeaPart(
+                name="Main",
+                bars=self.config.bars,
+                scale=self.config.scale,
+                tempo=self.config.tempo,
+                time_signature=self.config.time_signature,
+                style=self.config.style,
+                progression_type=self.config.progression_type,
+                progression_list=self.config.progression_list,
+            )]
+
     def generate(self) -> dict[str, Any]:
         """
         Generate full composition. Returns dict of track_name → notes.
         "_chords" key contains the chord progression (list[ChordLabel]).
-
-        Respects config.workflow:
-          "generate_all"                  — default; generate progression + all tracks
-          "harmonize_melody"              — harmonize config.seed_melody, render other tracks
-          "generate_melody_then_harmonize"— generate melody first, harmonize it, render rest
+        "_tempo_map" key contains the tempo changes if applicable.
         """
-        total_beats = self.config.bars * self.config.time_signature[0]
+        parts = self._get_resolved_parts()
+        
+        # Calculate total beats across all parts
+        total_beats = 0.0
+        for p in parts:
+            total_beats += p.bars * p.time_signature[0]
         scale = self.config.scale
         result: dict[str, Any] = {}
 
@@ -303,7 +347,7 @@ class IdeaTool:
             chords = (
                 harmonizer.harmonize(seed, self.config.scale, total_beats)
                 if seed
-                else self._generate_progression()
+                else self._generate_progression(parts)
             )
             self._chords = chords
             result["_chords"] = chords
@@ -364,11 +408,11 @@ class IdeaTool:
                     result[first_mel.name] = seed_notes
                     seed_assigned_name = first_mel.name
 
-            self._generate_all_tracks(chords, tension_curve, result, skip=seed_assigned_name)
+            self._generate_all_tracks(chords, tension_curve, result, parts, skip=seed_assigned_name)
 
         elif self.config.workflow == "generate_melody_then_harmonize":
             # Step 1: render ALL melody tracks with bootstrap progression
-            bootstrap_chords = self._generate_progression()
+            bootstrap_chords = self._generate_progression(parts)
             melody_tracks = [t for t in self.config.tracks if t.generator_type == "melody"]
             if not melody_tracks:
                 melody_tracks = [
@@ -377,7 +421,7 @@ class IdeaTool:
 
             all_melody_notes: list[NoteInfo] = []
             for mel_cfg in melody_tracks:
-                mel_notes = self._generate_track(mel_cfg, bootstrap_chords, tension_curve)
+                mel_notes = self._generate_track(mel_cfg, bootstrap_chords, tension_curve, parts)
                 result[mel_cfg.name] = mel_notes
                 all_melody_notes.extend(mel_notes)
 
@@ -395,15 +439,15 @@ class IdeaTool:
 
             # Step 3: render all non-melody tracks using harmonized chords
             melody_names = {t.name for t in melody_tracks}
-            self._generate_all_tracks(chords, tension_curve, result, skip_set=melody_names)
+            self._generate_all_tracks(chords, tension_curve, result, parts, skip_set=melody_names)
 
         else:
             # "generate_all" — default
-            chords = self._generate_progression()
+            chords = self._generate_progression(parts)
             self._chords = chords
             result["_chords"] = chords
 
-            self._generate_all_tracks(chords, tension_curve, result)
+            self._generate_all_tracks(chords, tension_curve, result, parts)
 
         # ---- Post-processing (all workflows) ----
         from melodica._postprocess import apply_texture_control, apply_velocity_shaping
@@ -572,60 +616,73 @@ class IdeaTool:
     # Progression generation
     # ------------------------------------------------------------------
 
-    def _generate_progression(self) -> list[ChordLabel]:
-        """Generate chord progression based on config."""
-        scale = self.config.scale
-        beats_per_bar = self.config.time_signature[0]
-        bars = self.config.bars
-        total_beats = bars * beats_per_bar
+    def _generate_progression(self, parts: list[IdeaPart]) -> list[ChordLabel]:
+        """Generate chord progression based on config parts."""
+        all_chords = []
+        offset_beats = 0.0
 
-        # HMM3 harmonizer — beam-search over diatonic + secondary dominants
-        if self.config.progression_type == "hmm3":
-            harmonizer = HMM3Harmonizer(
-                beam_width=self.config.hmm3_beam_width,
-                chord_change=self.config.hmm3_chord_change,
-                allow_extensions=self.config.hmm3_allow_extensions,
-                allow_secondary_dom=self.config.hmm3_allow_secondary_dom,
-            )
-            contour = self._build_melody_contour(scale, bars, beats_per_bar)
-            return harmonizer.harmonize(contour, scale, total_beats)
+        for part in parts:
+            scale = part.scale
+            beats_per_bar = part.time_signature[0]
+            bars = part.bars
+            part_beats = bars * beats_per_bar
+            style_profile = get_style(part.style)
 
-        # Rules-based harmonizer
-        if self.config.progression_type == "rules":
-            harmonizer = FunctionalHarmonizer(start_with="I", end_with="I")
-            contour = self._build_melody_contour(scale, bars, beats_per_bar)
-            return harmonizer.harmonize(contour, scale, total_beats)
-
-        # From list or random — static degree-based
-        if self.config.progression_type == "from_list" and self.config.progression_list:
-            degrees = random.choice(self.config.progression_list)
-        else:
-            pool = PROGRESSION_LIBRARY.get(self.config.style, PROGRESSION_LIBRARY["pop"])
-            degrees = random.choice(pool)
-
-        # Expand degrees to fill bars
-        full_degrees = []
-        while len(full_degrees) < bars:
-            full_degrees.extend(degrees)
-        full_degrees = full_degrees[:bars]
-
-        # Build ChordLabels
-        chords = []
-        degs = scale.degrees()
-        for i, deg in enumerate(full_degrees):
-            root_pc = degs[(deg - 1) % len(degs)]
-            quality = self._quality_for_degree(deg)
-            chords.append(
-                ChordLabel(
-                    root=root_pc,
-                    quality=quality,
-                    start=round(i * beats_per_bar, 6),
-                    duration=round(beats_per_bar, 6),
-                    degree=deg,
+            # HMM3 harmonizer — beam-search over diatonic + secondary dominants
+            if part.progression_type == "hmm3":
+                harmonizer = HMM3Harmonizer(
+                    beam_width=self.config.hmm3_beam_width,
+                    chord_change=self.config.hmm3_chord_change,
+                    allow_extensions=self.config.hmm3_allow_extensions,
+                    allow_secondary_dom=self.config.hmm3_allow_secondary_dom,
                 )
-            )
+                contour = self._build_melody_contour(scale, bars, beats_per_bar)
+                part_chords = harmonizer.harmonize(contour, scale, part_beats)
 
-        return chords
+            # Rules-based harmonizer
+            elif part.progression_type == "rules":
+                harmonizer = FunctionalHarmonizer(start_with="I", end_with="I")
+                contour = self._build_melody_contour(scale, bars, beats_per_bar)
+                part_chords = harmonizer.harmonize(contour, scale, part_beats)
+
+            # From list or random — static degree-based
+            else:
+                if part.progression_type == "from_list" and part.progression_list:
+                    degrees = random.choice(part.progression_list)
+                else:
+                    pool = PROGRESSION_LIBRARY.get(part.style, PROGRESSION_LIBRARY["pop"])
+                    degrees = random.choice(pool)
+
+                # Expand degrees to fill bars
+                full_degrees = []
+                while len(full_degrees) < bars:
+                    full_degrees.extend(degrees)
+                full_degrees = full_degrees[:bars]
+
+                # Build ChordLabels
+                part_chords = []
+                degs = scale.degrees()
+                for i, deg in enumerate(full_degrees):
+                    root_pc = degs[(deg - 1) % len(degs)]
+                    quality = self._quality_for_degree(deg, style_profile)
+                    part_chords.append(
+                        ChordLabel(
+                            root=root_pc,
+                            quality=quality,
+                            start=round(i * beats_per_bar, 6),
+                            duration=round(beats_per_bar, 6),
+                            degree=deg,
+                        )
+                    )
+            
+            # Shift the start times
+            for c in part_chords:
+                c.start += offset_beats
+            
+            all_chords.extend(part_chords)
+            offset_beats += part_beats
+
+        return all_chords
 
     def _build_melody_contour(self, scale, bars, beats_per_bar) -> list[NoteInfo]:
         """Build a synthetic melody contour for harmonizers."""
@@ -669,13 +726,14 @@ class IdeaTool:
 
         return notes
 
-    def _quality_for_degree(self, degree: int) -> Quality:
+    def _quality_for_degree(self, degree: int, style_profile: StyleProfile | None = None) -> Quality:
         """Get chord quality for a degree based on style."""
-        if self._style.extensions and degree in (1, 4):
+        style = style_profile or self._style
+        if style.extensions and degree in (1, 4):
             return Quality.MAJOR7
-        elif self._style.extensions and degree in (2, 3, 6):
+        elif style.extensions and degree in (2, 3, 6):
             return Quality.MINOR7
-        elif self._style.extensions and degree == 5:
+        elif style.extensions and degree == 5:
             return Quality.DOMINANT7
         elif degree in (1, 4, 5):
             return Quality.MAJOR
@@ -693,10 +751,9 @@ class IdeaTool:
         cfg: TrackConfig,
         chords: list[ChordLabel],
         tension_curve: TensionCurve | None,
+        parts: list[IdeaPart],
     ) -> list[NoteInfo]:
-        """Generate notes for a single track."""
-        scale = self.config.scale
-        total_beats = self.config.bars * self.config.time_signature[0]
+        """Generate notes for a single track across all parts."""
         params = GeneratorParams(density=cfg.density)
 
         # Obtain generator — from cache, direct instance, or freshly created
@@ -704,120 +761,142 @@ class IdeaTool:
         if gen is None:
             return []
 
-        # Apply arrangement pattern; thread context across sections (and across calls)
-        pattern = ARRANGEMENT_PATTERNS.get(cfg.arrangement, ["A", "B", "A", "B"])
-        notes: list[NoteInfo] = []
-        section_length = total_beats / len(pattern)
-        ctx = self._track_contexts.get(cfg.name, RenderContext())
+        all_notes: list[NoteInfo] = []
+        offset_beats = 0.0
 
-        n_sections = len(pattern)
-        for i, section in enumerate(pattern):
-            section_start = i * section_length
-            phrase_pos = i / max(1, n_sections - 1)  # 0.0 at A, 1.0 at last section
-            # Rebuild context preserving continuity but updating phrase_position
-            ctx = RenderContext(
-                prev_pitch=ctx.prev_pitch,
-                prev_velocity=ctx.prev_velocity,
-                prev_chord=ctx.prev_chord,
-                prev_pitches=list(ctx.prev_pitches),
-                phrase_position=phrase_pos,
-            )
-            section_end = section_start + section_length
-            section_chords = [c for c in chords if c.start < section_end and c.end > section_start]
-            if not section_chords:
-                # Use last chord that started before this section ends (not first-ever chord)
-                before = [c for c in chords if c.start < section_end]
-                section_chords = [before[-1]] if before else (chords[:1] if chords else [])
+        for part in parts:
+            scale = part.scale
+            part_beats = part.bars * part.time_signature[0]
 
-            # Adjust chord times to section-local origin; clip durations at section boundary
-            adjusted = [
-                ChordLabel(
-                    root=c.root,
-                    quality=c.quality,
-                    start=max(0.0, c.start - section_start),
-                    duration=min(c.end, section_end) - max(c.start, section_start),
-                    degree=c.degree,
+            # Apply arrangement pattern per part
+            pattern = ARRANGEMENT_PATTERNS.get(cfg.arrangement, ["A", "B", "A", "B"])
+            part_notes: list[NoteInfo] = []
+            section_length = part_beats / len(pattern)
+            ctx = self._track_contexts.get(cfg.name, RenderContext())
+
+            n_sections = len(pattern)
+            for i, section in enumerate(pattern):
+                section_start = offset_beats + i * section_length
+                phrase_pos = i / max(1, n_sections - 1) if n_sections > 1 else 0.0
+                
+                # Rebuild context preserving continuity but updating phrase_position
+                ctx = RenderContext(
+                    prev_pitch=ctx.prev_pitch,
+                    prev_velocity=ctx.prev_velocity,
+                    prev_chord=ctx.prev_chord,
+                    prev_pitches=list(ctx.prev_pitches),
+                    phrase_position=phrase_pos,
                 )
-                for c in section_chords
-            ]
+                section_end = section_start + section_length
+                
+                # Find chords for this section (in global time)
+                section_chords = [c for c in chords if c.start < section_end and c.end > section_start]
+                if not section_chords:
+                    before = [c for c in chords if c.start < section_end]
+                    section_chords = [before[-1]] if before else (chords[:1] if chords else [])
 
-            section_notes = gen.render(adjusted, scale, section_length, ctx)
-
-            # Phrase memory: store first occurrence, recall on repeat sections
-            from melodica._postprocess import handle_phrase_memory
-
-            mem_key = f"{cfg.name}:{section}"
-            section_notes = handle_phrase_memory(
-                section_notes,
-                self._phrase_memory,
-                mem_key,
-                section,
-                i,
-                adjusted,
-                cfg,
-                self.config.scale.root,
-            )
-
-            # Offset to global time
-            for n in section_notes:
-                notes.append(
-                    NoteInfo(
-                        pitch=n.pitch + cfg.octave_shift * 12,
-                        start=round(n.start + section_start, 6),
-                        duration=n.duration,
-                        velocity=n.velocity,
-                        articulation=n.articulation,
-                        expression=dict(n.expression),
+                # Adjust chord times to section-local origin; clip durations at section boundary
+                adjusted = [
+                    ChordLabel(
+                        root=c.root,
+                        quality=c.quality,
+                        start=max(0.0, c.start - section_start),
+                        duration=min(c.end, section_end) - max(c.start, section_start),
+                        degree=c.degree,
                     )
+                    for c in section_chords
+                ]
+
+                section_notes = gen.render(adjusted, scale, section_length, ctx)
+
+                # Phrase memory: store first occurrence, recall on repeat sections
+                from melodica._postprocess import handle_phrase_memory
+                
+                # Add part name to mem_key so that A in Part 1 is different from A in Part 2, unless desired otherwise.
+                # Usually we want a fresh arrangement cycle per part, so we namespace it by part name.
+                mem_key = f"{cfg.name}:{part.name}:{section}"
+                section_notes = handle_phrase_memory(
+                    section_notes,
+                    self._phrase_memory,
+                    mem_key,
+                    section,
+                    i,
+                    adjusted,
+                    cfg,
+                    scale.root,
                 )
 
-            # Thread context to next section — prefer generator's own tracked state
-            if hasattr(gen, "_last_context") and gen._last_context is not None:
-                ctx = gen._last_context
-            elif notes:
-                ctx = RenderContext().with_end_state(
-                    last_pitch=notes[-1].pitch,
-                    last_velocity=notes[-1].velocity,
-                    last_chord=section_chords[-1] if section_chords else None,
-                )
+                # Offset to global time (including the part's offset)
+                for n in section_notes:
+                    part_notes.append(
+                        NoteInfo(
+                            pitch=n.pitch + cfg.octave_shift * 12,
+                            start=round(n.start + section_start, 6),
+                            duration=n.duration,
+                            velocity=n.velocity,
+                            articulation=n.articulation,
+                            expression=dict(n.expression),
+                        )
+                    )
 
-        # Persist context for next generate() call
-        self._track_contexts[cfg.name] = ctx
+                # Thread context to next section
+                if hasattr(gen, "_last_context") and gen._last_context is not None:
+                    ctx = gen._last_context
+                elif part_notes:
+                    ctx = RenderContext().with_end_state(
+                        last_pitch=part_notes[-1].pitch,
+                        last_velocity=part_notes[-1].velocity,
+                        last_chord=section_chords[-1] if section_chords else None,
+                    )
 
-        # Apply built-in named variations
-        for var_name in cfg.variations:
-            notes = self._apply_variation(var_name, notes, chords)
+            # Persist context for next generate() call
+            self._track_contexts[cfg.name] = ctx
 
-        # Apply SDK modifier instances from TrackConfig.modifiers
+            # Apply built-in named variations (per part notes? Or all notes?)
+            # It's better to apply variations per part. But wait, apply_variation expects the whole track?
+            # actually apply_variation can operate on slices. We'll do it on part_notes.
+            # But we must shift chords to match part_notes start times. Wait, apply_variation doesn't take chords.
+            for var_name in cfg.variations:
+                # Need to map chords for this part only if variation needs it, but _apply_variation signature uses chords.
+                part_chords = [c for c in chords if c.start >= offset_beats and c.start < offset_beats + part_beats]
+                part_notes = self._apply_variation(var_name, part_notes, part_chords)
+
+            all_notes.extend(part_notes)
+            offset_beats += part_beats
+
+        # The global modifiers (SDK, voice leading, non-chord tones) should operate on the full track.
         from melodica._postprocess import (
             apply_track_modifiers,
             apply_voice_leading,
             apply_non_chord_tones,
         )
 
-        notes = apply_track_modifiers(
-            notes, cfg, chords, scale, self.config.time_signature, total_beats
+        total_beats = offset_beats
+        # It's safer to use the global scale for global post-processing, but note that scale changed per part.
+        # This is a limitation of the global post-processing.
+        scale = self.config.scale 
+        
+        all_notes = apply_track_modifiers(
+            all_notes, cfg, chords, scale, self.config.time_signature, total_beats
         )
 
-        # Voice leading: smooth out octave leaps between notes
         if self.config.use_voice_leading and cfg.generator_type in (
             "melody",
             "chord",
             "arpeggiator",
         ):
-            notes = apply_voice_leading(
-                notes, cfg, chords, scale, self.config.time_signature, total_beats
+            all_notes = apply_voice_leading(
+                all_notes, cfg, chords, scale, self.config.time_signature, total_beats
             )
 
-        # Non-chord tones: melody and melodic bass lines
         if self.config.use_non_chord_tones and cfg.generator_type in (
             "melody",
             "bass",
             "arpeggiator",
         ):
-            notes = apply_non_chord_tones(notes, cfg, chords, scale)
+            all_notes = apply_non_chord_tones(all_notes, cfg, chords, scale)
 
-        return notes
+        return all_notes
 
     def _get_generator(self, cfg: TrackConfig, params: GeneratorParams):
         """
@@ -845,6 +924,7 @@ class IdeaTool:
         chords: list[ChordLabel],
         tension_curve,
         result: dict,
+        parts: list[IdeaPart],
         skip: str | None = None,
         skip_set: set[str] | None = None,
     ) -> None:
@@ -875,14 +955,14 @@ class IdeaTool:
         ]
 
         for cfg in independent:
-            result[cfg.name] = self._generate_track(cfg, chords, tension_curve)
+            result[cfg.name] = self._generate_track(cfg, chords, tension_curve, parts)
 
         for cfg in dependent:
             dep_notes = result.get(cfg.depends_on, [])
             cfg.params[cfg.depends_on_param] = dep_notes
             # Invalidate cache so the generator is rebuilt with injected notes
             self._generator_cache.pop(cfg.name, None)
-            result[cfg.name] = self._generate_track(cfg, chords, tension_curve)
+            result[cfg.name] = self._generate_track(cfg, chords, tension_curve, parts)
 
     def _create_generator(self, cfg: TrackConfig, params: GeneratorParams):
         """Create a generator based on track config."""

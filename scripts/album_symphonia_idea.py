@@ -172,19 +172,40 @@ def generate_track_06():
     return IdeaTool(config).generate(), 110.0
 
 
+from melodica.idea_tool import IdeaPart
+
 def generate_track_07():
-    print("  -> 7. Finale - The Ascent (C Minor -> Epic, 125 BPM)")
+    print("  -> 7. Finale - The Ascent (Multi-Part Suite)")
     config = IdeaToolConfig(
+        # Global fallback scale and tempo
         scale=Scale(root=0, mode=Mode.HARMONIC_MINOR),
         style="cinematic",
-        bars=48,
-        tempo=125,
         workflow="generate_all",
         use_tension_curve=True,
         use_voice_leading=True,
         use_texture_control=True,
         use_mixing=True,
         target_lufs=-12.0,
+        parts=[
+            IdeaPart(
+                name="The Build",
+                bars=16,
+                scale=Scale(root=0, mode=Mode.HARMONIC_MINOR), # C Minor
+                tempo=120,
+            ),
+            IdeaPart(
+                name="The Modulation",
+                bars=16,
+                scale=Scale(root=2, mode=Mode.AEOLIAN), # D Minor
+                tempo=130,
+            ),
+            IdeaPart(
+                name="The Climax",
+                bars=16,
+                scale=Scale(root=4, mode=Mode.AEOLIAN), # E Minor
+                tempo=140,
+            )
+        ],
         tracks=[
             TrackConfig(name="Violins Legato", generator=StringsLegatoGenerator(), instrument="strings", arrangement="ABCD", density=0.9, octave_shift=1),
             TrackConfig(name="Choir Epic", generator=ChoirAahsGenerator(), instrument="choir", arrangement="ABCD", density=1.0),
@@ -195,7 +216,8 @@ def generate_track_07():
             TrackConfig(name="Timpani", generator=TimpaniGenerator(), instrument="timpani", arrangement="ABAB", density=0.8),
         ]
     )
-    return IdeaTool(config).generate(), 125.0
+    # Return 120 as base BPM for MIDI file metadata, though the engine can handle tempo maps if exporter supports it
+    return IdeaTool(config).generate(), 120.0
 
 
 def main():
