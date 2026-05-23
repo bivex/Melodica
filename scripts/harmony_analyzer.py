@@ -160,38 +160,98 @@ def analyze_chords(tracks: dict[str, list[NoteInfo]], ticks_per_beat: int):
         
     return slices
 
+import numpy as np
+from melodica.theory.modes import MODE_DATABASE, Mode
+from melodica.detection import _KS_MAJOR, _KS_MINOR
+
 # ---------------------------------------------------------------------------
-# Analysis: Key Detection
+# Logic: Modal Key Detection (Expanded Krumhansl-Schmuckler)
 # ---------------------------------------------------------------------------
 
-def detect_key(tracks: dict[str, list[NoteInfo]]):
-    """Simple heuristic for key detection based on pitch distribution."""
-    all_pcs = []
-    for tname, notes in tracks.items():
-        if "percussion" in tname.lower() or "drums" in tname.lower():
-            continue
-        for n in notes:
-            all_pcs.append(n.pitch % 12)
+def get_modal_profile(mode: Mode) -> np.ndarray:
+    """Generate a pseudo-KS profile for any mode based on its intervals."""
+    profile = np.zeros(12)
+    intervals = MODE_DATABASE[mode].intervals
+    # Basic weighting: Tonic=5.0, Fifths=4.0, Others=3.0, Non-scale=0.5
+    for iv in range(12):
+        if iv in intervals:
+            if iv == 0: profile[iv] = 6.0
+            elif iv == 7: profile[iv] = 5.0
+            elif iv in {3, 4}: profile[iv] = 4.5
+            else: profile[iv] = 3.5
+        else:
+            profile[iv] = 1.0
+    return profile
+
+def detect_key_modal(notes: list[NoteInfo], window: tuple[float, float] | None = None):
+    """
+    Advanced key detection supporting all modes and time windows.
+    """
+    if not notes:
+        return None, 0.0
+
+    histogram = np.zeros(12)
+    total_dur = 0.0
+    
+    for n in notes:
+        if window:
+            start = max(n.start, window[0])
+            end = min(n.start + n.duration, window[1])
+            if start >= end: continue
+            dur = end - start
+        else:
+            dur = n.duration
             
-    if not all_pcs:
-        return None
-        
-    counts = Counter(all_pcs)
-    # Most common pitch is likely the tonic or part of the tonic chord
-    # In a more advanced version, we'd match against scale degree weights
+        histogram[n.pitch % 12] += dur
+        total_dur += dur
+
+    if total_dur == 0:
+        return None, 0.0
+
+    histogram /= total_dur
+
+    best_corr = -2.0
+    best_scale = None
+
+    # Check common modes first for speed, then others
+    check_modes = [Mode.MAJOR, Mode.AEOLIAN, Mode.DORIAN, Mode.PHRYGIAN, Mode.LYDIAN, Mode.MIXOLYDIAN, Mode.LOCRIAN, Mode.HARMONIC_MINOR]
     
-    tonic = counts.most_common(1)[0][0]
+    for root in range(12):
+        rotated = np.roll(histogram, -root)
+        for mode in check_modes:
+            if mode == Mode.MAJOR: profile = _KS_MAJOR
+            elif mode == Mode.AEOLIAN: profile = _KS_MINOR
+            else: profile = get_modal_profile(mode)
+            
+            corr = float(np.corrcoef(rotated, profile)[0, 1])
+            if corr > best_corr:
+                best_corr = corr
+                best_scale = Scale(root=root, mode=mode)
+
+    return best_scale, best_corr
+
+# ---------------------------------------------------------------------------
+# Logic: Modulation Analysis
+# ---------------------------------------------------------------------------
+
+def analyze_modulations(tracks: dict[str, list[NoteInfo]], duration: float):
+    """Detect key changes over time using a sliding window."""
+    all_notes = [n for notes in tracks.values() for n in notes]
     
-    # Check if major or minor (3rd degree)
-    third_maj = (tonic + 4) % 12
-    third_min = (tonic + 3) % 12
+    window_size = 16.0 # 4 bars
+    step_size = 4.0   # 1 bar
     
-    if counts[third_min] >= counts[third_maj]:
-        mode = Mode.AEOLIAN
-    else:
-        mode = Mode.IONIAN
-        
-    return Scale(root=tonic, mode=mode)
+    modulations = []
+    last_key = None
+    
+    for t in np.arange(0, duration, step_size):
+        key, confidence = detect_key_modal(all_notes, window=(t, t + window_size))
+        if key and (last_key is None or key.root != last_key.root or key.mode != last_key.mode):
+            if confidence > 0.6: # Only record high-confidence changes
+                modulations.append((t, key, confidence))
+                last_key = key
+                
+    return modulations
 
 # ---------------------------------------------------------------------------
 # Report Generator
@@ -199,7 +259,7 @@ def detect_key(tracks: dict[str, list[NoteInfo]]):
 
 def run_analysis(path: str):
     print(f"\n{'=' * 80}")
-    print(f"        H A R M O N Y   A N A L Y Z E R")
+    print(f"        H A R M O N Y   A N A L Y Z E R   v2.0")
     print(f"        File: {Path(path).name}")
     print(f"{'=' * 80}")
 
@@ -208,10 +268,24 @@ def run_analysis(path: str):
         print("Error: No tracks found in MIDI file.")
         return
 
-    # 1. Key Detection
-    key = detect_key(tracks)
-    print(f"\n  DETECTED KEY: {key if key else 'Unknown'}")
+    all_notes = [n for nt in tracks.values() for n in nt]
+    duration_beats = mid.length * 120 / 60 # Approx for analysis
+
+    # 1. Key & Modulation Detection
+    main_key, confidence = detect_key_modal(all_notes)
+    modulations = analyze_modulations(tracks, mid.length * 120 / 60)
     
+    print(f"\n  DETECTED MAIN KEY: {main_key if main_key else 'Unknown'}")
+    print(f"  Confidence: {confidence:.2f}")
+    
+    if len(modulations) > 1:
+        print(f"\n  MODULATIONS DETECTED:")
+        for t, k, c in modulations:
+            print(f"    - At {t:5.1f}b: {str(k):30s} (Confidence: {c:.2f})")
+    
+    # Use the first detected key as the global key for chord analysis if needed
+    key = main_key
+
     # 2. Chord Analysis
     chords_slices = analyze_chords(tracks, mid.ticks_per_beat)
     print(f"\n  CHORD PROGRESSION (Estimated):")
