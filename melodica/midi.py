@@ -312,6 +312,7 @@ def export_multitrack_midi(
     humanize: bool = True,
     tempo_events: list[tuple[float, float]] | None = None,
     pitch_bend_range: int = 2,
+    mpe_tracks: set[str] | None = None,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -324,6 +325,8 @@ def export_multitrack_midi(
     instruments: { "TrackName": gm_program_number } — GM instrument per track.
         Default: 0 (Acoustic Grand Piano). Keys not found default to 0.
     diagnose: if True, run diagnostic analysis on tracks and print fix suggestions.
+    mpe_tracks: set of track names that should get MPE (per-note expression) treatment.
+        These tracks get larger voice pools and MPE zone RPN setup.
     """
     from melodica.types import TICKS_PER_BEAT, MIDI_MAX
 
@@ -400,6 +403,7 @@ def export_multitrack_midi(
 
     # 2. Dynamic voice channel pool allocation to prevent polyphonic pitch bend overlap.
     # Identify which tracks in tracks_data contain microtonal notes.
+    mpe_set = mpe_tracks or set()
     microtonal_tracks = []
     for name, notes in tracks_data.items():
         has_micro = False
@@ -412,14 +416,26 @@ def export_multitrack_midi(
 
     track_channels: dict[str, list[int]] = {}
     next_chan = 0
+    mpe_zone_channels = []  # Collect all MPE member channels for zone setup
     for name in tracks_data.keys():
-        if name in microtonal_tracks:
+        is_mpe = name in mpe_set
+        if is_mpe:
+            # MPE tracks: 7 channels for full polyphonic expression
+            pool_size = 7
+            remaining_tracks = len(tracks_data) - len(track_channels) - 1
+            if next_chan + pool_size + remaining_tracks > 15:
+                pool_size = max(1, 15 - next_chan - remaining_tracks)
+            pool = list(range(next_chan, next_chan + pool_size))
+            track_channels[name] = pool
+            mpe_zone_channels.extend(pool[1:])  # Member channels (not master)
+            next_chan += pool_size
+        elif name in microtonal_tracks:
             # Give a pool of 3 channels for polyphonic microtonal voice allocation
             pool_size = 3
             remaining_tracks = len(tracks_data) - len(track_channels) - 1
             if next_chan + pool_size + remaining_tracks > 16:
                 pool_size = max(1, 16 - next_chan - remaining_tracks)
-            
+
             track_channels[name] = list(range(next_chan, next_chan + pool_size))
             next_chan += pool_size
         else:
@@ -441,7 +457,8 @@ def export_multitrack_midi(
         tr.append(mido.MetaMessage("track_name", name=name, time=0))
 
         # Program change and controllers: broadcast to all channels in the pool
-        for channel in pool:
+        is_mpe_track = name in mpe_set
+        for ci, channel in enumerate(pool):
             program = (instruments or {}).get(name, 0)
             tr.append(mido.Message("program_change", program=program, channel=channel, time=0))
 
@@ -468,6 +485,28 @@ def export_multitrack_midi(
             # Null RPN to prevent accidental CC6 overrides later
             tr.append(mido.Message("control_change", control=101, value=127, channel=channel, time=0))
             tr.append(mido.Message("control_change", control=100, value=127, channel=channel, time=0))
+
+        # MPE zone setup: RPN 0x0006 on master channel (first in pool)
+        # Declares the number of member channels for MPE-aware synths
+        if is_mpe_track and len(pool) > 1:
+            master_ch = pool[0]
+            member_count = len(pool) - 1  # All channels except master
+            tr.append(mido.Message("control_change", control=101, value=0, channel=master_ch, time=0))
+            tr.append(mido.Message("control_change", control=100, value=6, channel=master_ch, time=0))
+            tr.append(mido.Message("control_change", control=6, value=member_count, channel=master_ch, time=0))
+            tr.append(mido.Message("control_change", control=38, value=0, channel=master_ch, time=0))
+            # Null RPN
+            tr.append(mido.Message("control_change", control=101, value=127, channel=master_ch, time=0))
+            tr.append(mido.Message("control_change", control=100, value=127, channel=master_ch, time=0))
+
+            # MPE per-note pitch bend range (+/- 48 semitones for maximum expression)
+            for ch in pool[1:]:
+                tr.append(mido.Message("control_change", control=101, value=0, channel=ch, time=0))
+                tr.append(mido.Message("control_change", control=100, value=0, channel=ch, time=0))
+                tr.append(mido.Message("control_change", control=6, value=48, channel=ch, time=0))
+                tr.append(mido.Message("control_change", control=38, value=0, channel=ch, time=0))
+                tr.append(mido.Message("control_change", control=101, value=127, channel=ch, time=0))
+                tr.append(mido.Message("control_change", control=100, value=127, channel=ch, time=0))
 
         # Build all events: note_on, note_off, control_change, pitchwheel
         # Format: (tick, msg_type, val1, val2, channel)

@@ -60,10 +60,10 @@ def generate_track_01():
         tracks=[
             TrackConfig(name="Harp Arpeggios", generator=HarpGenerator(), instrument="harp", arrangement="ABAB", density=0.7, rhythm_rests=0.8),
             TrackConfig(name="Woodwinds Motif", generator=WoodwindsEnsembleGenerator(), instrument="oboe", arrangement="AABB", density=0.5, octave_shift=1, variations=["humanize"], rhythm_rests=0.7),
-            TrackConfig(name="Cello Solo", generator=CelloGenerator(), instrument="cello", arrangement="ABCD", density=0.6, variations=["humanize"], rhythm_swing=0.55),
-            TrackConfig(name="Viola Counter", generator=CountermelodyGenerator(motion_preference="contrary"), instrument="viola", arrangement="ABCD", density=0.5, depends_on="Cello Solo", rhythm_rotate=0.125),
+            TrackConfig(name="Cello Solo", generator=CelloGenerator(), instrument="cello", arrangement="ABCD", density=0.6, variations=["humanize"], rhythm_swing=0.55, mpe=True),
+            TrackConfig(name="Viola Counter", generator=CountermelodyGenerator(motion_preference="contrary"), instrument="viola", arrangement="ABCD", density=0.5, depends_on="Cello Solo", rhythm_rotate=0.125, mpe=True),
             TrackConfig(name="Tremolo Tension", generator=TremoloStringsGenerator(), instrument="strings", arrangement="AABB", density=0.8, octave_shift=1),
-            TrackConfig(name="Choir Ahhs", generator=ChoirAahsGenerator(), instrument="choir", arrangement="AABB", density=0.4, rhythm_rests=0.6),
+            TrackConfig(name="Choir Ahhs", generator=ChoirAahsGenerator(), instrument="choir", arrangement="AABB", density=0.4, rhythm_rests=0.6, mpe=True),
             TrackConfig(name="Contrabass Sub", generator=ContrabassGenerator(), instrument="contrabass", arrangement="AABB", density=0.8, octave_shift=-1),
         ]
     )
@@ -167,11 +167,11 @@ def generate_track_05():
         parts=parts,
         tracks=[
             TrackConfig(name="Piano Runs", generator=PianoRunGenerator(), instrument="piano", arrangement="ABCD", density=0.8, octave_shift=1, variations=["humanize"]),
-            TrackConfig(name="Violins Melody", generator=ViolinGenerator(), instrument="violin", arrangement="AABC", density=0.9, octave_shift=1, variations=["octave_double"]),
-            TrackConfig(name="Strings Legato", generator=StringsLegatoGenerator(), instrument="strings", arrangement="AABC", density=1.0, octave_shift=1),
-            TrackConfig(name="Viola Counter", generator=CountermelodyGenerator(motion_preference="mixed"), instrument="viola", arrangement="AABC", density=0.7, depends_on="Violins Melody"),
+            TrackConfig(name="Violins Melody", generator=ViolinGenerator(), instrument="violin", arrangement="AABC", density=0.9, octave_shift=1, variations=["octave_double"], mpe=True),
+            TrackConfig(name="Strings Legato", generator=StringsLegatoGenerator(), instrument="strings", arrangement="AABC", density=1.0, octave_shift=1, mpe=True),
+            TrackConfig(name="Viola Counter", generator=CountermelodyGenerator(motion_preference="mixed"), instrument="viola", arrangement="AABC", density=0.7, depends_on="Violins Melody", mpe=True),
             TrackConfig(name="Brass Section", generator=BrassSectionGenerator(), instrument="brass", arrangement="AABB", density=1.0),
-            TrackConfig(name="French Horns", generator=FrenchHornGenerator(), instrument="french_horn", arrangement="AABB", density=0.9),
+            TrackConfig(name="French Horns", generator=FrenchHornGenerator(), instrument="french_horn", arrangement="AABB", density=0.9, mpe=True),
             TrackConfig(name="Trombones", generator=TromboneGenerator(), instrument="trombone", arrangement="AABB", density=0.9, octave_shift=-1),
             TrackConfig(name="Tremolo Tension", generator=TremoloStringsGenerator(), instrument="strings", arrangement="ABCD", density=0.9, octave_shift=2),
             TrackConfig(name="Timpani", generator=TimpaniGenerator(), instrument="timpani", arrangement="ABCD", density=1.0),
@@ -279,6 +279,9 @@ def main():
             # Extract CC automation events (expression, reverb, etc.)
             cc_events = notes_dict.get("_cc_events", {})
 
+            # Extract MPE track names for per-note expression channels
+            mpe_tracks = notes_dict.get("_mpe_tracks", set())
+
             # Export with tempo automation and CC events!
             export_multitrack_midi(
                 tracks_data,
@@ -286,6 +289,7 @@ def main():
                 bpm=parts_config[0].tempo, # Base BPM
                 tempo_events=tempo_map,    # Dynamic BPM automation!
                 cc_events=cc_events,       # CC11 expression + CC91 reverb!
+                mpe_tracks=mpe_tracks,     # MPE per-note channels!
             )
             
             # Count notes

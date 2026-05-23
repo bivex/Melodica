@@ -187,6 +187,9 @@ class TrackConfig:
     rhythm_rests: float = 1.0  # 1.0 = all notes kept, 0.0 = none
     rhythm_swing: float = 0.5  # 0.5 = straight, 0.66 = triplet swing
 
+    # MPE (MIDI Polyphonic Expression)
+    mpe: bool = False  # Allocate per-note channels for expression control
+
 
 @dataclass
 class IdeaPart:
@@ -538,6 +541,11 @@ class IdeaTool:
         # Apply this AFTER all verifiers so the swells are preserved
         apply_velocity_shaping(result, self.config.tracks, tension_curve)
 
+        # ---- MPE Expression (per-note CC11/CC74/CC1 curves) ----
+        from melodica._postprocess import apply_mpe_expression, apply_portamento
+        apply_mpe_expression(result, self.config.tracks)
+        apply_portamento(result, self.config.tracks)
+
         # ---- Production Pipeline (humanization, sidechain, dynamics, polyphony, CC) ----
         cc_events: dict[str, list[tuple[float, int, int]]] = {}
         if self.config.use_mixing or self.config.use_mastering:
@@ -587,6 +595,11 @@ class IdeaTool:
 
         if cc_events:
             result["_cc_events"] = cc_events
+
+        # Expose MPE track names for MIDI export
+        mpe_track_names = {tc.name for tc in self.config.tracks if getattr(tc, "mpe", False)}
+        if mpe_track_names:
+            result["_mpe_tracks"] = mpe_track_names
 
         # ---- Mastering Desk (LUFS target, Multiband Comp, Imaging, Limiter) ----
         if self.config.use_mastering:

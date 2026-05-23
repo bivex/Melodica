@@ -257,3 +257,104 @@ def apply_non_chord_tones(notes, cfg, chords, scale):
             exc_info=True,
         )
     return notes
+
+
+def apply_mpe_expression(result, tracks):
+    """Inject per-note MPE expression curves (CC11, CC74, CC1) for tracks with mpe=True."""
+    from melodica.expression_envelope import mpe_expression_for_instrument
+    import logging
+
+    logger = logging.getLogger(__name__)
+    for track_cfg in tracks:
+        if not getattr(track_cfg, "mpe", False):
+            continue
+        if track_cfg.name not in result:
+            continue
+
+        new_notes = []
+        for n in result[track_cfg.name]:
+            mpe_expr = mpe_expression_for_instrument(
+                track_cfg.instrument, n.duration, n.velocity
+            )
+            merged = dict(n.expression)
+            for k, v in mpe_expr.items():
+                if k not in merged:
+                    merged[k] = v
+            new_notes.append(
+                NoteInfo(
+                    pitch=n.pitch,
+                    start=n.start,
+                    duration=n.duration,
+                    velocity=n.velocity,
+                    articulation=n.articulation,
+                    expression=merged,
+                )
+            )
+        result[track_cfg.name] = new_notes
+
+
+def apply_portamento(result, tracks):
+    """Add pitch bend portamento curves for MPE tracks at large interval jumps.
+
+    When a note follows another with >2 semitone gap and starts within 0.5 beats,
+    a pitch bend curve glides from the previous pitch to the current one.
+    """
+    import math
+
+    for track_cfg in tracks:
+        if not getattr(track_cfg, "mpe", False):
+            continue
+        if track_cfg.name not in result:
+            continue
+
+        notes = sorted(result[track_cfg.name], key=lambda n: n.start)
+        if len(notes) < 2:
+            continue
+
+        modified = [notes[0]]
+        for i in range(1, len(notes)):
+            prev = notes[i - 1]
+            curr = notes[i]
+            gap = curr.start - (prev.start + prev.duration)
+            interval = curr.pitch - prev.pitch
+
+            # Only portamento: close timing (< 0.5 beats gap) and significant jump (3-11 semitones)
+            if -12 < interval < 12 and abs(interval) >= 3 and gap < 0.5:
+                # Pitch bend range: ±48 semitones (set by MPE zone in midi.py)
+                # 8192 per 48 semitones = ~171 per semitone
+                bend_start = int(interval * -171)  # Negative: start bent toward previous pitch
+                glide_beats = min(0.25, curr.duration * 0.3)  # Glide over 30% of note or 0.25 beats
+                steps = max(3, int(glide_beats * 8))
+
+                points = []
+                for s in range(steps + 1):
+                    t = (s / steps) * glide_beats
+                    frac = s / steps
+                    # Exponential ease-out curve
+                    eased = 1.0 - math.exp(-3.0 * frac)
+                    val = int(bend_start * (1.0 - eased))
+                    points.append((round(t, 4), max(-8192, min(8191, val))))
+
+                merged = dict(curr.expression)
+                # Prepend portamento to existing pitch_bend or create new
+                if "pitch_bend" in merged:
+                    existing = merged["pitch_bend"]
+                    if isinstance(existing, list):
+                        merged["pitch_bend"] = points + existing
+                else:
+                    merged["pitch_bend"] = points
+
+                modified.append(
+                    NoteInfo(
+                        pitch=curr.pitch,
+                        start=curr.start,
+                        duration=curr.duration,
+                        velocity=curr.velocity,
+                        articulation=curr.articulation,
+                        expression=merged,
+                    )
+                )
+            else:
+                modified.append(curr)
+
+        result[track_cfg.name] = modified
