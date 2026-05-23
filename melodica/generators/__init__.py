@@ -353,6 +353,15 @@ from melodica.generators.tuba import TubaGenerator
 from melodica.generators.snare_drum import SnareDrumGenerator
 from melodica.generators.orchestral_cymbal import OrchestralCymbalGenerator
 from melodica.generators.tubular_bells import TubularBellsGenerator
+from melodica.generators.chromatic_percussion import (
+    CelestaGenerator,
+    GlockenspielGenerator,
+    MusicBoxGenerator,
+    VibraphoneGenerator,
+    MarimbaGenerator,
+    XylophoneGenerator,
+    DulcimerGenerator,
+)
 
 __all__ = [
     "PhraseGenerator",
@@ -550,4 +559,11 @@ __all__ = [
     "SnareDrumGenerator",
     "OrchestralCymbalGenerator",
     "TubularBellsGenerator",
+    "CelestaGenerator",
+    "GlockenspielGenerator",
+    "MusicBoxGenerator",
+    "VibraphoneGenerator",
+    "MarimbaGenerator",
+    "XylophoneGenerator",
+    "DulcimerGenerator",
 ]
