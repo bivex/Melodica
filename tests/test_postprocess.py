@@ -53,22 +53,22 @@ class TestApplyVelocityShaping:
         result = {"melody": _notes(5)}
         curve = FakeTensionCurve(0.5)
         apply_velocity_shaping(result, [FakeTrackCfg("melody")], curve)
-        # factor = 0.6 + 0.4 * 0.5 = 0.8, vel = 80 * 0.8 = 64
-        assert result["melody"][0].velocity == 64
+        # factor = 0.4 + 0.6 * 0.5 = 0.7, vel = 80 * 0.7 = 56
+        assert result["melody"][0].velocity == 56
 
     def test_high_tension_max_velocity(self):
         result = {"melody": _notes(3)}
         curve = FakeTensionCurve(1.0)
         apply_velocity_shaping(result, [FakeTrackCfg("melody")], curve)
-        # factor = 0.6 + 0.4 * 1.0 = 1.0 → unchanged
+        # factor = 0.4 + 0.6 * 1.0 = 1.0 → unchanged
         assert result["melody"][0].velocity == 80
 
     def test_low_tension_reduces(self):
         result = {"melody": _notes(3)}
         curve = FakeTensionCurve(0.0)
         apply_velocity_shaping(result, [FakeTrackCfg("melody")], curve)
-        # factor = 0.6 + 0.4 * 0.0 = 0.6, vel = 80 * 0.6 = 48
-        assert result["melody"][0].velocity == 48
+        # factor = 0.4 + 0.6 * 0.0 = 0.4, vel = 80 * 0.4 = 32
+        assert result["melody"][0].velocity == 32
 
     def test_falsy_curve_skips(self):
         result = {"melody": _notes(3)}
