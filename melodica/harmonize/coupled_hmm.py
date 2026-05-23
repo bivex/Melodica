@@ -23,43 +23,66 @@ from melodica.types import ChordLabel, Quality, Scale, Mode, NoteInfo
 from melodica.theory import CHORD_TEMPLATES
 
 # ---------------------------------------------------------------------------
-# Data Matrices (Simplified from paper visualizations)
+# Data Matrices (Trained on 371 Bach Chorales via Metal GPU)
 # ---------------------------------------------------------------------------
 
-# Chord Types: 0=Major, 1=Minor, 2=Dissonant (Diminished/Dominant7)
-CHORD_TYPES = 3
-
 # µ_t: Probability of note offset n-r given chord type t
-# Values are rough estimates derived from the Bach Chorale study.
+# Columns: 0=Major, 1=Minor, 2=Dissonant (Diminished/Dominant7)
+# Data source: pnote_metal.txt
 CHORD_NOTE_EMISSIONS = [
-    # Type 0 (Major): {0: Root, 4: Maj3, 7: P5}
-    {0: 0.35, 4: 0.25, 7: 0.25, 2: 0.03, 5: 0.03, 9: 0.03, 11: 0.03, 1: 1e-6, 3: 1e-6, 6: 1e-6, 8: 1e-6, 10: 1e-6},
-    # Type 1 (Minor): {0: Root, 3: Min3, 7: P5}
-    {0: 0.35, 3: 0.25, 7: 0.25, 2: 0.03, 5: 0.03, 8: 0.03, 10: 0.03, 1: 1e-6, 4: 1e-6, 6: 1e-6, 9: 1e-6, 11: 1e-6},
-    # Type 2 (Dissonant): {0: Anchor, 3, 6, 8...}
-    {0: 0.25, 3: 0.20, 6: 0.20, 8: 0.15, 10: 0.10, 1: 0.02, 4: 0.02, 7: 0.02, 2: 0.02, 5: 0.02, 9: 1e-6, 11: 1e-6}
+    # Type 0 (Major)
+    {0: 0.998, 4: 0.880, 7: 0.957, 2: 0.077, 5: 0.061, 9: 0.095, 11: 0.063, 1: 0.001, 3: 0.001, 6: 0.005, 8: 0.011, 10: 0.001},
+    # Type 1 (Minor)
+    {0: 0.970, 3: 0.946, 7: 0.962, 2: 0.102, 5: 0.049, 8: 0.004, 10: 0.087, 1: 0.004, 4: 0.001, 6: 0.001, 9: 0.105, 11: 0.009},
+    # Type 2 (Dissonant)
+    {0: 0.846, 3: 0.898, 6: 0.987, 8: 0.657, 10: 0.030, 1: 0.110, 4: 0.010, 7: 0.001, 2: 0.001, 5: 0.018, 9: 0.066, 11: 0.001}
 ]
 
 # α: Chord transitions f(r2-r1, t1, t2)
-# Interval 7 (+7 or -5) and 5 (+5 or -7) are favored (Circle of Fifths).
-CHORD_TRANSITIONS = {} # (t1, t2) -> {interval: prob}
+# Data source: pchange_metal.npy (Simplified into high-impact transitions)
+CHORD_TRANSITIONS = {}
 
 def _init_chord_transitions():
+    # Load raw data from training result (approximated here for code readability)
+    # Format: (type_from, type_to) -> {interval: prob}
+    # Values extracted from the 3x12x3 matrix
+    
+    # 0 -> 0 (Major to Major)
+    CHORD_TRANSITIONS[(0, 0)] = {
+        0: 0.187, 5: 0.165, 7: 0.129, 2: 0.067, 11: 0.007, 10: 0.010, 9: 0.009
+    }
+    # 0 -> 1 (Major to Minor)
+    CHORD_TRANSITIONS[(0, 1)] = {
+        5: 0.052, 2: 0.032, 9: 0.032, 0: 0.006, 4: 0.008, 7: 0.011
+    }
+    # 1 -> 0 (Minor to Major)
+    CHORD_TRANSITIONS[(1, 0)] = {
+        2: 0.127, 5: 0.089, 7: 0.133, 10: 0.092, 3: 0.044, 8: 0.037
+    }
+    # 1 -> 1 (Minor to Minor)
+    CHORD_TRANSITIONS[(1, 1)] = {
+        0: 0.165, 5: 0.050, 7: 0.046, 10: 0.011, 2: 0.009
+    }
+    # Dissonant transitions (Simplified)
+    CHORD_TRANSITIONS[(2, 0)] = { 1: 0.592, 5: 0.018, 8: 0.028, 10: 0.017 } # Resolve to Major
+    CHORD_TRANSITIONS[(2, 1)] = { 1: 0.165, 3: 0.018, 10: 0.035 } # Resolve to Minor
+    CHORD_TRANSITIONS[(0, 2)] = { 4: 0.168, 6: 0.054, 11: 0.027, 1: 0.003 }
+    CHORD_TRANSITIONS[(1, 2)] = { 9: 0.066, 6: 0.025, 11: 0.026, 2: 0.016 }
+    CHORD_TRANSITIONS[(2, 2)] = { 0: 0.049, 2: 0.015, 5: 0.006 }
+
+    # Fill missing with epsilon
     for t1 in range(3):
         for t2 in range(3):
-            # Default uniform + small noise
-            d = {i: 0.05 for i in range(12)}
-            # Strong V-I (7 -> 0)
-            if t1 == 0 and t2 == 0: # Maj -> Maj (V -> I)
-                d[5] = 0.30 # Up a 4th
-                d[7] = 0.15 # Down a 4th / Up a 5th
-                d[0] = 0.10 # Repeat
-            elif t1 == 1 and t2 == 0: # Min -> Maj (ii -> V, vi -> V)
-                d[5] = 0.25
-                d[10] = 0.20
+            if (t1, t2) not in CHORD_TRANSITIONS:
+                CHORD_TRANSITIONS[(t1, t2)] = {i: 1e-4 for i in range(12)}
+            else:
+                for i in range(12):
+                    if i not in CHORD_TRANSITIONS[(t1, t2)]:
+                        CHORD_TRANSITIONS[(t1, t2)][i] = 1e-4
             # Normalize
-            s = sum(d.values())
-            CHORD_TRANSITIONS[(t1, t2)] = {k: v/s for k, v in d.items()}
+            s = sum(CHORD_TRANSITIONS[(t1, t2)].values())
+            for i in range(12):
+                CHORD_TRANSITIONS[(t1, t2)][i] /= s
 
 _init_chord_transitions()
 
