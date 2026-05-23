@@ -68,7 +68,7 @@ class _SynthModernBase(PhraseGenerator, ABC):
 class SynthLeadGenerator(_SynthModernBase):
     """
     Solo Synth Lead generator (GM 80-87).
-    Supports portamento monophonic glides.
+    Supports portamento monophonic glides, parallel fifths, and bass layers.
     """
     name: str = "Synth Lead Generator"
 
@@ -76,7 +76,7 @@ class SynthLeadGenerator(_SynthModernBase):
         self,
         params: GeneratorParams | None = None,
         *,
-        lead_type: str = "sawtooth",  # square, sawtooth, calliope, chiff
+        lead_type: str = "sawtooth",  # square, sawtooth, calliope, chiff, charang, voice, fifths, bass_lead
         glide_speed: float = 0.1,  # slide duration in beats
         note_density: float = 1.0,
     ) -> None:
@@ -110,26 +110,62 @@ class SynthLeadGenerator(_SynthModernBase):
             pitch = snap_to_scale(pitch, key)
             pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
 
-            vel = self._velocity(90)
+            if self.lead_type == "charang":
+                vel = self._velocity(95)  # Distorted lead is loud
+            elif self.lead_type == "voice":
+                vel = self._velocity(82)
+            else:
+                vel = self._velocity(90)
+                
             dur = chord.duration * 0.95
 
             # Expressive filter sweeps (CC 74) and monophonic pitch portamento sweeps (CC 5)
             expression = {}
             if self.glide_speed > 0 and pitch != prev_pitch:
-                # Add slide / glide effect
                 expression[5] = [(0.0, 40), (self.glide_speed, 90)]
                 
             # Filter sweeps
-            expression[74] = [(0.0, 50), (dur * 0.5, 110), (dur, 60)]
+            if self.lead_type == "voice":
+                # Vocal vibrato LFO sweep on CC 1
+                expression[1] = [(0.0, 30), (dur * 0.4, 85), (dur, 50)]
+                expression[74] = [(0.0, 45), (dur * 0.5, 95), (dur, 55)]
+            else:
+                expression[74] = [(0.0, 50), (dur * 0.5, 110), (dur, 60)]
 
-            note = NoteInfo(
+            main_note = NoteInfo(
                 pitch=pitch,
                 start=round(chord.start, 6),
                 duration=round(dur, 6),
                 velocity=vel,
             )
-            note.expression = expression
-            notes.append(note)
+            main_note.expression = expression.copy()
+            notes.append(main_note)
+
+            # Parallel Voicings & Layers:
+            # 1. Lead 5 (charang): adds a slightly delayed heavy octave pop (tack attack)
+            if self.lead_type == "charang":
+                notes.append(NoteInfo(
+                    pitch=max(self.params.key_range_low, min(self.params.key_range_high, pitch + 12)),
+                    start=round(chord.start + 0.04, 6),
+                    duration=round(dur * 0.8, 6),
+                    velocity=max(1, vel - 15),
+                ))
+            # 2. Lead 7 (fifths): parallel 5th layering
+            elif self.lead_type == "fifths":
+                notes.append(NoteInfo(
+                    pitch=max(self.params.key_range_low, min(self.params.key_range_high, pitch + 7)),
+                    start=round(chord.start, 6),
+                    duration=round(dur, 6),
+                    velocity=max(1, vel - 12),
+                ))
+            # 3. Lead 8 (bass_lead): deep bass sub-octave layer
+            elif self.lead_type == "bass_lead":
+                notes.append(NoteInfo(
+                    pitch=max(self.params.key_range_low, min(self.params.key_range_high, pitch - 12)),
+                    start=round(chord.start, 6),
+                    duration=round(dur, 6),
+                    velocity=max(1, vel - 10),
+                ))
 
             prev_pitch = pitch
 
@@ -139,7 +175,7 @@ class SynthLeadGenerator(_SynthModernBase):
 class SynthPadGenerator(_SynthModernBase):
     """
     Synth Pad generator (GM 88-95).
-    Generates thick ambient structures and rich octaves.
+    Generates thick ambient structures and rich sweeps.
     """
     name: str = "Synth Pad Generator"
 
@@ -147,7 +183,7 @@ class SynthPadGenerator(_SynthModernBase):
         self,
         params: GeneratorParams | None = None,
         *,
-        pad_type: str = "warm",  # new_age, warm, polysynth, halo
+        pad_type: str = "warm",  # new_age, warm, polysynth, halo, bowed, metallic, sweep
         swell: bool = True,
         note_density: float = 1.0,
     ) -> None:
@@ -188,7 +224,18 @@ class SynthPadGenerator(_SynthModernBase):
             # Expression CC 11 representing slow volume pad swells
             expression = {}
             if self.swell:
-                expression[11] = [(0.0, 30), (dur * 0.4, 90), (dur * 0.8, 60), (dur, 20)]
+                if self.pad_type == "bowed":
+                    # Bowed strings has a slower attack, longer swell
+                    expression[11] = [(0.0, 20), (dur * 0.5, 95), (dur * 0.85, 75), (dur, 30)]
+                elif self.pad_type == "sweep":
+                    # Sweeping pad: prominent dynamic volume crescendo
+                    expression[11] = [(0.0, 35), (dur * 0.45, 98), (dur * 0.8, 65), (dur, 20)]
+                else:
+                    expression[11] = [(0.0, 30), (dur * 0.4, 90), (dur * 0.8, 60), (dur, 20)]
+
+            # Resonant sweeps on CC 74 (sweeping filter)
+            if self.pad_type == "sweep":
+                expression[74] = [(0.0, 30), (dur * 0.5, 115), (dur, 40)]
 
             for pitch in voicing:
                 note = NoteInfo(
@@ -200,5 +247,15 @@ class SynthPadGenerator(_SynthModernBase):
                 if expression:
                     note.expression = expression.copy()
                 notes.append(note)
+
+            # Metallic pad: add a quiet high overtone layer on the attack of each note
+            if self.pad_type == "metallic":
+                metallic_pitch = max(self.params.key_range_low, min(self.params.key_range_high, voicing[-1] + 7))
+                notes.append(NoteInfo(
+                    pitch=metallic_pitch,
+                    start=round(chord.start, 6),
+                    duration=0.6,  # short ringing metallic chime
+                    velocity=max(1, vel - 25),
+                ))
 
         return sorted(notes, key=lambda x: x.start)
