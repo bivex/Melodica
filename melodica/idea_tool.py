@@ -461,7 +461,6 @@ class IdeaTool:
         apply_texture_control(
             result, self.config.tracks, tension_curve, self.config.use_texture_control
         )
-        apply_velocity_shaping(result, self.config.tracks, tension_curve)
 
         # ---- Harmonic verification (cross-track cacophony check) ----
         if self.config.use_harmonic_verifier:
@@ -527,6 +526,10 @@ class IdeaTool:
             if any(s[0] == "Loop" for s in sections):
                 loop_start_beat = (bars - 4) * self.config.time_signature[0]
                 result = desk.apply_fade_loop_end(result, loop_start_beat, fade_beats=2.0)
+
+        # ---- Artistic Post-processing (Tension-based swell) ----
+        # Apply this AFTER all verifiers so the swells are preserved
+        apply_velocity_shaping(result, self.config.tracks, tension_curve)
 
         # ---- Mastering Desk (LUFS target, Multiband Comp, Imaging, Limiter) ----
         if self.config.use_mastering:

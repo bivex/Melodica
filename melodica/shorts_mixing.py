@@ -127,13 +127,13 @@ class MixingDesk:
         # Low register (< C4=60): boost to compensate perceived quietness
         # High register (> C5=72): attenuate to avoid masking
         if avg_pitch < 48:
-            return 1.15
+            return 1.10
         elif avg_pitch < 60:
             return 1.05
         elif avg_pitch > 84:
-            return 0.80
-        elif avg_pitch > 72:
             return 0.90
+        elif avg_pitch > 72:
+            return 0.95
         return 1.0
 
     def apply_fade_loop_end(

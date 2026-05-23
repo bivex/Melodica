@@ -397,12 +397,12 @@ def detect_brightness_overload(
 # ---------------------------------------------------------------------------
 
 
-def _reduce_vel(note: NoteInfo, factor: float = 0.5) -> NoteInfo:
+def _reduce_vel(note: NoteInfo, factor: float = 0.5, min_velocity: int = 45) -> NoteInfo:
     return NoteInfo(
         pitch=note.pitch,
         start=note.start,
         duration=note.duration,
-        velocity=max(10, int(note.velocity * factor)),
+        velocity=max(min_velocity, min(note.velocity, int(note.velocity * factor))),
         articulation=note.articulation,
         expression=note.expression,
     )

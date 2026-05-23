@@ -126,7 +126,8 @@ class TensionCurve:
         else:
             # Resolution
             res_t = (t - peak - 0.05) / (1.0 - peak - 0.05)
-            return self.peak_intensity * (1.0 - res_t**0.7)
+            # Clamped to 0.15 minimum instead of 0.0
+            return max(0.15, self.peak_intensity * (1.0 - res_t**0.7))
 
     def _edm_curve(self, t: float) -> float:
         """EDM: build → drop → build → drop."""

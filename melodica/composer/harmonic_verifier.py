@@ -383,13 +383,13 @@ def _try_transpose(note: NoteInfo, other_pitch: int) -> NoteInfo:
     return note
 
 
-def _reduce_velocity(note: NoteInfo, factor: float = 0.5) -> NoteInfo:
-    """Reduce velocity to make clash less prominent."""
+def _reduce_velocity(note: NoteInfo, factor: float = 0.5, min_velocity: int = 40) -> NoteInfo:
+    """Reduce velocity to make clash less prominent, but stay above floor."""
     return NoteInfo(
         pitch=note.pitch,
         start=note.start,
         duration=note.duration,
-        velocity=max(10, int(note.velocity * factor)),
+        velocity=max(min_velocity, min(note.velocity, int(note.velocity * factor))),
         articulation=note.articulation,
         expression=note.expression,
     )

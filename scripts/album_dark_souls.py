@@ -55,7 +55,7 @@ def generate_track_01():
     
     config = IdeaToolConfig(
         style="cinematic", workflow="generate_all", use_tension_curve=True,
-        use_voice_leading=True, use_texture_control=True, use_mixing=True, target_lufs=-16.0,
+        use_voice_leading=True, use_texture_control=True, use_mixing=True, use_mastering=True, target_lufs=-16.0,
         parts=parts,
         tracks=[
             TrackConfig(name="Harp Arpeggios", generator=HarpGenerator(), instrument="harp", arrangement="ABAB", density=0.7, rhythm_rests=0.8),
@@ -82,7 +82,7 @@ def generate_track_02():
     
     config = IdeaToolConfig(
         style="cinematic", workflow="generate_all", use_tension_curve=True,
-        use_voice_leading=True, use_texture_control=True, use_mixing=True, target_lufs=-14.0,
+        use_voice_leading=True, use_texture_control=True, use_mixing=True, use_mastering=True, target_lufs=-14.0,
         parts=parts,
         tracks=[
             TrackConfig(name="Violins Pizzicato", generator=StringsPizzicatoGenerator(), instrument="pizzicato", arrangement="ABCD", density=0.8, rhythm_dotted=True),
@@ -107,7 +107,7 @@ def generate_track_03():
     
     config = IdeaToolConfig(
         style="cinematic", workflow="generate_all", use_tension_curve=True,
-        use_voice_leading=True, use_texture_control=True, use_mixing=True, target_lufs=-12.0,
+        use_voice_leading=True, use_texture_control=True, use_mixing=True, use_mastering=True, target_lufs=-12.0,
         parts=parts,
         tracks=[
             TrackConfig(name="Ostinato Cellos", generator=OstinatoGenerator(pattern="driving"), instrument="cello", arrangement="ABAB", density=1.0, octave_shift=-1, rhythm_swing=0.6),
@@ -137,7 +137,7 @@ def generate_track_04():
     
     config = IdeaToolConfig(
         style="cinematic", workflow="generate_all", use_tension_curve=True,
-        use_voice_leading=True, use_texture_control=True, use_mixing=True, target_lufs=-15.0,
+        use_voice_leading=True, use_texture_control=True, use_mixing=True, use_mastering=True, target_lufs=-15.0,
         parts=parts,
         tracks=[
             TrackConfig(name="Contrabass Drone", generator=ContrabassGenerator(), instrument="contrabass", arrangement="AABB", density=0.9, octave_shift=-2),
@@ -163,7 +163,7 @@ def generate_track_05():
     
     config = IdeaToolConfig(
         style="cinematic", workflow="generate_all", use_tension_curve=True,
-        use_voice_leading=True, use_texture_control=True, use_mixing=True, target_lufs=-11.5,
+        use_voice_leading=True, use_texture_control=True, use_mixing=True, use_mastering=True, target_lufs=-11.5,
         parts=parts,
         tracks=[
             TrackConfig(name="Piano Runs", generator=PianoRunGenerator(), instrument="piano", arrangement="ABCD", density=0.8, octave_shift=1, variations=["humanize"]),
@@ -195,7 +195,7 @@ def generate_track_06():
     
     config = IdeaToolConfig(
         style="cinematic", workflow="generate_all", use_tension_curve=True,
-        use_voice_leading=True, use_texture_control=True, use_mixing=True, target_lufs=-12.5,
+        use_voice_leading=True, use_texture_control=True, use_mixing=True, use_mastering=True, target_lufs=-12.5,
         parts=parts,
         tracks=[
             TrackConfig(name="Solo Piano", generator=PianoRunGenerator(), instrument="piano", arrangement="ABCD", density=0.7),
@@ -222,7 +222,7 @@ def generate_track_07():
     
     config = IdeaToolConfig(
         style="cinematic", workflow="generate_all", use_tension_curve=True,
-        use_voice_leading=True, use_texture_control=True, use_mixing=True, target_lufs=-16.0,
+        use_voice_leading=True, use_texture_control=True, use_mixing=True, use_mastering=True, target_lufs=-16.0,
         parts=parts,
         tracks=[
             TrackConfig(name="Harp", generator=HarpGenerator(), instrument="harp", arrangement="AABB", density=0.4),

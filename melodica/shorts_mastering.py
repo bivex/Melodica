@@ -138,9 +138,9 @@ class MasteringDesk:
         overall_rms = self._compute_rms(all_notes)
         target = self.target_rms_velocity
 
-        # Calculate a unified global gain factor, capped at 2.0x to avoid extreme distortion
+        # Calculate a unified global gain factor, capped at 5.0x to avoid extreme distortion
         global_gain = (target / overall_rms) if overall_rms > 5 else 1.0
-        global_gain = min(2.0, max(0.5, global_gain))
+        global_gain = min(5.0, max(0.2, global_gain))
 
         # 2. Map global gain to all tracks (preserving relative mix proportions perfectly)
         gain_factors = {tn: global_gain for tn in tracks.keys() if not tn.startswith("_")}
