@@ -73,6 +73,75 @@ class RhythmGenerator(typing.Protocol):
     def generate(self, duration_beats: float) -> list[RhythmEvent]: ...
 
 
+class RhythmProcessor:
+    """
+    Post-processing tools for RhythmEvent sequences.
+    """
+
+    @staticmethod
+    def rotate(events: list[RhythmEvent], total_beats: float, offset_percent: float) -> list[RhythmEvent]:
+        """Circularly shift events in time by a percentage of total_beats (-1.0 to 1.0)."""
+        if not events or offset_percent == 0:
+            return events
+            
+        shift = total_beats * offset_percent
+        shifted = []
+        for e in events:
+            new_onset = (e.onset + shift) % total_beats
+            shifted.append(RhythmEvent(onset=round(new_onset, 6), duration=e.duration, velocity_factor=e.velocity_factor))
+            
+        return sorted(shifted, key=lambda x: x.onset)
+
+    @staticmethod
+    def apply_dotted(events: list[RhythmEvent]) -> list[NoteInfo]:
+        """Transform pairs of equal adjacent notes into dotted-rhythm pairs (3:1 length ratio)."""
+        if len(events) < 2:
+            return events
+            
+        processed = []
+        i = 0
+        while i < len(events):
+            if i + 1 < len(events):
+                e1, e2 = events[i], events[i+1]
+                # If they are adjacent and equal length
+                if abs(e1.duration - e2.duration) < 0.01 and abs((e1.onset + e1.duration) - e2.onset) < 0.01:
+                    total_dur = e1.duration + e2.duration
+                    processed.append(RhythmEvent(onset=e1.onset, duration=total_dur * 0.75, velocity_factor=e1.velocity_factor))
+                    processed.append(RhythmEvent(onset=e1.onset + total_dur * 0.75, duration=total_dur * 0.25, velocity_factor=e2.velocity_factor))
+                    i += 2
+                    continue
+            processed.append(events[i])
+            i += 1
+        return processed
+
+    @staticmethod
+    def apply_rests(events: list[RhythmEvent], keep_probability: float) -> list[RhythmEvent]:
+        """Randomly drop notes to create rests (structural density setting)."""
+        import random
+        if keep_probability >= 1.0:
+            return events
+        return [e for e in events if random.random() < keep_probability]
+
+    @staticmethod
+    def apply_swing(events: list[RhythmEvent], amount: float = 0.6) -> list[RhythmEvent]:
+        """Apply swing (0.5 = straight, 0.66 = triplet swing) to 8th/16th note grids."""
+        if amount == 0.5:
+            return events
+            
+        processed = []
+        for e in events:
+            # Simple 8th note swing logic: if it's on an off-beat (X.5), delay it
+            # Works best for grids. 
+            beat_pos = e.onset % 1.0
+            if 0.4 <= beat_pos <= 0.6: # Approximate X.5
+                offset = (amount - 0.5) * 1.0 # shift
+                new_onset = (e.onset // 1.0) + amount
+                processed.append(RhythmEvent(onset=round(new_onset, 6), duration=e.duration, velocity_factor=e.velocity_factor))
+            else:
+                processed.append(e)
+        return processed
+
+
 class RhythmCoordinator:
     """
     Shares a single rhythm pattern across multiple tracks.

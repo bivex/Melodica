@@ -180,6 +180,12 @@ class TrackConfig:
     depends_on: str | None = None
     # Key inside params where the dependency notes are injected.
     depends_on_param: str = "primary_melody"
+    
+    # Rhythm Processing
+    rhythm_rotate: float = 0.0  # -1.0 to 1.0 (percent of total duration)
+    rhythm_dotted: bool = False
+    rhythm_rests: float = 1.0  # 1.0 = all notes kept, 0.0 = none
+    rhythm_swing: float = 0.5  # 0.5 = straight, 0.66 = triplet swing
 
 
 @dataclass
@@ -851,6 +857,9 @@ class IdeaTool:
                 # Restore true randomness
                 random.seed()
 
+                # Apply Rhythm Processing (Rotation, Dotted, Rests, Swing)
+                section_notes = self._apply_rhythm_processing(section_notes, cfg, section_length)
+
                 # Offset to global time (including the part's offset)
                 for n in section_notes:
                     part_notes.append(
@@ -922,6 +931,88 @@ class IdeaTool:
             all_notes = apply_non_chord_tones(all_notes, cfg, chords, scale)
 
         return all_notes
+
+    def _apply_rhythm_processing(
+        self, notes: list[NoteInfo], cfg: TrackConfig, total_beats: float
+    ) -> list[NoteInfo]:
+        """Apply rhythmic processing to a list of notes."""
+        if not notes:
+            return notes
+            
+        import random
+
+        # 1. Rests (Density)
+        if cfg.rhythm_rests < 1.0:
+            notes = [n for n in notes if random.random() < cfg.rhythm_rests]
+            
+        if not notes:
+            return []
+
+        # 2. Rotation
+        if cfg.rhythm_rotate != 0:
+            shift = total_beats * cfg.rhythm_rotate
+            rotated = []
+            for n in notes:
+                new_start = (n.start + shift) % total_beats
+                rotated.append(
+                    NoteInfo(
+                        pitch=n.pitch,
+                        start=round(new_start, 6),
+                        duration=n.duration,
+                        velocity=n.velocity,
+                        articulation=n.articulation,
+                        expression=dict(n.expression),
+                    )
+                )
+            notes = sorted(rotated, key=lambda x: x.start)
+
+        # 3. Dotted
+        if cfg.rhythm_dotted and len(notes) >= 2:
+            processed = []
+            i = 0
+            while i < len(notes):
+                if i + 1 < len(notes):
+                    n1, n2 = notes[i], notes[i+1]
+                    # If they are adjacent and equal length
+                    if abs(n1.duration - n2.duration) < 0.01 and abs((n1.start + n1.duration) - n2.start) < 0.01:
+                        total_dur = n1.duration + n2.duration
+                        processed.append(
+                            NoteInfo(
+                                pitch=n1.pitch, start=n1.start, duration=total_dur * 0.75,
+                                velocity=n1.velocity, articulation=n1.articulation, expression=dict(n1.expression)
+                            )
+                        )
+                        processed.append(
+                            NoteInfo(
+                                pitch=n2.pitch, start=n1.start + total_dur * 0.75, duration=total_dur * 0.25,
+                                velocity=n2.velocity, articulation=n2.articulation, expression=dict(n2.expression)
+                            )
+                        )
+                        i += 2
+                        continue
+                processed.append(notes[i])
+                i += 1
+            notes = processed
+
+        # 4. Swing
+        if cfg.rhythm_swing != 0.5:
+            swung = []
+            for n in notes:
+                # Simple swing: shift notes that start near X.5
+                beat_pos = n.start % 1.0
+                if 0.4 <= beat_pos <= 0.6:
+                    new_start = (n.start // 1.0) + cfg.rhythm_swing
+                    swung.append(
+                        NoteInfo(
+                            pitch=n.pitch, start=round(new_start, 6), duration=n.duration,
+                            velocity=n.velocity, articulation=n.articulation, expression=dict(n.expression)
+                        )
+                    )
+                else:
+                    swung.append(n)
+            notes = swung
+
+        return notes
 
     def _get_generator(self, cfg: TrackConfig, params: GeneratorParams):
         """
