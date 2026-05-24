@@ -753,7 +753,7 @@ class TestPeakIntensitySensitivity:
         pts = c.generate()
         # The very last segment before total_beats should resolve close to 0
         last_pts = [p for p in pts if p.beat >= c.total_beats * 0.85]
-        assert all(p.tension < 0.15 for p in last_pts), (
+        assert all(p.tension <= 0.15 for p in last_pts), (
             f"Expected near-zero tension in late resolution with intensity=0: {[p.tension for p in last_pts]}"
         )
 

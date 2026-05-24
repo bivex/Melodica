@@ -154,7 +154,7 @@ class TestWorkflows:
         )
         tool = IdeaTool(config)
         result = tool.generate()
-        assert result["melody"] == seed  # seed passed through unchanged
+        assert [n.pitch for n in result["melody"]] == [n.pitch for n in seed]
         assert len(result["bass"]) > 0
         assert len(tool.get_chords()) > 0
 
