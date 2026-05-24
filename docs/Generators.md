@@ -1,388 +1,502 @@
 # Generators Reference
 
-Все генераторы наследуют `PhraseGenerator` и реализуют `render(chords, key, duration_beats, context) -> list[NoteInfo]`.
+All generators live in `melodica/generators/`. Every class inherits `PhraseGenerator(ABC)` with optional `params: GeneratorParams`.
 
-Factory type string → class через `create_generator()`.
+## GeneratorParams (dataclass)
 
-**Всего: 166 генераторов.**
-
----
-
-## Содержание
-
-1. [Melody & Lead](#melody--lead) — 8
-2. [Bass](#bass) — 9
-3. [Chords & Harmony](#chords--harmony) — 7
-4. [Arpeggios & Broken Chords](#arpeggios--broken-chords) — 3
-5. [Ostinato & Riff](#ostinato--riff) — 3
-6. [Ornamentation & Articulation](#ornamentation--articulation) — 5
-7. [Guitar Techniques](#guitar-techniques) — 6
-8. [Guitar (расширенные)](#гитара-расширенные) — 3
-9. [Fills & Transitions](#fills--transitions) — 2
-10. [FX & Production](#fx--production) — 2
-11. [Rhythm & Drums — базовые](#rhythm--drums--базовые) — 7
-12. [Ударные (расширенные)](#ударные-расширенные) — 3
-13. [Modern Beats — Trap/Drill/Hip-Hop](#modern-beats--trapdrillhip-hop) — 12
-14. [Urban & Club](#urban--club) — 10
-15. [Afro Beats](#afro-beats) — 11
-16. [Game Audio / AAA](#game-audio--aaa) — 11
-17. [Synth & Electronic](#synth--electronic) — 6
-18. [Orchestral Articulations](#orchestral-articulations) — 4
-19. [Оркестр (расширенные)](#оркестр-расширенные) — 3
-20. [Клавишные](#клавишные) — 3
-21. [Genre-Specific (classic)](#genre-specific-classic) — 5
-22. [Texture & Ambient](#texture--ambient) — 5
-23. [Vocals & Samples](#vocals--samples) — 3
-24. [Вокал](#вокал) — 3
-25. [Harmony & Theory](#harmony--theory) — 5
-26. [Meta & Structure](#meta--structure) — 2
-27. [Utility](#utility) — 7
+| Field | Default | Notes |
+|-------|---------|-------|
+| density | 0.5 | |
+| key_range_low | 48 | |
+| key_range_high | 84 | |
+| complexity | 0.5 | |
+| leap_probability | 0.2 | |
+| velocity_range | None | |
+| intel | MelodicIntelligenceConfig() | |
 
 ---
 
-## Melody & Lead — 8 генераторов
+## Orchestral Strings
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `melody` | MelodyGenerator | Основной мелодический голос. Ступеневое движение, тоника аккорда |
-| `markov` | MarkovMelodyGenerator | Мелодия через цепи Маркова |
-| `call_response` | CallResponseGenerator | Вопрос-ответ: фраза → контрастный ответ |
-| `countermelody` | CountermelodyGenerator | Независимый контрапунктный голос (contrary/oblique motion) |
-| `sequence` | SequenceGenerator | Транспозиция мотива: diatonic/chromatic/fifths/ascending/descending |
-| `blues_lick` | BluesLickGenerator | Блюзовые фразы с b3/b5/b7, бенды, энклоужеры |
-| `motive` | MotiveGenerator | Развитие короткой мотивной ячейки (2–6 нот) |
-| `piano_run` | PianoRunGenerator | Виртуозные фортепианные пассажи |
+| Class | File | Key params |
+|-------|------|------------|
+| `ViolinGenerator` | `orchestral_strings.py` | `articulation="sustained"`, `dynamic_curve="flat"`, `vibrato=True`, `con_sordino=False`, `double_stops=False`, `position=1`, `note_density=1.0` |
+| `ViolaGenerator` | `orchestral_strings.py` | same as Violin |
+| `CelloGenerator` | `orchestral_strings.py` | same + `bass_voice=False` |
+| `ContrabassGenerator` | `orchestral_strings.py` | `vibrato=False`, `bass_voice=True` |
 
-## Bass — 9 генераторов
+## Orchestral Brass
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `bass` | BassGenerator | Универсальный бас: root/chord_tone/walking/octave |
-| `walking_bass` | WalkingBassGenerator | Джазовый walking bass (1 нота на долю, хроматические подходы) |
-| `alberti_bass` | AlbertiBassGenerator | Классический альберти-бас: root–5–3–5 |
-| `boogie_woogie` | BoogieWoogieGenerator | Буги-вуги левая рука: 8-нотные остинато |
-| `stride_piano` | StridePianoGenerator | Stride piano: бас(1,3)–аккорд(2,4) |
-| `pedal_bass` | PedalBassGenerator | Органный педаль-пойнт |
-| `pedal_melody` | PedalMelodyGenerator | Дрон + мелодия (pedal bass + верхний голос) |
-| `synth_bass` | SynthBassGenerator | Acid/reese/sub/wobble электронный бас |
-| `dark_bass` | DarkBassGenerator | Тёмный бас: doom/trip_hop/dub/drone |
+| Class | File | Key params |
+|-------|------|------------|
+| `TrumpetGenerator` | `orchestral_brass.py` | `articulation="sustained"`, `dynamic_curve="flat"`, `con_sordino=False`, `register=2`, `fanfare_mode=False`, `note_density=1.0` |
+| `TromboneGenerator` | `orchestral_brass.py` | same + `bass_voice=False` |
+| `FrenchHornGenerator` | `orchestral_brass.py` | same as Trumpet |
 
-## Chords & Harmony — 7 генераторов
+## Orchestral Woodwinds
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `chord` | ChordGenerator | Блочные аккорды: closed/open/spread/shell/power/cluster |
-| `modern_chord` | ModernChordPatternGenerator | Современные аккордовые паттерны |
-| `strum` | StrumPatternGenerator | Гитарный бой: down/up/folk/country/ska |
-| `chorale` | ChoraleGenerator | 4-голосный хорал SATB с голосоведением |
-| `cadence` | CadenceGenerator | Каденции: PAC/IAC/plagal/deceptive/half/backdoor/phrygian/neapolitan |
-| `reharmonization` | ReharmonizationGenerator | Замена аккордов: tritone/diatonic/secondary_dom/chromatic_mediant |
-| `modal_interchange` | ModalInterchangeGenerator | Заимствованные аккорды из параллельных ладов |
+| Class | File | Key params |
+|-------|------|------------|
+| `FluteGenerator` | `orchestral_woodwinds.py` | `articulation="sustained"`, `vibrato=True`, `register=2`, `breath_phrase=True`, `note_density=1.0` |
+| `OboeGenerator` | `orchestral_woodwinds.py` | same + `cor_anglais=False` |
+| `ClarinetGenerator` | `orchestral_woodwinds.py` | `vibrato=False`, `bass_voice=False` |
+| `BassoonGenerator` | `orchestral_woodwinds.py` | `vibrato=False`, `register=1` |
 
-## Arpeggios & Broken Chords — 3 генератора
+## Orchestral Percussion
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `arpeggiator` | ArpeggiatorGenerator | Арпеджио: up/down/up-down/random/inside-out |
-| `broken_chord` | BrokenChordGenerator | Расширенные фигурации: Chopin/Debussy/Liszt/rolling |
-| `fingerpicking` | FingerpickingGenerator | Гитарный fingerpicking: Travis/classical/folk |
+| Class | File | Key params |
+|-------|------|------------|
+| `TimpaniGenerator` | `orchestral_percussion.py` | `stroke_pattern="single"`, `drum_count=4`, `tuning_follows=True`, `roll_speed=0.125` |
+| `MalletPercussionGenerator` | `orchestral_percussion.py` | `instrument="marimba"`, `pattern="arpeggio"`, `mallet_count=2` |
 
-## Ostinato & Riff — 3 генератора
+## Orchestral Score & Transitions
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `ostinato` | OstinatoGenerator | Повторяющийся паттерн над меняющейся гармонией |
-| `riff` | RiffGenerator | Гитарные/басовые риффы: pentatonic/power/blues |
-| `groove` | GrooveGenerator | Грув-паттерны: funk/neo-soul/hip-hop |
+| Class | File | Key params |
+|-------|------|------------|
+| `OrchestralScoreGenerator` | `orchestral_score.py` | `sections=None`, `texture=Texture.FULL`, `include_choir=True`, `include_harp=True`, `include_brass=True` |
+| `OrchestralTransitionGenerator` | `orchestral_transition.py` | `transition_type="crescendo_build"`, `target_chord=None`, `intensity_curve="crescendo"` |
+| `OrchestralHitGenerator` | `orchestral_hit.py` | `hit_type="staccato"`, `voicing="chord"`, `duration=0.5`, `reverb_tail=2.0` |
+| `OrchestralCymbalGenerator` | `orchestral_cymbal.py` | `pattern_type="crash"` |
 
-## Ornamentation & Articulation — 5 генераторов
+## String Ensembles
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `ornamentation` | OrnamentationGenerator | Барочные орнаменты: mordent/turn/gruppetto/shake |
-| `trill` / `tremolo` | TrillTremoloGenerator | Трели, тремоло, рулады |
-| `acciaccatura` | AcciaccaturaGenerator | Grace notes: upper/lower/double/slide/chord |
-| `bend` | BendGenerator | Бенды: bend_up/down, pre-bend, slide |
-| `glissando` | GlissandoGenerator | Глиссандо: chromatic/diatonic/pentatonic/arpeggio |
+| Class | File | Key params |
+|-------|------|------------|
+| `StringsEnsembleGenerator` | `strings_ensemble.py` | `section_size="full"`, `articulation="sustained"`, `divisi=4`, `dynamic_curve="flat"` |
+| `StringsLegatoGenerator` | `strings_legato.py` | (params present) |
+| `StringsPizzicatoGenerator` | `strings_pizzicato.py` | `pattern="ostinato"`, `staccato_length=0.15`, `velocity_variation=0.3`, `section_divisi=2` |
+| `StringsStaccatoGenerator` | `staccato.py` | `style="octaves"`, `note_range_low/high=None` |
+| `TremoloStringsGenerator` | `tremolo_strings.py` | `variant="chord"`, `bow_speed=0.0625`, `dynamic_swell=True`, `attack_time=0.5`, `decay_time=0.5` |
 
-## Guitar Techniques — 6 генераторов
+## Woodwinds Ensemble
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `hocket` | HocketGenerator | Хоукет: чередование нот между голосами |
-| `power_chord` | PowerChordGenerator | Power chords: chug/gallop/offbeat/staccato |
-| `tremolo_picking` | TremoloPickingGenerator | Tremolo picking: быстрое повторение ноты |
-| `harmonics` | HarmonicsGenerator | Гитарные флажолеты: natural/artificial/tap/harp |
-| `guitar_legato` | GuitarLegatoGenerator | Легато: hammer-on/pull-off runs |
-| `guitar_tapping` | GuitarTappingGenerator | Тэппинг двумя руками |
+| Class | File | Key params |
+|-------|------|------------|
+| `WoodwindsEnsembleGenerator` | `woodwinds_ensemble.py` | `section="quartet"`, `ensemble_mode="full"`, `articulation="legato"`, `dynamic_range=0.5`, `breath_interval=6.0` |
 
-## Гитара (расширенные) — 3 генератора
+## Plucked / Keyboard Solo
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `guitar_strumming` | GuitarStrummingGenerator | Продвинутый бой: динамика, palm-mute, dead strums |
-| `bass_slap` | BassSlapGenerator | Слэп: thumb slap, finger pop, ghost notes |
-| `guitar_sweep` | GuitarSweepGenerator | Sweep picking: арпеджио одним движением медиатора |
+| Class | File | Key params |
+|-------|------|------------|
+| `PianoSoloGenerator` | `plucked_solo.py` | `instrument="grand_piano"`, `pedal=True`, `note_density=1.0` |
+| `AcousticGuitarGenerator` | `plucked_solo.py` | `style="fingerpicking"`, `acoustic_type="nylon"`, `note_density=1.0` |
+| `EthnicPluckedGenerator` | `plucked_solo.py` | `instrument="sitar"`, `note_density=1.0` |
 
-## Fills & Transitions — 2 генератора
+## Wind / Brass Solo
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `fill` / `turnaround` | FillGenerator | Финальные заполнения, тёрнараунды |
-| `pickup` | PickupGenerator | Анакруза: вступительные ноты перед downbeat |
+| Class | File | Key params |
+|-------|------|------------|
+| `MutedTrumpetGenerator` | `wind_brass_solo.py` | `plunger_wah=True`, `note_density=1.0` |
+| `SynthBrassGenerator` | `wind_brass_solo.py` | `brass_type="synth_brass_1"`, `harmony_count=3`, `note_density=1.0` |
+| `WoodwindSoloGenerator` | `wind_brass_solo.py` | `instrument="recorder"`, `breath_vibrato=True`, `note_density=1.0` |
 
-## FX & Production — 2 генератора
+## Saxophone
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `fx_riser` | FXRiserGenerator | Райзеры: noise/synth/orch/arp/sub_drop |
-| `fx_impact` | FXImpactGenerator | Импакты: boom/hit/reverse_cymbal/downlifter |
+| Class | File | Key params |
+|-------|------|------------|
+| `SaxSoloGenerator` | `sax_solo.py` | `style="bebop"`, `vibrato_depth=0.3` |
+
+## Chromatic Percussion
+
+| Class | File | Key params |
+|-------|------|------------|
+| `CelestaGenerator` | `chromatic_percussion.py` | `note_density=1.0` |
+| `GlockenspielGenerator` | `chromatic_percussion.py` | `note_density=1.0` |
+| `MusicBoxGenerator` | `chromatic_percussion.py` | `note_density=1.0` |
+| `VibraphoneGenerator` | `chromatic_percussion.py` | `note_density=1.0` |
+| `MarimbaGenerator` | `chromatic_percussion.py` | `note_density=1.0` |
+| `XylophoneGenerator` | `chromatic_percussion.py` | `note_density=1.0` |
+| `DulcimerGenerator` | `chromatic_percussion.py` | `note_density=1.0` |
+
+## SFX Percussion
+
+| Class | File | Key params |
+|-------|------|------------|
+| `SFXPercussionGenerator` | `sfx_percussion.py` | `instrument="tinkle_bell"`, `note_density=1.0` |
+
+## Tubular Bells & Timpani
+
+| Class | File | Key params |
+|-------|------|------------|
+| `TubularBellsGenerator` | `tubular_bells.py` | `stroke_pattern="single"`, `dampen=False` |
+| `TubaGenerator` | `tuba.py` | `articulation="sustained"`, `mute=False`, `growl=False`, `breath_gap=0.3` |
+
+## Keyboard Sustained
+
+| Class | File | Key params |
+|-------|------|------------|
+| `ChurchOrganGenerator` | `keyboard_sustained.py` | `stops="diapason"`, `note_density=1.0` |
+| `AccordionGenerator` | `keyboard_sustained.py` | `register="master"`, `tango_mode=False`, `note_density=1.0` |
+| `HarmonicaGenerator` | `keyboard_sustained.py` | `blues_harp=True`, `note_density=1.0` |
+| `PercussiveOrganGenerator` | `keyboard_sustained.py` | `click_octave_offset=2`, `note_density=1.0` |
+| `RockOrganGenerator` | `keyboard_sustained.py` | `leslie_speed_hz=6.5`, `note_density=1.0` |
+| `ReedOrganGenerator` | `keyboard_sustained.py` | `note_density=1.0` |
+
+## Piano / Keys
+
+| Class | File | Key params |
+|-------|------|------------|
+| `PianoCompGenerator` | `piano_comp.py` | `comp_style="jazz"`, `voicing_type="shell"`, `accent_pattern="2_4"`, `chord_density=0.7` |
+| `KeysArpeggioGenerator` | `keys_arpeggio.py` | `arp_pattern="up"`, `rate=0.125`, `octave_spread=2`, `swing=0.0` |
+| `StridePianoGenerator` | `stride_piano.py` | `pattern="standard"` |
+| `PianoRunGenerator` | `piano_run.py` | `direction="up"`, `scale_steps=False`, `technique=None`, `motion="up_down"`, `notes_per_run=4` |
+| `OrganDrawbarsGenerator` | `organ_drawbars.py` | `registration="jazz"`, `leslie_speed="slow"`, `percussion=True`, `sustain_bars=1.0` |
+
+## Guitar
+
+| Class | File | Key params |
+|-------|------|------------|
+| `GuitarStrummingGenerator` | `guitar_strumming.py` | `strum_pattern="folk"`, `palm_mute_ratio=0.2`, `accent_velocity=1.2`, `strum_delay=0.015`, `string_count=6` |
+| `GuitarLegatoGenerator` | `guitar_legato.py` | `direction="ascending"`, `notes_per_string=4` |
+| `GuitarSweepGenerator` | `guitar_sweep.py` | `sweep_direction="down"`, `note_count=5`, `speed=0.08`, `let_ring=False` |
+| `GuitarTappingGenerator` | `guitar_tapping.py` | `pattern="arpeggio"`, `width_interval=12`, `notes_per_cycle=6` |
+| `FingerpickingGenerator` | `fingerpicking.py` | `pattern=None`, `retrigger=0.0`, `sustain_notes="no"`, `strum_delay=0.0` |
+
+## Bass
+
+| Class | File | Key params |
+|-------|------|------------|
+| `BassGenerator` | `bass.py` | `style="root_only"`, `allowed_notes=None`, `global_movement="none"` |
+| `BassSoloGenerator` | `bass_solo.py` | `instrument="finger"`, `style="groove"`, `note_density=1.0` |
+| `BassSlapGenerator` | `bass_slap.py` | `slap_pattern="funky"`, `ghost_note_prob=0.3`, `pop_probability=0.4` |
+| `BassWobbleGenerator` | `bass_wobble.py` | `wobble_rate="1/8"`, `waveform="saw"`, `lfo_shape="sine"` |
+| `WalkingBassGenerator` | `walking_bass.py` | `approach_style="mixed"`, `connect_roots=True` |
+| `AlbertiBassGenerator` | `alberti_bass.py` | `pattern="1-5-3-5"`, `subdivision=0.5`, `voice_lead=True` |
+| `PedalBassGenerator` | `pedal_bass.py` | `pedal_note="root"`, `sustain=0.0`, `velocity_level=0.8` |
+| `ModernBass2025Generator` | `modern_bass_2025.py` | `style="walking"` |
+
+## Synth
+
+| Class | File | Key params |
+|-------|------|------------|
+| `SynthBassGenerator` | `synth_bass.py` | `waveform="acid"`, `pattern="acid_line"` |
+| `SynthLeadGenerator` | `synth_modern.py` | `lead_type="sawtooth"`, `glide_speed=0.1`, `note_density=1.0` |
+| `SynthPadGenerator` | `synth_modern.py` | `pad_type="warm"`, `swell=True`, `note_density=1.0` |
+| `SynthEffectsGenerator` | `synth_effects.py` | `fx_type="crystal"`, `note_density=1.0` |
+| `LeadSynthGenerator` | `lead_synth.py` | `style="trance"`, `portamento=0.15` |
+| `SupersawPadGenerator` | `supersaw_pad.py` | `variant="trance"` |
+| `DarkPadGenerator` | `dark_pad.py` | `mode="minor_pad"`, `chord_dur=8.0` |
+| `FilterSweepGenerator` | `filter_sweep.py` | `sweep_type="lowpass_open"`, `resonance=0.5`, `duration=4.0` |
+| `SidechainPumpGenerator` | `sidechain_pump.py` | `rate="1/4"`, `depth=0.7`, `attack=0.01`, `release=0.2` |
+
+## Synth Strings / Choir
+
+| Class | File | Key params |
+|-------|------|------------|
+| `SynthStringsGenerator` | `synth_choir_strings.py` | `string_type="synth_strings_1"`, `harmony_count=3`, `note_density=1.0` |
+| `VoiceOohsGMGenerator` | `synth_choir_strings.py` | (params present) |
+| `SynthChoirGenerator` | `synth_choir_strings.py` | (params present) |
+
+## Vocal
+
+| Class | File | Key params |
+|-------|------|------------|
+| `VocalOohsGenerator` | `vocal_oohs.py` | `syllable="ooh"`, `harmony_count=3`, `vibrato=0.4`, `breath_phasing=True` |
+| `ChoirAahsGenerator` | `choir_ahhs.py` | `voice_count=4`, `dynamics="mf"`, `vibrato=0.3`, `syllable="aah"` |
+| `VocalAdlibsGenerator` | `vocal_adlibs.py` | `density_adlib=0.3`, `register="mid"`, `style="adlib"`, `phrase_variety=0.5` |
+| `VocalChopsGenerator` | `vocal_chops.py` | `processing="pitch_shift"`, `density=0.6` |
+| `VocalMelismaGenerator` | `vocal_melisma.py` | `style="rnb"`, `run_length=4`, `ornament_prob=0.4`, `vibrato_depth=0.3`, `register_center=60` |
+| `VocalMelodyAutoGenerator` | `vocal_melody_auto.py` | `variant="travis"`, `register="mid"`, `sustain_preference=0.5`, `octave_jump_probability=0.15`, `grace_note_probability=0.2`, `repetition_amount=0.4` |
+
+## Melody
+
+| Class | File | Key params |
+|-------|------|------------|
+| `MelodyGenerator` | `melody.py` | `mode="downbeat_chord"`, `phrase_length=4.0`, `harmony_note_probability=0.64`, `random_movement=0.35`, `direction_bias=0.0`, `climax="auto"`, `after_leap="step_opposite"` |
+| `MarkovMelodyGenerator` | `markov.py` | `transitions=None`, `note_repetition_probability=0.14`, `harmony_note_probability=0.64` |
+| `NeuralMelodyGenerator` | `neural_melody.py` | `model_path=None`, `temperature=1.0`, `top_p=0.92`, `harmony_prob=0.55`, `device="cpu"` |
+| `SoloMelodyGenerator` | `solo_melody.py` | `style="blues_lick"`, `vibrato_depth=0.5`, `blues_notes=True`, `chromaticism=0.4` |
+| `CountermelodyGenerator` | `countermelody.py` | `primary_melody=None` |
+
+## Chords & Harmony
+
+| Class | File | Key params |
+|-------|------|------------|
+| `ChordGenerator` | `chord_gen.py` | `voicing="closed"`, `notes_to_use=None`, `add_bass_note=0` |
+| `ChordVoicingGenerator` | `chord_voicing.py` | (params present) |
+| `ModernChordPatternGenerator` | `modern_chord.py` | `extension="add9"`, `stab_pattern="syncopated"`, `voicing="closed"` |
+| `BrokenChordGenerator` | `broken_chord.py` | (params present) |
+| `CadenceGenerator` | `cadence.py` | (params present) |
+| `SecondaryDominantGenerator` | `secondary_dominant.py` | `strategy="secondary"` |
+| `ModalInterchangeGenerator` | `modal_interchange.py` | `source_mode="minor"`, `frequency=0.3`, `voice_leading=True` |
+| `ReharmonizationGenerator` | `reharmonization.py` | `strategy="tritone"`, `preservation="melody"`, `substitution_frequency=0.5` |
+| `VoiceLeadingGenerator` | `voice_leading.py` | `voices=4`, `prefer_stepwise=True`, `avoid_parallels=True`, `range_style="close"` |
+| `ChoraleGenerator` | `chorale.py` | `voice_spacing=12`, `soprano_motion="stepwise"`, `rhythmic_unit=1.0`, `doubling_preference="auto"` |
+| `CounterpointGenerator` | `counterpoint.py` | `species=1`, `voices=2`, `cantus_position="below"` |
+
+## Arpeggio & Ostinato
+
+| Class | File | Key params |
+|-------|------|------------|
+| `ArpeggiatorGenerator` | `arpeggiator.py` | `pattern="up"`, `note_duration=0.25`, `voicing="closed"`, `octaves=1` |
+| `OstinatoGenerator` | `ostinato.py` | `pattern=None`, `shape=None`, `use_scale_degrees=True`, `repeat_notes=1`, `pattern_length=None` |
+| `PluckSequenceGenerator` | `pluck_sequence.py` | `pattern="offbeat"`, `decay_time=0.3`, `pitch_randomization=0.0`, `pitch_range=3` |
+
+## Drums & Percussion
+
+| Class | File | Key params |
+|-------|------|------------|
+| `ElectronicDrumsGenerator` | `electronic_drums.py` | `style="rock"`, `hihat_pattern="eighth"`, `fill_frequency=0.2`, `section_type="verse"`, `auto_fills=True`, `groove_swing=0.5` |
+| `DrumKitPatternGenerator` | `drum_kit_pattern.py` | `kit="909"`, `pattern="four_on_floor"`, `sidechain=False`, `section_type="verse"`, `auto_fills=True`, `groove_swing=0.5` |
+| `TrapDrumsGenerator` | `trap_drums.py` | `variant="standard"`, `hat_roll_density=0.5`, `kick_pattern="standard"`, `open_hat_probability=0.2`, `clap_on_two=True`, `sidechain_depth=0.6` |
+| `BoomBapGenerator` | `boom_bap.py` | `variant="classic"`, `swing_ratio=0.58`, `chop_density=0.4` |
+| `BreakbeatGenerator` | `breakbeat.py` | `variant="amen"`, `chop_probability=0.3`, `ghost_notes=True`, `double_time=False` |
+| `FourOnFloorGenerator` | `four_on_floor.py` | `variant="house"`, `hihat_style="mixed"`, `clap_location="2_4"`, `swing=0.0` |
+| `PercussionGenerator` | `percussion.py` | `pattern_name="rock"`, `instruments=None`, `velocity_humanize=10` |
+| `PercussionEnsembleGenerator` | `percussion_ensemble.py` | `instruments=None`, `density=0.6`, `polyrhythm_ratio="3x2"` |
+| `SnareDrumGenerator` | `snare_drum.py` | `pattern_type="march"` |
+| `HiHatStutterGenerator` | `hihat_stutter.py` | `pattern="trap_eighth"`, `roll_density=0.4`, `open_hat_probability=0.15`, `instrument="hh_closed"`, `pan_mode="alternate"` |
+| `GhostNotesGenerator` | `ghost_notes.py` | `target="snare"`, `pattern="funk"`, `ghost_velocity=35` |
+| `RhythmicAccentGenerator` | `accent.py` | `preset="march"`, `pitch=None`, `octave=3`, `accent_strength=1.0` |
+| `BackbeatGenerator` | `backbeat.py` | `mode="accent"`, `accent_velocity=1.0` |
+
+## Ethnic / World
+
+| Class | File | Key params |
+|-------|------|------------|
+| `EthnicWorldGenerator` | `ethnic_world.py` | `instrument="banjo"`, `note_density=1.0` |
+| `HarpGenerator` | `harp.py` | (params present) |
+
+## Drone & Ambient
+
+| Class | File | Key params |
+|-------|------|------------|
+| `DroneGenerator` | `drone.py` | `variant="tonic"`, `fade_in=0.0`, `fade_out=0.0` |
+| `AmbientPadGenerator` | `ambient.py` | `voicing="spread"`, `overlap=0.1`, `note_range_low/high=None` |
+| `NebulaGenerator` | `nebula.py` | `variant="cloud"`, `density_notes=5`, `pitch_spread=12`, `note_duration=3.0`, `overlap=0.5` |
+| `SciFiUnderscoreGenerator` | `scifi_underscore.py` | `variant="blade_runner"`, `pad_density=0.6`, `arp_speed=0.25`, `include_bass_synth=True` |
+
+## FX
+
+| Class | File | Key params |
+|-------|------|------------|
+| `FXImpactGenerator` | `fx_impact.py` | `impact_type="boom"`, `tail_length=2.0`, `pitch_drop=12`, `placement="downbeat"` |
+| `FXRiserGenerator` | `fx_riser.py` | `riser_type="synth"`, `length_beats=4.0`, `pitch_curve="exponential"` |
+| `TransitionGenerator` | `transition.py` | `transition_type="build"`, `length_beats=8.0` |
+| `BeatRepeatGenerator` | `beat_repeat.py` | `repeat_type="accelerate"`, `stutter_length=2.0` |
+| `StingerGenerator` | `stinger.py` | `stinger_type="discovery"` |
+
+## 808 / Trap Bass
+
+| Class | File | Key params |
+|-------|------|------------|
+| `Bass808SlidingGenerator` | `bass_808_sliding.py` | `pattern="trap_basic"`, `slide_type="overlap"`, `slide_probability=0.4`, `slide_curve="exponential"` |
+| `DarkBassGenerator` | `dark_bass.py` | (params present) |
+
+## Genre: Hip-Hop / Rap
+
+| Class | File | Key params |
+|-------|------|------------|
+| `MelodicRapGenerator` | `melodic_rap.py` | `variant="sing_rap"`, `repetition_factor=0.5`, `stepwise_bias=0.7`, `bend_probability=0.15`, `phrase_length=4.0` |
+| `CloudRapGenerator` | `cloud_rap.py` | `variant="cloud"`, `pad_density=0.6`, `drum_sparseness=0.5`, `arp_speed="slow"` |
+| `DrillPatternGenerator` | `drill_pattern.py` | `variant="uk_drill"`, `slide_amount=7`, `stutter_intensity=0.5` |
+| `RageBeatGenerator` | `rage_beat.py` | `variant="carti"`, `synth_distortion=0.8`, `hat_speed="sixteenth"` |
+
+## Genre: Electronic / Dance
+
+| Class | File | Key params |
+|-------|------|------------|
+| `SynthwaveGenerator` | `synthwave.py` | `variant="outrun"`, `arp_pattern="up"`, `gated_pads=True` |
+| `FutureBassGenerator` | `future_bass.py` | `variant="standard"`, `chord_chop_rate=0.5`, `sidechain_feel=True` |
+| `DnBJungleGenerator` | `dnb_jungle.py` | `variant="liquid"`, `break_density=0.6`, `reese_amount=0.5`, `sub_weight=0.7` |
+| `HardstyleGenerator` | `hardstyle.py` | `variant="euphoric"`, `kick_distortion=0.8`, `include_lead=True`, `reverse_bass_weight=0.5` |
+| `HyperpopGenerator` | `hyperpop.py` | `variant="standard"`, `pitch_shift_range=12`, `glitch_density=0.4`, `distortion_amount=0.5`, `chaos_factor=0.3` |
+| `LoFiHipHopGenerator` | `lofi_hiphop.py` | `variant="chill"`, `swing_ratio=0.62`, `chord_voicing="ninth"`, `vinyl_noise=0.3`, `tape_stop=0.1` |
+| `ChiptuneGenerator` | `chiptune.py` | `variant="nes_classic"`, `channels=None` |
+| `WitchHouseGenerator` | `witch_house.py` | `variant="classic"`, `slowdown_factor=0.5`, `pad_darkness=0.8` |
+
+## Genre: Afro / Latin
+
+| Class | File | Key params |
+|-------|------|------------|
+| `AfroHouseGenerator` | `afro_house.py` | `variant="deep"`, `percussion_density=0.6`, `include_marimba=True`, `bass_depth=0.7` |
+| `AfroDrillGenerator` | `afro_drill.py` | `variant="burna"`, `slide_amount=7`, `melody_density=0.6` |
+| `AfroPercussionGenerator` | `afro_percussion.py` | `ensemble="west_african"`, `density=0.6`, `include_pitched=True` |
+| `AfroSambaGenerator` | `afro_samba.py` | `variant="samba_afro"`, `perc_density=0.7`, `include_guitar=True` |
+| `AfrobeatsGenerator` | `afrobeats.py` | (params present) |
+| `AmapianoLogDrumGenerator` | `amapiano_logdrum.py` | (params present) |
+| `DembowGenerator` | `dembow.py` | `variant="classic"`, `shaker_density=0.7`, `include_bass=True` |
+| `LatinTrapGenerator` | `latin_trap.py` | `variant="reggaeton_trap"`, `dembow_influence=0.6`, `hat_rolls=True`, `include_percussion=True` |
+| `BaileFunkGenerator` | `baile_funk.py` | `variant="classic"`, `bass_distortion=0.7`, `percussion_density=0.6` |
+| `BongoFlavaGenerator` | `bongo_flava.py` | `variant="modern"`, `melody_density=0.6`, `include_percussion=True` |
+| `GqomGenerator` | `gqom.py` | `variant="classic"`, `kick_weight=0.8`, `include_vocal_stabs=True` |
+| `KuduroGenerator` | `kuduro.py` | `variant="kuduro"`, `intensity=0.7` |
+| `JerseyClubGenerator` | `jersey_club.py` | `variant="classic"`, `kick_triplet_density=0.7`, `stutter_breaks=True` |
+| `HighlifeGuitarGenerator` | `highlife_guitar.py` | (params present) |
+| `SoukousGuitarGenerator` | `soukous_guitar.py` | `variant="soukous"`, `run_speed="sixteenth"`, `note_density=0.8` |
+| `MontunoGenerator` | `montuno.py` | (params present) |
+
+## Genre: Phonk / UK
+
+| Class | File | Key params |
+|-------|------|------------|
+| `PhonkGenerator` | `phonk.py` | `variant="classic_phonk"`, `cowbell_density=0.7`, `bass_slide_amount=5`, `filter_cutoff=0.4`, `aggression=0.6` |
+| `PhonkHouseGenerator` | `phonk_house.py` | `variant="drift_house"`, `cowbell_density=0.6`, `bass_slides=True` |
+| `GrimeGenerator` | `grime.py` | `variant="classic"`, `synth_aggression=0.7`, `include_melody=True` |
+| `PluggnbGenerator` | `pluggnb.py` | `variant="pluggnb"`, `pad_voicing="ninth"`, `include_808=True` |
+| `UKGarageGenerator` | `uk_garage.py` | (params present) |
+
+## Genre: Metal / Rock
+
+| Class | File | Key params |
+|-------|------|------------|
+| `PowerChordGenerator` | `power_chord.py` | `pattern="chug"`, `include_octave=True` |
+| `RiffGenerator` | `riff.py` | `scale_type="minor_pent"`, `riff_pattern="gallop"`, `palm_mute_prob=0.3`, `power_chord=True` |
+| `TremoloPickingGenerator` | `tremolo_picking.py` | `variant="single"`, `speed=0.125`, `palm_mute_probability=0.0`, `note_strategy="chord_root"` |
+
+## Genre: Cinematic / Game
+
+| Class | File | Key params |
+|-------|------|------------|
+| `FilmScoreGenerator` | `film_score.py` | `hit_points=None`, `emotional_arcs=None`, `default_mood="neutral"`, `include_choir=True`, `include_brass=True`, `include_harp=True` |
+| `BossBattleGenerator` | `boss_battle.py` | `phase="fight"`, `variant="epic"`, `choir_stabs=True` |
+| `CombatEscalationGenerator` | `combat_escalation.py` | `intensity=0.5`, `layers=None`, `tempo_factor=1.0`, `key_change_on_climax=True` |
+| `StealthStateGenerator` | `stealth_state.py` | `stealth_state="hidden"`, `transition_speed=0.5`, `heartbeat=True` |
+| `VictoryFanfareGenerator` | `victory_fanfare.py` | `variant="victory"`, `register=5`, `dynamics="forte"` |
+| `HorrorDissonanceGenerator` | `horror_dissonance.py` | `variant="psychological"`, `dissonance_level=0.7` |
+| `MedievalTavernGenerator` | `medieval_tavern.py` | `variant="tavern"`, `mode="dorian"`, `lute_density=0.7` |
+
+## Theory / Composition Tools
+
+| Class | File | Key params |
+|-------|------|------------|
+| `CanonGenerator` | `canon.py` | `canon_type="tonal"`, `delay_beats=DEFAULT`, `interval=7`, `num_followers=1`, `subject_length=4.0` |
+| `CallResponseGenerator` | `call_response.py` | `call_length=2.0`, `response_length=2.0`, `call_direction="up"`, `response_direction="down"` |
+| `HemiolaGenerator` | `hemiola.py` | (params present) |
+| `PolyrhythmGenerator` | `polyrhythm.py` | `ratio="3x2"`, `stream_a_pitch="chord_root"` |
+| `EuclideanRhythmGenerator` | `euclidean_rhythm.py` | `pulses=5`, `steps=8`, `pitch="chord_root"`, `velocity_accent=True` |
+| `TensionGenerator` | `tension.py` | `mode="semitone_cluster"`, `note_duration=2.0` |
+| `SwingGenerator` | `swing.py` | `swing_ratio=0.67`, `subdivision=0.5`, `pitch_strategy="chord_tone"`, `accent_pattern="downbeat"` |
+| `GrooveGenerator` | `groove.py` | `groove_pattern="funk_1"`, `ghost_note_vel=30`, `accent_vel=110` |
+| `SequenceGenerator` | `sequence.py` | (params present) |
+| `MotifDevelopmentGenerator` | `motif_development.py` | (params present) |
+| `MotiveGenerator` | `motive.py` | `motive_length=4`, `development="transpose"`, `interval_seed=None` |
+| `PhraseContainer` | `phrase_container.py` | `mode="sequential"`, `layers=None` |
+| `PhraseMorpher` | `phrase_morpher.py` | `source_notes=None`, `target_notes=None`, `steps=8` |
+
+## Ornaments & Articulation
+
+| Class | File | Key params |
+|-------|------|------------|
+| `TrillTremoloGenerator` | `trill.py` | `ornament_type="trill"`, `speed=0.125`, `base_note_strategy="chord_tone"`, `neighbor_interval="auto"` |
+| `AcciaccaturaGenerator` | `acciaccatura.py` | `grace_type="lower"`, `grace_duration=0.08`, `main_duration=0.75`, `interval=0`, `density=0.7` |
+| `BendGenerator` | `bend.py` | `bend_type="bend_up"`, `bend_range=2` |
+| `GlissandoGenerator` | `glissando.py` | `gliss_type="chromatic"`, `speed=0.0625` |
+| `OrnamentationGenerator` | `ornamentation.py` | (params present) |
+| `HarmonicsGenerator` | `harmonics.py` | `harmonic_type="natural"`, `use_chord_tones=True`, `duration_per_note=2.0`, `velocity_pp=True` |
+
+## Utility / Meta
+
+| Class | File | Key params |
+|-------|------|------------|
+| `GenericGenerator` | `generic_gen.py` | `chord_note_ratio=0.7`, `partial_polyphony=0.2`, `max_polyphony=3` |
+| `HumanizerGenerator` | `humanizer.py` | `timing_variance=0.03`, `velocity_variance=0.1`, `pitch_drift=0.0`, `groove_type="straight"` |
+| `DynamicsCurveGenerator` | `dynamics.py` | (params present) |
+| `RandomNoteGenerator` | `random_note.py` | `velocity_range=None`, `note_range=(36,84)` |
+| `RestGenerator` | `rest.py` | (no extra params) |
+| `DownbeatRestGenerator` | `downbeat_rest.py` | (params present) |
+| `PickupGenerator` | `pickup.py` | `pickup_type="scale_down"`, `pickup_length=1.0`, `target_on_downbeat=True` |
+| `HocketGenerator` | `hocket.py` | `hocket_pattern="alternating"`, `voice_index=0`, `euclidean_pulses=3`, `euclidean_steps=4` |
+| `ClusterGenerator` | `clusters.py` | `cluster_type="second"`, `cluster_width=3` |
+| `DyadGenerator` | `dyads.py` | `interval_pref=None`, `min_interval=3`, `motion_mode="random"` |
+| `DyadsRunGenerator` | `dyads_run.py` | `interval=3`, `technique="up"`, `notes_per_run=8` |
+| `StepSequencer` | `step_seq.py` | `steps=16`, `gate_prob=0.75`, `velocity_map=None`, `ties=None` |
+| `AdvancedStepSequencer` | `advanced_step_seq.py` | (keyword params via StepLane) |
+| `BPMAdaptiveGenerator` | `bpm_adaptive.py` | (params present) |
+| `SectionBuilderGenerator` | `section_builder.py` | `section_type="verse"`, `pattern="melody"`, `bars_per_section=4` |
+| `ArrangerGenerator` | `arranger.py` | `form="verse_chorus"`, `section_length=8`, `variation_seed=0`, `use_orchestral=False` |
+| `GenreFusionEngine` | `genre_fusion.py` | (params present) |
+| `PedalMelodyGenerator` | `pedal_melody.py` | (params present) |
+| `ProceduralExplorationGenerator` | `procedural_exploration.py` | `variant="nature"`, `mood="peaceful"`, `loop_length_bars=4`, `density=0.35` |
+| `PuzzleLoopGenerator` | `puzzle_loop.py` | `variant="bells"`, `complexity=0.3`, `loop_bars=4`, `register="mid"` |
+| `BluesLickGenerator` | `blues_lick.py` | `lick_style="standard"`, `phrase_length=4` |
+| `BoogieWoogieGenerator` | `boogie_woogie.py` | `pattern="standard"`, `octave_bass=True`, `swing=0.67` |
+| `RagtimeGenerator` | `ragtime.py` | `pattern="classic"`, `melody_density=0.8` |
+| `WaltzGenerator` | `waltz.py` | `variant="viennese"`, `include_bass_octave=True`, `staccato_chords=True` |
+| `TangoGenerator` | `tango.py` | `pattern="marcato"`, `accent=1.15`, `staccato_chords=True` |
+| `StrumPatternGenerator` | `strum.py` | `strum_delay=0.02`, `voicing="guitar"`, `direction_pattern=None`, `density="medium"`, `polyphony=6` |
+| `ReggaeSkankGenerator` | `reggae_skank.py` | `variant="skank"`, `staccato=True`, `mute_probability=0.1` |
+| `FillGenerator` | `fills.py` | (params present) |
 
 ---
 
-## Rhythm & Drums — базовые — 7 генераторов
+## GM Programs (`_GM_PROGRAMS` in `idea_tool.py`)
 
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `percussion` | PercussionGenerator | Универсальные перкуссионные паттерны |
-| `polyrhythm` | PolyrhythmGenerator | Полиритмия: 3x2, 5x4, 3x4, 7x8 |
-| `beat_repeat` | BeatRepeatGenerator | Stutter/gate: accelerate/decelerate/glitch/reverse |
-| `tremolo_strings` | TremoloStringsGenerator | Струнное тремоло (bow tremolo) |
-| `trap_drums` | TrapDrumsGenerator | Трэп: hi-hat rolls, 808, snare 2+4 |
-| `four_on_floor` | FourOnFloorGenerator | Four-on-the-floor: house/techno/disco/progressive |
-| `breakbeat` | BreakbeatGenerator | Breakbeat: amen/funky/think/dnb/idm |
-
-## Ударные (расширенные) — 3 генератора
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `drum_kit_pattern` | DrumKitPatternGenerator | Полноценные драм-паттерны: rock/jazz/latin/funk/hiphop |
-| `percussion_ensemble` | PercussionEnsembleGenerator | Ансамбль перкуссии: конги, бонго, шейкеры |
-| `electronic_drums` | ElectronicDrumsGenerator | Электронные ударные: 909/808/cr78/linn |
-
----
-
-## Modern Beats — Trap/Drill/Hip-Hop — 12 генераторов
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `bass_808_sliding` | Bass808SlidingGenerator | 808 bass с pitch slides: trap_basic/trap_syncopated/drill_sliding/half_time/rolling |
-| `hihat_stutter` | HiHatStutterGenerator | Hi-hat stutter rolls, triplets, velocity waves: trap_eighth/trap_triplet/drill_stutter/rapid_fire/sparse/velocity_wave |
-| `drill_pattern` | DrillPatternGenerator | Полный UK/NY drill: sliding 808, stutter hats, displaced snares, dark piano. Варианты: uk_drill/ny_drill/melodic_drill/dark_drill |
-| `ghost_notes` | GhostNotesGenerator | Ghost notes для реалистичных drums: snare/kick/hihat/tom. Паттерны: funk/hiphop/jazz/linear |
-| `lofi_hiphop` | LoFiHipHopGenerator | Lo-fi hip-hop: dusty 7th/9th chords, swing drums, vinyl noise, tape stop. Варианты: chill/jazzy/nostalgic/upbeat |
-| `phonk` | PhonkGenerator | Phonk/Memphis: cowbell, drift slides, Memphis chops. Варианты: classic_phonk/drift_phonk/lofi_phonk/aggressive |
-| `melodic_rap` | MelodicRapGenerator | Auto-tune friendly мелодии с grace notes. Варианты: sing_rap/auto_tune/melodic_trap/hook |
-| `rage_beat` | RageBeatGenerator | Distorted synth leads, aggressive 808. Варианты: carti/destroy/ken/rage |
-| `pluggnb` | PluggnbGenerator | Мягкие pads 7th/9th, 808 slides, minimal drums. Варианты: pluggnb/plugg/melodic/dark_plugg |
-| `boom_bap` | BoomBapGenerator | Classic hip-hop: dusty drums, MPC swing, jazz chops. Варианты: classic/jazz_hop/golden_age/dusty |
-| `advanced_step_seq` | AdvancedStepSequencer | Grid-sequencer: velocity layers, probability, ratchets, micro-timing. Пресеты: four_on_floor/breakbeat/trap/techno/dnb |
-| `bpm_adaptive` | BPMAdaptiveGenerator | Обёртка для адаптации плотности к BPM. Режимы: linear/logarithmic/genre_safe |
-
-## Urban & Club — 10 генераторов
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `jersey_club` | JerseyClubGenerator | Jersey/TikTok Club: triplet kick bounce, stutter breaks, chopped samples. Варианты: classic/tiktok/dark/bedroom |
-| `dembow` | DembowGenerator | Dancehall/Reggaeton: dembow rhythm, shakers, cowbell. Варианты: classic/reggaeton/dancehall/moombahton |
-| `baile_funk` | BaileFunkGenerator | Brazilian Phonk/Funk: tamborzão percussion, MC chops. Варианты: classic/phonk_br/mandela/rasterinha |
-| `latin_trap` | LatinTrapGenerator | Latin trap fusion: dembow + trap drums. Варианты: reggaeton_trap/urbano/spanish_trap/bachata_trap |
-| `uk_garage` | UKGarageGenerator | UK Garage/2-Step: shuffle, skippy hats, vocal chops. Варианты: 2step/speed_garage/bassline/dark_garage |
-| `hyperpop` | HyperpopGenerator | Hyperpop/Glitch: pitch-shifted chops, chaos. Варианты: standard/glitch/bubblegum/deconstructed |
-| `dnb_jungle` | DnBJungleGenerator | DnB/Jungle: breakbeat chops, reese bass. Варианты: liquid/jungle/neurofunk/minimal |
-| `hardstyle` | HardstyleGenerator | Hardstyle: distorted kick, reverse bass, screech leads. Варианты: euphoric/raw/reverse/classic |
-| `synthwave` | SynthwaveGenerator | Synthwave/Retrowave: gated pads, arp bass. Варианты: outrun/chillwave/darksynth/retro_pop |
-| `future_bass` | FutureBassGenerator | Future Bass: supersaw chops, sidechain feel, vocal chops. Варианты: standard/festival/chill/wave_race |
-| `witch_house` | WitchHouseGenerator | Witch House: slowed, dark pads, dissonant clusters. Варианты: classic/drag/dark_ambient/occult |
-| `phonk_house` | PhonkHouseGenerator | Phonk + House fusion: cowbell, drift bass. Варианты: drift_house/dark_house/brazilian/classic |
-| `grime` | GrimeGenerator | UK Grime: square wave synths, 140 BPM. Варианты: classic/eskibeat/weightless/modern |
-
-## Afro Beats — 11 генераторов
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `afrobeats` | AfrobeatsGenerator | Afrobeats/Amapiano: log drums, shakers, piano. Варианты: afrobeats/amapiano/afro_pop/afro_rock |
-| `amapiano_logdrum` | AmapianoLogDrumGenerator | Детальные log drum паттерны с pitch variations, ghost notes. Варианты: classic/kabza/dj_maphorisa/mellow/percussive |
-| `afro_percussion` | AfroPercussionGenerator | Djembe, congas, shekere, balafon. Ансамбли: west_african/cuban_afro/south_african/east_african |
-| `highlife_guitar` | HighlifeGuitarGenerator | West African guitar riffs: highlife/afrobeat/juju/palm_wine |
-| `afro_house` | AfroHouseGenerator | Black Coffee style: marimba, deep bass. Варианты: deep/spiritual/tech/organic |
-| `gqom` | GqomGenerator | Durban Gqom: heavy syncopated kicks. Варианты: classic/dark/minimal/sgubhu |
-| `kuduro` | KuduroGenerator | Angolan kuduro + South African kwaito. Варианты: kuduro/kwaito/afro_tech/tarraxinha |
-| `afro_drill` | AfroDrillGenerator | Afro мелодии поверх drill 808s (Burna Boy/Rema style). Варианты: burna/rema/central/classic |
-| `soukous_guitar` | SoukousGuitarGenerator | Congolese guitar: sebene runs. Варианты: soukous/rumba/ndombolo/cavacha |
-| `bongo_flava` | BongoFlavaGenerator | Tanzanian Bongo Flava. Варианты: classic/modern/singeli/taarab_pop |
-| `afro_samba` | AfroSambaGenerator | Brazilian-African fusion. Варианты: samba_afro/bossa_afro/axe/maracatu |
-
----
-
-## Game Audio / AAA — 11 генераторов
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `combat_escalation` | CombatEscalationGenerator | Адаптивная боевая музыка: `intensity` 0.0–1.0 (exploration → climax). Слои: strings/brass/percussion/bass |
-| `stinger` | StingerGenerator | Музыкальные cues (1–4 beats): discovery/achievement/danger/death/save/level_up/item_get/quest_complete/fail/stealth_alert/checkpoint/combo |
-| `chiptune` | ChiptuneGenerator | 8-bit: pulse1 (melody), pulse2 (harmony), triangle (bass), noise (drums). Варианты: nes_classic/gameboy/modern_chip/megadrive |
-| `horror_dissonance` | HorrorDissonanceGenerator | Horror scoring: minor 2nd clusters, tritones, chromatic crawls. Варианты: psychological/jump_scare/ambient_dread/creature |
-| `stealth_state` | StealthStateGenerator | Stealth state machine: hidden/caution/alert/pursuit/evading |
-| `procedural_exploration` | ProceduralExplorationGenerator | Infinite exploration loops. Варианты: nature/sci_fi/underwater/desert/forest. Моды: peaceful/curious/wonder/uneasy |
-| `boss_battle` | BossBattleGenerator | Epic boss: фазы intro → build → fight → climax. Варианты: epic/dark_lord/dragon/final |
-| `puzzle_loop` | PuzzleLoopGenerator | Minimal puzzle loops: bells/ambient/clockwork/zen |
-| `medieval_tavern` | MedievalTavernGenerator | RPG: lute, flute, modal scales (Dorian/Mixolydian). Варианты: tavern/court/journey/battle_camp |
-| `scifi_underscore` | SciFiUnderscoreGenerator | Sci-fi pads, sequenced synths. Варианты: blade_runner/space/cyberpunk/retro_sci_fi |
-| `victory_fanfare` | VictoryFanfareGenerator | Victory/game_over/title_screen/level_complete/continue |
-
----
-
-## Synth & Electronic — 6 генераторов
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `synth_bass` | SynthBassGenerator | Acid/reese/sub/wobble электронный бас |
-| `supersaw_pad` | SupersawPadGenerator | Supersaw пады: trance/ambient/stabs/plucks |
-| `pluck_sequence` | PluckSequenceGenerator | Offbeat plucks: deep house/tech house |
-| `bass_wobble` | BassWobbleGenerator | Dubstep wobble: LFO-модуляция фильтра |
-| `lead_synth` | LeadSynthGenerator | Синтезаторный лид: monophonic, portamento, vibrato |
-| `sidechain_pump` | SidechainPumpGenerator | Sidechain-качание: velocity ducking по триггеру |
-
-## Orchestral Articulations — 4 генератора
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `strings_legato` | StringsLegatoGenerator | Legato струнные с портменто |
-| `strings_pizzicato` | StringsPizzicatoGenerator | Pizzicato: ostinato/waltz/tremolo/random |
-| `strings_staccato` | StringsStaccatoGenerator | Staccato струнные |
-| `brass_section` | BrassSectionGenerator | Духовая секция: hit/swell/fanfare/falls/doits |
-
-## Оркестр (расширенные) — 3 генератора
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `woodwinds_ensemble` | WoodwindsEnsembleGenerator | Деревянные духовые: trio/quartet/full |
-| `strings_ensemble` | StringsEnsembleGenerator | Струнная секция: divisi, articulations, dynamic curves |
-| `orchestral_hit` | OrchestralHitGenerator | Кинематографичные хиты: staccato/sustain/braam |
-
-## Клавишные — 3 генератора
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `piano_comp` | PianoCompGenerator | Джазовый/поп аккомпанемент: shell voicings, comping-ритмы |
-| `organ_drawbars` | OrganDrawbarsGenerator | Hammond орган: drawbar-регистры, вибрато, лесли |
-| `keys_arpeggio` | KeysArpeggioGenerator | Синтезаторные арпеджио с LFO-модуляцией |
-
-## Genre-Specific (classic) — 5 генераторов
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `ragtime` | RagtimeGenerator | Рагтайм: syncopated RH + stride LH |
-| `tango` | TangoGenerator | Танго: marcato/habanera/milonga/vals |
-| `reggae_skank` | ReggaeSkankGenerator | Регги: skank/ska/one_drop/rockers/dub |
-| `montuno` | MontunoGenerator | Латин: son/salsa/guajira/cha_cha/mambo |
-| `waltz` | WaltzGenerator | Вальс: Viennese/jazz/romantic/modern |
-
-## Texture & Ambient — 5 генераторов
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `canon` | CanonGenerator | Канон: задержанная копия мелодии |
-| `drone` | DroneGenerator | Дрон: tonic/dominant/root/fifth/octave/power |
-| `ambient` | AmbientPadGenerator | Ambient пады |
-| `nebula` | NebulaGenerator | Текстурные облака: cloud/cascade/swell/granular/stasis |
-| `clusters` | ClusterGenerator | Тоновые кластеры: second/fourth/mixed/white_key/chromatic |
-| `dark_pad` | DarkPadGenerator | Тёмные пады: minor_pad/phrygian_pad/diminished_pad/suspended_pad |
-| `tension` | TensionGenerator | Напряжение: sustain/pulse/rising/staccato/dissonant |
-
-## Vocals & Samples — 3 генератора
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `vocal_chops` | VocalChopsGenerator | Нарезка вокальных семплов |
-| `vocal_oohs` | VocalOohsGenerator | Фоновый вокал: ooh/aah/hum/mm |
-| `sax_solo` | SaxSoloGenerator | Саксофонное соло: ballad/bebop/fusion/smooth |
-
-## Вокал — 3 генератора
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `vocal_melisma` | VocalMelismaGenerator | Мелизмы, рулады (R&B, gospel, opera) |
-| `vocal_adlibs` | VocalAdlibsGenerator | Импровизационные вставки, call-outs |
-| `choir_ahhs` | ChoirAahsGenerator | Хоровые пэды: SATB-гармонии |
-
-## Harmony & Theory — 5 генераторов
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `reharmonization` | ReharmonizationGenerator | Субституция аккордов |
-| `modal_interchange` | ModalInterchangeGenerator | Заимствованные аккорды |
-| `voice_leading` | VoiceLeadingGenerator | Автоматическое плавное голосоведение |
-| `counterpoint` | CounterpointGenerator | Строгий контрапункт: species 1–5 |
-| `motif_development` | MotifDevelopmentGenerator | Развитие мотива: inversion/retrograde/augmentation |
-
-## Meta & Structure — 2 генератора
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `arranger` | ArrangerGenerator | Управление формой: verse/chorus/bridge |
-| `humanizer` | HumanizerGenerator | Пост-обработка: timing/velocity/groove |
-
-## Utility — 7 генераторов
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `dyads` | DyadGenerator | Двухголосные интервалы |
-| `dyads_run` | DyadsRunGenerator | Беглые двухголосные последовательности |
-| `rest` | RestGenerator | Тишина |
-| `generic` | GenericGenerator | Запасной генератор |
-| `step_sequencer` | StepSequencer | Пошаговый секвенсор |
-| `phrase_container` | PhraseContainer | Контейнер для фраз |
-| `phrase_morpher` | PhraseMorpher | Интерполяция между фразами |
-| `random_note` | RandomNoteGenerator | Случайные ноты |
-| `filter_sweep` | FilterSweepGenerator | Автоматизация фильтра: cutoff envelope |
-| `euclidean_rhythm` | EuclideanRhythmGenerator | Евклидовы ритмы: Bjorklund algorithm |
-
----
-
-## Meta-генераторы
-
-| Тип | Класс | Описание |
-|-----|-------|----------|
-| `genre_fusion` | GenreFusionEngine | Смешение жанров: trap+jazz, drill+lofi и т.д. Режимы: interleave/layer/morph/random |
-| `vocal_melody_auto` | VocalMelodyAutoGenerator | Auto-tune оптимизированные мелодии. Варианты: travis/tpain/future/don_toliver |
-
----
-
-## MIDI Doctor (интеграция в IdeaTool)
-
-Параметры `IdeaToolConfig`:
-
-| Параметр | Default | Описание |
-|----------|---------|----------|
-| `run_doctor` | `False` | Запустить диагностику после генерации |
-| `doctor_psycho` | `True` | Psychoacoustic checks (masking, fusion, blur) |
-| `doctor_harmonic` | `True` | Cross-track harmonic clash detection |
-
-Результат в `result["_doctor_report"]`:
-```python
-{
-    "psycho_checks": {"frequency_masking": [...], "temporal_masking": [...], ...},
-    "harmonic_clashes": [...],
-    "total_issues": int,
-}
-```
-
-Диагностика использует существующие функции из `melodica.composer.psychoacoustic` и `melodica.composer.harmonic_verifier`.
-
-Отдельный CLI-скрипт: `scripts/midi_doctor.py --script <script.py> --duration <min> --tempo <bpm> --key <root> --seed <int>`
-
----
-
-## GeneratorParams (общие параметры)
-
-| Поле | Default | Описание |
-|---|---|---|
-| `density` | 0.5 | Плотность нот / уровень velocity (0.0–1.0) |
-| `complexity` | 0.5 | Ритмическая/мелодическая сложность (0.0–1.0) |
-| `key_range_low` | 48 | Нижняя граница MIDI (C3) |
-| `key_range_high` | 84 | Верхняя граница MIDI (C6) |
-| `swing` | 0.5 | Свинг (0.0 = straight, 1.0 = полный) |
-| `humanize` | 0.5 | Гуманизация тайминга/velocity (0.0–1.0) |
-| `scale` | None | Переопределение тональности |
+| Name | GM# |
+|------|-----|
+| piano | 0 |
+| bright_piano | 1 |
+| electric_piano | 4 |
+| harpsichord | 6 |
+| celesta | 8 |
+| glockenspiel | 9 |
+| music_box | 10 |
+| vibraphone | 11 |
+| marimba | 12 |
+| xylophone | 13 |
+| tubular_bells | 14 |
+| organ | 19 |
+| accordion | 21 |
+| harmonica | 22 |
+| nylon_guitar | 24 |
+| guitar / steel_guitar | 25 |
+| jazz_guitar | 26 |
+| electric_guitar | 27 |
+| muted_guitar | 28 |
+| overdrive_guitar | 29 |
+| distortion_guitar | 30 |
+| acoustic_bass | 32 |
+| bass | 33 |
+| electric_bass | 34 |
+| fretless_bass | 35 |
+| slap_bass | 36 |
+| synth_bass | 38 |
+| violin | 40 |
+| viola | 41 |
+| cello | 42 |
+| contrabass | 43 |
+| tremolo_strings | 44 |
+| pizzicato | 45 |
+| harp | 46 |
+| timpani | 47 |
+| strings | 48 |
+| choir | 52 |
+| voice / synth_voice | 54 |
+| orchestra_hit | 55 |
+| trumpet | 56 |
+| trombone | 57 |
+| tuba | 58 |
+| french_horn | 60 |
+| brass | 61 |
+| synth_brass | 62 |
+| soprano_sax | 64 |
+| alto_sax | 65 |
+| tenor_sax | 66 |
+| baritone_sax | 67 |
+| oboe | 68 |
+| english_horn | 69 |
+| bassoon | 70 |
+| clarinet | 71 |
+| piccolo | 72 |
+| flute | 73 |
+| recorder | 74 |
+| pan_flute | 75 |
+| shakuhachi | 77 |
+| whistle | 78 |
+| ocarina | 79 |
+| synth_lead | 80 |
+| dark_pad | 88 |
+| pad | 89 |
+| synth_fx | 102 |
+| sitar | 104 |
+| banjo | 105 |
+| shamisen | 106 |
+| koto | 107 |
+| kalimba | 108 |
+| bagpipe | 109 |
+| fiddle | 110 |
+| shanai | 111 |
+| tinkle_bell | 112 |
+| steel_drums | 114 |
+| taiko | 116 |
+| drums / percussion | 0 (ch9) |
