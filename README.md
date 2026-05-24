@@ -85,6 +85,44 @@ python3 scripts/midi_analyzer.py output/album_ainulindale/ --no-music21
 - `mido` (required)
 - `music21` (optional — for key detection and consonance analysis; skip with `--no-music21`)
 
+### Register Balancing Workflow
+
+The analyzer exposes register overlap and density problems. Fix them in the album script, then re-analyze to verify.
+
+**1. Run the analyzer** and look at **Register Distribution** (9 bands from sub to top) and **Suggestions** (lines like `Chaos_Tremolo ↔ Defiant_Brass: 77% register overlap`).
+
+**2. Diagnose.** In **Track Stats**, the `Band` column shows where each track sits. Two tracks in the same band will mask each other. Rule of thumb: one track per register band (sub / low / mid / mid-high / high).
+
+**3. Fix register overlap** with `octave_shift` on `TrackConfig`:
+
+```python
+# Both in mid — overlap:
+TrackConfig(name="Defiant_Brass", ..., octave_shift=1)    # → mid-high
+TrackConfig(name="Tension_Cluster", ..., octave_shift=0)   # → mid (stays)
+
+# Push bass deeper:
+TrackConfig(name="Darkness_Pad", ..., octave_shift=-2)     # → sub
+```
+
+**4. Fix note density.** `TrackConfig.density` controls phrase-level density, not internal generator output. For generators like `TremoloStringsGenerator` that produce notes internally, adjust their own parameters:
+
+```python
+# bow_speed directly controls stroke count (lower = more notes):
+TremoloStringsGenerator(bow_speed=0.0625)  # ~64 strokes per 4 beats
+TremoloStringsGenerator(bow_speed=0.15)    # ~27 strokes (half the notes)
+```
+
+**5. Regenerate and re-analyze:**
+
+```bash
+python3 scripts/album_xxx.py
+python3 scripts/midi_analyzer.py output/album_xxx/
+```
+
+Verify: register distribution is spread, register masking dropped, no overlap pairs above 50%.
+
+Cycle: **analyze → diagnose → `octave_shift` + generator params → regenerate → analyze**.
+
 ## Engines
 
 | ID | Name | Algorithm |
