@@ -200,6 +200,21 @@ ARRANGEMENT_PATTERNS: dict[str, list[str]] = {
 }
 
 
+@dataclass(frozen=True)
+class PhraseSlot:
+    """A single segment in a PhraseSchedule — play, rest, or ghost."""
+    kind: str = "play"    # "play" | "rest" | "ghost"
+    bars: int = 4
+    label: str = "A"
+
+
+@dataclass
+class PhraseSchedule:
+    """Ordered list of PhraseSlots describing when a track plays within a part."""
+    slots: list[PhraseSlot] = field(default_factory=list)
+    loop: bool = True
+
+
 @dataclass
 class TrackConfig:
     """Configuration for a single track in the Idea Tool."""
@@ -233,6 +248,9 @@ class TrackConfig:
     # MPE (MIDI Polyphonic Expression)
     mpe: bool = False  # Allocate per-note channels for expression control
 
+    # Phrase-level scheduling within a part (None = use arrangement pattern as before)
+    phrase_schedule: PhraseSchedule | None = None
+
 
 @dataclass
 class IdeaPart:
@@ -250,6 +268,8 @@ class IdeaPart:
     track_density: dict[str, float] | None = None  # {"TrackName": 0.3}
     track_mute: list[str] | None = None  # ["TrackName1", ...]
     track_velocity_scale: dict[str, float] | None = None  # {"TrackName": 0.5}
+    # Per-track phrase schedule overrides (None = use track default)
+    track_phrase_schedules: dict[str, PhraseSchedule] | None = None
 
 
 @dataclass
@@ -1030,103 +1050,114 @@ class IdeaTool:
                 offset_beats += part_beats
                 continue
 
-            # Apply arrangement pattern per part
-            pattern = ARRANGEMENT_PATTERNS.get(cfg.arrangement, ["A", "B", "A", "B"])
-            part_notes: list[NoteInfo] = []
-            bpb = part.time_signature[0]
-            # Align sections to bar boundaries: distribute bars evenly across sections
-            n_sections = len(pattern)
-            if part.bars < n_sections:
-                # More sections than bars: merge — treat the whole part as one section
-                section_bar_counts = [part.bars]
-                pattern = [pattern[0]]
-                n_sections = 1
-            else:
-                base_section_bars = max(1, part.bars // n_sections)
-                remainder_bars = part.bars - base_section_bars * n_sections
-                section_bar_counts = [base_section_bars + (1 if i < remainder_bars else 0) for i in range(n_sections)]
-            ctx = self._track_contexts.get(cfg.name, RenderContext())
+            # Resolve effective phrase schedule (per-part override takes priority)
+            effective_schedule = cfg.phrase_schedule
+            if part.track_phrase_schedules and cfg.name in part.track_phrase_schedules:
+                effective_schedule = part.track_phrase_schedules[cfg.name]
 
-            section_offset_beats = 0.0
-            for i, section in enumerate(pattern):
-                section_length = section_bar_counts[i] * bpb
-                section_start = offset_beats + section_offset_beats
-                phrase_pos = i / max(1, n_sections - 1) if n_sections > 1 else 0.0
-
-                # Rebuild context preserving continuity but updating phrase_position
-                ctx = RenderContext(
-                    prev_pitch=ctx.prev_pitch,
-                    prev_velocity=ctx.prev_velocity,
-                    prev_chord=ctx.prev_chord,
-                    prev_pitches=list(ctx.prev_pitches),
-                    phrase_position=phrase_pos,
+            if effective_schedule is not None:
+                # Phrase-schedule driven rendering
+                part_notes = self._render_phrase_schedule(
+                    cfg, chords, scale, part, offset_beats, gen
                 )
-                section_end = section_start + section_length
+            else:
+                # Apply arrangement pattern per part (existing logic)
+                pattern = ARRANGEMENT_PATTERNS.get(cfg.arrangement, ["A", "B", "A", "B"])
+                part_notes: list[NoteInfo] = []
+                bpb = part.time_signature[0]
+                # Align sections to bar boundaries: distribute bars evenly across sections
+                n_sections = len(pattern)
+                if part.bars < n_sections:
+                    # More sections than bars: merge — treat the whole part as one section
+                    section_bar_counts = [part.bars]
+                    pattern = [pattern[0]]
+                    n_sections = 1
+                else:
+                    base_section_bars = max(1, part.bars // n_sections)
+                    remainder_bars = part.bars - base_section_bars * n_sections
+                    section_bar_counts = [base_section_bars + (1 if i < remainder_bars else 0) for i in range(n_sections)]
+                ctx = self._track_contexts.get(cfg.name, RenderContext())
 
-                # Find chords for this section (in global time)
-                section_chords = [
-                    c for c in chords if c.start < section_end and c.end > section_start
-                ]
-                if not section_chords:
-                    before = [c for c in chords if c.start < section_end]
-                    section_chords = [before[-1]] if before else (chords[:1] if chords else [])
+                section_offset_beats = 0.0
+                for i, section in enumerate(pattern):
+                    section_length = section_bar_counts[i] * bpb
+                    section_start = offset_beats + section_offset_beats
+                    phrase_pos = i / max(1, n_sections - 1) if n_sections > 1 else 0.0
 
-                # Adjust chord times to section-local origin; clip durations at section boundary
-                adjusted = [
-                    ChordLabel(
-                        root=c.root,
-                        quality=c.quality,
-                        start=max(0.0, c.start - section_start),
-                        duration=min(c.end, section_end) - max(c.start, section_start),
-                        degree=c.degree,
+                    # Rebuild context preserving continuity but updating phrase_position
+                    ctx = RenderContext(
+                        prev_pitch=ctx.prev_pitch,
+                        prev_velocity=ctx.prev_velocity,
+                        prev_chord=ctx.prev_chord,
+                        prev_pitches=list(ctx.prev_pitches),
+                        phrase_position=phrase_pos,
                     )
-                    for c in section_chords
-                ]
+                    section_end = section_start + section_length
 
-                # Seed the random generator to ensure that repeating sections (e.g., A, A)
-                # generate the exact same rhythmic and melodic contours, but perfectly
-                # adapted to the current underlying chords.
-                import hashlib
+                    # Find chords for this section (in global time)
+                    section_chords = [
+                        c for c in chords if c.start < section_end and c.end > section_start
+                    ]
+                    if not section_chords:
+                        before = [c for c in chords if c.start < section_end]
+                        section_chords = [before[-1]] if before else (chords[:1] if chords else [])
 
-                seed_str = f"{cfg.name}:{part.name}:{section}"
-                seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
-                random.seed(seed_val)
-
-                section_notes = gen.render(adjusted, scale, section_length, ctx)
-
-                # Restore true randomness
-                random.seed()
-
-                # Apply Rhythm Processing (Rotation, Dotted, Rests, Swing)
-                section_notes = self._apply_rhythm_processing(section_notes, cfg, section_length)
-
-                # Offset to global time (including the part's offset)
-                for n in section_notes:
-                    part_notes.append(
-                        NoteInfo(
-                            pitch=n.pitch + cfg.octave_shift * 12,
-                            start=round(n.start + section_start, 6),
-                            duration=n.duration,
-                            velocity=n.velocity,
-                            articulation=n.articulation,
-                            expression=dict(n.expression),
+                    # Adjust chord times to section-local origin; clip durations at section boundary
+                    adjusted = [
+                        ChordLabel(
+                            root=c.root,
+                            quality=c.quality,
+                            start=max(0.0, c.start - section_start),
+                            duration=min(c.end, section_end) - max(c.start, section_start),
+                            degree=c.degree,
                         )
-                    )
+                        for c in section_chords
+                    ]
 
-                # Thread context to next section
-                if hasattr(gen, "_last_context") and gen._last_context is not None:
-                    ctx = gen._last_context
-                elif part_notes:
-                    ctx = RenderContext().with_end_state(
-                        last_pitch=part_notes[-1].pitch,
-                        last_velocity=part_notes[-1].velocity,
-                        last_chord=section_chords[-1] if section_chords else None,
-                    )
+                    # Seed the random generator to ensure that repeating sections (e.g., A, A)
+                    # generate the exact same rhythmic and melodic contours, but perfectly
+                    # adapted to the current underlying chords.
+                    import hashlib
 
-                section_offset_beats += section_length
+                    seed_str = f"{cfg.name}:{part.name}:{section}"
+                    seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
+                    random.seed(seed_val)
 
-            # Persist context for next generate() call
-            self._track_contexts[cfg.name] = ctx
+                    section_notes = gen.render(adjusted, scale, section_length, ctx)
+
+                    # Restore true randomness
+                    random.seed()
+
+                    # Apply Rhythm Processing (Rotation, Dotted, Rests, Swing)
+                    section_notes = self._apply_rhythm_processing(section_notes, cfg, section_length)
+
+                    # Offset to global time (including the part's offset)
+                    for n in section_notes:
+                        part_notes.append(
+                            NoteInfo(
+                                pitch=n.pitch + cfg.octave_shift * 12,
+                                start=round(n.start + section_start, 6),
+                                duration=n.duration,
+                                velocity=n.velocity,
+                                articulation=n.articulation,
+                                expression=dict(n.expression),
+                            )
+                        )
+
+                    # Thread context to next section
+                    if hasattr(gen, "_last_context") and gen._last_context is not None:
+                        ctx = gen._last_context
+                    elif part_notes:
+                        ctx = RenderContext().with_end_state(
+                            last_pitch=part_notes[-1].pitch,
+                            last_velocity=part_notes[-1].velocity,
+                            last_chord=section_chords[-1] if section_chords else None,
+                        )
+
+                    section_offset_beats += section_length
+
+                # Persist context for next generate() call
+                self._track_contexts[cfg.name] = ctx
 
             # Apply built-in named variations (per part notes? Or all notes?)
             # It's better to apply variations per part. But wait, apply_variation expects the whole track?
@@ -1300,6 +1331,133 @@ class IdeaTool:
             notes = swung
 
         return notes
+
+    def _render_phrase_schedule(
+        self,
+        cfg: TrackConfig,
+        chords: list[ChordLabel],
+        scale: Scale,
+        part: IdeaPart,
+        offset_beats: float,
+        gen,
+    ) -> list[NoteInfo]:
+        """Render a track following a PhraseSchedule within a single part."""
+        import hashlib
+
+        schedule = cfg.phrase_schedule
+        if part.track_phrase_schedules and cfg.name in part.track_phrase_schedules:
+            schedule = part.track_phrase_schedules[cfg.name]
+        assert schedule is not None
+
+        bpb = part.time_signature[0]
+        part_beats = part.bars * bpb
+        total_schedule_bars = sum(s.bars for s in schedule.slots)
+
+        # Expand schedule to fill the part
+        if schedule.loop and total_schedule_bars > 0:
+            expanded: list[PhraseSlot] = []
+            while sum(s.bars for s in expanded) < part.bars:
+                for slot in schedule.slots:
+                    expanded.append(slot)
+                    if sum(s.bars for s in expanded) >= part.bars:
+                        break
+            # Trim last slot if it overshoots
+            total = sum(s.bars for s in expanded)
+            if total > part.bars:
+                excess = total - part.bars
+                last = expanded[-1]
+                expanded[-1] = PhraseSlot(
+                    kind=last.kind,
+                    bars=last.bars - excess,
+                    label=last.label,
+                )
+        else:
+            expanded = list(schedule.slots)
+
+        part_notes: list[NoteInfo] = []
+        ctx = self._track_contexts.get(cfg.name, RenderContext())
+        slot_offset_beats = 0.0
+
+        for slot_idx, slot in enumerate(expanded):
+            slot_beats = slot.bars * bpb
+            if slot_beats <= 0:
+                continue
+
+            if slot.kind == "rest":
+                # Silence: advance time, keep context
+                slot_offset_beats += slot_beats
+                continue
+
+            section_start = offset_beats + slot_offset_beats
+            section_end = section_start + slot_beats
+            phrase_pos = slot_offset_beats / part_beats if part_beats > 0 else 0.0
+
+            ctx = RenderContext(
+                prev_pitch=ctx.prev_pitch,
+                prev_velocity=ctx.prev_velocity,
+                prev_chord=ctx.prev_chord,
+                prev_pitches=list(ctx.prev_pitches),
+                phrase_position=phrase_pos,
+            )
+
+            # Find chords for this section
+            section_chords = [
+                c for c in chords if c.start < section_end and c.end > section_start
+            ]
+            if not section_chords:
+                before = [c for c in chords if c.start < section_end]
+                section_chords = [before[-1]] if before else (chords[:1] if chords else [])
+
+            adjusted = [
+                ChordLabel(
+                    root=c.root,
+                    quality=c.quality,
+                    start=max(0.0, c.start - section_start),
+                    duration=min(c.end, section_end) - max(c.start, section_start),
+                    degree=c.degree,
+                )
+                for c in section_chords
+            ]
+
+            # Deterministic seeding
+            seed_str = f"{cfg.name}:{part.name}:{slot.label}"
+            seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
+            random.seed(seed_val)
+
+            section_notes = gen.render(adjusted, scale, slot_beats, ctx)
+            random.seed()
+
+            # Rhythm processing
+            section_notes = self._apply_rhythm_processing(section_notes, cfg, slot_beats)
+
+            # Offset to global time + octave shift
+            for n in section_notes:
+                part_notes.append(
+                    NoteInfo(
+                        pitch=n.pitch + cfg.octave_shift * 12,
+                        start=round(n.start + section_start, 6),
+                        duration=n.duration,
+                        velocity=n.velocity,
+                        articulation=n.articulation,
+                        expression=dict(n.expression),
+                    )
+                )
+
+            # Thread context
+            if hasattr(gen, "_last_context") and gen._last_context is not None:
+                ctx = gen._last_context
+            elif part_notes:
+                ctx = RenderContext().with_end_state(
+                    last_pitch=part_notes[-1].pitch,
+                    last_velocity=part_notes[-1].velocity,
+                    last_chord=section_chords[-1] if section_chords else None,
+                )
+
+            slot_offset_beats += slot_beats
+
+        # Persist context
+        self._track_contexts[cfg.name] = ctx
+        return part_notes
 
     def _get_generator(self, cfg: TrackConfig, params: GeneratorParams):
         """
