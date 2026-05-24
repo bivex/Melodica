@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 
 N_TONES = 12
-N_TYPES = 6  # Expanded from 3
+N_TYPES = 9  # Expanded to include 7ths (Maj7, Min7, Dom7)
 MAX_ITER = 100
 TARGET_DELTA = 1e-5
 
@@ -97,8 +97,13 @@ def main():
     pnote[0, 3], pnote[4, 3], pnote[8, 3] = 0.90, 0.85, 0.80  # Aug
     pnote[0, 4], pnote[2, 4], pnote[7, 4] = 0.90, 0.75, 0.85  # sus2
     pnote[0, 5], pnote[5, 5], pnote[7, 5] = 0.90, 0.80, 0.85  # sus4
+    pnote[0, 6], pnote[4, 6], pnote[7, 6], pnote[11, 6] = 0.95, 0.85, 0.90, 0.80 # Maj7
+    pnote[0, 7], pnote[3, 7], pnote[7, 7], pnote[10, 7] = 0.95, 0.85, 0.90, 0.80 # Min7
+    pnote[0, 8], pnote[4, 8], pnote[7, 8], pnote[10, 8] = 0.95, 0.85, 0.90, 0.80 # Dom7
 
-    pchord = torch.tensor([2.0, 2.0, 1.0, 0.5, 0.3, 0.3], device=device)
+    pnote /= pnote.sum(dim=0, keepdim=True)
+
+    pchord = torch.tensor([2.0, 2.0, 1.0, 0.5, 0.3, 0.3, 1.0, 1.0, 1.5], device=device)
     pchord /= pchord.sum()
 
     pchange = torch.ones(N_TYPES, N_TONES, N_TYPES, device=device) / (N_TONES * N_TYPES)

@@ -208,7 +208,7 @@ def main():
             total_songs += 1
 
         # Summary for this mode
-        triad_types = set(t for _, t in chords)
+        triad_types = set(t for _, t in triads)
         type_names = {
             0: "Maj", 1: "Min", 2: "Dim", 3: "Aug", 
             4: "sus2", 5: "sus4", 6: "Maj7", 7: "Min7", 8: "Dom7"
