@@ -222,7 +222,8 @@ class PhrasePool:
         self._pool[k] = list(notes)
 
     def get(self, track_name: str, base_label: str) -> list[Any] | None:
-        return self._pool.get(self.key(track_name, base_label))
+        v = self._pool.get(self.key(track_name, base_label))
+        return list(v) if v is not None else None
 
     def has(self, track_name: str, base_label: str) -> bool:
         return self.key(track_name, base_label) in self._pool
