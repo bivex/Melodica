@@ -185,3 +185,112 @@ class AdjustNoteLengthsModifier(PhraseModifier):
                 absolute=n.absolute
             ))
         return result
+
+
+@dataclass
+class RhythmicDensityModifier(PhraseModifier):
+    """
+    Adjusts the density of the phrase by randomly removing notes.
+    density: 0.0 to 1.0. If < 1.0, notes are randomly dropped.
+    """
+
+    density: float = 1.0
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        if self.density >= 1.0:
+            return notes
+        if self.density <= 0.0:
+            return []
+
+        import random
+
+        result = [n for n in notes if random.random() < self.density]
+        return result
+
+
+@dataclass
+class PolyrhythmLayerModifier:
+    """
+    Overlays a second rhythmic layer over existing notes to create a polyrhythm.
+    E.g. 3 over 4.
+    Original notes are kept, but new notes are added on a different grid.
+    """
+
+    tuple_count: int = 3  # e.g. 3 in 3:4
+    base_count: int = 4  # e.g. 4 in 3:4
+    velocity_scale: float = 0.7
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        if not notes:
+            return []
+
+        # Find the range of current notes
+        start = min(n.start for n in notes)
+        end = max(n.start + n.duration for n in notes)
+        total_beats = end - start
+
+        # New grid step
+        # For 3 over 4, if total duration is 4 beats, we want 3 notes.
+        # step = 4 / 3
+        step = (self.base_count / self.tuple_count)
+        
+        result = list(notes)
+        t = start
+        while t < end:
+            # Pick a pitch from existing notes at this time (or nearest)
+            closest_n = min(notes, key=lambda n: abs(n.start - t))
+            
+            result.append(
+                NoteInfo(
+                    pitch=closest_n.pitch,
+                    start=round(t, 6),
+                    duration=round(step * 0.8, 6),
+                    velocity=int(closest_n.velocity * self.velocity_scale),
+                    absolute=closest_n.absolute,
+                )
+            )
+            t += step
+            
+        return sorted(result, key=lambda x: x.start)
+
+
+@dataclass
+class AdaptiveSwingModifier:
+    """
+    Applies swing that changes dynamically across the phrase.
+    'start_swing' to 'end_swing' ramp.
+    """
+
+    start_swing: float = 0.5
+    end_swing: float = 0.7
+    grid: float = 0.5
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        if not notes:
+            return []
+
+        total_len = context.duration_beats
+        result = []
+        for n in notes:
+            progress = n.start / total_len
+            current_swing = self.start_swing + (self.end_swing - self.start_swing) * progress
+            
+            if current_swing <= 0.5 or self.grid <= 0:
+                result.append(n)
+                continue
+
+            delay = (current_swing - 0.5) * 2.0 * (self.grid / 2.0)
+            grid_pos = (n.start % self.grid)
+            is_offbeat = abs(grid_pos - (self.grid / 2.0)) < 0.05
+            
+            new_start = n.start + delay if is_offbeat else n.start
+            result.append(
+                NoteInfo(
+                    pitch=n.pitch,
+                    start=round(new_start, 6),
+                    duration=n.duration,
+                    velocity=n.velocity,
+                    absolute=n.absolute,
+                )
+            )
+        return result

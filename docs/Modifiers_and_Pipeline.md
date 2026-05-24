@@ -53,20 +53,29 @@ All modifiers implement the `PhraseModifier` protocol and must supply a `modify(
 | **Rhythmic** | `HumanizeModifier` | Adds slight Gaussian noise to timing and dynamics. | `timing_std`, `velocity_std` |
 | **Rhythmic** | `AdjustNoteLengthsModifier` | Scales note durations or sets a fixed length. | `gate_factor=0.5` |
 | **Rhythmic** | `FollowRhythmModifier` | Takes the rhythm (onsets and durations) from a source track and applies them to pitches. | `source_track="Melody"` |
+| **Rhythmic** | `AdaptiveSwingModifier` | Applies swing that changes dynamically across the phrase. | `start_swing`, `end_swing` |
+| **Rhythmic** | `PolyrhythmLayerModifier` | Overlays a second rhythmic layer (e.g., 3:4) over existing notes. | `tuple_count`, `base_count` |
+| **Rhythmic** | `RhythmicDensityModifier` | Randomly thins out notes to achieve a target density. | `density=0.7` |
 | **Dynamic** (`melodica.modifiers.dynamic`) | `VelocityScalingModifier` | Globally scales and shifts all note velocities in the phrase. | `scale=1.0`, `add_val=0` |
 | **Dynamic** | `CrescendoModifier` | Applies a linear velocity ramp across the phrase duration. | `start_vel=40`, `end_vel=100` |
+| **Dynamic** | `VelocityCurveModifier` | Applies a velocity ramp with different curve shapes (exp, log, sine, S). | `curve="s_curve"` |
 | **Dynamic** | `SectionIntensityModifier` | Dynamically scales velocities based on song structure arc. | `sections` (dict) |
 | **Harmonic & Voicing** (`melodica.modifiers.harmonic`, `voicings.py`) | `NoteDoublerModifier` | Duplicates notes by specific octave shifts. | `octaves=[-1, 1]` |
 | **Harmonic & Voicing** | `TransposeModifier` | Transposes all notes by a fixed number of semitones. | `semitones=12` |
 | **Harmonic & Voicing** | `LimitNoteRangeModifier` | Constrains pitches to a specific range, shifting octaves if needed. | `min_pitch=40`, `max_pitch=80` |
+| **Harmonic & Voicing** | `ChordToneSnapModifier` | Snaps non-chord tones to the nearest pitch class of the active chord. | |
+| **Harmonic & Voicing** | `ChordVoicingSpreadModifier` | Adjusts the spread of chord voices (closed, spread, open). | `spread_mode="open"` |
 | **Harmonic & Voicing** | `DropVoicingModifier` | Drops the second-highest (Drop 2) or third-highest (Drop 3) note down an octave. | `drop_type=2` |
 | **Harmonic & Voicing** | `InversionModifier` | Inverts chords within the phrase. | `inversion=1` |
 | **Variations & Articulations** (`melodica.modifiers.variations`, `variations_articulation.py`) | `MirrorModifier` | Flips the pitch contour upside down around an axis. | |
 | **Variations & Articulations** | `ArpeggiateModifier` | Turns block chords into arpeggios. | `pattern="Up"` |
 | **Variations & Articulations** | `StaccatoLegatoModifier` | Intelligent articulation shaping based on phrasing. | |
+| **Variations & Articulations** | `SlideLegatoModifier` | Generates pitch bend slides between legato notes. | `slide_beats=0.1` |
 | **Variations & Articulations** | `MIDIEchoModifier` | Generates a MIDI delay effect with velocity decay. | `delay_beats=1.0` |
 | **Aesthetic & Voice Leading** (`melodica.modifiers.aesthetic`, `voice_leading.py`) | `GrooveModifier` | Overlays a complex groove template onto the phrase. | `groove_template` |
 | **Aesthetic & Voice Leading** | `VoiceLeadingModifier` | Enforces strict counterpoint and voice-leading rules between consecutive chords. | `max_leap=7` |
+| **Structural** (`rc_variations_structural.py`) | `PhraseBoundaryModifier` | Ensures notes stay within phrase boundaries and adds "breath" gaps. | `breath_beats=0.1` |
+| **Structural** | `MotifTransformModifier` | Applies retrograde, inversion, or both to the entire phrase. | `transform_type` |
 
 ---
 

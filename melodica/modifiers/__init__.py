@@ -59,18 +59,23 @@ from melodica.modifiers.rhythmic import (
     HumanizeModifier,
     SwingController,
     AdjustNoteLengthsModifier,
+    RhythmicDensityModifier,
+    PolyrhythmLayerModifier,
+    AdaptiveSwingModifier,
 )
 
 from melodica.modifiers.harmonic import (
     NoteDoublerModifier,
     TransposeModifier,
     LimitNoteRangeModifier,
+    ChordToneSnapModifier,
 )
 
 from melodica.modifiers.dynamic import (
     VelocityScalingModifier,
     CrescendoModifier,
     SectionIntensityModifier,
+    VelocityCurveModifier,
 )
 
 from melodica.modifiers.voice_leading import VoiceLeadingModifier
@@ -87,10 +92,15 @@ from melodica.modifiers.variations import (
     ArpeggiateModifier,
 )
 
+from melodica.modifiers.variations_articulation import (
+    SlideLegatoModifier,
+)
+
 from melodica.modifiers.voicings import (
     DropVoicingModifier,
     TopNoteVoicingModifier,
     InversionModifier,
+    ChordVoicingSpreadModifier,
 )
 
 from melodica.modifiers.rc_variations import (
@@ -113,6 +123,11 @@ from melodica.modifiers.rc_variations import (
     FillGapsModifier,
 )
 
+from melodica.modifiers.rc_variations_structural import (
+    PhraseBoundaryModifier,
+    MotifTransformModifier,
+)
+
 __all__ = [
     "PhraseModifier",
     "ModifierContext",
@@ -121,12 +136,17 @@ __all__ = [
     "HumanizeModifier",
     "SwingController",
     "AdjustNoteLengthsModifier",
+    "RhythmicDensityModifier",
+    "PolyrhythmLayerModifier",
+    "AdaptiveSwingModifier",
     "NoteDoublerModifier",
     "TransposeModifier",
     "LimitNoteRangeModifier",
+    "ChordToneSnapModifier",
     "VelocityScalingModifier",
     "CrescendoModifier",
     "SectionIntensityModifier",
+    "VelocityCurveModifier",
     "VoiceLeadingModifier",
     "GrooveModifier",
     "PolishedOctaveModifier",
@@ -137,9 +157,11 @@ __all__ = [
     "MonophonicModifier",
     "MIDIEchoModifier",
     "ArpeggiateModifier",
+    "SlideLegatoModifier",
     "DropVoicingModifier",
     "TopNoteVoicingModifier",
     "InversionModifier",
+    "ChordVoicingSpreadModifier",
     "AddChordNotesModifier",
     "AddIntervalModifier",
     "DelayNotesModifier",
@@ -157,4 +179,6 @@ __all__ = [
     "AudioGainModifier",
     "RemoveDuplicatesModifier",
     "FillGapsModifier",
+    "PhraseBoundaryModifier",
+    "MotifTransformModifier",
 ]

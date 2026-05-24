@@ -152,3 +152,53 @@ class SectionIntensityModifier(PhraseModifier):
         """
         sections = {(start, end): intensity for _, start, end, intensity in labels}
         return cls(sections=sections, velocity_scale=velocity_scale)
+
+
+@dataclass
+class VelocityCurveModifier(PhraseModifier):
+    """
+    Applies a velocity ramp with different curve shapes.
+    Supported curves: 'linear', 'exponential', 'logarithmic', 'sine', 's_curve'.
+    """
+
+    start_vel: int = 40
+    end_vel: int = 100
+    curve: str = "linear"
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        if not notes:
+            return []
+
+        import math
+
+        total_len = max((n.start + n.duration for n in notes), default=1.0)
+        total_len = max(total_len, 0.001)
+
+        result = []
+        for n in notes:
+            t = n.start / total_len
+            t = max(0.0, min(1.0, t))
+
+            if self.curve == "exponential":
+                t = t**2
+            elif self.curve == "logarithmic":
+                t = math.sqrt(t)
+            elif self.curve == "sine":
+                t = math.sin(t * math.pi / 2.0)
+            elif self.curve == "s_curve":
+                t = (1 - math.cos(t * math.pi)) / 2.0
+            # default is linear
+
+            new_vel = int(self.start_vel + (self.end_vel - self.start_vel) * t)
+            new_vel = max(1, min(127, new_vel))
+
+            result.append(
+                NoteInfo(
+                    pitch=n.pitch,
+                    start=n.start,
+                    duration=n.duration,
+                    velocity=new_vel,
+                    absolute=n.absolute,
+                )
+            )
+        return result

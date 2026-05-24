@@ -182,3 +182,118 @@ class RotateNotesModifier:
                 )
             )
         return sorted(rotated, key=lambda n: n.start)
+
+
+@dataclass
+class PhraseBoundaryModifier:
+    """
+    Ensures notes stay within phrase boundaries and optionally adds a 'breath' gap
+    at the end of the phrase by truncating notes that bleed out.
+    """
+
+    breath_beats: float = 0.05
+    mode: str = "truncate"  # "truncate" | "remove"
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        limit = context.duration_beats - self.breath_beats
+        result = []
+        for n in notes:
+            if n.start >= limit:
+                if self.mode == "remove":
+                    continue
+                else:
+                    # Can't truncate if start is already past limit
+                    continue
+            
+            new_dur = n.duration
+            if n.start + n.duration > limit:
+                if self.mode == "remove":
+                    continue
+                else:
+                    new_dur = max(0.01, limit - n.start)
+            
+            result.append(
+                NoteInfo(
+                    pitch=n.pitch,
+                    start=n.start,
+                    duration=round(new_dur, 6),
+                    velocity=n.velocity,
+                    absolute=n.absolute,
+                )
+            )
+        return result
+
+
+@dataclass
+class MotifTransformModifier:
+    """
+    Applies classical motif transformations.
+    'retrograde': plays phrase backwards in time.
+    'inversion': flips pitches upside down relative to the first note or axis.
+    'retrograde_inversion': both.
+    """
+
+    transform_type: str = "retrograde"  # "retrograde" | "inversion" | "retro_inversion"
+    axis_pitch: int | None = None
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        if not notes:
+            return []
+
+        if self.transform_type == "retrograde":
+            duration = context.duration_beats
+            return sorted(
+                [
+                    NoteInfo(
+                        pitch=n.pitch,
+                        start=round(duration - (n.start + n.duration), 6),
+                        duration=n.duration,
+                        velocity=n.velocity,
+                        absolute=n.absolute,
+                    )
+                    for n in notes
+                ],
+                key=lambda x: x.start,
+            )
+        elif self.transform_type == "inversion":
+            axis = self.axis_pitch if self.axis_pitch is not None else notes[0].pitch
+            return [
+                NoteInfo(
+                    pitch=max(0, min(127, axis - (n.pitch - axis))),
+                    start=n.start,
+                    duration=n.duration,
+                    velocity=n.velocity,
+                    absolute=n.absolute,
+                )
+                for n in notes
+            ]
+        elif self.transform_type == "retro_inversion":
+            # First invert
+            axis = self.axis_pitch if self.axis_pitch is not None else notes[0].pitch
+            inverted = [
+                NoteInfo(
+                    pitch=max(0, min(127, axis - (n.pitch - axis))),
+                    start=n.start,
+                    duration=n.duration,
+                    velocity=n.velocity,
+                    absolute=n.absolute,
+                )
+                for n in notes
+            ]
+            # Then retrograde
+            duration = context.duration_beats
+            return sorted(
+                [
+                    NoteInfo(
+                        pitch=n.pitch,
+                        start=round(duration - (n.start + n.duration), 6),
+                        duration=n.duration,
+                        velocity=n.velocity,
+                        absolute=n.absolute,
+                    )
+                    for n in inverted
+                ],
+                key=lambda x: x.start,
+            )
+
+        return notes

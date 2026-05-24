@@ -189,3 +189,58 @@ class ArpeggiateModifier:
         for i, n in enumerate(sorted_notes):
             n.start += i * self.offset
         return sorted_notes
+
+
+@dataclass
+class SlideLegatoModifier:
+    """
+    Adds pitch bend slides between consecutive notes if they are overlapping or very close.
+    Works by adding a 'pitch_bend' ramp to the NoteInfo.expression dictionary.
+    Best used with Monophonic phrases.
+    """
+
+    max_gap: float = 0.05
+    slide_beats: float = 0.1
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        if not notes:
+            return []
+        
+        sorted_notes = sorted(notes, key=lambda x: x.start)
+        for i in range(len(sorted_notes) - 1):
+            n1 = sorted_notes[i]
+            n2 = sorted_notes[i + 1]
+
+            gap = n2.start - (n1.start + n1.duration)
+            if gap <= self.max_gap:
+                # Calculate interval in semitones
+                interval = n2.pitch - n1.pitch
+                if interval == 0:
+                    continue
+
+                # 8192 units = 2 semitones (standard range)
+                # But Melodica uses configurable pitch_bend_range (default 2)
+                # We'll assume default 2 for now, or just provide semitones if we can.
+                # Actually, the exporter expects raw MIDI values.
+                # 8192 / range = units per semitone
+                PB_RANGE = 2
+                units_per_semitone = 8192 / PB_RANGE
+
+                # Add a ramp at the end of n1
+                # The ramp should start before n1 ends and reach 'interval' at n2.start
+                # But n1 ends at n1.start + n1.duration. 
+                # Let's start the slide 'slide_beats' before n2.start
+                slide_start_rel = n2.start - n1.start - self.slide_beats
+                
+                # Use a small ramp of 5 steps
+                pb_events = []
+                for step in range(6):
+                    t_rel = slide_start_rel + (step / 5.0) * self.slide_beats
+                    # progress from 0 to 1
+                    progress = step / 5.0
+                    val = int(progress * interval * units_per_semitone)
+                    pb_events.append((round(t_rel, 6), val))
+                
+                n1.expression["pitch_bend"] = pb_events
+
+        return sorted_notes

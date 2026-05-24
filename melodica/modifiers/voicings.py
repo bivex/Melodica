@@ -112,3 +112,41 @@ class InversionModifier:
                     g[i].pitch += 12
             result.extend(g)
         return result
+
+
+@dataclass
+class ChordVoicingSpreadModifier:
+    """
+    Adjusts the spread of chord voices.
+    'closed' (default): tones kept as close as possible.
+    'spread': moves every second tone up/down by an octave to create a wider sound.
+    'open': moves voices further apart by octaves.
+    """
+
+    spread_mode: str = "spread"  # "closed" | "spread" | "open"
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        groups = {}
+        for n in notes:
+            t = round(n.start, 4)
+            groups.setdefault(t, []).append(n)
+
+        result = []
+        for t, g in groups.items():
+            if len(g) < 2:
+                result.extend(g)
+                continue
+
+            g.sort(key=lambda x: x.pitch)
+            if self.spread_mode == "spread":
+                # Move every other note up or down
+                for i, n in enumerate(g):
+                    if i % 2 == 1:
+                        n.pitch += 12
+            elif self.spread_mode == "open":
+                # Double octaves for bass/top
+                g[0].pitch -= 12
+                g[-1].pitch += 12
+
+            result.extend(g)
+        return result

@@ -111,3 +111,57 @@ class LimitNoteRangeModifier(PhraseModifier):
                 absolute=n.absolute
             ))
         return result
+
+
+@dataclass
+class ChordToneSnapModifier(PhraseModifier):
+    """
+    Snaps notes to the nearest chord tone of the active chord.
+    If multiple chord tones are equally near, it picks the one in the direction
+    of the original note (or downwards by default).
+    """
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        if not context.timeline:
+            return notes
+
+        result = []
+        for n in notes:
+            chord = context.timeline.get_chord_at(n.start)
+            if not chord:
+                result.append(n)
+                continue
+
+            chord_tones = chord.pitch_classes()
+            if not chord_tones:
+                result.append(n)
+                continue
+
+            pc = n.pitch % 12
+            if pc in chord_tones:
+                result.append(n)
+                continue
+
+            # Find nearest chord tone in pitch space
+            best_shift = 0
+            min_dist = 13
+            for cpc in chord_tones:
+                for shift in [-12, 0, 12]:
+                    diff = (cpc + shift) - pc
+                    if abs(diff) < min_dist:
+                        min_dist = abs(diff)
+                        best_shift = diff
+                    elif abs(diff) == min_dist:
+                        # Tie-break: prefer the shift that was already chosen or smaller absolute
+                        if abs(diff) < abs(best_shift):
+                            best_shift = diff
+
+            new_pitch = max(0, min(127, n.pitch + best_shift))
+            result.append(NoteInfo(
+                pitch=new_pitch,
+                start=n.start,
+                duration=n.duration,
+                velocity=n.velocity,
+                absolute=n.absolute
+            ))
+        return result

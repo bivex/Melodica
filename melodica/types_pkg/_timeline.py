@@ -64,3 +64,13 @@ class MusicTimeline:
             else:
                 break
         return active
+
+    def get_chord_at(self, time: float) -> ChordLabel | None:
+        if not self.chords:
+            return None
+        # Sort and find the last chord that starts before or at 'time'
+        # and ends after 'time'.
+        for c in sorted(self.chords, key=lambda x: x.start):
+            if c.start <= time < c.end:
+                return c
+        return None
