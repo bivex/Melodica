@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from melodica.theory.modes import MODE_DATABASE, get_mode_intervals, Mode
 from melodica.types import BarGrid, ChordLabel, Quality, Scale, NoteInfo
 
 # ---------------------------------------------------------------------------
@@ -28,7 +29,10 @@ from melodica.types import BarGrid, ChordLabel, Quality, Scale, NoteInfo
 
 N_TONES = 12
 N_TYPES = 6  # Major, Minor, Dim, Aug, sus2, sus4
-N_KEY_TYPES = 2  # Major key, Minor key
+
+# List of all supported modes for Layer 2
+MODES_LIST = list(MODE_DATABASE.keys())
+N_KEY_TYPES = len(MODES_LIST)
 
 # Mapping from training type index to Quality enum
 TYPE_TO_QUALITY = [
@@ -76,28 +80,54 @@ LOG_PNOTE = np.log(np.clip(PNOTE, _EPS, 1.0))       # [12, 6]
 LOG_PCHANGE = np.log(np.clip(PCHANGE, _EPS, 1.0))    # [6, 12, 6]
 
 # ---------------------------------------------------------------------------
-# Key-Chord Emissions (hand-coded functional harmony priors)
+# Universal Modal Priors (Layer 2)
 # ---------------------------------------------------------------------------
 
-# ν: P(chord_type | key_type) — how likely each chord type is in each key
-# Expanded to 6 types, weighted by functional harmony knowledge
-KEY_TYPE_PRIOR = np.array([
-    # Major key: I, ii, iii, IV, V, vi, vii° + extensions
-    # Maj  Min  Dim  Aug  sus2 sus4
-    [0.35, 0.20, 0.05, 0.02, 0.08, 0.10],  # diatonic offsets
-    # Minor key: i, ii°, III, iv, V/v, VI, VII
-    [0.20, 0.35, 0.08, 0.02, 0.05, 0.08],
-])
+def _init_modal_priors():
+    """Dynamically build priors for all 78 modes."""
+    # ν: P(chord_type | key_type)
+    type_priors = np.full((N_KEY_TYPES, N_TYPES), 0.05)
+    # κ: P(root_offset | key_type)
+    offset_logs = np.full((N_KEY_TYPES, N_TONES), math.log(0.01))
+    
+    # Chord type definitions (thirds and fifths) for compatibility checking
+    type_intervals = [
+        (4, 7), # Major
+        (3, 7), # Minor
+        (3, 6), # Dim
+        (4, 8), # Aug
+        (2, 7), # sus2
+        (5, 7), # sus4
+    ]
 
-# Key-chord offset distributions: P(root_offset | key_type)
-# These encode which scale degrees are most likely
-KEY_OFFSET_LOG = np.full((N_KEY_TYPES, N_TONES), math.log(0.01))
-# Major key scale degrees: I(0), ii(2), iii(4), IV(5), V(7), vi(9), vii°(11)
-KEY_OFFSET_LOG[0, [0, 2, 4, 5, 7, 9, 11]] = [math.log(0.30), math.log(0.12),
-    math.log(0.06), math.log(0.15), math.log(0.20), math.log(0.10), math.log(0.04)]
-# Minor key: i(0), ii°(2), III(3), iv(5), V(7), VI(8), VII(10)
-KEY_OFFSET_LOG[1, [0, 2, 3, 5, 7, 8, 10]] = [math.log(0.30), math.log(0.05),
-    math.log(0.10), math.log(0.15), math.log(0.20), math.log(0.10), math.log(0.05)]
+    for m_idx, mode in enumerate(MODES_LIST):
+        intervals = get_mode_intervals(mode)
+        scale_pcs = {round(iv) % 12 for iv in intervals}
+        
+        # 1. Root offsets: high weight for notes in scale
+        for pc in scale_pcs:
+            offset_logs[m_idx, pc] = math.log(0.8 / len(scale_pcs))
+            
+        # 2. Chord types: check which types fit the scale notes best
+        for t_idx, (third, fifth) in enumerate(type_intervals):
+            # A chord type is "diatonic" if its 3rd and 5th (relative to root 0) 
+            # are generally found in modes of this family.
+            # Simplified: higher weight for Major in Ionian-like, Minor in Aeolian-like
+            if 3 in scale_pcs: # Minor-ish
+                if t_idx == 1: type_priors[m_idx, t_idx] = 0.4
+                if t_idx == 2: type_priors[m_idx, t_idx] = 0.1
+            if 4 in scale_pcs: # Major-ish
+                if t_idx == 0: type_priors[m_idx, t_idx] = 0.4
+            
+            # SUS and Aug are always possible but less likely
+            if t_idx in (3, 4, 5): type_priors[m_idx, t_idx] = 0.1
+            
+        # Normalize priors
+        type_priors[m_idx] /= type_priors[m_idx].sum()
+        
+    return type_priors, offset_logs
+
+KEY_TYPE_PRIOR, KEY_OFFSET_LOG = _init_modal_priors()
 
 
 # ---------------------------------------------------------------------------

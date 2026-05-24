@@ -12,27 +12,39 @@ import random
 from pathlib import Path
 from melodica.theory.modes import MODE_DATABASE, get_mode_intervals, Mode
 
-# 6 chord types for the expanded model
-# Lookup by (third_offset, fifth_offset) from root
+# 9 chord types for the expanded model
+# Lookup by (third, fifth, seventh) from root
+# Use None for seventh if it's a triad
 TRIAD_TYPES = {
-    (4, 7): 0,   # Major
-    (3, 7): 1,   # Minor
-    (3, 6): 2,   # Diminished
-    (4, 8): 3,   # Augmented
-    (2, 7): 4,   # sus2
-    (5, 7): 5,   # sus4
+    (4, 7, None): 0,   # Major
+    (3, 7, None): 1,   # Minor
+    (3, 6, None): 2,   # Diminished
+    (4, 8, None): 3,   # Augmented
+    (2, 7, None): 4,   # sus2
+    (5, 7, None): 5,   # sus4
+    (4, 7, 11): 6,     # Major7
+    (3, 7, 10): 7,     # Minor7
+    (4, 7, 10): 8,     # Dominant7
 }
 
 def classify_triad(intervals):
-    """Classify (root, third, fifth) into one of 6 triad types."""
-    root, third, fifth = intervals
-    rel = ((third - root) % 12, (fifth - root) % 12)
+    """Classify (root, third, fifth, seventh) into one of 9 types."""
+    root, third, fifth, seventh = intervals
+    rel = ((third - root) % 12, (fifth - root) % 12, (seventh - root) % 12 if seventh is not None else None)
+    
     if rel in TRIAD_TYPES:
         return TRIAD_TYPES[rel]
+        
     # Find nearest by interval distance
     best_type, best_dist = 0, 999
     for triad_key, t_idx in TRIAD_TYPES.items():
-        dist = abs(rel[0] - triad_key[0]) + abs(rel[1] - triad_key[1])
+        k_3, k_5, k_7 = triad_key
+        dist = abs(rel[0] - k_3) + abs(rel[1] - k_5)
+        if k_7 is not None and rel[2] is not None:
+            dist += abs(rel[2] - k_7)
+        elif (k_7 is None) != (rel[2] is None):
+            dist += 4 # Penalty for triad vs 7th mismatch
+            
         if dist < best_dist:
             best_dist = dist
             best_type = t_idx
@@ -40,33 +52,37 @@ def classify_triad(intervals):
 
 
 def build_mode_triads(mode_intervals):
-    """Build diatonic triads on each degree of a mode. Returns [(root_pc, type_idx)]."""
+    """Build diatonic chords (triads and 7ths) on each degree. Returns [(root_pc, type_idx)]."""
     n = len(mode_intervals)
-    triads = []
+    chords = []
     scale_pcs = [round(iv) % 12 for iv in mode_intervals]
 
     for i in range(n):
+        # Diatonic degrees: 1, 3, 5, 7
         root = scale_pcs[i]
         third = scale_pcs[(i + 2) % n]
         fifth = scale_pcs[(i + 4) % n]
-
-        # For microtonal modes, round to nearest semitone
-        root_iv = mode_intervals[i]
-        third_iv = mode_intervals[(i + 2) % n]
-        fifth_iv = mode_intervals[(i + 4) % n]
+        seventh = scale_pcs[(i + 6) % n]
 
         # Use actual pitch classes
-        root_pc = round(root_iv) % 12
-        third_pc = round(third_iv) % 12
-        fifth_pc = round(fifth_iv) % 12
+        root_pc = round(mode_intervals[i]) % 12
+        third_pc = round(mode_intervals[(i + 2) % n]) % 12
+        fifth_pc = round(mode_intervals[(i + 4) % n]) % 12
+        seventh_pc = round(mode_intervals[(i + 6) % n]) % 12
 
         rel_third = (third_pc - root_pc) % 12
         rel_fifth = (fifth_pc - root_pc) % 12
+        rel_seventh = (seventh_pc - root_pc) % 12
 
-        t_idx = classify_triad((0, rel_third, rel_fifth))
-        triads.append((root_pc, t_idx))
+        # 50% chance to use 7th if scale allows
+        if random.random() < 0.5:
+            t_idx = classify_triad((0, rel_third, rel_fifth, rel_seventh))
+        else:
+            t_idx = classify_triad((0, rel_third, rel_fifth, None))
+            
+        chords.append((root_pc, t_idx))
 
-    return triads
+    return chords
 
 
 # Functional progression patterns (degree indices)
@@ -104,6 +120,9 @@ def generate_notes_for_chord(root_pc, type_idx, scale_pcs, n_notes=4):
         3: [0, 4, 8],       # Aug
         4: [0, 2, 7],       # sus2
         5: [0, 5, 7],       # sus4
+        6: [0, 4, 7, 11],   # Major7
+        7: [0, 3, 7, 10],   # Minor7
+        8: [0, 4, 7, 10],   # Dominant7
     }
     intervals = chord_intervals.get(type_idx, [0, 4, 7])
     chord_pcs = [(root_pc + iv) % 12 for iv in intervals]
@@ -189,10 +208,13 @@ def main():
             total_songs += 1
 
         # Summary for this mode
-        triad_types = set(t for _, t in triads)
-        type_names = {0: "Maj", 1: "Min", 2: "Dim", 3: "Aug", 4: "sus2", 5: "sus4"}
+        triad_types = set(t for _, t in chords)
+        type_names = {
+            0: "Maj", 1: "Min", 2: "Dim", 3: "Aug", 
+            4: "sus2", 5: "sus4", 6: "Maj7", 7: "Min7", 8: "Dom7"
+        }
         types_str = ", ".join(type_names.get(t, "?") for t in sorted(triad_types))
-        print(f"  {mode.value:30s} intervals={intervals}  triads=[{types_str}]")
+        print(f"  {mode.value:30s} intervals={intervals}  chords=[{types_str}]")
 
     # Write songlist
     songlist_path = out_dir / "songlist.txt"
