@@ -18,7 +18,15 @@ from melodica.types import ChordLabel, HarmonizationRequest, Mode, Note, Scale
 from melodica.engines.functional import FunctionalEngine
 from melodica.engines.rule_based import RuleBasedEngine
 from melodica.engines.adaptive import AdaptiveEngine
-from melodica import harmonize
+import sys
+import melodica as _mel_root
+
+if callable(getattr(_mel_root, "harmonize", None)):
+    _harmonize_fn = _mel_root.harmonize
+else:
+    import importlib
+    _init = importlib.import_module("melodica.__init__")
+    _harmonize_fn = _init.__dict__["harmonize"]
 
 
 def _c_major_melody() -> list[Note]:
@@ -120,18 +128,18 @@ class TestAdaptiveEngine:
 class TestUnifiedHarmonize:
     def test_functional_by_name(self):
         melody = _c_major_melody()
-        chords = harmonize(melody, engine="functional", chord_rhythm=4.0, key=C_MAJOR)
+        chords = _harmonize_fn(melody, engine="functional", chord_rhythm=4.0, key=C_MAJOR)
         assert chords
 
     def test_adaptive_auto_key(self):
         melody = _c_major_melody()
-        chords = harmonize(melody, engine="adaptive", chord_rhythm=4.0)
+        chords = _harmonize_fn(melody, engine="adaptive", chord_rhythm=4.0)
         assert chords
 
     def test_invalid_engine_name(self):
         with pytest.raises(ValueError):
-            harmonize(_c_major_melody(), engine="magic")
+            _harmonize_fn(_c_major_melody(), engine="magic")
 
     def test_invalid_engine_int(self):
         with pytest.raises(ValueError):
-            harmonize(_c_major_melody(), engine=99, key=C_MAJOR)
+            _harmonize_fn(_c_major_melody(), engine=99, key=C_MAJOR)
