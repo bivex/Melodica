@@ -29,36 +29,36 @@ def main():
     out_dir = Path("output/album_symphonic_metal")
     out_dir.mkdir(exist_ok=True, parents=True)
 
-    # The Massive Hybrid Arrangement (Final Orchestral Balance)
+    # The Massive Hybrid Arrangement (Final Balanced 5-Star Spacing)
     hybrid_orchestra = [
         # --- The Orchestra ---
-        # Choir moved to the top for shimmer and presence
-        TrackConfig(name="Epic_Choir", generator=ChoirAahsGenerator(voice_count=6, dynamics="mf"), instrument="choir", density=0.7, octave_shift=3),
+        # Choir moved to high register (Shift +2)
+        TrackConfig(name="Epic_Choir", generator=ChoirAahsGenerator(voice_count=10, dynamics="ff"), instrument="choir", density=0.8, octave_shift=2),
         
-        # Violins at the absolute peak
-        TrackConfig(name="Violins_Spiccato", generator=StringsEnsembleGenerator(articulation="staccato", divisi=1), instrument="violin", density=0.8, octave_shift=5),
-        TrackConfig(name="Cellos_Legato", generator=StringsEnsembleGenerator(articulation="legato", divisi=2), instrument="cello", density=0.6, octave_shift=0),
+        # Violins shifted to +3 (safe range)
+        TrackConfig(name="Violins_Spiccato", generator=StringsEnsembleGenerator(articulation="staccato", divisi=1), instrument="violin", density=0.9, octave_shift=3),
+        TrackConfig(name="Cellos_Legato", generator=StringsEnsembleGenerator(articulation="legato", divisi=2), instrument="cello", density=0.7, octave_shift=0),
         
-        # Brass providing a low foundation
-        TrackConfig(name="Doom_Brass", generator=BassGenerator(style="root_only"), instrument="brass", density=0.8, octave_shift=-2),
+        # Brass switched to RiffGenerator to anchor the low-mid "wall"
+        TrackConfig(name="Doom_Brass", generator=RiffGenerator(riff_pattern="gallop", power_chord=True), instrument="brass", density=0.9, octave_shift=-1),
         
-        # Woodwinds high but clear
-        TrackConfig(name="Woodwinds", generator=WoodwindsEnsembleGenerator(ensemble_mode="full"), instrument="flute", density=0.5, octave_shift=3),
+        # Woodwinds high but not extreme
+        TrackConfig(name="Woodwinds", generator=WoodwindsEnsembleGenerator(ensemble_mode="full"), instrument="flute", density=0.6, octave_shift=2),
         
-        # Timpani dropped for sub-impact
+        # Timpani dropped deep for impact
         TrackConfig(name="Timpani_Strikes", generator=TimpaniGenerator(stroke_pattern="single"), instrument="timpani", density=1.0, octave_shift=-3),
         
-        # Harpsichord density reduced
-        TrackConfig(name="Gothic_Harpsichord", generator=ArpeggiatorGenerator(pattern="up_down", octaves=1), instrument="harpsichord", density=0.3, octave_shift=2),
+        # Harpsichord isolated
+        TrackConfig(name="Gothic_Harpsichord", generator=ArpeggiatorGenerator(pattern="up_down", octaves=1), instrument="harpsichord", density=0.4, octave_shift=1),
         
         # --- The Metal Band ---
-        # Rhythm guitars thinned out to clear the mid-range
-        TrackConfig(name="Rhythm_Guitars", generator=PowerChordGenerator(pattern="chug"), instrument="distortion_guitar", density=0.4, octave_shift=-1),
+        # Rhythm chugs provide the mid-low foundation
+        TrackConfig(name="Rhythm_Guitars", generator=PowerChordGenerator(pattern="chug"), instrument="distortion_guitar", density=0.7, octave_shift=-1),
         
-        # Lead Tremolo density reduced significantly
-        TrackConfig(name="Lead_Tremolo", generator=TremoloPickingGenerator(speed=0.25), instrument="overdrive_guitar", density=0.2, octave_shift=2),
+        # Lead Tremolo shifted higher to clear the center
+        TrackConfig(name="Lead_Tremolo", generator=TremoloPickingGenerator(speed=0.1875), instrument="overdrive_guitar", density=0.4, octave_shift=1),
         
-        # Metal Bass moved up to fill the 36-48 LOW frequency zone
+        # Metal Bass: Constant driving gallop at -1 (fills 36-48 zone)
         TrackConfig(name="Metal_Bass", generator=RiffGenerator(riff_pattern="gallop", power_chord=False), instrument="electric_bass", density=1.0, octave_shift=-1),
         TrackConfig(name="Double_Kick_Drums", generator=TrapDrumsGenerator(variant="heavy"), instrument="drums", density=1.0, octave_shift=-1),
     ]
