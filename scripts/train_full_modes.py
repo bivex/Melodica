@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 N_TONES = 12
 N_TYPES = 6  # Expanded from 3
-MAX_ITER = 25
+MAX_ITER = 100
 TARGET_DELTA = 1e-4
 
 
