@@ -377,3 +377,37 @@ class TestQuickCompose:
     def test_quick_compose_with_percussion(self):
         result = quick_compose(style="rock", bars=4, tracks=["melody", "bass", "percussion"])
         assert len(result["percussion"]) > 0
+
+    def test_cinematic_pad_with_6_tracks_generates_notes(self):
+        """Regression test: Cinematic_Pad must generate notes even with 6 tracks active.
+
+        Previously, polyphony limit of 16 caused all pad notes to be dropped when
+        6 orchestral tracks exceeded 16 simultaneous voices, and PAD role had lowest
+        priority (5) in _polyphony_limit.
+        """
+        from melodica.generators.ambient import AmbientPadGenerator
+
+        config = IdeaToolConfig(
+            scale=Scale(root=0, mode=Mode.MINOR),
+            bars=8,
+            style="cinematic_hybrid",
+            use_harmonic_verifier=False,
+            use_mixing=False,
+            tracks=[
+                TrackConfig(name="melody", generator_type="melody", density=0.7),
+                TrackConfig(name="bass", generator_type="bass", density=0.8),
+                TrackConfig(name="strings", generator_type="strings", density=0.6),
+                TrackConfig(name="choir", generator_type="choir", density=0.5),
+                TrackConfig(name="lead", generator_type="lead", density=0.5),
+                TrackConfig(
+                    name="Cinematic_Pad",
+                    generator=AmbientPadGenerator(basic_dens=0.6, human_dens=0.4),
+                ),
+            ],
+        )
+        result = IdeaTool(config).generate()
+        pad_notes = result.get("Cinematic_Pad", [])
+        assert len(pad_notes) > 0, (
+            "Cinematic_Pad generated 0 notes - likely due to polyphony limit dropping "
+            "all pad notes when 6 tracks exceeded 16 simultaneous voices"
+        )
