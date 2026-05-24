@@ -293,20 +293,30 @@ class CoupledHMMHarmonizer:
     # ------------------------------------------------------------------
 
     def _get_change_points(self, duration: float) -> list[float]:
-        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
-        points = []
-        step = bpb if self.chord_change == "bars" else bpb / 2.0
+        if self.bar_grid:
+            mode_map = {"bars": "bars", "half": "strong_beats", "beats": "beats"}
+            return self.bar_grid.change_points(duration, mode=mode_map.get(self.chord_change, "bars"))
+
+        # Fallback if no bar_grid
+        step = 4.0 if self.chord_change == "bars" else 2.0
+        pts = []
         t = 0.0
-        while t < duration:
-            points.append(t)
+        while t < duration - 0.01:
+            pts.append(round(t, 6))
             t += step
-        return points
+        return pts
 
     def _extract_observations(self, melody: list[NoteInfo], change_points: list[float]) -> list[list[int]]:
         observations = []
-        sorted_m = sorted(melody, key=lambda n: n.start)
         for i, cp in enumerate(change_points):
             next_cp = change_points[i + 1] if i + 1 < len(change_points) else float("inf")
-            pcs = [n.pitch % 12 for n in sorted_m if cp <= n.start < next_cp]
-            observations.append(pcs if pcs else [0])
+
+            # Find notes that are ACTIVE during [cp, next_cp)
+            active_pcs = []
+            for n in melody:
+                n_end = n.start + n.duration
+                if n.start < next_cp and n_end > cp:
+                    active_pcs.append(n.pitch % 12)
+
+            observations.append(list(set(active_pcs)))
         return observations
