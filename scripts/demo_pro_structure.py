@@ -237,38 +237,41 @@ def main():
     # ---------------------------------------------------------------------------
     # Using the Non-Destructive Modifier Pipeline (Variation Stack)
     # ---------------------------------------------------------------------------
-    print("  Applying Non-Destructive Modifier Pipeline to Lead_Melody...")
+    print("  Applying Non-Destructive Modifier Pipeline...")
     from melodica.modifiers import ModifierPipeline, ModifierContext
-    from melodica.modifiers.rhythmic import SwingController, QuantizeModifier
+    from melodica.modifiers.rhythmic import SwingController, QuantizeModifier, HumanizeModifier
     from melodica.modifiers.dynamic import CrescendoModifier
+    from melodica.modifiers.harmonic import NoteDoublerModifier
+
+    total_bars = sum(p.bars for p in parts)
+    mod_context = ModifierContext(
+        duration_beats=total_bars * 4,  # Assuming 4/4 time
+        chords=[],
+        timeline=scale, # Fallback timeline
+        scale=scale
+    )
 
     if "Lead_Melody" in notes_dict:
-        base_lead = notes_dict["Lead_Melody"]
-        # Create pipeline with base notes
-        pipeline = ModifierPipeline(base_notes=base_lead)
-        
-        # Add a variation stack (inserts)
+        pipeline = ModifierPipeline(base_notes=notes_dict["Lead_Melody"])
         pipeline.add_modifier(SwingController(swing_ratio=0.6))
         pipeline.add_modifier(QuantizeModifier(grid_resolution=0.125))
         pipeline.add_modifier(CrescendoModifier(start_vel=40, end_vel=110))
-        
-        # We can dynamically bypass or remove modifiers if we want:
-        # pipeline.set_bypass(1, bypass=True)  # Bypass quantization for example
-        
-        # Generate the context (duration needs to be derived from the parts)
-        total_bars = sum(p.bars for p in parts)
-        # Using a dummy context since our specific modifiers here might not need chords/scale 
-        # or we just provide the basic info
-        mod_context = ModifierContext(
-            duration_beats=total_bars * 4,  # Assuming 4/4 time
-            chords=[],
-            timeline=scale, # Fallback timeline
-            scale=scale
-        )
-        
-        # Process the pipeline and overwrite the track
         notes_dict["Lead_Melody"] = pipeline.process(mod_context)
-        print(f"  > Lead_Melody transformed through pipeline! Base notes intact: {len(pipeline.base_notes)}, Final notes: {len(notes_dict['Lead_Melody'])}")
+        print(f"  > Lead_Melody transformed! Base notes intact: {len(pipeline.base_notes)}")
+
+    if "Orchestral_Strings" in notes_dict:
+        # Doubling the strings an octave down for a thicker cinematic sound
+        str_pipeline = ModifierPipeline(base_notes=notes_dict["Orchestral_Strings"])
+        str_pipeline.add_modifier(NoteDoublerModifier(octaves=[-1]))
+        notes_dict["Orchestral_Strings"] = str_pipeline.process(mod_context)
+        print(f"  > Orchestral_Strings transformed (doubled)! Base notes intact: {len(str_pipeline.base_notes)}")
+
+    if "Deep_Bass" in notes_dict:
+        # Humanizing the bass timing slightly
+        bass_pipeline = ModifierPipeline(base_notes=notes_dict["Deep_Bass"])
+        bass_pipeline.add_modifier(HumanizeModifier(timing_std=0.03, velocity_std=10.0))
+        notes_dict["Deep_Bass"] = bass_pipeline.process(mod_context)
+        print(f"  > Deep_Bass transformed (humanized)! Base notes intact: {len(bass_pipeline.base_notes)}")
 
 
     tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
