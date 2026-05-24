@@ -15,8 +15,8 @@ from tqdm import tqdm
 
 
 N_TONES = 12
-N_TYPES = 9  # Expanded to include 7ths (Maj7, Min7, Dom7)
-MAX_ITER = 100
+N_TYPES = 12  # Cinematic Expanded (Maj, Min, Dim, Aug, sus2, sus4, Maj7, Min7, Dom7, Maj9, Min9, Add9)
+MAX_ITER = 500
 TARGET_DELTA = 1e-5
 
 
@@ -89,21 +89,39 @@ def main():
     # r_next_indices_for_beta[r_prev, interval] = (r_prev + interval) % 12
     r_next_indices_for_beta = (r_next_indices + interval_indices) % N_TONES
 
-    # Initialize parameters
-    pnote = torch.rand(N_TONES, N_TYPES, device=device) * 0.5 + 0.1
-    pnote[0, 0], pnote[4, 0], pnote[7, 0] = 0.95, 0.85, 0.90  # Major
-    pnote[0, 1], pnote[3, 1], pnote[7, 1] = 0.95, 0.85, 0.90  # Minor
-    pnote[0, 2], pnote[3, 2], pnote[6, 2] = 0.90, 0.85, 0.80  # Dim
-    pnote[0, 3], pnote[4, 3], pnote[8, 3] = 0.90, 0.85, 0.80  # Aug
-    pnote[0, 4], pnote[2, 4], pnote[7, 4] = 0.90, 0.75, 0.85  # sus2
-    pnote[0, 5], pnote[5, 5], pnote[7, 5] = 0.90, 0.80, 0.85  # sus4
-    pnote[0, 6], pnote[4, 6], pnote[7, 6], pnote[11, 6] = 0.95, 0.85, 0.90, 0.80 # Maj7
-    pnote[0, 7], pnote[3, 7], pnote[7, 7], pnote[10, 7] = 0.95, 0.85, 0.90, 0.80 # Min7
-    pnote[0, 8], pnote[4, 8], pnote[7, 8], pnote[10, 8] = 0.95, 0.85, 0.90, 0.80 # Dom7
+    # Initialize parameters with STRONGER differentiation to avoid oscillation
+    # pnote[pitch, type]
+    pnote = torch.rand(N_TONES, N_TYPES, device=device) * 0.1 + 0.01
+    
+    # 0: Major (0, 4, 7)
+    pnote[0, 0], pnote[4, 0], pnote[7, 0] = 0.9, 0.8, 0.8
+    # 1: Minor (0, 3, 7)
+    pnote[0, 1], pnote[3, 1], pnote[7, 1] = 0.9, 0.8, 0.8
+    # 2: Dim (0, 3, 6)
+    pnote[0, 2], pnote[3, 2], pnote[6, 2] = 0.8, 0.8, 0.8
+    # 3: Aug (0, 4, 8)
+    pnote[0, 3], pnote[4, 3], pnote[8, 3] = 0.8, 0.8, 0.8
+    # 4: sus2 (0, 2, 7)
+    pnote[0, 4], pnote[2, 4], pnote[7, 4] = 0.8, 0.9, 0.8
+    # 5: sus4 (0, 5, 7)
+    pnote[0, 5], pnote[5, 5], pnote[7, 5] = 0.8, 0.9, 0.8
+    # 6: Maj7 (0, 4, 7, 11) - Focus on 11
+    pnote[0, 6], pnote[4, 6], pnote[7, 6], pnote[11, 6] = 0.7, 0.6, 0.6, 0.99
+    # 7: Min7 (0, 3, 7, 10) - Focus on 10
+    pnote[0, 7], pnote[3, 7], pnote[7, 7], pnote[10, 7] = 0.7, 0.6, 0.6, 0.99
+    # 8: Dom7 (0, 4, 7, 10) - Focus on 10
+    pnote[0, 8], pnote[4, 8], pnote[7, 8], pnote[10, 8] = 0.7, 0.6, 0.6, 0.99
+    # 9: Maj9 (0, 4, 7, 11, 2) - EXTREME focus on 2 and 11
+    pnote[0, 9], pnote[4, 9], pnote[7, 9], pnote[11, 9], pnote[2, 9] = 0.5, 0.5, 0.5, 0.99, 0.99
+    # 10: Min9 (0, 3, 7, 10, 2) - EXTREME focus on 2 and 10
+    pnote[0, 10], pnote[3, 10], pnote[7, 10], pnote[10, 10], pnote[2, 10] = 0.5, 0.5, 0.5, 0.99, 0.99
+    # 11: Add9 (0, 4, 7, 2) - Focus on 2, NO 11/10
+    pnote[0, 11], pnote[4, 11], pnote[7, 11], pnote[2, 11] = 0.7, 0.7, 0.7, 0.99
+    pnote[11, 11], pnote[10, 11] = 0.001, 0.001
 
     pnote /= pnote.sum(dim=0, keepdim=True)
 
-    pchord = torch.tensor([2.0, 2.0, 1.0, 0.5, 0.3, 0.3, 1.0, 1.0, 1.5], device=device)
+    pchord = torch.tensor([2.0, 2.0, 1.0, 0.5, 0.3, 0.3, 1.0, 1.0, 1.5, 0.8, 0.8, 1.2], device=device)
     pchord /= pchord.sum()
 
     pchange = torch.ones(N_TYPES, N_TONES, N_TYPES, device=device) / (N_TONES * N_TYPES)
@@ -166,6 +184,14 @@ def main():
         # 4. Expectations
         gamma = alpha * beta
         gamma /= gamma.sum(dim=(2, 3), keepdim=True) + eps
+
+        # --- 3-PHASE EM SCHEDULE ---
+        if 50 <= iter_idx < 150:
+            # Phase 2: Sharpening (Beta=1.5) to break symmetry between similar chords
+            gamma = gamma ** 1.5
+            gamma /= gamma.sum(dim=(2, 3), keepdim=True) + eps
+        # (Phase 1 and Phase 3 are normal Soft-EM to allow settling)
+
         gamma *= mask.view(n_songs, max_t, 1, 1)
 
         chord_hist = gamma.sum(dim=(0, 1, 2))
@@ -179,8 +205,31 @@ def main():
         # 5. M-step
         old_pnote = pnote.clone()
         pnote = note_hist / (chord_hist.view(1, N_TYPES) + eps)
+        
+        # --- STRUCTURAL ANCHORS: Force states to keep their musical meaning ---
+        # Each column must prioritize its defining intervals
+        # 0: Maj, 1: Min, 2: Dim, 3: Aug, 4: sus2, 5: sus4, 6: Maj7, 7: Min7, 8: Dom7, 9: Maj9, 10: Min9, 11: Add9
+        anchors = [
+            [0, 4, 7],       # 0: Major
+            [0, 3, 7],       # 1: Minor
+            [0, 3, 6],       # 2: Dim
+            [0, 4, 8],       # 3: Aug
+            [0, 2, 7],       # 4: sus2
+            [0, 5, 7],       # 5: sus4
+            [0, 4, 7, 11],   # 6: Maj7
+            [0, 3, 7, 10],   # 7: Min7
+            [0, 4, 7, 10],   # 8: Dom7
+            [0, 4, 7, 11, 2],# 9: Maj9
+            [0, 3, 7, 10, 2],# 10: Min9
+            [0, 4, 7, 2],    # 11: Add9
+        ]
+        
+        for t_idx, notes in enumerate(anchors):
+            for n in notes:
+                # Force core notes to be high
+                pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], 0.6, 0.999)
+        
         pnote = torch.clamp(pnote, 0.001, 0.999)
-        pnote[0, :] = torch.clamp(pnote[0, :], 0.5, 0.999)
         pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
 
         delta = torch.abs(pnote - old_pnote).max().item()

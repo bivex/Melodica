@@ -28,6 +28,9 @@ class Quality(IntEnum):
     SUS2 = 9
     SUS4 = 10
     POWER = 11
+    MAJOR9 = 28
+    MINOR9 = 29
+    ADD9 = 30
     
     # --- Orchestral & Cluster Extensions ---
     CLUSTER_MINOR_2 = 12
@@ -68,6 +71,9 @@ CHORD_TEMPLATES: dict[Quality, list[int]] = {
     Quality.SUS2:       [0, 2, 7],
     Quality.SUS4:       [0, 5, 7],
     Quality.POWER:      [0, 7],
+    Quality.MAJOR9:     [0, 4, 7, 11, 14],
+    Quality.MINOR9:     [0, 3, 7, 10, 14],
+    Quality.ADD9:       [0, 4, 7, 14],
     
     # Clusters & Poly-chords
     Quality.CLUSTER_MINOR_2: [0, 1, 4, 7],

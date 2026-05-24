@@ -28,7 +28,7 @@ from melodica.types import BarGrid, ChordLabel, Quality, Scale, NoteInfo
 # ---------------------------------------------------------------------------
 
 N_TONES = 12
-N_TYPES = 9  # Major, Minor, Dim, Aug, sus2, sus4, Maj7, Min7, Dom7
+N_TYPES = 12  # Maj, Min, Dim, Aug, sus2, sus4, Maj7, Min7, Dom7, Maj9, Min9, Add9
 
 # List of all supported modes for Layer 2
 MODES_LIST = list(MODE_DATABASE.keys())
@@ -45,6 +45,9 @@ TYPE_TO_QUALITY = [
     Quality.MAJOR7,      # 6
     Quality.MINOR7,      # 7
     Quality.DOMINANT7,   # 8
+    Quality.MAJOR9,      # 9
+    Quality.MINOR9,      # 10
+    Quality.ADD9,        # 11
 ]
 
 # ---------------------------------------------------------------------------
@@ -93,17 +96,20 @@ def _init_modal_priors():
     # κ: P(root_offset | key_type)
     offset_logs = np.full((N_KEY_TYPES, N_TONES), math.log(0.01))
     
-    # Chord type definitions (thirds, fifths, sevenths) for compatibility checking
+    # Chord type definitions (3rd, 5th, 7th, 9th) for compatibility checking
     type_intervals = [
-        (4, 7, None), # Major
-        (3, 7, None), # Minor
-        (3, 6, None), # Dim
-        (4, 8, None), # Aug
-        (2, 7, None), # sus2
-        (5, 7, None), # sus4
-        (4, 7, 11),   # Major7
-        (3, 7, 10),   # Minor7
-        (4, 7, 10),   # Dominant7
+        (4, 7, None, None), # Major
+        (3, 7, None, None), # Minor
+        (3, 6, None, None), # Dim
+        (4, 8, None, None), # Aug
+        (2, 7, None, None), # sus2
+        (5, 7, None, None), # sus4
+        (4, 7, 11, None),   # Major7
+        (3, 7, 10, None),   # Minor7
+        (4, 7, 10, None),   # Dominant7
+        (4, 7, 11, 2),      # Major9
+        (3, 7, 10, 2),      # Minor9
+        (4, 7, None, 2),    # Add9
     ]
 
     for m_idx, mode in enumerate(MODES_LIST):
@@ -115,20 +121,24 @@ def _init_modal_priors():
             offset_logs[m_idx, pc] = math.log(0.8 / len(scale_pcs))
             
         # 2. Chord types: check which types fit the scale notes best
-        for t_idx, (third, fifth, seventh) in enumerate(type_intervals):
+        for t_idx, (third, fifth, seventh, ninth) in enumerate(type_intervals):
             # A chord type is "diatonic" if its notes are generally found in the mode
             fit_score = 0
             if third in scale_pcs: fit_score += 1
             if fifth in scale_pcs: fit_score += 1
             if seventh is not None and seventh in scale_pcs: fit_score += 1
+            if ninth is not None and ninth in scale_pcs: fit_score += 1
             
             # Base probability based on fit
-            if fit_score >= 2:
-                type_priors[m_idx, t_idx] = 0.3 if t_idx < 2 else 0.15
+            # Higher reward for 9ths in cinematic context
+            if fit_score >= 3:
+                type_priors[m_idx, t_idx] = 0.35 if t_idx >= 9 else 0.25
+            elif fit_score == 2:
+                type_priors[m_idx, t_idx] = 0.15
             
             # Special case for Dominant 7 (often used even if not strictly diatonic)
             if t_idx == 8 and 4 in scale_pcs and 10 in scale_pcs:
-                type_priors[m_idx, t_idx] = 0.25
+                type_priors[m_idx, t_idx] = 0.20
             
         # Normalize priors
         type_priors[m_idx] /= type_priors[m_idx].sum()
