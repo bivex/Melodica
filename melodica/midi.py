@@ -595,6 +595,26 @@ def export_multitrack_midi(
         # Sort chronologically by onset
         jittered_notes.sort(key=lambda jn: jn["onset"])
 
+        # 3.1.5 Deduplicate identical or near-identical notes (same pitch, same onset)
+        deduped = []
+        for jn in jittered_notes:
+            pitch = jn["note"].pitch
+            is_duplicate = False
+            # Look backwards in deduped. We only need to look at recent notes since it's sorted by onset.
+            for i in range(len(deduped) - 1, -1, -1):
+                d = deduped[i]
+                if jn["onset"] - d["onset"] >= 0.05:  # Too far apart, stop looking back
+                    break
+                if d["note"].pitch == pitch and abs(d["onset"] - jn["onset"]) < 0.05:
+                    is_duplicate = True
+                    # Merge attributes: keep the highest velocity and longest duration
+                    d["note"].velocity = max(d["note"].velocity, jn["note"].velocity)
+                    d["duration"] = max(d["duration"], jn["duration"])
+                    break
+            if not is_duplicate:
+                deduped.append(jn)
+        jittered_notes = deduped
+
         # 3.2. Prevent same-pitch note overlaps by trimming overlapping note durations
         pitch_last_note = {}
         for jn in jittered_notes:
@@ -618,23 +638,26 @@ def export_multitrack_midi(
             duration = jn["duration"]
 
             # Dynamic voice allocation
-            assigned_ch = None
-            for ch in pool:
-                if channel_busy_until[ch] <= onset:
-                    assigned_ch = ch
-                    break
-            if assigned_ch is None:
-                # Steal the voice that becomes free earliest
-                assigned_ch = min(pool, key=lambda ch: channel_busy_until[ch])
-                # Deterministic voice stealing truncation:
-                # Truncate the stolen note's duration to the onset tick of the stealing note
-                on_tick = round(onset * tpb)
-                for ev in channel_active_events[assigned_ch]:
-                    if ev[0] > on_tick:
-                        if ev[1] in ("note_off", "pitchwheel_reset"):
-                            ev[0] = on_tick
-                        else:
-                            ev[1] = "discard"
+            if len(pool) == 1:
+                assigned_ch = pool[0]
+            else:
+                assigned_ch = None
+                for ch in pool:
+                    if channel_busy_until[ch] <= onset:
+                        assigned_ch = ch
+                        break
+                if assigned_ch is None:
+                    # Steal the voice that becomes free earliest
+                    assigned_ch = min(pool, key=lambda ch: channel_busy_until[ch])
+                    # Deterministic voice stealing truncation:
+                    # Truncate the stolen note's duration to the onset tick of the stealing note
+                    on_tick = round(onset * tpb)
+                    for ev in channel_active_events[assigned_ch]:
+                        if ev[0] > on_tick:
+                            if ev[1] in ("note_off", "pitchwheel_reset"):
+                                ev[0] = on_tick
+                            else:
+                                ev[1] = "discard"
             
             channel_busy_until[assigned_ch] = onset + duration
 
@@ -979,6 +1002,26 @@ def export_midi(
         # Sort chronologically by onset
         jittered_notes.sort(key=lambda jn: jn["onset"])
 
+        # 3.1.5 Deduplicate identical or near-identical notes (same pitch, same onset)
+        deduped = []
+        for jn in jittered_notes:
+            pitch = jn["note"].pitch
+            is_duplicate = False
+            # Look backwards in deduped. We only need to look at recent notes since it's sorted by onset.
+            for i in range(len(deduped) - 1, -1, -1):
+                d = deduped[i]
+                if jn["onset"] - d["onset"] >= 0.05:  # Too far apart, stop looking back
+                    break
+                if d["note"].pitch == pitch and abs(d["onset"] - jn["onset"]) < 0.05:
+                    is_duplicate = True
+                    # Merge attributes: keep the highest velocity and longest duration
+                    d["note"].velocity = max(d["note"].velocity, jn["note"].velocity)
+                    d["duration"] = max(d["duration"], jn["duration"])
+                    break
+            if not is_duplicate:
+                deduped.append(jn)
+        jittered_notes = deduped
+
         # 3.2. Prevent same-pitch note overlaps by trimming overlapping note durations
         pitch_last_note = {}
         for jn in jittered_notes:
@@ -1002,23 +1045,26 @@ def export_midi(
             duration = jn["duration"]
 
             # Dynamic voice allocation
-            assigned_ch = None
-            for ch in pool:
-                if channel_busy_until[ch] <= onset:
-                    assigned_ch = ch
-                    break
-            if assigned_ch is None:
-                # Steal the voice that becomes free earliest
-                assigned_ch = min(pool, key=lambda ch: channel_busy_until[ch])
-                # Deterministic voice stealing truncation:
-                # Truncate the stolen note's duration to the onset tick of the stealing note
-                on_tick = round(onset * tpb)
-                for ev in channel_active_events[assigned_ch]:
-                    if ev[0] > on_tick:
-                        if ev[1] in ("note_off", "pitchwheel_reset"):
-                            ev[0] = on_tick
-                        else:
-                            ev[1] = "discard"
+            if len(pool) == 1:
+                assigned_ch = pool[0]
+            else:
+                assigned_ch = None
+                for ch in pool:
+                    if channel_busy_until[ch] <= onset:
+                        assigned_ch = ch
+                        break
+                if assigned_ch is None:
+                    # Steal the voice that becomes free earliest
+                    assigned_ch = min(pool, key=lambda ch: channel_busy_until[ch])
+                    # Deterministic voice stealing truncation:
+                    # Truncate the stolen note's duration to the onset tick of the stealing note
+                    on_tick = round(onset * tpb)
+                    for ev in channel_active_events[assigned_ch]:
+                        if ev[0] > on_tick:
+                            if ev[1] in ("note_off", "pitchwheel_reset"):
+                                ev[0] = on_tick
+                            else:
+                                ev[1] = "discard"
             
             channel_busy_until[assigned_ch] = onset + duration
 
