@@ -146,6 +146,7 @@ def _init_modal_priors():
     return type_priors, offset_logs
 
 KEY_TYPE_PRIOR, KEY_OFFSET_LOG = _init_modal_priors()
+LOG_KEY_TYPE_PRIOR = np.log(KEY_TYPE_PRIOR + _EPS)
 
 
 # ---------------------------------------------------------------------------
@@ -336,34 +337,33 @@ class CoupledHMMHarmonizer:
         STAY_LOG = math.log(0.98)
         SWITCH_LOG = math.log(0.02 / (n_s - 1))
 
+        trans = np.full((n_s, n_s), SWITCH_LOG)
+        np.fill_diagonal(trans, STAY_LOG)
+
+        roots = np.array([c[0] for c in chords])
+        ctypes = np.array([c[1] for c in chords])
+
+        key_roots = np.arange(N_TONES)
+        key_types = np.arange(N_KEY_TYPES)
+        offsets = (roots[:, None] - key_roots[None, :]) % N_TONES  # [T, 12]
+
+        emit_all = np.empty((T, n_s))
+        for kt in range(N_KEY_TYPES):
+            emit_all[:, kt::N_KEY_TYPES] = (
+                KEY_OFFSET_LOG[kt][offsets]
+                + LOG_KEY_TYPE_PRIOR[kt, ctypes[:, None]]
+            )
+
         NEG_INF = -1e9
-        dp = np.full((T, n_s), NEG_INF)
         backtrack = np.zeros((T, n_s), dtype=np.int32)
 
-        # Init
-        for kr in range(N_TONES):
-            for kt in range(N_KEY_TYPES):
-                dp[0, kr * N_KEY_TYPES + kt] = self._log_emit_key(chords[0], kr, kt)
-
+        dp = emit_all[0].copy()
         for t_step in range(1, T):
-            for s_idx in range(n_s):
-                kr = s_idx // N_KEY_TYPES
-                kt = s_idx % N_KEY_TYPES
-                emit_score = self._log_emit_key(chords[t_step], kr, kt)
+            scores = dp[:, None] + trans
+            backtrack[t_step] = np.argmax(scores, axis=0)
+            dp = emit_all[t_step] + np.max(scores, axis=0)
 
-                best_score = NEG_INF
-                best_prev = 0
-                for p_idx in range(n_s):
-                    trans = STAY_LOG if p_idx == s_idx else SWITCH_LOG
-                    score = dp[t_step - 1, p_idx] + trans
-                    if score > best_score:
-                        best_score = score
-                        best_prev = p_idx
-
-                dp[t_step, s_idx] = emit_score + best_score
-                backtrack[t_step, s_idx] = best_prev
-
-        best_last = int(np.argmax(dp[T - 1]))
+        best_last = int(np.argmax(dp))
         path = [best_last]
         for t_step in range(T - 1, 0, -1):
             path.append(int(backtrack[t_step, path[-1]]))
@@ -399,7 +399,7 @@ class CoupledHMMHarmonizer:
         cr, ct = chord
         off = (cr - key_root) % N_TONES
         log_off = KEY_OFFSET_LOG[key_type, off]
-        log_type = math.log(KEY_TYPE_PRIOR[key_type, ct] + _EPS)
+        log_type = LOG_KEY_TYPE_PRIOR[key_type, ct]
         return log_off + log_type
 
     # ------------------------------------------------------------------
