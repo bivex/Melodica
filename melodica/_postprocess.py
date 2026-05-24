@@ -48,12 +48,23 @@ def apply_texture_control(
 
     ctrl = TextureController(tension_curve=tension_curve)
 
+    def is_chord_track(cfg) -> bool:
+        """Check if a track produces chord-like (polyphonic simultaneous) notes."""
+        if cfg.generator_type in ("chord", "strum", "arpeggiator"):
+            return True
+        if cfg.generator is not None:
+            from melodica.generators.ambient import AmbientPadGenerator
+
+            if isinstance(cfg.generator, AmbientPadGenerator):
+                return True
+        return False
+
     # Build index of all non-chord notes (melody, bass, etc.) for clash checking
     reference_notes: list[tuple[float, float, int]] = []
     chord_track_names = set()
     max_ref_duration = 0.0
     for track_cfg in tracks:
-        if track_cfg.generator_type in ("chord", "strum", "arpeggiator"):
+        if is_chord_track(track_cfg):
             chord_track_names.add(track_cfg.name)
         elif track_cfg.name in result:
             for n in result[track_cfg.name]:
@@ -76,7 +87,7 @@ def apply_texture_control(
             creates_clash = False
             lo = bisect.bisect_left(ref_starts, n.start - max_ref_duration - 0.1)
             hi = bisect.bisect_right(ref_starts, n.start + n.duration)
-            
+
             for ref_start, ref_end, ref_pitch in reference_notes[lo:hi]:
                 if n.start < ref_end and (n.start + n.duration) > ref_start:
                     interval = abs(n.pitch - ref_pitch) % 12
@@ -273,9 +284,7 @@ def apply_mpe_expression(result, tracks):
 
         new_notes = []
         for n in result[track_cfg.name]:
-            mpe_expr = mpe_expression_for_instrument(
-                track_cfg.instrument, n.duration, n.velocity
-            )
+            mpe_expr = mpe_expression_for_instrument(track_cfg.instrument, n.duration, n.velocity)
             merged = dict(n.expression)
             for k, v in mpe_expr.items():
                 if k not in merged:
