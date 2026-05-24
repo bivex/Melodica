@@ -241,17 +241,27 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Cello_Grief",
                 generator=CelloGenerator(articulation="sustained", vibrato=True),
-                instrument="cello", density=0.4, octave_shift=-1,
+                instrument="cello", density=0.4, octave_shift=-2,
             ),
             TrackConfig(
                 name="Contrabass_Ground",
-                generator=BassGenerator(style="root_only", global_movement="none"),
-                instrument="contrabass", density=0.8, octave_shift=-2,
+                generator=PedalBassGenerator(pedal_note="root", sustain=0.95, velocity_level=0.85),
+                instrument="contrabass", density=0.7, octave_shift=-2,
+            ),
+            TrackConfig(
+                name="Sorrow_Pizzicato",
+                generator=StringsPizzicatoGenerator(pattern="ostinato", staccato_length=0.15, velocity_variation=0.3),
+                instrument="pizzicato", density=0.35, octave_shift=-2,
+            ),
+            TrackConfig(
+                name="Funeral_Timpani",
+                generator=TimpaniGenerator(),
+                instrument="taiko", density=0.5, octave_shift=-1,
             ),
             TrackConfig(
                 name="Harp_Tears",
                 generator=HarpGenerator(),
-                instrument="harp", density=0.25, octave_shift=1,
+                instrument="harp", density=0.25, octave_shift=0,
             ),
             TrackConfig(
                 name="Mourning_Choir",
@@ -261,7 +271,7 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Requiem_Pad",
                 generator=AmbientPadGenerator(voicing="close", overlap=0.5),
-                instrument="dark_pad", density=0.55, octave_shift=-1,
+                instrument="dark_pad", density=0.45, octave_shift=-2,
             ),
         ],
 
