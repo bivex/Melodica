@@ -168,7 +168,7 @@ def main():
 
         # change_hist[t_p, i, t_n]
         term_next = psets[:, 1:] * beta[:, 1:]  # [N, T-1, 12, K]
-        term_prev_expanded = alpha[:, :-1][:, r_prev_indices]  # [N, T-1, 12, 12, K]
+        term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]  # [N, T-1, 12, 12, K]
         change_hist = torch.einsum("ntrik,ntro->kio", term_prev_expanded, term_next)
 
         # 5. M-step
