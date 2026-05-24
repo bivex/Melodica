@@ -23,7 +23,7 @@ from __future__ import annotations
 import typing
 from dataclasses import dataclass
 from melodica.types import NoteInfo
-from melodica.modifiers import ModifierContext
+from melodica.modifiers import ModifierContext, PhraseModifier
 
 @dataclass
 class DropVoicingModifier:
