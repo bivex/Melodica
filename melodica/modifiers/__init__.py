@@ -51,6 +51,8 @@ class PhraseModifier(typing.Protocol):
     def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]: ...
 
 
+from melodica.modifiers.pipeline import ModifierPipeline
+
 from melodica.modifiers.rhythmic import (
     QuantizeModifier,
     FollowRhythmModifier,
