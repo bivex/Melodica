@@ -215,7 +215,7 @@ def analyze_harmonic(tracks: dict):
             print(f"    {pair:40s}: {count:5d}")
 
 
-def analyze_register_distribution(tracks: dict, total_notes: int):
+def analyze_register_distribution(tracks: dict, total_notes: int) -> Counter:
     print(f"\n{'─' * 78}")
     print(f"  REGISTER DISTRIBUTION")
     print(f"{'─' * 78}")
@@ -230,6 +230,106 @@ def analyze_register_distribution(tracks: dict, total_notes: int):
         pct = count / max(total_notes, 1) * 100
         bar = "█" * min(int(pct), 40)
         print(f"  {name:>10s} ({lo:3d}-{hi:3d}): {count:6d} {pct:5.1f}%  {bar}")
+
+    return band_counts
+
+
+# ---------------------------------------------------------------------------
+# Balance verdict: LOW / MID / HIGH
+# ---------------------------------------------------------------------------
+
+# Ideal ranges for cinematic / orchestral MIDI (percentage of total notes)
+_BALANCE_TARGETS = {
+    "LOW":  (15.0, 35.0),   # sub + sub-bass + low
+    "MID":  (35.0, 60.0),   # mid-low + mid + mid-high
+    "HIGH": (15.0, 35.0),   # high + very high + top
+}
+
+_LOW_BANDS  = {"sub", "sub-bass", "low"}
+_MID_BANDS  = {"mid-low", "mid", "mid-high"}
+_HIGH_BANDS = {"high", "very high", "top"}
+
+
+def _balance_score(pct: float, lo: float, hi: float) -> tuple[str, str]:
+    """Return (emoji, verdict text) for one zone."""
+    mid = (lo + hi) / 2
+    if pct < lo * 0.5:
+        return "🔴", "critically low"
+    if pct < lo:
+        deficit = lo - pct
+        return "🟡", f"{deficit:.1f}% short of target"
+    if pct > hi * 1.5:
+        return "🔴", "critically overloaded"
+    if pct > hi:
+        excess = pct - hi
+        return "🟡", f"{excess:.1f}% over target"
+    return "🟢", "good"
+
+
+def analyze_balance_verdict(band_counts: Counter, total_notes: int):
+    print(f"\n{'─' * 78}")
+    print(f"  FREQUENCY BALANCE VERDICT")
+    print(f"{'─' * 78}")
+
+    total = max(total_notes, 1)
+    low_n  = sum(band_counts.get(b, 0) for b in _LOW_BANDS)
+    mid_n  = sum(band_counts.get(b, 0) for b in _MID_BANDS)
+    high_n = sum(band_counts.get(b, 0) for b in _HIGH_BANDS)
+
+    low_pct  = low_n  / total * 100
+    mid_pct  = mid_n  / total * 100
+    high_pct = high_n / total * 100
+
+    zones = [
+        ("LOW  (bass foundation)",  low_pct,  *_BALANCE_TARGETS["LOW"]),
+        ("MID  (body / harmony)",   mid_pct,  *_BALANCE_TARGETS["MID"]),
+        ("HIGH (air / presence)",   high_pct, *_BALANCE_TARGETS["HIGH"]),
+    ]
+
+    print(f"  {'Zone':<28s} {'%':>6s}  {'Target':>12s}  Verdict")
+    print(f"  {'─' * 28} {'─' * 6}  {'─' * 12}  {'─' * 30}")
+
+    all_ok = True
+    advice_lines = []
+    for label, pct, lo, hi in zones:
+        emoji, verdict = _balance_score(pct, lo, hi)
+        target_str = f"{lo:.0f}–{hi:.0f}%"
+        bar_filled = int(pct / 2)            # 1 char per 2 %
+        bar_target_hi = int(hi / 2)
+        bar = ("█" * bar_filled).ljust(bar_target_hi)
+        print(f"  {label:<28s} {pct:>5.1f}%  {target_str:>12s}  {emoji} {verdict}")
+        if emoji != "🟢":
+            all_ok = False
+            zone_key = label[:3].strip()
+            if pct < lo:
+                advice_lines.append(f"  → Add more {zone_key} content ({pct:.1f}% vs target {lo:.0f}–{hi:.0f}%)")
+            else:
+                advice_lines.append(f"  → Reduce {zone_key} density or lower velocity ({pct:.1f}% vs target {lo:.0f}–{hi:.0f}%)")
+
+    # Overall rating
+    score = 0
+    for _, pct, lo, hi in zones:
+        e, _ = _balance_score(pct, lo, hi)
+        if e == "🟢":
+            score += 2
+        elif e == "🟡":
+            score += 1
+
+    rating_map = {6: "EXCELLENT", 5: "GOOD", 4: "ACCEPTABLE", 3: "NEEDS WORK",
+                  2: "POOR", 1: "BAD", 0: "CRITICAL"}
+    rating = rating_map.get(score, "CRITICAL")
+    stars  = {"EXCELLENT": "★★★★★", "GOOD": "★★★★☆", "ACCEPTABLE": "★★★☆☆",
+               "NEEDS WORK": "★★☆☆☆", "POOR": "★☆☆☆☆",
+               "BAD": "☆☆☆☆☆", "CRITICAL": "☆☆☆☆☆"}[rating]
+
+    print(f"\n  Overall balance: {stars}  {rating}")
+
+    if advice_lines:
+        print(f"\n  Advice:")
+        for line in advice_lines:
+            print(line)
+    else:
+        print(f"\n  Balance is solid — no major corrections needed.")
 
 
 def analyze_timeline(tracks: dict, total_dur: float):
@@ -471,7 +571,8 @@ def analyze_file(midi_path: str, no_music21: bool = False):
     print(f"{'=' * 78}")
 
     analyze_track_stats(tracks, total_dur)
-    analyze_register_distribution(tracks, total_notes)
+    band_counts = analyze_register_distribution(tracks, total_notes)
+    analyze_balance_verdict(band_counts, total_notes)
     analyze_psychoacoustic(tracks)
     analyze_harmonic(tracks)
     analyze_timeline(tracks, total_dur)
