@@ -227,29 +227,39 @@ def main():
 
     if "Lead_Melody" in notes_dict:
         p = ModifierPipeline(base_notes=notes_dict["Lead_Melody"])
-        p.add_modifier(MetricAccentModifier(strength=0.3))
-        p.add_modifier(ChordToneSnapModifier())
-        p.add_modifier(VelocityCurveModifier(start_vel=45, end_vel=115, curve="s_curve"))
-        p.add_modifier(SlideLegatoModifier(slide_beats=0.15))
-        p.add_modifier(OverlapSafetyModifier(gap_beats=0.01))
+        p.add_modifier(HumanizeModifier(timing_std=0.02, velocity_std=8.0))
         notes_dict["Lead_Melody"] = p.process(mod_context)
-        print("  > Lead_Melody: Metric Accents + Harmonic Snapping + Expression")
+        print("  > Lead_Melody: Humanize")
 
     if "Orchestral_Strings" in notes_dict:
         p = ModifierPipeline(base_notes=notes_dict["Orchestral_Strings"])
-        p.add_modifier(ChordVoicingSpreadModifier(spread_mode="open"))
-        p.add_modifier(NoteDoublerModifier(octaves=[-1]))
-        p.add_modifier(OverlapSafetyModifier(gap_beats=0.02))
+        p.add_modifier(HumanizeModifier(timing_std=0.01, velocity_std=5.0))
         notes_dict["Orchestral_Strings"] = p.process(mod_context)
-        print("  > Orchestral_Strings: Open voicings + Doubling")
+        print("  > Orchestral_Strings: Humanize")
 
     if "Deep_Bass" in notes_dict:
         p = ModifierPipeline(base_notes=notes_dict["Deep_Bass"])
-        p.add_modifier(MetricAccentModifier(strength=0.4))
-        p.add_modifier(RhythmicDensityModifier(density=0.8))
         p.add_modifier(HumanizeModifier(timing_std=0.03, velocity_std=12.0))
         notes_dict["Deep_Bass"] = p.process(mod_context)
-        print("  > Deep_Bass: Metric Pulse + Humanization")
+        print("  > Deep_Bass: Humanize")
+
+    if "Woodwind_Counter" in notes_dict:
+        p = ModifierPipeline(base_notes=notes_dict["Woodwind_Counter"])
+        p.add_modifier(HumanizeModifier(timing_std=0.02, velocity_std=6.0))
+        notes_dict["Woodwind_Counter"] = p.process(mod_context)
+        print("  > Woodwind_Counter: Humanize")
+
+    if "Epic_Choir" in notes_dict:
+        p = ModifierPipeline(base_notes=notes_dict["Epic_Choir"])
+        p.add_modifier(HumanizeModifier(timing_std=0.015, velocity_std=4.0))
+        notes_dict["Epic_Choir"] = p.process(mod_context)
+        print("  > Epic_Choir: Humanize")
+
+    if "Cinematic_Pad" in notes_dict:
+        p = ModifierPipeline(base_notes=notes_dict["Cinematic_Pad"])
+        p.add_modifier(HumanizeModifier(timing_std=0.005, velocity_std=2.0))
+        notes_dict["Cinematic_Pad"] = p.process(mod_context)
+        print("  > Cinematic_Pad: Humanize")
 
     # ---------------------------------------------------------------------------
     # Export
