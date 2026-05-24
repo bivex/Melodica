@@ -100,3 +100,39 @@ class RandomOctaveJumpsModifier(PhraseModifier):
             ))
         return result
 ```
+
+---
+
+## Best Practices: The Minimum Viable Stack
+
+While you can combine modifiers in any order, some are essential for professional-sounding results. Here is the recommended prioritization:
+
+### 🔴 Critical (Must-Haves)
+Without these, the output may sound "raw" or technically broken.
+
+*   **`QuantizeModifier`**: Ensures the rhythmic grid is stable. Crucial if generation is not perfectly aligned.
+*   **`VelocityScalingModifier`**: Without dynamics control, everything sounds mechanical and flat.
+*   **`LimitNoteRangeModifier`**: Protects against notes flying out of an instrument's playable range (e.g., a bass playing C6).
+
+### 🟡 Important (Musicality)
+These bring the arrangement to life.
+
+*   **`HumanizeModifier`**: Removes the "MIDI from the 90s" feel by adding micro-imperfections.
+*   **`CrescendoModifier`**: Adds dynamic arcs, allowing phrases to "breathe" over long sections.
+*   **`VoiceLeadingModifier`**: Essential for chordal tracks (pads, strings) to ensure smooth transitions without jarring jumps.
+
+### 🟢 Situational
+*   **Jazz / Soul:** `SwingController`
+*   **Pads / Epic Choirs:** `NoteDoublerModifier`
+*   **Basslines:** `AdjustNoteLengthsModifier` (acting as a gate for staccato feel)
+*   **Electronic / Synth:** `ArpeggiateModifier`
+
+### Example: The Minimum Viable Stack (MVS)
+This stack provides a rhythmically accurate, lively, and range-safe result suitable for almost any genre.
+
+```python
+pipeline.add_modifier(QuantizeModifier(grid_resolution=0.125))
+pipeline.add_modifier(HumanizeModifier(timing_std=0.015, velocity_std=5.0))
+pipeline.add_modifier(VelocityScalingModifier(scale=1.0))
+pipeline.add_modifier(LimitNoteRangeModifier(min_pitch=36, max_pitch=84))
+```
