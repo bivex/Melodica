@@ -339,7 +339,7 @@ def generate_tandumi_ruins():
             name=cfg["name"], bars=cfg["bars"],
             scale=sikah, tempo=cfg["tempo"],
             time_signature=cfg["ts"],
-            progression_type="hmm3",
+            progression_type="coupled_hmm",
         )]
 
         track_list = tracks_map[cfg["name"]]
