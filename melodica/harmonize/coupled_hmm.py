@@ -3,100 +3,102 @@
 # Licensed under the MIT License.
 
 """
-coupled_hmm.py — Advanced Hierarchical HMM Harmonizer.
+coupled_hmm.py — Hierarchical HMM Harmonizer (6 chord types).
 Based on research by Dmitri Tymoczko and Mark Newman (2024).
 
-Implements:
-1. Interval-based (modulo 12) transition probabilities.
-2. Probabilistic chord note emissions (µ_t).
-3. Hierarchical key-tracking layer.
+Layer 1: Notes -> Chords via Viterbi over 72 states (12 roots x 6 types).
+Layer 2: Chords -> Keys via Viterbi over 24 states (12 roots x 2 key types).
+
+Weights loaded from melodica/harmonize/weights/ (trained by train_full_modes.py).
 """
 
 from __future__ import annotations
 
 import math
-import random
-from dataclasses import dataclass, field
+import numpy as np
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-from melodica.types import BarGrid, ChordLabel, Quality, Scale, Mode, NoteInfo
-from melodica.theory import CHORD_TEMPLATES
+from melodica.types import BarGrid, ChordLabel, Quality, Scale, NoteInfo
 
 # ---------------------------------------------------------------------------
-# Data Matrices (Trained on 371 Bach Chorales via Metal GPU)
+# Constants
 # ---------------------------------------------------------------------------
 
-# µ_t: Probability of note offset n-r given chord type t
-# Columns: 0=Major, 1=Minor, 2=Dissonant (Diminished/Dominant7)
-# Data source: pnote_metal.txt
-CHORD_NOTE_EMISSIONS = [
-    # Type 0 (Major)
-    {0: 0.998, 4: 0.880, 7: 0.957, 2: 0.077, 5: 0.061, 9: 0.095, 11: 0.063, 1: 0.001, 3: 0.001, 6: 0.005, 8: 0.011, 10: 0.001},
-    # Type 1 (Minor)
-    {0: 0.970, 3: 0.946, 7: 0.962, 2: 0.102, 5: 0.049, 8: 0.004, 10: 0.087, 1: 0.004, 4: 0.001, 6: 0.001, 9: 0.105, 11: 0.009},
-    # Type 2 (Dissonant)
-    {0: 0.846, 3: 0.898, 6: 0.987, 8: 0.657, 10: 0.030, 1: 0.110, 4: 0.010, 7: 0.001, 2: 0.001, 5: 0.018, 9: 0.066, 11: 0.001}
+N_TONES = 12
+N_TYPES = 6  # Major, Minor, Dim, Aug, sus2, sus4
+N_KEY_TYPES = 2  # Major key, Minor key
+
+# Mapping from training type index to Quality enum
+TYPE_TO_QUALITY = [
+    Quality.MAJOR,       # 0
+    Quality.MINOR,       # 1
+    Quality.DIMINISHED,  # 2
+    Quality.AUGMENTED,   # 3
+    Quality.SUS2,        # 4
+    Quality.SUS4,        # 5
 ]
 
-# α: Chord transitions f(r2-r1, t1, t2)
-# Data source: pchange_metal.npy (Simplified into high-impact transitions)
-CHORD_TRANSITIONS = {}
+# ---------------------------------------------------------------------------
+# Weight Loading
+# ---------------------------------------------------------------------------
 
-def _init_chord_transitions():
-    # Load raw data from training result (approximated here for code readability)
-    # Format: (type_from, type_to) -> {interval: prob}
-    # Values extracted from the 3x12x3 matrix
-    
-    # 0 -> 0 (Major to Major)
-    CHORD_TRANSITIONS[(0, 0)] = {
-        0: 0.187, 5: 0.165, 7: 0.129, 2: 0.067, 11: 0.007, 10: 0.010, 9: 0.009
-    }
-    # 0 -> 1 (Major to Minor)
-    CHORD_TRANSITIONS[(0, 1)] = {
-        5: 0.052, 2: 0.032, 9: 0.032, 0: 0.006, 4: 0.008, 7: 0.011
-    }
-    # 1 -> 0 (Minor to Major)
-    CHORD_TRANSITIONS[(1, 0)] = {
-        2: 0.127, 5: 0.089, 7: 0.133, 10: 0.092, 3: 0.044, 8: 0.037
-    }
-    # 1 -> 1 (Minor to Minor)
-    CHORD_TRANSITIONS[(1, 1)] = {
-        0: 0.165, 5: 0.050, 7: 0.046, 10: 0.011, 2: 0.009
-    }
-    # Dissonant transitions (Simplified)
-    CHORD_TRANSITIONS[(2, 0)] = { 1: 0.592, 5: 0.018, 8: 0.028, 10: 0.017 } # Resolve to Major
-    CHORD_TRANSITIONS[(2, 1)] = { 1: 0.165, 3: 0.018, 10: 0.035 } # Resolve to Minor
-    CHORD_TRANSITIONS[(0, 2)] = { 4: 0.168, 6: 0.054, 11: 0.027, 1: 0.003 }
-    CHORD_TRANSITIONS[(1, 2)] = { 9: 0.066, 6: 0.025, 11: 0.026, 2: 0.016 }
-    CHORD_TRANSITIONS[(2, 2)] = { 0: 0.049, 2: 0.015, 5: 0.006 }
+_WEIGHTS_DIR = Path(__file__).parent / "weights"
 
-    # Fill missing with epsilon
-    for t1 in range(3):
-        for t2 in range(3):
-            if (t1, t2) not in CHORD_TRANSITIONS:
-                CHORD_TRANSITIONS[(t1, t2)] = {i: 1e-4 for i in range(12)}
-            else:
-                for i in range(12):
-                    if i not in CHORD_TRANSITIONS[(t1, t2)]:
-                        CHORD_TRANSITIONS[(t1, t2)][i] = 1e-4
-            # Normalize
-            s = sum(CHORD_TRANSITIONS[(t1, t2)].values())
-            for i in range(12):
-                CHORD_TRANSITIONS[(t1, t2)][i] /= s
 
-_init_chord_transitions()
+def _load_weights():
+    """Load trained HMM weights from files."""
+    pnote_path = _WEIGHTS_DIR / "pnote_full.txt"
+    pchange_path = _WEIGHTS_DIR / "pchange_full.npy"
 
-# Key Types: 0=Major, 1=Minor
-KEY_TYPES = 2
+    if not pnote_path.exists() or not pchange_path.exists():
+        raise FileNotFoundError(
+            f"Trained weights not found in {_WEIGHTS_DIR}. "
+            "Run scripts/train_full_modes.py first."
+        )
 
-# ν: Chord emissions given key ν_kc = P(c | k)
-# Depends on key type u and offset r-s.
-KEY_CHORD_EMISSIONS = [
-    # Key Type 0 (Major): {0:I, 2:ii, 4:iii, 5:IV, 7:V, 9:vi, 11:vii}
-    {0: 0.30, 7: 0.20, 5: 0.15, 2: 0.10, 9: 0.10, 4: 0.05, 11: 0.05},
-    # Key Type 1 (Minor): {0:i, 2:ii°, 3:III, 5:iv, 7:v/V, 8:VI, 10:VII}
-    {0: 0.30, 7: 0.20, 5: 0.15, 8: 0.10, 3: 0.10, 2: 0.05, 10: 0.05}
-]
+    # pnote: shape [12, 6] — pnote[pitch_offset, chord_type]
+    pnote = np.loadtxt(pnote_path)
+
+    # pchange: shape [6, 12, 6] — pchange[type_prev, interval, type_next]
+    pchange = np.load(pchange_path)
+
+    return pnote, pchange
+
+
+# Load once at module level
+PNOTE, PCHANGE = _load_weights()
+
+# Pre-compute log versions for Viterbi (add small epsilon to avoid log(0))
+_EPS = 1e-8
+LOG_PNOTE = np.log(np.clip(PNOTE, _EPS, 1.0))       # [12, 6]
+LOG_PCHANGE = np.log(np.clip(PCHANGE, _EPS, 1.0))    # [6, 12, 6]
+
+# ---------------------------------------------------------------------------
+# Key-Chord Emissions (hand-coded functional harmony priors)
+# ---------------------------------------------------------------------------
+
+# ν: P(chord_type | key_type) — how likely each chord type is in each key
+# Expanded to 6 types, weighted by functional harmony knowledge
+KEY_TYPE_PRIOR = np.array([
+    # Major key: I, ii, iii, IV, V, vi, vii° + extensions
+    # Maj  Min  Dim  Aug  sus2 sus4
+    [0.35, 0.20, 0.05, 0.02, 0.08, 0.10],  # diatonic offsets
+    # Minor key: i, ii°, III, iv, V/v, VI, VII
+    [0.20, 0.35, 0.08, 0.02, 0.05, 0.08],
+])
+
+# Key-chord offset distributions: P(root_offset | key_type)
+# These encode which scale degrees are most likely
+KEY_OFFSET_LOG = np.full((N_KEY_TYPES, N_TONES), math.log(0.01))
+# Major key scale degrees: I(0), ii(2), iii(4), IV(5), V(7), vi(9), vii°(11)
+KEY_OFFSET_LOG[0, [0, 2, 4, 5, 7, 9, 11]] = [math.log(0.30), math.log(0.12),
+    math.log(0.06), math.log(0.15), math.log(0.20), math.log(0.10), math.log(0.04)]
+# Minor key: i(0), ii°(2), III(3), iv(5), V(7), VI(8), VII(10)
+KEY_OFFSET_LOG[1, [0, 2, 3, 5, 7, 8, 10]] = [math.log(0.30), math.log(0.05),
+    math.log(0.10), math.log(0.15), math.log(0.20), math.log(0.10), math.log(0.05)]
+
 
 # ---------------------------------------------------------------------------
 # Coupled HMM Harmonizer
@@ -104,16 +106,9 @@ KEY_CHORD_EMISSIONS = [
 
 @dataclass
 class CoupledHMMHarmonizer:
-    """
-    Implements a hierarchical HMM for music harmonization and analysis.
-    """
     beam_width: int = 12
     chord_change: str = "bars"
     bar_grid: BarGrid | None = None
-    
-    # State Mapping
-    # Chord States: 12 roots * 3 types = 36 states
-    # Key States: 12 roots * 2 types = 24 states
 
     def harmonize(
         self,
@@ -121,164 +116,181 @@ class CoupledHMMHarmonizer:
         initial_scale: Scale,
         duration_beats: float
     ) -> list[ChordLabel]:
-        if not melody: return []
+        if not melody:
+            return []
 
-        # 1. Prepare Observations
+        # 1. Prepare observations
         change_points = self._get_change_points(duration_beats)
         observations = self._extract_observations(melody, change_points)
         T = len(observations)
-        
-        # 2. Layer 1: Notes to Chords (36 states)
-        # We find the sequence of chords that best explains the notes.
+
+        # 2. Layer 1: Notes -> Chords (72 states = 12 roots x 6 types)
         chord_path = self._viterbi_chords(observations, initial_scale)
-        
-        # 3. Layer 2: Chords to Keys (24 states)
-        # We find the sequence of keys that best explains the chords.
-        # This allows us to detect modulations.
+
+        # 3. Layer 2: Chords -> Keys (24 states = 12 roots x 2 key types)
         key_path = self._viterbi_keys(chord_path)
-        
-        # 4. Build Result
+
+        # 4. Build result
         result = []
-        for i, c_state in enumerate(chord_path):
-            root, t_idx = c_state
-            # Map back to Quality
-            quality = Quality.MAJOR if t_idx == 0 else (Quality.MINOR if t_idx == 1 else Quality.DIMINISHED)
-            
+        for i, (root, t_idx) in enumerate(chord_path):
+            quality = TYPE_TO_QUALITY[t_idx]
+
             start = change_points[i]
-            dur = (change_points[i+1]-start) if i+1 < len(change_points) else duration_beats-start
-            
-            # Detect Roman numeral relative to current key
-            key_root, key_t = key_path[i]
-            off = (root - key_root) % 12
-            # (In a full implementation, we'd map (off, t_idx) to a degree 1-7)
-            
+            dur = (change_points[i + 1] - start) if i + 1 < len(change_points) else duration_beats - start
+
             result.append(ChordLabel(
-                root=root, quality=quality, 
+                root=root, quality=quality,
                 start=round(start, 6), duration=round(dur, 6)
             ))
-            
+
         return result
 
-    def _viterbi_chords(self, obs: list[list[int]], scale: Scale) -> list[tuple[int, int]]:
-        """Find most likely sequence of (root, type) states."""
-        states = []
-        for r in range(12):
-            for t in range(3):
-                states.append((r, t))
-        
-        n_s = len(states)
-        T = len(obs)
-        
-        dp = [[-1000.0] * n_s for _ in range(T)]
-        backtrack = [[0] * n_s for _ in range(T)]
-        
-        # Init
-        for s_idx, (r, t) in enumerate(states):
-            emit = self._log_emit_chord(obs[0], r, t)
-            # Bias toward tonic major/minor at start
-            start_bias = 0.0
-            if r == scale.root:
-                start_bias = 2.0
-            dp[0][s_idx] = emit + start_bias
+    # ------------------------------------------------------------------
+    # Layer 1: Chord Viterbi
+    # ------------------------------------------------------------------
 
-        # Transitions
+    def _viterbi_chords(self, obs: list[list[int]], scale: Scale) -> list[tuple[int, int]]:
+        """Find most likely chord sequence via Viterbi over 72 states."""
+        n_s = N_TONES * N_TYPES  # 72
+        T = len(obs)
+
+        # Pre-compute emissions: emit[t_step, r, k] = log P(obs[t_step] | chord r,k)
+        emit = np.full((T, N_TONES, N_TYPES), -20.0)
+        for t_step in range(T):
+            for r in range(N_TONES):
+                for k in range(N_TYPES):
+                    emit[t_step, r, k] = self._log_emit_chord(obs[t_step], r, k)
+
+        # Flatten to [n_s] for DP
+        NEG_INF = -1e9
+        dp = np.full((T, n_s), NEG_INF)
+        backtrack = np.zeros((T, n_s), dtype=np.int32)
+
+        # Init step
+        for r in range(N_TONES):
+            for k in range(N_TYPES):
+                s_idx = r * N_TYPES + k
+                score = emit[0, r, k]
+                if r == scale.root:
+                    score += 2.0  # tonic bias
+                dp[0, s_idx] = score
+
+        # Pre-compute transition log-probs: trans[k_prev, interval, k_next]
+        # LOG_PCHANGE is [6, 12, 6]
+
+        # Forward pass
         for t_step in range(1, T):
-            for s_idx, (r, t) in enumerate(states):
-                emit = self._log_emit_chord(obs[t_step], r, t)
-                
-                best_prev_score = -1000.0
-                best_prev_idx = 0
-                
-                for p_idx, (pr, pt) in enumerate(states):
-                    interval = (r - pr) % 12
-                    trans_prob = CHORD_TRANSITIONS[(pt, t)].get(interval, 0.001)
-                    score = dp[t_step-1][p_idx] + math.log(trans_prob)
-                    
-                    if score > best_prev_score:
-                        best_prev_score = score
-                        best_prev_idx = p_idx
-                        
-                dp[t_step][s_idx] = emit + best_prev_score
-                backtrack[t_step][s_idx] = best_prev_idx
+            cur_emit = emit[t_step]  # [12, 6]
+            prev_dp = dp[t_step - 1]  # [72]
+
+            # Vectorized: for each (r_next, k_next), find best (r_prev, k_prev)
+            # score = emit[r_next, k_next] + max over (r_prev, k_prev) of
+            #         dp[r_prev, k_prev] + log_pchange[k_prev, interval, k_next]
+            # where interval = (r_next - r_prev) % 12
+
+            for r_next in range(N_TONES):
+                for k_next in range(N_TYPES):
+                    best_score = NEG_INF
+                    best_prev = 0
+
+                    e = cur_emit[r_next, k_next]
+
+                    for r_prev in range(N_TONES):
+                        interval = (r_next - r_prev) % N_TONES
+                        for k_prev in range(N_TYPES):
+                            s_prev = r_prev * N_TYPES + k_prev
+                            score = prev_dp[s_prev] + LOG_PCHANGE[k_prev, interval, k_next]
+                            if score > best_score:
+                                best_score = score
+                                best_prev = s_prev
+
+                    s_next = r_next * N_TYPES + k_next
+                    dp[t_step, s_next] = e + best_score
+                    backtrack[t_step, s_next] = best_prev
 
         # Backtrack
-        best_last = max(range(n_s), key=lambda i: dp[T-1][i])
-        path_indices = [best_last]
-        for t_step in range(T-1, 0, -1):
-            path_indices.append(backtrack[t_step][path_indices[-1]])
-        path_indices.reverse()
-        
-        return [states[i] for i in path_indices]
+        best_last = int(np.argmax(dp[T - 1]))
+        path = [best_last]
+        for t_step in range(T - 1, 0, -1):
+            path.append(int(backtrack[t_step, path[-1]]))
+        path.reverse()
+
+        return [(s // N_TYPES, s % N_TYPES) for s in path]
+
+    # ------------------------------------------------------------------
+    # Layer 2: Key Viterbi
+    # ------------------------------------------------------------------
 
     def _viterbi_keys(self, chords: list[tuple[int, int]]) -> list[tuple[int, int]]:
-        """Find most likely sequence of (root, type) keys given chord sequence."""
-        states = []
-        for r in range(12):
-            for t in range(2): # Major/Minor keys
-                states.append((r, t))
-        
-        n_s = len(states)
+        """Find most likely key sequence given chord observations."""
+        n_s = N_TONES * N_KEY_TYPES  # 24
         T = len(chords)
-        
-        dp = [[-1000.0] * n_s for _ in range(T)]
-        backtrack = [[0] * n_s for _ in range(T)]
-        
-        # Transition between keys is very slow (high probability of staying in same key)
-        STAY_KEY_PROB = 0.98
-        SWITCH_KEY_PROB = (1.0 - STAY_KEY_PROB) / (n_s - 1)
+
+        STAY_LOG = math.log(0.98)
+        SWITCH_LOG = math.log(0.02 / (n_s - 1))
+
+        NEG_INF = -1e9
+        dp = np.full((T, n_s), NEG_INF)
+        backtrack = np.zeros((T, n_s), dtype=np.int32)
 
         # Init
-        for s_idx, (kr, kt) in enumerate(states):
-            dp[0][s_idx] = self._log_emit_key(chords[0], kr, kt)
+        for kr in range(N_TONES):
+            for kt in range(N_KEY_TYPES):
+                dp[0, kr * N_KEY_TYPES + kt] = self._log_emit_key(chords[0], kr, kt)
 
-        # Transitions
         for t_step in range(1, T):
-            for s_idx, (kr, kt) in enumerate(states):
-                emit = self._log_emit_key(chords[t_step], kr, kt)
-                
-                best_prev_score = -1000.0
-                best_prev_idx = 0
-                
-                for p_idx, (pkr, pkt) in enumerate(states):
-                    trans_prob = STAY_KEY_PROB if p_idx == s_idx else SWITCH_KEY_PROB
-                    score = dp[t_step-1][p_idx] + math.log(trans_prob)
-                    if score > best_prev_score:
-                        best_prev_score = score
-                        best_prev_idx = p_idx
-                
-                dp[t_step][s_idx] = emit + best_prev_score
-                backtrack[t_step][s_idx] = best_prev_idx
+            for s_idx in range(n_s):
+                kr = s_idx // N_KEY_TYPES
+                kt = s_idx % N_KEY_TYPES
+                emit_score = self._log_emit_key(chords[t_step], kr, kt)
 
-        # Backtrack
-        best_last = max(range(n_s), key=lambda i: dp[T-1][i])
-        path_indices = [best_last]
-        for t_step in range(T-1, 0, -1):
-            path_indices.append(backtrack[t_step][path_indices[-1]])
-        path_indices.reverse()
-        
-        return [states[i] for i in path_indices]
+                best_score = NEG_INF
+                best_prev = 0
+                for p_idx in range(n_s):
+                    trans = STAY_LOG if p_idx == s_idx else SWITCH_LOG
+                    score = dp[t_step - 1, p_idx] + trans
+                    if score > best_score:
+                        best_score = score
+                        best_prev = p_idx
 
-    def _log_emit_chord(self, pcs: list[int], root: int, type_idx: int) -> float:
-        """Probability of seeing these pitch classes given chord (r, t)."""
-        if not pcs: return -1.0
+                dp[t_step, s_idx] = emit_score + best_score
+                backtrack[t_step, s_idx] = best_prev
+
+        best_last = int(np.argmax(dp[T - 1]))
+        path = [best_last]
+        for t_step in range(T - 1, 0, -1):
+            path.append(int(backtrack[t_step, path[-1]]))
+        path.reverse()
+
+        return [(s // N_KEY_TYPES, s % N_KEY_TYPES) for s in path]
+
+    # ------------------------------------------------------------------
+    # Emission helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _log_emit_chord(pcs: list[int], root: int, type_idx: int) -> float:
+        """log P(pitch_classes | chord root, type) using trained pnote."""
+        if not pcs:
+            return -1.0
         log_p = 0.0
-        dist = CHORD_NOTE_EMISSIONS[type_idx]
         for pc in pcs:
-            off = (pc - root) % 12
-            prob = dist.get(off, 0.001)
-            log_p += math.log(prob)
+            off = (pc - root) % N_TONES
+            log_p += LOG_PNOTE[off, type_idx]
         return log_p
 
-    def _log_emit_key(self, chord: tuple[int, int], key_root: int, key_type: int) -> float:
-        """Probability of seeing chord c given key k."""
+    @staticmethod
+    def _log_emit_key(chord: tuple[int, int], key_root: int, key_type: int) -> float:
+        """log P(chord | key) using key offset distribution + type prior."""
         cr, ct = chord
-        off = (cr - key_root) % 12
-        # Use simple map: in key, certain chords are common
-        dist = KEY_CHORD_EMISSIONS[key_type]
-        prob = dist.get(off, 0.01)
-        # Type check: minor chords more common in minor keys, etc.
-        if ct != key_type: prob *= 0.5
-        return math.log(prob)
+        off = (cr - key_root) % N_TONES
+        log_off = KEY_OFFSET_LOG[key_type, off]
+        log_type = math.log(KEY_TYPE_PRIOR[key_type, ct] + _EPS)
+        return log_off + log_type
+
+    # ------------------------------------------------------------------
+    # Observation extraction
+    # ------------------------------------------------------------------
 
     def _get_change_points(self, duration: float) -> list[float]:
         bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
