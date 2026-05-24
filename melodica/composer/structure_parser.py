@@ -183,14 +183,17 @@ def structure_to_slots(
 ) -> "list[PhraseSlot]":
     from melodica.idea_tool import PhraseSlot
     segments = parse_structure(structure, bars_per_segment)
-    return [
-        PhraseSlot(
-            kind="play",
-            bars=seg.bars,
-            label=_build_slot_label(seg),
-        )
-        for seg in segments
-    ]
+    slots: "list[PhraseSlot]" = []
+    for seg in segments:
+        if seg.letter == "R":
+            slots.append(PhraseSlot(kind="rest", bars=seg.bars, label="R"))
+        else:
+            slots.append(PhraseSlot(
+                kind="play",
+                bars=seg.bars,
+                label=_build_slot_label(seg),
+            ))
+    return slots
 
 
 def _build_slot_label(seg: ParsedSegment) -> str:
