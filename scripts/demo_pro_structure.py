@@ -233,6 +233,44 @@ def main():
     )
 
     notes_dict = IdeaTool(config).generate()
+    
+    # ---------------------------------------------------------------------------
+    # Using the Non-Destructive Modifier Pipeline (Variation Stack)
+    # ---------------------------------------------------------------------------
+    print("  Applying Non-Destructive Modifier Pipeline to Lead_Melody...")
+    from melodica.modifiers import ModifierPipeline, ModifierContext
+    from melodica.modifiers.rhythmic import SwingController, QuantizeModifier
+    from melodica.modifiers.dynamic import CrescendoModifier
+
+    if "Lead_Melody" in notes_dict:
+        base_lead = notes_dict["Lead_Melody"]
+        # Create pipeline with base notes
+        pipeline = ModifierPipeline(base_notes=base_lead)
+        
+        # Add a variation stack (inserts)
+        pipeline.add_modifier(SwingController(swing_ratio=0.6))
+        pipeline.add_modifier(QuantizeModifier(grid_resolution=0.125))
+        pipeline.add_modifier(CrescendoModifier(start_vel=40, end_vel=110))
+        
+        # We can dynamically bypass or remove modifiers if we want:
+        # pipeline.set_bypass(1, bypass=True)  # Bypass quantization for example
+        
+        # Generate the context (duration needs to be derived from the parts)
+        total_bars = sum(p.bars for p in parts)
+        # Using a dummy context since our specific modifiers here might not need chords/scale 
+        # or we just provide the basic info
+        mod_context = ModifierContext(
+            duration_beats=total_bars * 4,  # Assuming 4/4 time
+            chords=[],
+            timeline=scale, # Fallback timeline
+            scale=scale
+        )
+        
+        # Process the pipeline and overwrite the track
+        notes_dict["Lead_Melody"] = pipeline.process(mod_context)
+        print(f"  > Lead_Melody transformed through pipeline! Base notes intact: {len(pipeline.base_notes)}, Final notes: {len(notes_dict['Lead_Melody'])}")
+
+
     tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
     
     instruments_map = {t.name: _GM_PROGRAMS.get(t.instrument, 0) for t in tracks}
