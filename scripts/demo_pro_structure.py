@@ -237,41 +237,72 @@ def main():
     # ---------------------------------------------------------------------------
     # Using the Non-Destructive Modifier Pipeline (Variation Stack)
     # ---------------------------------------------------------------------------
-    print("  Applying Non-Destructive Modifier Pipeline...")
-    from melodica.modifiers import ModifierPipeline, ModifierContext
-    from melodica.modifiers.rhythmic import SwingController, QuantizeModifier, HumanizeModifier
-    from melodica.modifiers.dynamic import CrescendoModifier
-    from melodica.modifiers.harmonic import NoteDoublerModifier
+    print("  Applying Advanced Non-Destructive Modifier Pipeline...")
+    from melodica.modifiers import (
+        ModifierPipeline, ModifierContext, 
+        SwingController, QuantizeModifier, HumanizeModifier,
+        VelocityCurveModifier, ChordToneSnapModifier, SlideLegatoModifier,
+        RhythmicDensityModifier, ChordVoicingSpreadModifier, NoteDoublerModifier
+    )
 
+    # Derived context for modifiers
     total_bars = sum(p.bars for p in parts)
+    
+    # Extract the generated timeline (chords/keys) from the tool output
+    # Notes dict often contains hidden keys with timeline data
+    # If not, we'll construct a simple one for the demo
+    from melodica.types import MusicTimeline
+    timeline = notes_dict.get("_timeline", MusicTimeline(chords=[], keys=[]))
+
     mod_context = ModifierContext(
-        duration_beats=total_bars * 4,  # Assuming 4/4 time
-        chords=[],
-        timeline=scale, # Fallback timeline
+        duration_beats=total_bars * 4,
+        chords=timeline.chords,
+        timeline=timeline,
         scale=scale
     )
 
     if "Lead_Melody" in notes_dict:
         pipeline = ModifierPipeline(base_notes=notes_dict["Lead_Melody"])
+        
+        # 1. Harmonic integrity: Snap all melody notes to current chord tones!
+        pipeline.add_modifier(ChordToneSnapModifier())
+        
+        # 2. Expression: Use S-Curve velocity ramp instead of linear
+        pipeline.add_modifier(VelocityCurveModifier(start_vel=45, end_vel=115, curve="s_curve"))
+        
+        # 3. Articulation: Add violin-style pitch slides between close notes
+        pipeline.add_modifier(SlideLegatoModifier(slide_beats=0.15))
+        
+        # 4. Feel: Triplet swing and quantization
         pipeline.add_modifier(SwingController(swing_ratio=0.6))
         pipeline.add_modifier(QuantizeModifier(grid_resolution=0.125))
-        pipeline.add_modifier(CrescendoModifier(start_vel=40, end_vel=110))
+
         notes_dict["Lead_Melody"] = pipeline.process(mod_context)
-        print(f"  > Lead_Melody transformed! Base notes intact: {len(pipeline.base_notes)}")
+        print(f"  > Lead_Melody: Snapped to chords + S-Curve dynamics + Legato Slides applied!")
 
     if "Orchestral_Strings" in notes_dict:
-        # Doubling the strings an octave down for a thicker cinematic sound
         str_pipeline = ModifierPipeline(base_notes=notes_dict["Orchestral_Strings"])
+        
+        # 1. Spacing: Widening the string section voicing
+        str_pipeline.add_modifier(ChordVoicingSpreadModifier(spread_mode="open"))
+        
+        # 2. Thickness: Octave doubling
         str_pipeline.add_modifier(NoteDoublerModifier(octaves=[-1]))
+        
         notes_dict["Orchestral_Strings"] = str_pipeline.process(mod_context)
-        print(f"  > Orchestral_Strings transformed (doubled)! Base notes intact: {len(str_pipeline.base_notes)}")
+        print(f"  > Orchestral_Strings: Open voicings + Octave doubling applied!")
 
     if "Deep_Bass" in notes_dict:
-        # Humanizing the bass timing slightly
         bass_pipeline = ModifierPipeline(base_notes=notes_dict["Deep_Bass"])
-        bass_pipeline.add_modifier(HumanizeModifier(timing_std=0.03, velocity_std=10.0))
+        
+        # 1. Density: Let's thin out the bass a bit to make it less "busy"
+        bass_pipeline.add_modifier(RhythmicDensityModifier(density=0.8))
+        
+        # 2. Humanize
+        bass_pipeline.add_modifier(HumanizeModifier(timing_std=0.03, velocity_std=12.0))
+        
         notes_dict["Deep_Bass"] = bass_pipeline.process(mod_context)
-        print(f"  > Deep_Bass transformed (humanized)! Base notes intact: {len(bass_pipeline.base_notes)}")
+        print(f"  > Deep_Bass: Rhythmic thinning + Humanization applied!")
 
 
     tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
