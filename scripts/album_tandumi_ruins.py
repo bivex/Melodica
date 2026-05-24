@@ -100,7 +100,7 @@ def generate_tandumi_ruins():
             ),
             TrackConfig(
                 name="Deep_Rumble",
-                generator=PedalBassGenerator(pedal_note="root", sustain=0.95, velocity_level=0.6),
+                generator=PedalBassGenerator(pedal_note="root", sustain=0.95, velocity_level=0.85),
                 instrument="contrabass", density=0.65, octave_shift=-2,
             ),
             TrackConfig(
@@ -127,7 +127,7 @@ def generate_tandumi_ruins():
                     phrase_length=8.0, mode="downbeat_chord",
                     random_movement=0.25, climax="up_5th", direction_bias=0.2,
                 ),
-                instrument="shakuhachi", density=0.55, octave_shift=1, mpe=True,
+                instrument="shakuhachi", density=0.55, octave_shift=2, mpe=True,
             ),
             TrackConfig(
                 name="Dhol_Pulse",
@@ -145,7 +145,7 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Sitar_Counter",
                 generator=EthnicPluckedGenerator(instrument="sitar", note_density=0.7),
-                instrument="sitar", density=0.45, octave_shift=1, mpe=True,
+                instrument="sitar", density=0.45, octave_shift=2, mpe=True,
             ),
             TrackConfig(
                 name="Brass_Stabs",
@@ -157,7 +157,7 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Battle_Bass",
                 generator=BassGenerator(style="root_fifth", global_movement="up_down"),
-                instrument="bass", density=0.65, octave_shift=-1,
+                instrument="bass", density=0.65, octave_shift=-2,
             ),
             TrackConfig(
                 name="Warrior_Choir",
@@ -175,7 +175,7 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Chaos_Taiko",
                 generator=ElectronicDrumsGenerator(kit="ethnic"),
-                instrument="taiko", density=0.88, octave_shift=-1,
+                instrument="taiko", density=0.88, octave_shift=-2,
             ),
             TrackConfig(
                 name="Falling_Stones",
@@ -275,29 +275,29 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Tremolo_Rise",
                 generator=TremoloStringsGenerator(
-                    variant="chord", dynamic_swell=True, attack_time=0.3, decay_time=0.8, bow_speed=0.18,
+                    variant="single", dynamic_swell=True, attack_time=0.5, decay_time=1.5, bow_speed=0.2,
                 ),
-                instrument="tremolo_strings", density=0.65,
+                instrument="tremolo_strings", density=0.12, octave_shift=-1,
             ),
             TrackConfig(
                 name="Glory_Horns",
                 generator=FrenchHornGenerator(articulation="sustained", dynamic_curve="crescendo", fanfare_mode=False),
-                instrument="french_horn", density=0.5, octave_shift=-1,
+                instrument="french_horn", density=0.5, octave_shift=0,
             ),
             TrackConfig(
                 name="Victory_Trombones",
                 generator=TromboneGenerator(articulation="sustained", register=1, bass_voice=False),
-                instrument="trombone", density=0.4, octave_shift=-1,
+                instrument="trombone", density=0.4, octave_shift=0,
             ),
             TrackConfig(
                 name="Final_Sitar",
                 generator=EthnicPluckedGenerator(instrument="sitar", note_density=0.6),
-                instrument="sitar", density=0.5, octave_shift=1, mpe=True,
+                instrument="sitar", density=0.5, octave_shift=2, mpe=True,
             ),
             TrackConfig(
                 name="Triumph_Choir",
                 generator=ChoirAahsGenerator(voice_count=6, dynamics="ff", syllable="aah", vibrato=0.5),
-                instrument="choir", density=0.5,
+                instrument="choir", density=0.5, octave_shift=1,
             ),
             TrackConfig(
                 name="Resurrection_Dhol",
@@ -307,7 +307,7 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Victory_Bells",
                 generator=TubularBellsGenerator(stroke_pattern="single", dampen=False),
-                instrument="tubular_bells", density=0.3, octave_shift=0,
+                instrument="tubular_bells", density=0.3, octave_shift=2,
             ),
             TrackConfig(
                 name="Bass_Foundation",
@@ -317,7 +317,7 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Light_Drone",
                 generator=DroneGenerator(variant="tonic", fade_in=4.0, fade_out=10.0),
-                instrument="dark_pad", density=0.75, octave_shift=-1,
+                instrument="dark_pad", density=0.75, octave_shift=-2,
             ),
         ],
     }
