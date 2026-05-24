@@ -216,105 +216,104 @@ class CoupledHMMHarmonizer:
         tension_curve: Any | None = None
     ) -> list[tuple[int, int]]:
         """Find most likely chord sequence with optional hard constraints and tension bias."""
-        n_s = N_TONES * N_TYPES  # 108
+        n_s = N_TONES * N_TYPES  # 144
         T = len(obs)
-        NEG_INF = -1e12 # Very large negative number
+        NEG_INF = -1e12
 
-        # Pre-compute emissions
+        # Pre-compute emissions via vectorized _log_emit_chord
         emit = np.full((T, N_TONES, N_TYPES), -20.0)
         for t_step in range(T):
-            for r in range(N_TONES):
-                for k in range(N_TYPES):
-                    emit[t_step, r, k] = self._log_emit_chord(obs[t_step], r, k)
+            wpcs = obs[t_step]
+            if not wpcs:
+                continue
+            for wn in wpcs:
+                off = np.arange(N_TONES, dtype=np.intp)
+                off = (wn.pitch_class - off) % N_TONES
+                emit[t_step] += wn.weight * LOG_PNOTE[off]
+
+            total_w = sum(wn.weight for wn in wpcs)
+            emit[t_step] /= (total_w + 1e-6)
 
         # Map Quality to index for constraints
         quality_to_idx = {q: i for i, q in enumerate(TYPE_TO_QUALITY)}
 
-        dp = np.full((T, n_s), NEG_INF)
-        backtrack = np.zeros((T, n_s), dtype=np.int32)
-
-        # Tension indices (for bias)
-        # 0: Maj, 1: Min, 2: Dim, 3: Aug, 8: Dom7, 11: Add9
+        # Tension indices
         STABLE_INDICES = {0, 1, 11}
         UNSTABLE_INDICES = {2, 3, 8}
 
+        # Pre-compute transition matrix [k_prev, interval, k_next] -> [n_s, n_s]
+        # s_prev = r_prev * N_TYPES + k_prev, s_next = r_next * N_TYPES + k_next
+        # interval = (r_next - r_prev) % 12
+        trans = np.full((n_s, n_s), NEG_INF)
+        for k_prev in range(N_TYPES):
+            for k_next in range(N_TYPES):
+                for r_prev in range(N_TONES):
+                    s_prev = r_prev * N_TYPES + k_prev
+                    for r_next in range(N_TONES):
+                        interval = (r_next - r_prev) % N_TONES
+                        s_next = r_next * N_TYPES + k_next
+                        trans[s_prev, s_next] = LOG_PCHANGE[k_prev, interval, k_next]
+
+        dp = np.full((T, n_s), NEG_INF)
+        backtrack = np.zeros((T, n_s), dtype=np.int32)
+
         # Init step
-        for r in range(N_TONES):
+        init_scores = emit[0].ravel().copy()
+        if scale.root is not None:
             for k in range(N_TYPES):
-                s_idx = r * N_TYPES + k
-                score = emit[0, r, k]
-                
-                # Apply tonic bias
-                if r == scale.root:
-                    score += 2.0
-                
-                # Apply tension bias at T=0
-                if tension_curve:
-                    tau = tension_curve.tension_at(change_points[0])
-                    if k in UNSTABLE_INDICES: score += tau * 4.0
-                    if k in STABLE_INDICES: score += (1.0 - tau) * 4.0
-                
-                # Check for constraint at start (T=0)
-                if constraints:
-                    cp = change_points[0]
-                    target = next((c for c in constraints if c.start <= cp < c.start + c.duration), None)
-                    if target:
-                        t_idx = quality_to_idx.get(target.quality)
+                init_scores[scale.root * N_TYPES + k] += 2.0
+
+        if tension_curve:
+            tau = tension_curve.tension_at(change_points[0])
+            for k in range(N_TYPES):
+                for r in range(N_TONES):
+                    s = r * N_TYPES + k
+                    if k in UNSTABLE_INDICES:
+                        init_scores[s] += tau * 4.0
+                    if k in STABLE_INDICES:
+                        init_scores[s] += (1.0 - tau) * 4.0
+
+        if constraints:
+            cp = change_points[0]
+            target = next((c for c in constraints if c.start <= cp < c.start + c.duration), None)
+            if target:
+                t_idx = quality_to_idx.get(target.quality)
+                for r in range(N_TONES):
+                    for k in range(N_TYPES):
                         if r != target.root or k != t_idx:
-                            score = NEG_INF # Kill all other paths
-                
-                dp[0, s_idx] = score
+                            init_scores[r * N_TYPES + k] = NEG_INF
+
+        dp[0] = init_scores
 
         # Forward pass
         for t_step in range(1, T):
-            cur_emit = emit[t_step]
-            prev_dp = dp[t_step - 1]
+            cur_emit = emit[t_step].ravel()
             cp = change_points[t_step]
-            
-            # Tension level at this point
             tau = tension_curve.tension_at(cp) if tension_curve else 0.5
 
-            # Find if there is a constraint for this time step
             target_chord = None
             if constraints:
                 target_chord = next((c for c in constraints if c.start <= cp < c.start + c.duration), None)
 
-            for r_next in range(N_TONES):
-                for k_next in range(N_TYPES):
-                    s_next = r_next * N_TYPES + k_next
-                    
-                    # If this state doesn't match the constraint, skip it
-                    if target_chord:
-                        t_idx = quality_to_idx.get(target_chord.quality)
-                        if r_next != target_chord.root or k_next != t_idx:
-                            dp[t_step, s_next] = NEG_INF
-                            continue
+            scores = dp[t_step - 1][:, None] + trans  # [n_s, n_s]
+            best_prev = np.argmax(scores, axis=0)
+            best_scores = scores[best_prev, np.arange(n_s)]
 
-                    best_score = NEG_INF
-                    best_prev = 0
-                    e = cur_emit[r_next, k_next]
-                    
-                    # Tension bias for entering this chord type
-                    t_bias = 0.0
-                    if k_next in UNSTABLE_INDICES: t_bias = tau * 4.0
-                    if k_next in STABLE_INDICES: t_bias = (1.0 - tau) * 4.0
-                    
-                    for r_prev in range(N_TONES):
-                        interval = (r_next - r_prev) % N_TONES
-                        for k_prev in range(N_TYPES):
-                            s_prev = r_prev * N_TYPES + k_prev
-                            
-                            # Optimization: skip calculation if previous path is already dead
-                            if prev_dp[s_prev] <= NEG_INF / 2:
-                                continue
-                                
-                            score = prev_dp[s_prev] + LOG_PCHANGE[k_prev, interval, k_next]
-                            if score > best_score:
-                                best_score = score
-                                best_prev = s_prev
-                                
-                    dp[t_step, s_next] = e + t_bias + best_score
-                    backtrack[t_step, s_next] = best_prev
+            t_bias = np.zeros(n_s)
+            for k in UNSTABLE_INDICES:
+                t_bias[k::N_TYPES] = tau * 4.0
+            for k in STABLE_INDICES:
+                t_bias[k::N_TYPES] = (1.0 - tau) * 4.0
+
+            dp[t_step] = cur_emit + t_bias + best_scores
+            backtrack[t_step] = best_prev
+
+            if target_chord:
+                t_idx = quality_to_idx.get(target_chord.quality)
+                for r in range(N_TONES):
+                    for k in range(N_TYPES):
+                        if r != target_chord.root or k != t_idx:
+                            dp[t_step, r * N_TYPES + k] = NEG_INF
 
         # Backtrack
         best_last = int(np.argmax(dp[T - 1]))
