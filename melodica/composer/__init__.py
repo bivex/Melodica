@@ -60,6 +60,15 @@ from melodica.composer.diagnostics import diagnose_tracks, DiagnosticReport
 from melodica.composer.transition_coordinator import TransitionCoordinator
 from melodica.composer.album_pipeline import compile_continuous_album
 from melodica.composer.instrument_assigner import InstrumentAssigner
+from melodica.composer.structure_parser import (
+    PhrasePool,
+    PhraseTransform,
+    ParsedSegment,
+    parse_structure,
+    parse_slot_label,
+    apply_phrase_transform,
+    structure_to_slots,
+)
 
 __all__ = [
     "TransitionCoordinator",
@@ -108,4 +117,11 @@ __all__ = [
     "diagnose_tracks",
     "DiagnosticReport",
     "InstrumentAssigner",
+    "PhrasePool",
+    "PhraseTransform",
+    "ParsedSegment",
+    "parse_structure",
+    "parse_slot_label",
+    "apply_phrase_transform",
+    "structure_to_slots",
 ]

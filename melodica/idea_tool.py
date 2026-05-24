@@ -363,6 +363,8 @@ class IdeaTool:
         # Phrase memory: stores generated phrases for recall in later sections
         self._phrase_memory = PhraseMemory()
         self._pan_cc_events: dict[str, list[tuple[float, int, int]]] = {}
+        # Phrase pool: RC-style shared phrase storage (Letter Rule)
+        self._phrase_pool: PhrasePool | None = None
 
     def _get_resolved_parts(self) -> list[IdeaPart]:
         if self.config.parts:
@@ -415,6 +417,10 @@ class IdeaTool:
             total_beats += p.bars * p.time_signature[0]
         scale = self.config.scale
         result: dict[str, Any] = {}
+
+        # Initialize phrase pool for this generation run
+        from melodica.composer.structure_parser import PhrasePool
+        self._phrase_pool = PhrasePool()
 
         # Remove stale contexts and cached generators for tracks no longer in config
         active_names = {t.name for t in self.config.tracks}
@@ -1341,8 +1347,16 @@ class IdeaTool:
         offset_beats: float,
         gen,
     ) -> list[NoteInfo]:
-        """Render a track following a PhraseSchedule within a single part."""
+        """Render a track following a PhraseSchedule within a single part.
+
+        Supports RC-style phrase pooling and transform suffixes.
+        Slot labels with ":" trigger pool lookup/store and optional transforms.
+        Example: "A:var" → reuse phrase A with auto-variation.
+        """
         import hashlib
+        from melodica.composer.structure_parser import (
+            parse_slot_label, PhraseTransform, apply_phrase_transform as _apply_transform,
+        )
 
         schedule = cfg.phrase_schedule
         if part.track_phrase_schedules and cfg.name in part.track_phrase_schedules:
@@ -1388,6 +1402,10 @@ class IdeaTool:
                 slot_offset_beats += slot_beats
                 continue
 
+            # Parse the slot label for pool-aware rendering
+            base_label, transform = parse_slot_label(slot.label)
+            pool = self._phrase_pool
+
             section_start = offset_beats + slot_offset_beats
             section_end = section_start + slot_beats
             phrase_pos = slot_offset_beats / part_beats if part_beats > 0 else 0.0
@@ -1419,16 +1437,51 @@ class IdeaTool:
                 for c in section_chords
             ]
 
-            # Deterministic seeding
-            seed_str = f"{cfg.name}:{part.name}:{slot.label}"
-            seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
-            random.seed(seed_val)
+            # Pool lookup: reuse existing phrase if available
+            section_notes: list[NoteInfo] | None = None
+            if pool is not None and pool.has(cfg.name, base_label):
+                stored = pool.get(cfg.name, base_label)
+                if stored is not None:
+                    section_notes = _apply_transform(stored, transform)
+                    # Re-time notes to fit this slot's duration
+                    if section_notes:
+                        stored_dur = max(n.start + n.duration for n in stored) - min(n.start for n in stored)
+                        target_dur = slot_beats
+                        if stored_dur > 0 and abs(stored_dur - target_dur) > 0.01:
+                            ratio = target_dur / stored_dur
+                            section_notes = [
+                                NoteInfo(
+                                    pitch=n.pitch,
+                                    start=round(n.start * ratio, 6),
+                                    duration=round(max(0.0625, n.duration * ratio), 6),
+                                    velocity=n.velocity,
+                                    articulation=n.articulation,
+                                    expression=dict(n.expression),
+                                )
+                                for n in section_notes
+                            ]
 
-            section_notes = gen.render(adjusted, scale, slot_beats, ctx)
-            random.seed()
+            if section_notes is None:
+                # Deterministic seeding — uses base_label so identical letters get identical seeds
+                seed_str = f"{cfg.name}:{part.name}:{base_label}"
+                seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
+                random.seed(seed_val)
 
-            # Rhythm processing
-            section_notes = self._apply_rhythm_processing(section_notes, cfg, slot_beats)
+                section_notes = gen.render(adjusted, scale, slot_beats, ctx)
+                random.seed()
+
+                # Rhythm processing
+                section_notes = self._apply_rhythm_processing(section_notes, cfg, slot_beats)
+
+                # Store in pool for future reuse (the Letter Rule)
+                if pool is not None and transform == PhraseTransform.ORIGINAL:
+                    pool.store(cfg.name, base_label, section_notes)
+
+                # Apply transform if this is a variation slot
+                if transform != PhraseTransform.ORIGINAL:
+                    if pool is not None and not pool.has(cfg.name, base_label):
+                        pool.store(cfg.name, base_label, section_notes)
+                    section_notes = _apply_transform(section_notes, transform)
 
             # Offset to global time + octave shift
             for n in section_notes:
@@ -1622,3 +1675,32 @@ def quick_compose(
 
     tool = IdeaTool(config)
     return tool.generate()
+
+
+# ---------------------------------------------------------------------------
+# RC-style Structure Helpers
+# ---------------------------------------------------------------------------
+
+
+def structure_to_schedule(
+    structure: str,
+    bars_per_segment: int = 4,
+    loop: bool = True,
+) -> PhraseSchedule:
+    """
+    Parse an RC-style structure string into a PhraseSchedule.
+
+    Supports:
+      - Compact: "AABB", "ABAB"
+      - Prime: "AA'BB"  (A' = variation of A)
+      - Subscript: "A1 A1 B1 B1"
+      - Suffix: "A A_var B B_inv"
+      - Mixed: "A A' B_fast B"
+
+    Example:
+        >>> schedule = structure_to_schedule("AA'BB")
+        >>> # Creates 4 slots: A, A:var, B, B
+    """
+    from melodica.composer.structure_parser import structure_to_slots
+    slots = structure_to_slots(structure, bars_per_segment)
+    return PhraseSchedule(slots=slots, loop=loop)
