@@ -145,7 +145,7 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Sitar_Counter",
                 generator=EthnicPluckedGenerator(instrument="sitar", note_density=0.7),
-                instrument="sitar", density=0.45, octave_shift=2, mpe=True,
+                instrument="sitar", density=0.45, octave_shift=1, mpe=True,
             ),
             TrackConfig(
                 name="Brass_Stabs",
@@ -245,8 +245,8 @@ def generate_tandumi_ruins():
             ),
             TrackConfig(
                 name="Contrabass_Ground",
-                generator=ContrabassGenerator(articulation="sustained"),
-                instrument="contrabass", density=0.3, octave_shift=-2,
+                generator=BassGenerator(style="root_only", global_movement="none"),
+                instrument="contrabass", density=0.8, octave_shift=-2,
             ),
             TrackConfig(
                 name="Harp_Tears",
@@ -297,7 +297,7 @@ def generate_tandumi_ruins():
             TrackConfig(
                 name="Triumph_Choir",
                 generator=ChoirAahsGenerator(voice_count=6, dynamics="ff", syllable="aah", vibrato=0.5),
-                instrument="choir", density=0.5, octave_shift=1,
+                instrument="choir", density=0.5, octave_shift=2,
             ),
             TrackConfig(
                 name="Resurrection_Dhol",
