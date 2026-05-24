@@ -163,7 +163,8 @@ class CoupledHMMHarmonizer:
         self,
         melody: list[NoteInfo],
         initial_scale: Scale,
-        duration_beats: float
+        duration_beats: float,
+        constraints: list[ChordLabel] | None = None
     ) -> list[ChordLabel]:
         if not melody:
             return []
@@ -173,8 +174,8 @@ class CoupledHMMHarmonizer:
         observations = self._extract_observations(melody, change_points)
         T = len(observations)
 
-        # 2. Layer 1: Notes -> Chords (72 states)
-        chord_path = self._viterbi_chords(observations, initial_scale)
+        # 2. Layer 1: Notes -> Chords (108 states)
+        chord_path = self._viterbi_chords(observations, initial_scale, change_points, constraints)
 
         # 3. Layer 2: Chords -> Keys (24 states)
         key_path = self._viterbi_keys(chord_path)
@@ -194,24 +195,28 @@ class CoupledHMMHarmonizer:
 
         return result
 
-    # ------------------------------------------------------------------
-    # Layer 1: Chord Viterbi
-    # ------------------------------------------------------------------
-
-    def _viterbi_chords(self, obs: list[list[WeightedNote]], scale: Scale) -> list[tuple[int, int]]:
-        """Find most likely chord sequence via Viterbi over 72 states."""
-        n_s = N_TONES * N_TYPES  # 72
+    def _viterbi_chords(
+        self, 
+        obs: list[list[WeightedNote]], 
+        scale: Scale,
+        change_points: list[float],
+        constraints: list[ChordLabel] | None = None
+    ) -> list[tuple[int, int]]:
+        """Find most likely chord sequence with optional hard constraints."""
+        n_s = N_TONES * N_TYPES  # 108
         T = len(obs)
+        NEG_INF = -1e12 # Very large negative number
 
-        # Pre-compute emissions: emit[t_step, r, k] = log P(obs[t_step] | chord r,k)
+        # Pre-compute emissions
         emit = np.full((T, N_TONES, N_TYPES), -20.0)
         for t_step in range(T):
             for r in range(N_TONES):
                 for k in range(N_TYPES):
                     emit[t_step, r, k] = self._log_emit_chord(obs[t_step], r, k)
 
-        # Flatten to [n_s] for DP
-        NEG_INF = -1e9
+        # Map Quality to index for constraints
+        quality_to_idx = {q: i for i, q in enumerate(TYPE_TO_QUALITY)}
+
         dp = np.full((T, n_s), NEG_INF)
         backtrack = np.zeros((T, n_s), dtype=np.int32)
 
@@ -220,32 +225,62 @@ class CoupledHMMHarmonizer:
             for k in range(N_TYPES):
                 s_idx = r * N_TYPES + k
                 score = emit[0, r, k]
+                
+                # Apply tonic bias
                 if r == scale.root:
-                    score += 2.0  # tonic bias
+                    score += 2.0
+                
+                # Check for constraint at start (T=0)
+                if constraints:
+                    cp = change_points[0]
+                    target = next((c for c in constraints if c.start <= cp < c.start + c.duration), None)
+                    if target:
+                        t_idx = quality_to_idx.get(target.quality)
+                        if r != target.root or k != t_idx:
+                            score = NEG_INF # Kill all other paths
+                
                 dp[0, s_idx] = score
 
         # Forward pass
         for t_step in range(1, T):
-            cur_emit = emit[t_step]  # [12, 6]
-            prev_dp = dp[t_step - 1]  # [72]
+            cur_emit = emit[t_step]
+            prev_dp = dp[t_step - 1]
+            cp = change_points[t_step]
+            
+            # Find if there is a constraint for this time step
+            target_chord = None
+            if constraints:
+                target_chord = next((c for c in constraints if c.start <= cp < c.start + c.duration), None)
 
             for r_next in range(N_TONES):
                 for k_next in range(N_TYPES):
+                    s_next = r_next * N_TYPES + k_next
+                    
+                    # If this state doesn't match the constraint, skip it (kill the path)
+                    if target_chord:
+                        t_idx = quality_to_idx.get(target_chord.quality)
+                        if r_next != target_chord.root or k_next != t_idx:
+                            dp[t_step, s_next] = NEG_INF
+                            continue
+
                     best_score = NEG_INF
                     best_prev = 0
-
                     e = cur_emit[r_next, k_next]
-
+                    
                     for r_prev in range(N_TONES):
                         interval = (r_next - r_prev) % N_TONES
                         for k_prev in range(N_TYPES):
                             s_prev = r_prev * N_TYPES + k_prev
+                            
+                            # Optimization: skip calculation if previous path is already dead
+                            if prev_dp[s_prev] <= NEG_INF / 2:
+                                continue
+                                
                             score = prev_dp[s_prev] + LOG_PCHANGE[k_prev, interval, k_next]
                             if score > best_score:
                                 best_score = score
                                 best_prev = s_prev
-
-                    s_next = r_next * N_TYPES + k_next
+                                
                     dp[t_step, s_next] = e + best_score
                     backtrack[t_step, s_next] = best_prev
 

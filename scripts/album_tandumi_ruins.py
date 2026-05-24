@@ -335,11 +335,22 @@ def generate_tandumi_ruins():
     for cfg in configs:
         print(f"\n--- Composing: {cfg['name']} ({cfg['ts'][0]}/{cfg['ts'][1]}, {cfg['tempo']} BPM) ---")
 
+        # Define harmonic anchors for each track to guide the HMM
+        # We set pillars (usually at start/end or transitions) and let HMM fill the rest
+        anchors = {
+            "01_The_Ruins_Breathe": ["Im7:4.0", "IVaug:4.0"],
+            "02_Warriors_of_the_Khalsa": ["Im:4.0", "bIImaj7:4.0", "V7:4.0"],
+            "03_The_Temple_Falls": ["Im7:4.0", "bVImaj7:4.0", "Idim:4.0"],
+            "04_Requiem_of_the_Fallen": ["Im:6.0", "IVm7:6.0"],
+            "05_Undying_Light": ["Isus4:4.0", "Imaj7:4.0"],
+        }
+
         parts = [IdeaPart(
             name=cfg["name"], bars=cfg["bars"],
             scale=sikah, tempo=cfg["tempo"],
             time_signature=cfg["ts"],
-            progression_type="coupled_hmm",
+            progression_type="constrained_hmm",
+            progression_list=anchors.get(cfg["name"], ["Im7"]),
         )]
 
         track_list = tracks_map[cfg["name"]]

@@ -807,6 +807,23 @@ class IdeaTool:
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
                 part_chords = harmonizer.harmonize(contour, scale, part_beats)
 
+            # Hybrid Coupled HMM (Guided by user constraints)
+            elif part.progression_type == "constrained_hmm":
+                from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
+                from melodica.types import parse_progression
+                
+                constraints = []
+                if part.progression_list:
+                    prog_str = " ".join(part.progression_list)
+                    constraints = parse_progression(prog_str, scale)
+
+                harmonizer = CoupledHMMHarmonizer(
+                    chord_change=self.config.hmm3_chord_change,
+                    bar_grid=bar_grid,
+                )
+                contour = self._build_melody_contour(scale, bars, beats_per_bar)
+                part_chords = harmonizer.harmonize(contour, scale, part_beats, constraints=constraints)
+
             # Rules-based harmonizer
             elif part.progression_type == "rules":
                 harmonizer = RuleBasedHarmonizer(
