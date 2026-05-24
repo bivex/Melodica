@@ -41,12 +41,13 @@ def build_engine(engine_id: int = 3, **kwargs: object) -> HarmonizerPort:
     """
     Factory: construct the appropriate engine by ID.
 
-    engine_id: 0 = Functional, 1 = RuleBased, 2 = Adaptive, 3 = HMM (default)
+    engine_id: 0 = Functional, 1 = RuleBased, 2 = Adaptive, 3 = HMM, 4 = Coupled HMM (default)
     kwargs:    forwarded to engine constructors
 
     OCP compliance: add a new ID branch here instead of modifying engine code.
     """
     from melodica.engines.adaptive import AdaptiveEngine
+    from melodica.engines.coupled_hmm_engine import CoupledHMMEngine
     from melodica.engines.functional import FunctionalEngine
     from melodica.engines.rule_based import RuleBasedEngine
     from melodica.engines.hmm_engine import HMMEngine
@@ -80,5 +81,7 @@ def build_engine(engine_id: int = 3, **kwargs: object) -> HarmonizerPort:
                 transition_weight=transition_weight,  # type: ignore[arg-type]
                 **engine_kwargs,
             )
+        case 4:
+            return CoupledHMMEngine(**kwargs)
         case _:
-            raise ValueError(f"Unknown engine_id {engine_id}. Must be 0, 1, 2, or 3.")
+            raise ValueError(f"Unknown engine_id {engine_id}. Must be 0, 1, 2, 3, or 4.")

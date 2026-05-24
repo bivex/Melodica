@@ -186,6 +186,7 @@ def harmonize(
                   1 / "rules"       → RuleBasedEngine   (Viterbi + rule graph)
                   2 / "adaptive"    → AdaptiveEngine    (heuristic search)
                   3 / "hmm"         → HMMEngine         (Hidden Markov Model, DEFAULT)
+                  4 / "coupled"     → CoupledHMMEngine  (Hierarchical coupled HMM)
     chord_rhythm: Beats per chord event (default 4 = one bar at 4/4).
     **engine_kwargs: Forwarded to the engine constructor.
 
@@ -200,13 +201,15 @@ def harmonize(
         "adaptive": 2,
         "hmm": 3,
         "markov": 3,
+        "coupled": 4,
+        "coupled_hmm": 4,
     }
     if isinstance(engine, str):
         engine_id = _ENGINE_MAP.get(engine.lower())
         if engine_id is None:
             raise ValueError(
                 f"Unknown engine name {engine!r}. "
-                f"Use 'functional', 'rules', 'adaptive', 'hmm', or 0/1/2/3."
+                f"Use 'functional', 'rules', 'adaptive', 'hmm', 'coupled', or 0/1/2/3/4."
             )
     else:
         engine_id = int(engine)

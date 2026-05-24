@@ -40,58 +40,73 @@ def main():
         TrackConfig(name="Celesta", generator=ArpeggiatorGenerator(), instrument="celesta", density=0.4, octave_shift=1),
     ]
 
-    # Track 1: The Gathering Storm (E Dorian)
-    t1_parts = [
-        IdeaPart(name="Mist", bars=4, scale=Scale(4, Mode.DORIAN), progression_type="constrained_hmm", progression_list=["Im9:4.0"], track_mute=["Horns", "Trombones", "Timpani"]),
-        IdeaPart(name="Thunder", bars=8, scale=Scale(4, Mode.DORIAN), progression_type="constrained_hmm", progression_list=["Im9:4.0", "bVIIadd9:4.0", "IVmaj9:4.0", "V7:4.0"], style="cinematic_epic")
-    ]
-
-    # Track 2: March of the Khalsa (Arabic Sikah)
-    t2_parts = [
-        IdeaPart(name="Rhythm", bars=4, scale=Scale(4, Mode.ARABIC_SIKAH), progression_type="from_list", progression_list=["Im:16.0"], track_mute=["Violins", "Cellos", "Horns"]),
-        IdeaPart(name="March", bars=12, scale=Scale(4, Mode.ARABIC_SIKAH), progression_type="constrained_hmm", progression_list=["Im7:4.0", "bIIadd9:12.0", "V7alt:32.0"])
-    ]
-
-    # Track 3: The Broken Throne (D Minor / Aeolian)
-    t3_parts = [
-        IdeaPart(name="Elegy", bars=8, scale=Scale(2, Mode.AEOLIAN), progression_type="constrained_hmm", progression_list=["Im9:4.0", "bVImaj9:4.0", "Idim:4.0"], track_density={"Violins": 0.3, "Cellos": 0.8}),
-        IdeaPart(name="Rebirth", bars=8, scale=Scale(2, Mode.AEOLIAN), progression_type="constrained_hmm", progression_list=["bVImaj9:4.0", "bVIIadd9:4.0", "Imaj9:4.0"])
-    ]
-
-    # Track 4: Sky-Clad Warriors (Lydian)
-    t4_parts = [
-        IdeaPart(name="Ascent", bars=16, scale=Scale(0, Mode.LYDIAN), progression_type="constrained_hmm", progression_list=["Imaj9:8.0", "IIadd9:8.0"])
-    ]
-
-    # Track 5: Descent into the Crypt (Phrygian Dominant)
-    t5_parts = [
-        IdeaPart(name="Entrance", bars=4, scale=Scale(4, Mode.PHRYGIAN_DOMINANT), progression_type="constrained_hmm", progression_list=["Im:4.0"]),
-        IdeaPart(name="Horror", bars=8, scale=Scale(4, Mode.PHRYGIAN_DOMINANT), progression_type="constrained_hmm", progression_list=["Im:2.0", "bIIaug:2.0", "Idim:2.0"], track_density={"Timpani": 0.8, "Trombones": 0.7})
-    ]
-
-    # Track 6: Eternal Light (Ionian)
-    t6_parts = [
-        IdeaPart(name="Final_Hymn", bars=16, scale=Scale(7, Mode.MAJOR), progression_type="constrained_hmm", progression_list=["Imaj9:8.0", "IVmaj9:4.0", "Vadd9:4.0"])
-    ]
-
     album_configs = [
-        ("01_Gathering_Storm", t1_parts),
-        ("02_March_of_Khalsa", t2_parts),
-        ("03_Broken_Throne", t3_parts),
-        ("04_Sky_Warriors", t4_parts),
-        ("05_Crypt_Descent", t5_parts),
-        ("06_Eternal_Light", t6_parts),
+        {
+            "name": "01_Gathering_Storm",
+            "tempo": 68,
+            "ts": (4, 4),
+            "parts": [
+                IdeaPart(name="Mist", bars=4, scale=Scale(4, Mode.DORIAN), progression_type="constrained_hmm", progression_list=["Im9:4.0"], track_mute=["Horns", "Trombones", "Timpani"]),
+                IdeaPart(name="Thunder", bars=8, scale=Scale(4, Mode.DORIAN), progression_type="constrained_hmm", progression_list=["Im9:4.0", "bVIIadd9:4.0", "IVmaj9:4.0", "V7:4.0"], style="cinematic_epic")
+            ]
+        },
+        {
+            "name": "02_March_of_Khalsa",
+            "tempo": 104,
+            "ts": (5, 4), # Uneven meter for military tension
+            "parts": [
+                IdeaPart(name="Rhythm", bars=4, scale=Scale(4, Mode.ARABIC_SIKAH), progression_type="from_list", progression_list=["Im:20.0"], track_mute=["Violins", "Cellos", "Horns"]),
+                IdeaPart(name="March", bars=12, scale=Scale(4, Mode.ARABIC_SIKAH), progression_type="constrained_hmm", progression_list=["Im7:5.0", "bIIadd9:15.0", "V7alt:40.0"])
+            ]
+        },
+        {
+            "name": "03_Broken_Throne",
+            "tempo": 52, # Slow and mournful
+            "ts": (3, 4),
+            "parts": [
+                IdeaPart(name="Elegy", bars=16, scale=Scale(2, Mode.AEOLIAN), progression_type="constrained_hmm", progression_list=["Im9:9.0", "bVImaj9:9.0", "Idim:6.0"], track_density={"Violins": 0.3, "Cellos": 0.8}),
+            ]
+        },
+        {
+            "name": "04_Sky_Warriors",
+            "tempo": 128, # Fast and uplifting
+            "ts": (4, 4),
+            "parts": [
+                IdeaPart(name="Ascent", bars=24, scale=Scale(0, Mode.LYDIAN), progression_type="constrained_hmm", progression_list=["Imaj9:8.0", "IIadd9:8.0", "IVmaj9:8.0"])
+            ]
+        },
+        {
+            "name": "05_Crypt_Descent",
+            "tempo": 84,
+            "ts": (4, 4),
+            "parts": [
+                IdeaPart(name="Entrance", bars=4, scale=Scale(4, Mode.PHRYGIAN_DOMINANT), progression_type="constrained_hmm", progression_list=["Im:4.0"]),
+                IdeaPart(name="Horror", bars=12, scale=Scale(4, Mode.PHRYGIAN_DOMINANT), progression_type="constrained_hmm", progression_list=["Im:4.0", "bIIaug:4.0", "Idim:4.0"], track_density={"Timpani": 0.8, "Trombones": 0.7})
+            ]
+        },
+        {
+            "name": "06_Final_Confrontation",
+            "tempo": 145, # Battle peak!
+            "ts": (4, 4),
+            "parts": [
+                IdeaPart(name="Battle", bars=32, scale=Scale(2, Mode.HARMONIC_MINOR), progression_type="constrained_hmm", progression_list=["Im7:8.0", "bVImaj7:8.0", "V7alt:8.0", "Im9:8.0"])
+            ]
+        }
     ]
 
-    for name, parts in album_configs:
-        print(f"\n--- Composing: {name} ---")
+    for cfg in album_configs:
+        name = cfg["name"]
+        parts = cfg["parts"]
+        print(f"\n--- Composing: {name} ({cfg['ts'][0]}/{cfg['ts'][1]}, {cfg['tempo']} BPM) ---")
         
         tool_config = IdeaToolConfig(
             style="orchestral",
             parts=parts,
             tracks=orchestra,
             use_tension_curve=True,
-            use_voice_leading=True
+            use_voice_leading=True,
+            tempo=cfg["tempo"],
+            time_signature=cfg["ts"]
         )
 
         try:
@@ -104,10 +119,11 @@ def main():
             export_multitrack_midi(
                 tracks_data, 
                 str(filepath), 
-                bpm=parts[0].tempo or 100, # Fallback to 100
-                time_sig=parts[0].time_signature or (4, 4),
+                bpm=cfg["tempo"],
+                time_sig=cfg["ts"],
                 instruments=instruments_map
             )
+            print(f"    ✓ Exported {name}.mid")
             print(f"    ✓ Exported {name}.mid")
         except Exception as e:
             print(f"    ✗ Error in {name}: {e}")

@@ -17,8 +17,9 @@ engines/hmm_engine.py — Adapter for HMMHarmonizer to engine protocol.
 
 from __future__ import annotations
 
+from melodica.engines._adapter_utils import to_note_infos
 from melodica.harmonize.advanced import HMM3Harmonizer
-from melodica.types import ChordLabel, HarmonizationRequest, NoteInfo
+from melodica.types import ChordLabel, HarmonizationRequest
 
 
 class HMMEngine:
@@ -39,7 +40,7 @@ class HMMEngine:
         )
 
     def harmonize(self, req: HarmonizationRequest) -> list[ChordLabel]:
-        notes = _to_note_infos(req.melody)
+        notes = to_note_infos(req.melody)
         duration = max(n.start + n.duration for n in notes) if notes else 4.0
         chords = self._hmm.harmonize(notes, req.key, duration)
         if req.chord_rhythm != 4.0 and chords:
@@ -69,23 +70,3 @@ class HMMEngine:
             t += new_rhythm
             idx += 1
         return result
-
-
-def _to_note_infos(melody: list) -> list[NoteInfo]:
-    """Convert list[Note] to list[NoteInfo], handling both types safely."""
-    if not melody:
-        return []
-    result = []
-    for n in melody:
-        if isinstance(n, NoteInfo):
-            result.append(n)
-        else:
-            result.append(
-                NoteInfo(
-                    pitch=n.pitch,
-                    start=n.start,
-                    duration=n.duration,
-                    velocity=getattr(n, "velocity", 64),
-                )
-            )
-    return result

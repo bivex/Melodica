@@ -851,32 +851,56 @@ class IdeaTool:
             # From list or random — static degree-based
             else:
                 if part.progression_type == "from_list" and part.progression_list:
-                    degrees = random.choice(part.progression_list)
+                    # Support both list of lists (degrees) and list of strings (chord names)
+                    first_item = part.progression_list[0]
+                    if isinstance(first_item, str):
+                        # It's a list of chord names like ["Im7", "IVm7"]
+                        from melodica.types import parse_progression
+                        part_chords = parse_progression(" ".join(part.progression_list), scale)
+                    else:
+                        # It's a list of lists of degrees like [[1, 4, 5, 1]]
+                        degrees = random.choice(part.progression_list)
+                        full_degrees = []
+                        while len(full_degrees) < bars:
+                            full_degrees.extend(degrees)
+                        full_degrees = full_degrees[:bars]
+
+                        part_chords = []
+                        degs = scale.degrees()
+                        for i, deg in enumerate(full_degrees):
+                            root_pc = degs[(deg - 1) % len(degs)]
+                            quality = self._quality_for_degree(deg, style_profile)
+                            part_chords.append(
+                                ChordLabel(
+                                    root=root_pc,
+                                    quality=quality,
+                                    start=round(i * beats_per_bar, 6),
+                                    duration=round(beats_per_bar, 6),
+                                    degree=deg,
+                                )
+                            )
                 else:
                     pool = PROGRESSION_LIBRARY.get(part.style, PROGRESSION_LIBRARY["pop"])
                     degrees = random.choice(pool)
+                    full_degrees = []
+                    while len(full_degrees) < bars:
+                        full_degrees.extend(degrees)
+                    full_degrees = full_degrees[:bars]
 
-                # Expand degrees to fill bars
-                full_degrees = []
-                while len(full_degrees) < bars:
-                    full_degrees.extend(degrees)
-                full_degrees = full_degrees[:bars]
-
-                # Build ChordLabels
-                part_chords = []
-                degs = scale.degrees()
-                for i, deg in enumerate(full_degrees):
-                    root_pc = degs[(deg - 1) % len(degs)]
-                    quality = self._quality_for_degree(deg, style_profile)
-                    part_chords.append(
-                        ChordLabel(
-                            root=root_pc,
-                            quality=quality,
-                            start=round(i * beats_per_bar, 6),
-                            duration=round(beats_per_bar, 6),
-                            degree=deg,
+                    part_chords = []
+                    degs = scale.degrees()
+                    for i, deg in enumerate(full_degrees):
+                        root_pc = degs[(deg - 1) % len(degs)]
+                        quality = self._quality_for_degree(deg, style_profile)
+                        part_chords.append(
+                            ChordLabel(
+                                root=root_pc,
+                                quality=quality,
+                                start=round(i * beats_per_bar, 6),
+                                duration=round(beats_per_bar, 6),
+                                degree=deg,
+                            )
                         )
-                    )
 
             # Shift the start times
             for c in part_chords:

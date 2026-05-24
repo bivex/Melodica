@@ -12,7 +12,8 @@ Covers:
 import pytest
 
 from melodica.types import Note, NoteInfo, ChordLabel, HarmonizationRequest, Scale, Mode, Quality
-from melodica.engines.hmm_engine import HMMEngine, _to_note_infos
+from melodica.engines.hmm_engine import HMMEngine
+from melodica.engines._adapter_utils import to_note_infos as _to_note_infos
 
 
 C_MAJOR = Scale(root=0, mode=Mode.MAJOR)
