@@ -52,6 +52,14 @@ def main():
             "tempo": 58,
             "ts": (3, 4),
             "pillars": ["Im9:6.0", "bVImaj9:6.0", "bIIIadd9:6.0"]
+        },
+        {
+            "name": "04_Climax_of_Tandumi",
+            "scale": Scale(4, Mode.ARABIC_SIKAH), # E Sikah
+            "bars": 16,
+            "tempo": 110,
+            "ts": (4, 4),
+            "pillars": ["Im7:4.0"] # Just start with minor, let HMM build tension
         }
     ]
 
