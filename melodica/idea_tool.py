@@ -416,9 +416,12 @@ class IdeaTool:
             # Caller supplied a melody; harmonize it, then render other tracks
             seed = self.config.seed_melody or []
             bar_grid = BarGrid(numerator=self.config.time_signature[0], denominator=self.config.time_signature[1])
-            harmonizer = HMM3Harmonizer(bar_grid=bar_grid)
+            
+            # Use CoupledHMMHarmonizer for advanced tension-aware harmonization
+            from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
+            harmonizer = CoupledHMMHarmonizer(bar_grid=bar_grid)
             chords = (
-                harmonizer.harmonize(seed, self.config.scale, total_beats)
+                harmonizer.harmonize(seed, self.config.scale, total_beats, tension_curve=tension_curve)
                 if seed
                 else self._generate_progression(parts)
             )
@@ -773,9 +776,19 @@ class IdeaTool:
     # ------------------------------------------------------------------
 
     def _generate_progression(self, parts: list[IdeaPart]) -> list[ChordLabel]:
-        """Generate chord progression based on config parts."""
+        """Generate chord progression for all parts."""
         all_chords = []
-        offset_beats = 0.0
+        current_beat = 0.0
+
+        # Pre-generate tension curve if enabled
+        total_beats = sum(p.bars * p.time_signature[0] for p in parts)
+        tension_curve = None
+        if self.config.use_tension_curve:
+            tension_curve = TensionCurve(
+                total_beats=total_beats,
+                curve_type=self._style.tension_curve,
+            )
+
 
         for part in parts:
             scale = part.scale
@@ -805,7 +818,7 @@ class IdeaTool:
                     bar_grid=bar_grid,
                 )
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
-                part_chords = harmonizer.harmonize(contour, scale, part_beats)
+                part_chords = harmonizer.harmonize(contour, scale, part_beats, tension_curve=tension_curve)
 
             # Hybrid Coupled HMM (Guided by user constraints)
             elif part.progression_type == "constrained_hmm":
@@ -822,7 +835,7 @@ class IdeaTool:
                     bar_grid=bar_grid,
                 )
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
-                part_chords = harmonizer.harmonize(contour, scale, part_beats, constraints=constraints)
+                part_chords = harmonizer.harmonize(contour, scale, part_beats, constraints=constraints, tension_curve=tension_curve)
 
             # Rules-based harmonizer
             elif part.progression_type == "rules":
@@ -867,10 +880,10 @@ class IdeaTool:
 
             # Shift the start times
             for c in part_chords:
-                c.start += offset_beats
+                c.start += current_beat
 
             all_chords.extend(part_chords)
-            offset_beats += part_beats
+            current_beat += part_beats
 
         return all_chords
 

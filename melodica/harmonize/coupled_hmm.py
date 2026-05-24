@@ -174,7 +174,8 @@ class CoupledHMMHarmonizer:
         melody: list[NoteInfo],
         initial_scale: Scale,
         duration_beats: float,
-        constraints: list[ChordLabel] | None = None
+        constraints: list[ChordLabel] | None = None,
+        tension_curve: Any | None = None
     ) -> list[ChordLabel]:
         if not melody:
             return []
@@ -185,7 +186,7 @@ class CoupledHMMHarmonizer:
         T = len(observations)
 
         # 2. Layer 1: Notes -> Chords (108 states)
-        chord_path = self._viterbi_chords(observations, initial_scale, change_points, constraints)
+        chord_path = self._viterbi_chords(observations, initial_scale, change_points, constraints, tension_curve)
 
         # 3. Layer 2: Chords -> Keys (24 states)
         key_path = self._viterbi_keys(chord_path)
@@ -210,9 +211,10 @@ class CoupledHMMHarmonizer:
         obs: list[list[WeightedNote]], 
         scale: Scale,
         change_points: list[float],
-        constraints: list[ChordLabel] | None = None
+        constraints: list[ChordLabel] | None = None,
+        tension_curve: Any | None = None
     ) -> list[tuple[int, int]]:
-        """Find most likely chord sequence with optional hard constraints."""
+        """Find most likely chord sequence with optional hard constraints and tension bias."""
         n_s = N_TONES * N_TYPES  # 108
         T = len(obs)
         NEG_INF = -1e12 # Very large negative number
@@ -230,6 +232,11 @@ class CoupledHMMHarmonizer:
         dp = np.full((T, n_s), NEG_INF)
         backtrack = np.zeros((T, n_s), dtype=np.int32)
 
+        # Tension indices (for bias)
+        # 0: Maj, 1: Min, 2: Dim, 3: Aug, 8: Dom7, 11: Add9
+        STABLE_INDICES = {0, 1, 11}
+        UNSTABLE_INDICES = {2, 3, 8}
+
         # Init step
         for r in range(N_TONES):
             for k in range(N_TYPES):
@@ -239,6 +246,12 @@ class CoupledHMMHarmonizer:
                 # Apply tonic bias
                 if r == scale.root:
                     score += 2.0
+                
+                # Apply tension bias at T=0
+                if tension_curve:
+                    tau = tension_curve.tension_at(change_points[0])
+                    if k in UNSTABLE_INDICES: score += tau * 4.0
+                    if k in STABLE_INDICES: score += (1.0 - tau) * 4.0
                 
                 # Check for constraint at start (T=0)
                 if constraints:
@@ -257,6 +270,9 @@ class CoupledHMMHarmonizer:
             prev_dp = dp[t_step - 1]
             cp = change_points[t_step]
             
+            # Tension level at this point
+            tau = tension_curve.tension_at(cp) if tension_curve else 0.5
+
             # Find if there is a constraint for this time step
             target_chord = None
             if constraints:
@@ -266,7 +282,7 @@ class CoupledHMMHarmonizer:
                 for k_next in range(N_TYPES):
                     s_next = r_next * N_TYPES + k_next
                     
-                    # If this state doesn't match the constraint, skip it (kill the path)
+                    # If this state doesn't match the constraint, skip it
                     if target_chord:
                         t_idx = quality_to_idx.get(target_chord.quality)
                         if r_next != target_chord.root or k_next != t_idx:
@@ -276,6 +292,11 @@ class CoupledHMMHarmonizer:
                     best_score = NEG_INF
                     best_prev = 0
                     e = cur_emit[r_next, k_next]
+                    
+                    # Tension bias for entering this chord type
+                    t_bias = 0.0
+                    if k_next in UNSTABLE_INDICES: t_bias = tau * 4.0
+                    if k_next in STABLE_INDICES: t_bias = (1.0 - tau) * 4.0
                     
                     for r_prev in range(N_TONES):
                         interval = (r_next - r_prev) % N_TONES
@@ -291,7 +312,7 @@ class CoupledHMMHarmonizer:
                                 best_score = score
                                 best_prev = s_prev
                                 
-                    dp[t_step, s_next] = e + best_score
+                    dp[t_step, s_next] = e + t_bias + best_score
                     backtrack[t_step, s_next] = best_prev
 
         # Backtrack
