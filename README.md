@@ -109,7 +109,7 @@ TrackConfig(name="Darkness_Pad", ..., octave_shift=-2)     # → sub
 ```python
 # bow_speed directly controls stroke count (lower = more notes):
 TremoloStringsGenerator(bow_speed=0.0625)  # ~64 strokes per 4 beats
-TremoloStringsGenerator(bow_speed=0.15)    # ~27 strokes (half the notes)
+TremoloStringsGenerator(bow_speed=0.20)    # ~20 strokes (3× fewer notes)
 ```
 
 **5. Regenerate and re-analyze:**
@@ -122,6 +122,137 @@ python3 scripts/midi_analyzer.py output/album_xxx/
 Verify: register distribution is spread, register masking dropped, no overlap pairs above 50%.
 
 Cycle: **analyze → diagnose → `octave_shift` + generator params → regenerate → analyze**.
+
+---
+
+### Case Study: Sikhs in the Ruins of Tandumi
+
+[`scripts/album_tandumi_ruins.py`](scripts/album_tandumi_ruins.py) — 5-track epic album in Arabic Sikah scale (E½♭),
+Punjabi warrior energy over orchestral ruins atmosphere.
+Below is the full, unedited balancing cycle we ran during production.
+
+#### Iteration 1 — First run, first analysis
+
+```bash
+python3 scripts/album_tandumi_ruins.py
+python3 scripts/midi_analyzer.py output/album_tandumi_ruins/ --no-music21
+```
+
+**Album-wide FREQUENCY BALANCE VERDICT:**
+
+```
+LOW  (bass foundation)   13.3%   target 15–35%  🟡 1.7% short
+MID  (body / harmony)    77.4%   target 35–60%  🟡 17.4% over target
+HIGH (air / presence)     9.2%   target 15–35%  🟡 5.8% short
+Overall balance: ★★☆☆☆  NEEDS WORK
+```
+
+**Key findings from Suggestions:**
+
+```
+Bass_Foundation: max velocity 44 — raise velocity scaling
+Tremolo_Rise: 4 362 notes — reduce density to avoid clutter
+Tremolo_Rise: 2 734 blurry notes (<30ms) — increase durations
+Glory_Horns  ↔ Light_Drone:        100% register overlap — separate ranges
+Bass_Foundation ↔ Glory_Horns:      93% register overlap — separate ranges
+Bass_Foundation ↔ Light_Drone:      86% register overlap — separate ranges
+```
+
+**What we fixed — round 1:**
+
+| Problem | Fix | Parameter changed |
+|---------|-----|-------------------|
+| LOW deficit | `Battle_Bass` and `Chaos_Taiko` moved to sub-bass | `octave_shift=-2` (was -1) |
+| HIGH deficit | `Warrior_Melody`, `Sitar_Counter`, `Final_Sitar`, `Victory_Bells` pushed up | `octave_shift=2` (was 1) |
+| Bass/Horns 93% overlap | `Glory_Horns` lifted one octave | `octave_shift=0` (was -1) |
+| Horns/Drone 100% overlap | `Light_Drone` dropped to sub-bass | `octave_shift=-2` (was -1) |
+| Bass too quiet | `Deep_Rumble` velocity raised | `velocity_level=0.85` (was 0.6) |
+| Blurry tremolo | `Tremolo_Rise` bow speed slowed | `bow_speed=0.08` (was 0.18) |
+
+#### Iteration 2 — Tremolo_Rise is still the bottleneck
+
+After round 1 fixes, tracks 01 and 02 immediately scored **EXCELLENT**,
+but track 05 (Undying Light) got *worse* — jumped to **CRITICAL**:
+
+```
+LOW   6.2%   🔴 critically low
+MID  91.8%   🔴 critically overloaded
+HIGH  2.0%   🔴 critically low
+Tremolo_Rise: 9 921 notes — reduce density to avoid clutter
+Overall: ☆☆☆☆☆  CRITICAL
+```
+
+**Root cause discovered:** `TremoloStringsGenerator` ignores `TrackConfig.density`.
+Its note count is determined entirely by `bow_speed` inside the generator:
+
+```python
+# From melodica/generators/tremolo_strings.py:
+total_strokes = max(1, int(total_dur / self.bow_speed))
+```
+
+At `bow_speed=0.08` over a 180-second track:
+`180 / 0.08 = 2 250 strokes × 4–5 chord notes = ~9 900 notes`.
+
+Cutting `TrackConfig.density` from `0.65` to `0.12` had **zero effect**
+because the generator doesn't read that field for stroke count.
+
+**Fix — round 2:**
+
+```python
+# Before (9 921 notes):
+TremoloStringsGenerator(variant="chord", bow_speed=0.08), density=0.40
+
+# After (1 368 notes):
+TremoloStringsGenerator(variant="single", bow_speed=0.2), density=0.12, octave_shift=-1
+```
+
+Two changes at once:
+- `variant="single"` — plays one note per stroke instead of a full chord voicing
+- `bow_speed=0.2` — maximum allowed value, cuts strokes from 2 250 → 900
+- `octave_shift=-1` — moves the tremolo mass from mid-high into mid-low,
+  freeing space for choir and horns above
+
+#### Final results after 3 iterations
+
+| Track | LOW | MID | HIGH | Rating |
+|-------|-----|-----|------|--------|
+| 01 The Ruins Breathe | 20% | 49% | 31% | ★★★★★ **EXCELLENT** |
+| 02 Warriors of the Khalsa | 30% | 50% | 20% | ★★★★★ **EXCELLENT** |
+| 03 The Temple Falls | 21% | 66% | 14% | ★★★☆☆ **ACCEPTABLE** |
+| 04 Requiem of the Fallen | 10% | 50% | 40% | ★★★☆☆ **ACCEPTABLE** |
+| 05 Undying Light | 29% | 63% | 8% | ★★★☆☆ **ACCEPTABLE** |
+
+Tracks 03–05 remain slightly outside the ideal window — this is expected
+and intentional: an action track (03) naturally concentrates energy in the mid register,
+an elegy (04) leans high, a climax (05) pushes bass. These are compositional
+decisions, not technical errors. The **CRITICAL → ACCEPTABLE** jump on track 05
+was achieved by fixing a single generator parameter (`bow_speed`).
+
+#### Key lessons
+
+1. **`TrackConfig.density` ≠ generator note count.**
+   Always check generator-specific parameters (`bow_speed`, `note_density`,
+   `voice_count`) when the Suggestions section reports a track with thousands of notes.
+   Setting `density=0.0` on TrackConfig will not silence a generator that
+   calculates its output from duration alone.
+
+2. **`octave_shift` is your primary register tool.**
+   Moving a track ±1 octave shifts its entire note population into a new band
+   without changing its musical content or harmonic role.
+
+3. **Analyze per-file, not just album-wide.**
+   The album-wide verdict can look reasonable while one track is completely broken.
+   The `midi_analyzer.py` prints a verdict for every file in the directory — read each one.
+
+4. **One iteration is rarely enough.**
+   Plan for at least 2–3 analyze → fix → regenerate cycles.
+   Each round reveals second-order effects (e.g., fixing overlap in one track
+   exposes a different imbalance in another).
+
+5. **The balance targets are genre-adjustable.**
+   The defaults in `midi_analyzer.py` (`_BALANCE_TARGETS`) assume cinematic/orchestral.
+   For electronic music, bass-heavy genres, or solo piano you may want to tighten
+   or widen the LOW/MID/HIGH windows.
 
 ## Engines
 

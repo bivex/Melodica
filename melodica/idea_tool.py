@@ -303,8 +303,8 @@ class IdeaToolConfig:
     doctor_harmonic: bool = True
 
     # Mixing & Mastering
-    use_mixing: bool = False
-    use_mastering: bool = False
+    use_mixing: bool = True
+    use_mastering: bool = True
     target_lufs: float = -14.0
 
     # For "harmonize_melody" workflow: caller-supplied melody to harmonize
