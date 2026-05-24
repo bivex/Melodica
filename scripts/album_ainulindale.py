@@ -80,12 +80,12 @@ def generate_ainulindale():
         # Full strings sustain. Horn nobility. Harp cascades.
         # Choir grows from pp to mf. Organ-like pad.
         "II_The_Great_Music": [
-            TrackConfig(name="Ainur_Violin",       generator=ViolinGenerator(articulation="legato", vibrato=True), instrument="violin", density=0.5, mpe=True),
-            TrackConfig(name="Ainur_Oboe",          generator=OboeGenerator(articulation="legato"), instrument="oboe", density=0.45, mpe=True),
-            TrackConfig(name="Harmony_Strings",     generator=StringsEnsembleGenerator(section_size="full", articulation="sustained", dynamic_curve="crescendo", divisi=4), instrument="strings", density=0.5),
-            TrackConfig(name="Harp_of_Light",       generator=HarpGenerator(), instrument="harp", density=0.4),
-            TrackConfig(name="Noble_Horn",          generator=FrenchHornGenerator(articulation="sustained", dynamic_curve="swell"), instrument="french_horn", density=0.3),
-            TrackConfig(name="Growing_Choir",       generator=ChoirAahsGenerator(voice_count=4, dynamics="mf", syllable="aah", vibrato=0.3), instrument="choir", density=0.35),
+            TrackConfig(name="Ainur_Violin",       generator=ViolinGenerator(articulation="legato", vibrato=True), instrument="violin", density=0.5, octave_shift=1, mpe=True),
+            TrackConfig(name="Ainur_Oboe",          generator=OboeGenerator(articulation="legato"), instrument="oboe", density=0.45, octave_shift=1, mpe=True),
+            TrackConfig(name="Harmony_Strings",     generator=StringsEnsembleGenerator(section_size="full", articulation="sustained", dynamic_curve="crescendo", divisi=4), instrument="strings", density=0.4),
+            TrackConfig(name="Harp_of_Light",       generator=HarpGenerator(), instrument="harp", density=0.3, octave_shift=1),
+            TrackConfig(name="Noble_Horn",          generator=FrenchHornGenerator(articulation="sustained", dynamic_curve="swell"), instrument="french_horn", density=0.3, octave_shift=-1),
+            TrackConfig(name="Growing_Choir",       generator=ChoirAahsGenerator(voice_count=4, dynamics="mf", syllable="aah", vibrato=0.3), instrument="choir", density=0.25),
         ],
 
         # ── III: Discord of Melkor — darkness enters the music ────────────
@@ -93,12 +93,12 @@ def generate_ainulindale():
         # Tremolo strings = chaos. Tension clusters. Brass stabs.
         # Percussion like thunder. Dark pad underneath. Horns of defiance.
         "III_Discord_of_Melkor": [
-            TrackConfig(name="Melkors_Voice",      generator=TromboneGenerator(articulation="staccato", register=1, bass_voice=True), instrument="trombone", density=0.55),
-            TrackConfig(name="Chaos_Tremolo",       generator=TremoloStringsGenerator(variant="chord", dynamic_swell=True, attack_time=0.2, decay_time=0.3, bow_speed=0.0625), instrument="tremolo_strings", density=0.7),
-            TrackConfig(name="Thunder_Perucssion",  generator=ElectronicDrumsGenerator(kit="ethnic"), instrument="taiko", density=0.75),
-            TrackConfig(name="Darkness_Pad",        generator=DarkPadGenerator(mode="minor_pad", chord_dur=4.0), instrument="dark_pad", density=0.8, octave_shift=-1),
-            TrackConfig(name="Tension_Cluster",     generator=TensionGenerator(mode="semitone_cluster", note_duration=2.0), instrument="synth_fx", density=0.4),
-            TrackConfig(name="Defiant_Brass",       generator=FrenchHornGenerator(articulation="staccato"), instrument="french_horn", density=0.4),
+            TrackConfig(name="Melkors_Voice",      generator=TromboneGenerator(articulation="staccato", register=1, bass_voice=True), instrument="trombone", density=0.45, octave_shift=-1),
+            TrackConfig(name="Chaos_Tremolo",       generator=TremoloStringsGenerator(variant="chord", dynamic_swell=True, attack_time=0.3, decay_time=0.4, bow_speed=0.15), instrument="tremolo_strings", density=0.35),
+            TrackConfig(name="Thunder_Perucssion",  generator=ElectronicDrumsGenerator(kit="ethnic"), instrument="taiko", density=0.6),
+            TrackConfig(name="Darkness_Pad",        generator=DarkPadGenerator(mode="minor_pad", chord_dur=4.0), instrument="dark_pad", density=0.6, octave_shift=-2),
+            TrackConfig(name="Tension_Cluster",     generator=TensionGenerator(mode="semitone_cluster", note_duration=2.0), instrument="synth_fx", density=0.3, octave_shift=1),
+            TrackConfig(name="Defiant_Brass",       generator=FrenchHornGenerator(articulation="staccato"), instrument="french_horn", density=0.3, octave_shift=1),
         ],
 
         # ── IV: The Three Themes — Iluvatar's quiet, growing response ────
