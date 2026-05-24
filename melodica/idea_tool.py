@@ -203,7 +203,8 @@ ARRANGEMENT_PATTERNS: dict[str, list[str]] = {
 @dataclass(frozen=True)
 class PhraseSlot:
     """A single segment in a PhraseSchedule — play, rest, or ghost."""
-    kind: str = "play"    # "play" | "rest" | "ghost"
+
+    kind: str = "play"  # "play" | "rest" | "ghost"
     bars: int = 4
     label: str = "A"
 
@@ -211,6 +212,7 @@ class PhraseSlot:
 @dataclass
 class PhraseSchedule:
     """Ordered list of PhraseSlots describing when a track plays within a part."""
+
     slots: list[PhraseSlot] = field(default_factory=list)
     loop: bool = True
 
@@ -420,6 +422,7 @@ class IdeaTool:
 
         # Initialize phrase pool for this generation run
         from melodica.composer.structure_parser import PhrasePool
+
         self._phrase_pool = PhrasePool()
 
         # Remove stale contexts and cached generators for tracks no longer in config
@@ -441,13 +444,18 @@ class IdeaTool:
         if self.config.workflow == "harmonize_melody":
             # Caller supplied a melody; harmonize it, then render other tracks
             seed = self.config.seed_melody or []
-            bar_grid = BarGrid(numerator=self.config.time_signature[0], denominator=self.config.time_signature[1])
-            
+            bar_grid = BarGrid(
+                numerator=self.config.time_signature[0], denominator=self.config.time_signature[1]
+            )
+
             # Use CoupledHMMHarmonizer for advanced tension-aware harmonization
             from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
+
             harmonizer = CoupledHMMHarmonizer(bar_grid=bar_grid)
             chords = (
-                harmonizer.harmonize(seed, self.config.scale, total_beats, tension_curve=tension_curve)
+                harmonizer.harmonize(
+                    seed, self.config.scale, total_beats, tension_curve=tension_curve
+                )
                 if seed
                 else self._generate_progression(parts)
             )
@@ -528,7 +536,9 @@ class IdeaTool:
                 all_melody_notes.extend(mel_notes)
 
             # Step 2: harmonize the combined melody output
-            bar_grid = BarGrid(numerator=self.config.time_signature[0], denominator=self.config.time_signature[1])
+            bar_grid = BarGrid(
+                numerator=self.config.time_signature[0], denominator=self.config.time_signature[1]
+            )
             harmonizer = HMM3Harmonizer(bar_grid=bar_grid)
             chords = harmonizer.harmonize(
                 sorted(all_melody_notes, key=lambda n: n.start),
@@ -677,8 +687,11 @@ class IdeaTool:
                 mood_profile = _MOOD_PROFILES[mood]
                 result = _shape_dynamics(result, mood_profile)
 
-                # Polyphony limiting: cap simultaneous voices at 16
-                result = _polyphony_limit(result, profiles, max_voices=16)
+                # Polyphony limiting: cap simultaneous voices (32 for cinematic, 16 for others)
+                max_poly = (
+                    32 if self.config.style in ("cinematic", "cinematic_hybrid", "epic") else 16
+                )
+                result = _polyphony_limit(result, profiles, max_voices=max_poly)
 
                 # CC11 expression ramps for late-entering instruments
                 entry_cc = _generate_entry_fades(result, profiles, total_dur)
@@ -815,7 +828,6 @@ class IdeaTool:
                 curve_type=self._style.tension_curve,
             )
 
-
         for part in parts:
             scale = part.scale
             beats_per_bar = part.time_signature[0]
@@ -839,18 +851,21 @@ class IdeaTool:
             # Coupled HMM (Tymoczko/Newman First Principles)
             elif part.progression_type == "coupled_hmm":
                 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
+
                 harmonizer = CoupledHMMHarmonizer(
                     chord_change=self.config.hmm3_chord_change,
                     bar_grid=bar_grid,
                 )
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
-                part_chords = harmonizer.harmonize(contour, scale, part_beats, tension_curve=tension_curve)
+                part_chords = harmonizer.harmonize(
+                    contour, scale, part_beats, tension_curve=tension_curve
+                )
 
             # Hybrid Coupled HMM (Guided by user constraints)
             elif part.progression_type == "constrained_hmm":
                 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
                 from melodica.types import parse_progression
-                
+
                 constraints = []
                 if part.progression_list:
                     prog_str = " ".join(part.progression_list)
@@ -861,7 +876,9 @@ class IdeaTool:
                     bar_grid=bar_grid,
                 )
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
-                part_chords = harmonizer.harmonize(contour, scale, part_beats, constraints=constraints, tension_curve=tension_curve)
+                part_chords = harmonizer.harmonize(
+                    contour, scale, part_beats, constraints=constraints, tension_curve=tension_curve
+                )
 
             # Rules-based harmonizer
             elif part.progression_type == "rules":
@@ -882,6 +899,7 @@ class IdeaTool:
                     if isinstance(first_item, str):
                         # It's a list of chord names like ["Im7", "IVm7"]
                         from melodica.types import parse_progression
+
                         part_chords = parse_progression(" ".join(part.progression_list), scale)
                     else:
                         # It's a list of lists of degrees like [[1, 4, 5, 1]]
@@ -1081,7 +1099,10 @@ class IdeaTool:
                 else:
                     base_section_bars = max(1, part.bars // n_sections)
                     remainder_bars = part.bars - base_section_bars * n_sections
-                    section_bar_counts = [base_section_bars + (1 if i < remainder_bars else 0) for i in range(n_sections)]
+                    section_bar_counts = [
+                        base_section_bars + (1 if i < remainder_bars else 0)
+                        for i in range(n_sections)
+                    ]
                 ctx = self._track_contexts.get(cfg.name, RenderContext())
 
                 section_offset_beats = 0.0
@@ -1135,7 +1156,9 @@ class IdeaTool:
                     random.seed()
 
                     # Apply Rhythm Processing (Rotation, Dotted, Rests, Swing)
-                    section_notes = self._apply_rhythm_processing(section_notes, cfg, section_length)
+                    section_notes = self._apply_rhythm_processing(
+                        section_notes, cfg, section_length
+                    )
 
                     # Offset to global time (including the part's offset)
                     for n in section_notes:
@@ -1355,7 +1378,9 @@ class IdeaTool:
         """
         import hashlib
         from melodica.composer.structure_parser import (
-            parse_slot_label, PhraseTransform, apply_phrase_transform as _apply_transform,
+            parse_slot_label,
+            PhraseTransform,
+            apply_phrase_transform as _apply_transform,
         )
 
         schedule = cfg.phrase_schedule
@@ -1419,9 +1444,7 @@ class IdeaTool:
             )
 
             # Find chords for this section
-            section_chords = [
-                c for c in chords if c.start < section_end and c.end > section_start
-            ]
+            section_chords = [c for c in chords if c.start < section_end and c.end > section_start]
             if not section_chords:
                 before = [c for c in chords if c.start < section_end]
                 section_chords = [before[-1]] if before else (chords[:1] if chords else [])
@@ -1445,7 +1468,9 @@ class IdeaTool:
                     section_notes = _apply_transform(stored, transform)
                     # Re-time notes to fit this slot's duration
                     if section_notes:
-                        stored_dur = max(n.start + n.duration for n in stored) - min(n.start for n in stored)
+                        stored_dur = max(n.start + n.duration for n in stored) - min(
+                            n.start for n in stored
+                        )
                         target_dur = slot_beats
                         if stored_dur > 0 and abs(stored_dur - target_dur) > 0.01:
                             ratio = target_dur / stored_dur
@@ -1702,5 +1727,6 @@ def structure_to_schedule(
         >>> # Creates 4 slots: A, A:var, B, B
     """
     from melodica.composer.structure_parser import structure_to_slots
+
     slots = structure_to_slots(structure, bars_per_segment)
     return PhraseSchedule(slots=slots, loop=loop)
