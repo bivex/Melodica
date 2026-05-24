@@ -60,6 +60,7 @@ from melodica.orchestrator import OrchestralLayer, Orchestrator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
+from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
 
 
 # ---------------------------------------------------------------------------
@@ -81,16 +82,31 @@ D_MAJOR = Scale(root=2, mode=Mode.IONIAN)
 # Utilities
 # ---------------------------------------------------------------------------
 
+_harmonizer = CoupledHMMHarmonizer()
+
+
 def _build_chords(progression: str, duration: float, key: Scale) -> list[ChordLabel]:
+    """Generate chords via CoupledHMMHarmonizer from a seed melody."""
+    # Build a simple seed melody from the scale degrees in the progression
+    seed_melody = _make_seed_melody(progression, duration, key)
+    return _harmonizer.harmonize(seed_melody, key, duration)
+
+
+def _make_seed_melody(progression: str, duration: float, key: Scale) -> list[NoteInfo]:
+    """Create a seed melody from roman numeral degrees for the HMM to harmonize."""
     parts = progression.split()
     beats_per = duration / len(parts)
-    chords = []
+    melody = []
     for i, p in enumerate(parts):
         chord = key.parse_roman(p)
-        chord.start = i * beats_per
-        chord.duration = beats_per
-        chords.append(chord)
-    return chords
+        pitch = chord.root + 60
+        melody.append(NoteInfo(
+            pitch=pitch,
+            start=i * beats_per,
+            duration=beats_per * 0.8,
+            velocity=70,
+        ))
+    return melody
 
 
 def _clamp(notes: list[NoteInfo], lo: int = 1, hi: int = 127) -> list[NoteInfo]:
