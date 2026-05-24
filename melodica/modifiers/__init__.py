@@ -62,6 +62,7 @@ from melodica.modifiers.rhythmic import (
     RhythmicDensityModifier,
     PolyrhythmLayerModifier,
     AdaptiveSwingModifier,
+    MetricAccentModifier,
 )
 
 from melodica.modifiers.harmonic import (
@@ -76,6 +77,7 @@ from melodica.modifiers.dynamic import (
     CrescendoModifier,
     SectionIntensityModifier,
     VelocityCurveModifier,
+    ExpressionLFOModifier,
 )
 
 from melodica.modifiers.voice_leading import VoiceLeadingModifier
@@ -94,6 +96,8 @@ from melodica.modifiers.variations import (
 
 from melodica.modifiers.variations_articulation import (
     SlideLegatoModifier,
+    ArticulationByLengthModifier,
+    OverlapSafetyModifier,
 )
 
 from melodica.modifiers.voicings import (
@@ -101,6 +105,7 @@ from melodica.modifiers.voicings import (
     TopNoteVoicingModifier,
     InversionModifier,
     ChordVoicingSpreadModifier,
+    SmartDivisiModifier,
 )
 
 from melodica.modifiers.rc_variations import (
@@ -139,6 +144,7 @@ __all__ = [
     "RhythmicDensityModifier",
     "PolyrhythmLayerModifier",
     "AdaptiveSwingModifier",
+    "MetricAccentModifier",
     "NoteDoublerModifier",
     "TransposeModifier",
     "LimitNoteRangeModifier",
@@ -147,6 +153,7 @@ __all__ = [
     "CrescendoModifier",
     "SectionIntensityModifier",
     "VelocityCurveModifier",
+    "ExpressionLFOModifier",
     "VoiceLeadingModifier",
     "GrooveModifier",
     "PolishedOctaveModifier",
@@ -158,10 +165,13 @@ __all__ = [
     "MIDIEchoModifier",
     "ArpeggiateModifier",
     "SlideLegatoModifier",
+    "ArticulationByLengthModifier",
+    "OverlapSafetyModifier",
     "DropVoicingModifier",
     "TopNoteVoicingModifier",
     "InversionModifier",
     "ChordVoicingSpreadModifier",
+    "SmartDivisiModifier",
     "AddChordNotesModifier",
     "AddIntervalModifier",
     "DelayNotesModifier",

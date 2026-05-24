@@ -202,3 +202,53 @@ class VelocityCurveModifier(PhraseModifier):
                 )
             )
         return result
+
+
+@dataclass
+class ExpressionLFOModifier(PhraseModifier):
+    """
+    Applies an LFO (Low Frequency Oscillator) to MIDI Expression (CC11) or Modulation (CC1).
+    The LFO amplitude can ramp up over the duration of each note (vibrato effect).
+    """
+
+    cc_num: int = 11
+    frequency: float = 2.0  # Cycles per beat
+    amplitude: int = 20
+    ramp_up_beats: float = 0.5  # Time for LFO to reach full amplitude per note
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        import math
+
+        result = []
+        for n in notes:
+            # We add LFO steps to the note's expression dictionary
+            # Standard resolution: every 0.1 beats
+            steps = max(2, int(n.duration / 0.1))
+            lfo_events = []
+            
+            for step in range(steps + 1):
+                t_rel = (step / steps) * n.duration
+                # Ramp up the LFO amplitude
+                current_ramp = min(1.0, t_rel / self.ramp_up_beats) if self.ramp_up_beats > 0 else 1.0
+                
+                # Calculate LFO value (centered around 80 by default for expression)
+                phase = 2.0 * math.pi * self.frequency * t_rel
+                lfo_val = 80 + int(math.sin(phase) * self.amplitude * current_ramp)
+                lfo_val = max(0, min(127, lfo_val))
+                
+                lfo_events.append((round(t_rel, 6), lfo_val))
+            
+            # Merge with existing expression if any
+            new_expr = dict(n.expression)
+            new_expr[self.cc_num] = lfo_events
+            
+            result.append(NoteInfo(
+                pitch=n.pitch,
+                start=n.start,
+                duration=n.duration,
+                velocity=n.velocity,
+                absolute=n.absolute,
+                articulation=n.articulation,
+                expression=new_expr
+            ))
+        return result

@@ -294,3 +294,52 @@ class AdaptiveSwingModifier:
                 )
             )
         return result
+
+
+@dataclass
+class MetricAccentModifier(PhraseModifier):
+    """
+    Applies velocity accents based on metric weight (strong vs weak beats).
+    E.g., in 4/4: Beat 1 is strongest, Beat 3 is strong, 2 and 4 are weak, offbeats are weakest.
+    """
+
+    strength: float = 0.2  # 0.0 to 1.0 intensity of the effect
+    time_sig: tuple[int, int] = (4, 4)
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        num, den = self.time_sig
+        
+        result = []
+        for n in notes:
+            # Position within the measure (0.0 to num)
+            pos = n.start % num
+            
+            # Metric weight logic (0.0 to 1.0)
+            weight = 0.5  # base
+            
+            if pos < 0.05: # Downbeat (1)
+                weight = 1.0
+            elif abs(pos - num / 2.0) < 0.05: # Mid-point (3 in 4/4)
+                weight = 0.85
+            elif abs(pos % 1.0) < 0.05: # Other quarter beats (2, 4)
+                weight = 0.7
+            elif abs(pos % 0.5) < 0.05: # 8th notes
+                weight = 0.5
+            else: # 16th or deeper
+                weight = 0.3
+                
+            # Scale velocity based on weight and strength
+            factor = 1.0 + (weight - 0.7) * self.strength
+            new_vel = int(n.velocity * factor)
+            new_vel = max(1, min(127, new_vel))
+            
+            result.append(NoteInfo(
+                pitch=n.pitch,
+                start=n.start,
+                duration=n.duration,
+                velocity=new_vel,
+                absolute=n.absolute,
+                articulation=n.articulation,
+                expression=dict(n.expression)
+            ))
+        return result

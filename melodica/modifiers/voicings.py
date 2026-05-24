@@ -113,7 +113,6 @@ class InversionModifier:
             result.extend(g)
         return result
 
-
 @dataclass
 class ChordVoicingSpreadModifier:
     """
@@ -150,3 +149,38 @@ class ChordVoicingSpreadModifier:
 
             result.extend(g)
         return result
+
+
+@dataclass
+class SmartDivisiModifier(PhraseModifier):
+    """
+    Extracts a specific voice from polyphonic chords for orchestral divisi.
+    voice_index: 0 = highest, 1 = second highest, etc.
+    If 'from_bottom' is True: 0 = lowest, 1 = second lowest, etc.
+    """
+
+    voice_index: int = 0
+    from_bottom: bool = False
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        # Group notes by start time
+        groups = {}
+        for n in notes:
+            t = round(n.start, 4)
+            groups.setdefault(t, []).append(n)
+
+        result = []
+        for t, g in sorted(groups.items()):
+            if not g:
+                continue
+            # Sort by pitch (Top to Bottom by default)
+            g.sort(key=lambda x: x.pitch, reverse=not self.from_bottom)
+            
+            # Select the voice if it exists
+            if self.voice_index < len(g):
+                result.append(g[self.voice_index])
+            else:
+                # If requested index is out of bounds, take the nearest available voice
+                result.append(g[-1])
+
+        return sorted(result, key=lambda x: x.start)

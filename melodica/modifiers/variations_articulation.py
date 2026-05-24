@@ -17,12 +17,8 @@ variations_articulation.py
 
 from __future__ import annotations
 
-from __future__ import annotations
-
 import random
 from dataclasses import dataclass
-from melodica.types import NoteInfo
-from melodica.modifiers import ModifierContext
 from melodica.types import NoteInfo
 from melodica.modifiers import ModifierContext
 
@@ -190,7 +186,6 @@ class ArpeggiateModifier:
             n.start += i * self.offset
         return sorted_notes
 
-
 @dataclass
 class SlideLegatoModifier:
     """
@@ -244,3 +239,56 @@ class SlideLegatoModifier:
                 n1.expression["pitch_bend"] = pb_events
 
         return sorted_notes
+
+
+@dataclass
+class ArticulationByLengthModifier(PhraseModifier):
+    """
+    Automatically sets articulation based on note duration.
+    E.g., notes shorter than 0.25 beats become 'staccato'.
+    """
+
+    short_threshold: float = 0.25
+    short_articulation: str = "staccato"
+    long_articulation: str = "sustain"
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        result = []
+        for n in notes:
+            art = self.short_articulation if n.duration <= self.short_threshold else self.long_articulation
+            result.append(NoteInfo(
+                pitch=n.pitch,
+                start=n.start,
+                duration=n.duration,
+                velocity=n.velocity,
+                absolute=n.absolute,
+                articulation=art,
+                expression=dict(n.expression)
+            ))
+        return result
+
+
+@dataclass
+class OverlapSafetyModifier(PhraseModifier):
+    """
+    Ensures a small gap between consecutive notes of the same pitch
+    to prevent VST re-triggering issues.
+    """
+
+    gap_beats: float = 0.02
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        if not notes:
+            return []
+        
+        sorted_notes = sorted(notes, key=lambda x: (x.pitch, x.start))
+        for i in range(len(sorted_notes) - 1):
+            n1 = sorted_notes[i]
+            n2 = sorted_notes[i + 1]
+
+            if n1.pitch == n2.pitch:
+                # If they overlap or are too close
+                if n1.start + n1.duration > n2.start - self.gap_beats:
+                    n1.duration = max(0.01, n2.start - n1.start - self.gap_beats)
+
+        return sorted(sorted_notes, key=lambda x: x.start)
