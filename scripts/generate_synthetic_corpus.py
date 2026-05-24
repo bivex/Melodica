@@ -172,8 +172,8 @@ def main():
         triads = build_mode_triads(intervals)
         scale_pcs = [round(iv) % 12 for iv in intervals]
 
-        # Generate 8 songs per mode
-        n_songs = 8
+        # Generate 30 songs per mode
+        n_songs = 30
         for song_i in range(n_songs):
             name = f"synth_{mode.value}_{song_i:03d}"
             bars = random.choice([8, 12, 16])
