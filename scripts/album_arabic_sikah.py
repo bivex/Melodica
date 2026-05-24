@@ -64,7 +64,7 @@ def generate_arabic_sikah():
         ],
         "02_Beauty_in_Strands": [
             TrackConfig(name="Harp_Arpeggio", generator=ArpeggiatorGenerator(pattern="up", note_duration=0.5), instrument="harp", density=0.7),
-            TrackConfig(name="Kanun_Trill", generator=EthnicWorldGenerator(instrument="koto"), instrument="koto", density=0.5, mpe=True),
+            TrackConfig(name="Kanun_Trill", generator=EthnicPluckedGenerator(instrument="koto"), instrument="koto", density=0.5, mpe=True),
             TrackConfig(name="Clarinet_Melody", generator=MelodyGenerator(phrase_length=8.0), instrument="clarinet", density=0.5, mpe=True),
             TrackConfig(name="Viola_Pad", generator=ViolaGenerator(articulation="sustained"), instrument="viola", density=0.4),
             TrackConfig(name="Gentle_Perc", generator=ElectronicDrumsGenerator(kit="ethnic"), instrument="steel_drums", density=0.3),
