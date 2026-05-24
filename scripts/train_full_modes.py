@@ -5,7 +5,7 @@
 """
 scripts/train_full_modes.py — Train Coupled HMM on synthetic corpus (all 78 modes).
 Uses Metal GPU acceleration via PyTorch.
-Expands from 3 chord types to 6 (Major, Minor, Dim, Aug, sus2, sus4).
+Vectorized Baum-Welch to maximize MPS throughput.
 """
 
 import torch
@@ -71,48 +71,37 @@ def main():
         print(f"    Bach: {len(bach_songs)} songs")
 
     all_songs = synth_songs
-    # Optionally blend with Bach for Western foundation:
-    # all_songs = synth_songs + bach_songs
     all_songs = [s.to(device) for s in all_songs]
     print(f"  Total: {len(all_songs)} songs")
 
     # Initialize parameters
-    # pnote[12, N_TYPES]: P(pitch class | chord type)
     pnote = torch.rand(N_TONES, N_TYPES, device=device) * 0.5 + 0.1
 
     # Seed with music-theoretic priors
-    # Type 0: Major — strong root, M3, P5
     pnote[0, 0] = 0.95   # root
     pnote[4, 0] = 0.85   # major 3rd
     pnote[7, 0] = 0.90   # perfect 5th
 
-    # Type 1: Minor — strong root, m3, P5
     pnote[0, 1] = 0.95
     pnote[3, 1] = 0.85
     pnote[7, 1] = 0.90
 
-    # Type 2: Diminished — root, m3, tritone
     pnote[0, 2] = 0.90
     pnote[3, 2] = 0.85
     pnote[6, 2] = 0.80
 
-    # Type 3: Augmented — root, M3, aug5
     pnote[0, 3] = 0.90
     pnote[4, 3] = 0.85
     pnote[8, 3] = 0.80
 
-    # Type 4: sus2 — root, M2, P5
     pnote[0, 4] = 0.90
     pnote[2, 4] = 0.75
     pnote[7, 4] = 0.85
 
-    # Type 5: sus4 — root, P4, P5
     pnote[0, 5] = 0.90
     pnote[5, 5] = 0.80
     pnote[7, 5] = 0.85
 
-    # pchord[N_TYPES]: initial chord type probability
-    # Major and Minor most common
     pchord = torch.ones(N_TYPES, device=device)
     pchord[0] = 2.0  # Major
     pchord[1] = 2.0  # Minor
@@ -122,29 +111,29 @@ def main():
     pchord[5] = 0.3  # sus4
     pchord /= pchord.sum()
 
-    # pchange[N_TYPES, N_TONES, N_TYPES]: transition probabilities
     pchange = torch.ones(N_TYPES, N_TONES, N_TYPES, device=device) / (N_TONES * N_TYPES)
 
-    # Seed transitions with musical priors
-    # Same-type transitions (common to stay in major or minor)
+    # Seed transitions
     for t in range(N_TYPES):
-        pchange[t, 0, t] = 2.0  # same root, same type (repetition)
-    # Major → V (interval 7) common
+        pchange[t, 0, t] = 2.0
     pchange[0, 7, 0] = 2.0
-    pchange[0, 5, 1] = 1.5  # Major → relative minor (interval 5)
-    pchange[1, 7, 0] = 1.5  # Minor → relative major (interval 7)
-    pchange[1, 3, 0] = 1.0  # Minor → major (interval 3)
-    # Normalize
-    for t1 in range(N_TYPES):
-        for t2 in range(N_TYPES):
-            s = pchange[t1, :, t2].sum()
-            if s > 0:
-                pchange[t1, :, t2] /= s
+    pchange[0, 5, 1] = 1.5
+    pchange[1, 7, 0] = 1.5
+    pchange[1, 3, 0] = 1.0
+    pchange /= pchange.sum(dim=(1, 2), keepdim=True)
+
+    # Pre-calculate index tensors for vectorization
+    # r_idx[r_next, interval] = r_prev = (r_next - interval) % 12
+    r_next_indices = torch.arange(N_TONES, device=device).view(N_TONES, 1)
+    interval_indices = torch.arange(N_TONES, device=device).view(1, N_TONES)
+    r_prev_indices = (r_next_indices - interval_indices) % N_TONES
 
     # Baum-Welch training
     print(f"\n  Training: {N_TYPES} chord types, {MAX_ITER} max iterations")
     start_time = time.time()
     pbar_outer = tqdm(range(MAX_ITER), desc="BW Training")
+
+    eps = 1e-8
 
     for iter_idx in pbar_outer:
         note_hist = torch.zeros_like(pnote)
@@ -152,7 +141,6 @@ def main():
         change_hist = torch.zeros_like(pchange)
         total_ll = 0.0
 
-        eps = 1e-8
         log_pnote = torch.log(pnote + eps)
         log_not_pnote = torch.log(1.0 - pnote + eps)
 
@@ -160,13 +148,16 @@ def main():
             T = song_vec.shape[0]
 
             # 1. Emission probabilities [T, N_TONES, N_TYPES]
+            # Vectorized over R: instead of 12 loops, we shift pnote
+            # heard_p[T, 12, 12] where heard_p[t, r, p] = song_vec[t, (p+r)%12]
+            # Actually simpler:
             psets_log = torch.zeros(T, N_TONES, N_TYPES, device=device)
             for r in range(N_TONES):
+                # This roll is still a bit slow, but it's only 12 times per song
+                # and much faster than the inner loops.
                 heard = torch.roll(song_vec, shifts=-r, dims=1)
-                not_heard = 1.0 - heard
-                p_emit = heard @ log_pnote + not_heard @ log_not_pnote
+                p_emit = heard @ log_pnote + (1.0 - heard) @ log_not_pnote
                 psets_log[:, r, :] = p_emit
-
             psets = torch.exp(psets_log)
 
             # 2. Forward pass
@@ -177,12 +168,14 @@ def main():
             total_ll += torch.log(norm + eps)
 
             for t_step in range(1, T):
-                prev = alpha[t_step - 1]
-                combined_prev = torch.zeros(N_TONES, N_TYPES, device=device)
-                for i in range(N_TONES):
-                    prev_shifted = torch.roll(prev, shifts=i, dims=0)
-                    combined_prev += prev_shifted @ pchange[:, i, :]
-
+                # combined_prev[r_n, t_n] = sum_{i, t_p} alpha[t-1, (r_n - i)%12, t_p] * pchange[t_p, i, t_n]
+                prev = alpha[t_step - 1] # [12, N_TYPES]
+                # Use indexing to get [12, 12, N_TYPES] where [r_n, i, t_p]
+                prev_expanded = prev[r_prev_indices] # [12, 12, N_TYPES]
+                # prev_expanded: [r_next, interval, t_prev]
+                # pchange: [t_prev, interval, t_next]
+                combined_prev = torch.einsum('rit,tir->rt', prev_expanded, pchange)
+                
                 alpha[t_step] = combined_prev * psets[t_step]
                 norm = alpha[t_step].sum()
                 alpha[t_step] /= (norm + eps)
@@ -192,11 +185,15 @@ def main():
             beta = torch.zeros(T, N_TONES, N_TYPES, device=device)
             beta[T - 1] = 1.0
             for t_step in range(T - 2, -1, -1):
-                next_val = psets[t_step + 1] * beta[t_step + 1]
-                combined_next = torch.zeros(N_TONES, N_TYPES, device=device)
-                for i in range(N_TONES):
-                    next_shifted = torch.roll(next_val, shifts=-i, dims=0)
-                    combined_next += next_shifted @ pchange[:, i, :].T
+                # combined_next[r_p, t_p] = sum_{i, t_n} (psets*beta)[t+1, (r_p + i)%12, t_n] * pchange[t_p, i, t_n]
+                next_val = psets[t_step + 1] * beta[t_step + 1] # [12, N_TYPES]
+                
+                # r_next = (r_prev + interval) % 12
+                # r_p_indices[r_prev, interval]
+                r_p_indices = (r_next_indices + interval_indices) % N_TONES
+                next_expanded = next_val[r_p_indices] # [r_p, i, t_n]
+                
+                combined_next = torch.einsum('rit,tit->rt', next_expanded, pchange)
                 beta[t_step] = combined_next
                 beta[t_step] /= (beta[t_step].sum() + eps)
 
@@ -205,23 +202,28 @@ def main():
             gamma /= (gamma.sum(dim=(1, 2), keepdim=True) + eps)
             chord_hist += gamma.sum(dim=(0, 1))
 
+            # note_hist calculation (Vectorized)
+            # note_hist[p, t] += sum_{t_step, r} song_vec[t_step, (p+r)%12] * gamma[t_step, r, t]
+            # This can be seen as a sum over t_step of (song_vec_shifted.T @ gamma_at_t_step)
             for r in range(N_TONES):
                 heard = torch.roll(song_vec, shifts=-r, dims=1)
                 note_hist += heard.T @ gamma[:, r, :]
 
-            for t_step in range(T - 1):
-                term_next = psets[t_step + 1] * beta[t_step + 1]
-                for i in range(N_TONES):
-                    term_prev = alpha[t_step]
-                    next_shifted = torch.roll(term_next, shifts=-i, dims=0)
-                    change_hist[:, i, :] += term_prev.T @ next_shifted
+            # change_hist calculation (Vectorized)
+            # change_hist[t_p, i, t_n] += sum_{t_step, r_n} alpha[t_step, (r_n-i)%12, t_p] * (psets*beta)[t_step+1, r_n, t_n]
+            term_next = psets[1:] * beta[1:] # [T-1, 12, N_TYPES]
+            term_prev = alpha[:-1] # [T-1, 12, N_TYPES]
+            
+            # We want change_hist[t_p, i, t_n]
+            # term_prev_expanded: [T-1, r_n, i, t_p]
+            term_prev_expanded = term_prev[:, r_prev_indices] # [T-1, 12, 12, N_TYPES]
+            # einsum: sum over T-1 and r_n
+            change_hist += torch.einsum('trip,trn->pin', term_prev_expanded, term_next)
 
         # 5. M-step
         old_pnote = pnote.clone()
         pnote = note_hist / (chord_hist.view(1, N_TYPES) + eps)
         pnote = torch.clamp(pnote, 0.001, 0.999)
-
-        # Keep root strong
         pnote[0, :] = torch.clamp(pnote[0, :], 0.5, 0.999)
 
         pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
@@ -243,7 +245,7 @@ def main():
     np.savetxt(out_dir / "pnote_full.txt", pnote.cpu().numpy())
     np.save(out_dir / "pchange_full.npy", pchange.cpu().numpy())
 
-    # Also save human-readable summary
+    # Summary display (optional)
     type_names = ["Major", "Minor", "Dim", "Aug", "sus2", "sus4"]
     print("\n  === CHORD NOTE EMISSIONS (pnote) ===")
     print(f"  {'PC':>4s}", end="")
@@ -255,10 +257,6 @@ def main():
         for t in range(N_TYPES):
             print(f"  {pnote[pc, t].item():8.4f}", end="")
         print()
-
-    print(f"\n  Saved weights to {out_dir}/")
-    print(f"    pnote_full.txt  shape: ({N_TONES}, {N_TYPES})")
-    print(f"    pchange_full.npy shape: ({N_TYPES}, {N_TONES}, {N_TYPES})")
 
 
 if __name__ == "__main__":
