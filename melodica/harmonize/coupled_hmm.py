@@ -105,7 +105,18 @@ KEY_OFFSET_LOG[1, [0, 2, 3, 5, 7, 8, 10]] = [math.log(0.30), math.log(0.05),
 # ---------------------------------------------------------------------------
 
 @dataclass
+class WeightedNote:
+    pitch_class: int
+    weight: float
+
+
+# ---------------------------------------------------------------------------
+# Coupled HMM Harmonizer
+# ---------------------------------------------------------------------------
+
+@dataclass
 class CoupledHMMHarmonizer:
+    """Hierarchical HMM Harmonizer with Duration and Metric Weighting."""
     beam_width: int = 12
     chord_change: str = "bars"
     bar_grid: BarGrid | None = None
@@ -124,10 +135,10 @@ class CoupledHMMHarmonizer:
         observations = self._extract_observations(melody, change_points)
         T = len(observations)
 
-        # 2. Layer 1: Notes -> Chords (72 states = 12 roots x 6 types)
+        # 2. Layer 1: Notes -> Chords (72 states)
         chord_path = self._viterbi_chords(observations, initial_scale)
 
-        # 3. Layer 2: Chords -> Keys (24 states = 12 roots x 2 key types)
+        # 3. Layer 2: Chords -> Keys (24 states)
         key_path = self._viterbi_keys(chord_path)
 
         # 4. Build result
@@ -149,7 +160,7 @@ class CoupledHMMHarmonizer:
     # Layer 1: Chord Viterbi
     # ------------------------------------------------------------------
 
-    def _viterbi_chords(self, obs: list[list[int]], scale: Scale) -> list[tuple[int, int]]:
+    def _viterbi_chords(self, obs: list[list[WeightedNote]], scale: Scale) -> list[tuple[int, int]]:
         """Find most likely chord sequence via Viterbi over 72 states."""
         n_s = N_TONES * N_TYPES  # 72
         T = len(obs)
@@ -175,18 +186,10 @@ class CoupledHMMHarmonizer:
                     score += 2.0  # tonic bias
                 dp[0, s_idx] = score
 
-        # Pre-compute transition log-probs: trans[k_prev, interval, k_next]
-        # LOG_PCHANGE is [6, 12, 6]
-
         # Forward pass
         for t_step in range(1, T):
             cur_emit = emit[t_step]  # [12, 6]
             prev_dp = dp[t_step - 1]  # [72]
-
-            # Vectorized: for each (r_next, k_next), find best (r_prev, k_prev)
-            # score = emit[r_next, k_next] + max over (r_prev, k_prev) of
-            #         dp[r_prev, k_prev] + log_pchange[k_prev, interval, k_next]
-            # where interval = (r_next - r_prev) % 12
 
             for r_next in range(N_TONES):
                 for k_next in range(N_TYPES):
@@ -269,15 +272,22 @@ class CoupledHMMHarmonizer:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _log_emit_chord(pcs: list[int], root: int, type_idx: int) -> float:
-        """log P(pitch_classes | chord root, type) using trained pnote."""
-        if not pcs:
+    def _log_emit_chord(weighted_pcs: list[WeightedNote], root: int, type_idx: int) -> float:
+        """log P(weighted_pitch_classes | chord root, type) with normalization."""
+        if not weighted_pcs:
             return -1.0
+
         log_p = 0.0
-        for pc in pcs:
-            off = (pc - root) % N_TONES
-            log_p += LOG_PNOTE[off, type_idx]
-        return log_p
+        total_weight = 0.0
+
+        for wn in weighted_pcs:
+            off = (wn.pitch_class - root) % N_TONES
+            weight = wn.weight
+            log_p += weight * LOG_PNOTE[off, type_idx]
+            total_weight += weight
+
+        # Normalization to keep likelihoods comparable across different densities
+        return log_p / (total_weight + 1e-6)
 
     @staticmethod
     def _log_emit_key(chord: tuple[int, int], key_root: int, key_type: int) -> float:
@@ -306,17 +316,45 @@ class CoupledHMMHarmonizer:
             t += step
         return pts
 
-    def _extract_observations(self, melody: list[NoteInfo], change_points: list[float]) -> list[list[int]]:
+    def _extract_observations(self, melody: list[NoteInfo], change_points: list[float]) -> list[list[WeightedNote]]:
         observations = []
+        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
+
         for i, cp in enumerate(change_points):
             next_cp = change_points[i + 1] if i + 1 < len(change_points) else float("inf")
 
-            # Find notes that are ACTIVE during [cp, next_cp)
-            active_pcs = []
+            # Use dict to consolidate same pitch classes in this window
+            pc_weights: dict[int, float] = {}
+
             for n in melody:
                 n_end = n.start + n.duration
-                if n.start < next_cp and n_end > cp:
-                    active_pcs.append(n.pitch % 12)
+                # Find overlap between note [n.start, n_end] and window [cp, next_cp]
+                overlap_start = max(cp, n.start)
+                overlap_end = min(next_cp, n_end)
 
-            observations.append(list(set(active_pcs)))
+                if overlap_end > overlap_start:
+                    active_dur = overlap_end - overlap_start
+                    pc = n.pitch % 12
+
+                    # 1. Duration Weighting (sqrt to avoid domination)
+                    duration_weight = math.sqrt(active_dur)
+
+                    # 2. Metric Weighting
+                    # Calculate position within bar
+                    pos_in_bar = self.bar_grid.beat_in_bar(n.start) if self.bar_grid else (n.start % 4.0)
+
+                    metric_weight = 1.0
+                    if abs(pos_in_bar) < 0.01: # Beat 1
+                        metric_weight = 1.5
+                    elif abs(pos_in_bar - (bpb / 2.0)) < 0.01: # Beat 3 (in 4/4)
+                        metric_weight = 1.2
+                    elif abs(pos_in_bar % 1.0) > 0.01: # Syncopated / Off-beat
+                        metric_weight = 0.8
+
+                    weight = duration_weight * metric_weight
+                    pc_weights[pc] = pc_weights.get(pc, 0.0) + weight
+
+            obs_list = [WeightedNote(pc, w) for pc, w in pc_weights.items()]
+            observations.append(obs_list)
+
         return observations
