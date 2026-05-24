@@ -53,6 +53,38 @@ python3 scratch/demo_catchy_melody.py
 
 The output MIDI is exported directly to `output/demo_catchy/demo_catchy_melody.mid`.
 
+## MIDI Analyzer
+
+`scripts/midi_analyzer.py` — unified diagnostic tool that reads a MIDI file (or full album directory) and prints a compositional report.
+
+```bash
+# Analyze a single track
+python3 scripts/midi_analyzer.py output/album_ainulindale/I_The_Theme_of_Eru.mid
+
+# Analyze an entire album directory
+python3 scripts/midi_analyzer.py output/album_ainulindale/
+
+# Skip music21 (no key detection / consonance profiling)
+python3 scripts/midi_analyzer.py output/album_ainulindale/ --no-music21
+```
+
+### What it reports
+
+| Section | Description |
+|---------|-------------|
+| **Track Stats & Roles** | Note count, pitch range, velocity, density (notes/s). Auto-assigns role: BASS / LEAD / PAD / PERC / STRINGS / CHOIR / FX |
+| **Register Distribution** | 9-band breakdown (sub → top) with note counts and bar chart |
+| **Psychoacoustic** | 6 checks — frequency masking, temporal masking, harmonic fusion, rhythmic blur, register masking, brightness overload |
+| **Harmonic Analysis** | Cross-track clashes by interval (m2, TT, M7, etc.) and top clashing pairs |
+| **Timeline** | Which tracks are active in each quarter of the piece |
+| **music21 Advanced** | Key detection + confidence, ambitus per track, consonance/dissonance profile, low-interval mud (LIM) warnings, melodic motion (step vs leap ratio, large-leap resolution rate) |
+| **Suggestions** | Actionable fixes — velocity too low, register overlap, blurry notes, dense tracks |
+
+### Requirements
+
+- `mido` (required)
+- `music21` (optional — for key detection and consonance analysis; skip with `--no-music21`)
+
 ## Engines
 
 | ID | Name | Algorithm |
