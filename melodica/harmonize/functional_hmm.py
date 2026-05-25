@@ -223,31 +223,29 @@ class FunctionalHMMHarmonizer:
         result: list[tuple[int, int, HarmonicFunction]] = []
         degs = scale.degrees()
 
-        # Check for cadence positions (every 4th or 8th bar approaching a T)
+        # Cadence positions: only every 4 bars at a T-after-D boundary
         cadence_positions = set()
         for i in range(2, n_bars):
-            if func_plan[i] == HarmonicFunction.TONIC:
-                # Check if 2 bars before is D or S (cadence setup)
-                if i >= 2 and func_plan[i - 1] == HarmonicFunction.DOMINANT:
+            if func_plan[i] == HarmonicFunction.TONIC and func_plan[i - 1] == HarmonicFunction.DOMINANT:
+                if (i + 1) % 4 == 0 or i == n_bars - 1:  # every 4 bars or final bar
                     cadence_positions.add(i - 1)  # V
                     cadence_positions.add(i)       # I
 
         for i in range(n_bars):
             fn = func_plan[i]
 
-            # Cadence override: force V→I at cadence positions
-            if i in cadence_positions and i + 1 < n_bars and func_plan[i] == HarmonicFunction.DOMINANT:
-                deg = 5  # V degree
+            # Cadence override: force V→I ONLY at structural cadence positions
+            if i in cadence_positions and func_plan[i] == HarmonicFunction.DOMINANT:
+                deg = 5
                 root_pc = int(round(degs[(deg - 1) % len(degs)]))
                 quality = diatonic[(deg - 1) % len(diatonic)][1]
-                # Make dominant a 7th for stronger resolution
                 if quality == Quality.MAJOR:
                     quality = Quality.DOMINANT7
                 result.append((root_pc, deg, fn))
                 continue
 
             if i in cadence_positions and func_plan[i] == HarmonicFunction.TONIC:
-                deg = 1  # I degree
+                deg = 1
                 root_pc = int(round(degs[(deg - 1) % len(degs)]))
                 quality = diatonic[(deg - 1) % len(diatonic)][1]
                 result.append((root_pc, deg, fn))
@@ -258,7 +256,7 @@ class FunctionalHMMHarmonizer:
             if not candidates:
                 candidates = [1]
 
-            # Score each candidate using HMM emission + gravity
+            # Score each candidate using HMM emission + gravity + diversity
             best_deg = candidates[0]
             best_score = -1e9
 
@@ -266,23 +264,36 @@ class FunctionalHMMHarmonizer:
                 root_pc = int(round(degs[(deg - 1) % len(degs)]))
                 quality = diatonic[(deg - 1) % len(diatonic)][1]
 
-                # HMM emission score (how well does this chord fit the melody)
-                emit_score = self._score_emission(root_pc, quality, observations[i])
+                # HMM emission score (scaled down — functional fit matters more)
+                emit_score = self._score_emission(root_pc, quality, observations[i]) * 0.3
 
                 # Gravity bonus (characteristic degrees of the mode)
                 grav_bonus = 3.0 if (deg - 1) in gravity else 0.0
 
-                # Avoid repeating same degree as previous
-                repeat_penalty = 0.0
+                # Avoid repeating same degree
+                deg_penalty = 0.0
                 if result and result[-1][1] == deg:
-                    repeat_penalty = -4.0
+                    deg_penalty = -6.0
 
-                # Avoid repeating same root as previous
+                # Avoid repeating same root
                 root_penalty = 0.0
                 if result and result[-1][0] == root_pc:
-                    root_penalty = -3.0
+                    root_penalty = -5.0
 
-                score = emit_score + grav_bonus + repeat_penalty + root_penalty
+                # Avoid repeating same root INTERVAL as the previous transition
+                interval_penalty = 0.0
+                if len(result) >= 2:
+                    prev_interval = (result[-1][0] - result[-2][0]) % 12
+                    this_interval = (root_pc - result[-1][0]) % 12
+                    if prev_interval == this_interval and prev_interval != 0:
+                        interval_penalty = -4.0
+
+                # Avoid same root as 2 bars ago (prevents ABA pattern)
+                aba_penalty = 0.0
+                if len(result) >= 2 and result[-2][0] == root_pc:
+                    aba_penalty = -3.0
+
+                score = emit_score + grav_bonus + deg_penalty + root_penalty + interval_penalty + aba_penalty
                 if score > best_score:
                     best_score = score
                     best_deg = deg
