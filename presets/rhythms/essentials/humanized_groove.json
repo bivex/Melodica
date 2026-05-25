@@ -1,0 +1,66 @@
+{
+  "name": "humanized_groove",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.02,
+      "duration": 0.48,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 0.52,
+      "duration": 0.23,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 0.78,
+      "duration": 0.24,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 1.01,
+      "duration": 0.51,
+      "velocity_factor": 0.75
+    },
+    {
+      "onset": 1.53,
+      "duration": 0.22,
+      "velocity_factor": 0.55
+    },
+    {
+      "onset": 1.77,
+      "duration": 0.26,
+      "velocity_factor": 0.8
+    },
+    {
+      "onset": 2.03,
+      "duration": 0.47,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 2.51,
+      "duration": 0.25,
+      "velocity_factor": 0.65
+    },
+    {
+      "onset": 2.79,
+      "duration": 0.23,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 3.02,
+      "duration": 0.49,
+      "velocity_factor": 0.8
+    },
+    {
+      "onset": 3.54,
+      "duration": 0.24,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 3.78,
+      "duration": 0.25,
+      "velocity_factor": 0.85
+    }
+  ]
+}
