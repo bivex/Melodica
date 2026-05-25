@@ -1,0 +1,26 @@
+{
+  "name": "hc_splash_screen",
+  "loop": false,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.5,
+      "velocity_factor": 0.8
+    },
+    {
+      "onset": 0.5,
+      "duration": 0.25,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 0.75,
+      "duration": 0.25,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 1.0,
+      "duration": 1.0,
+      "velocity_factor": 1.0
+    }
+  ]
+}

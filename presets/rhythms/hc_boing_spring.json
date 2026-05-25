@@ -1,0 +1,86 @@
+{
+  "name": "hc_boing_spring",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.125,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.125,
+      "duration": 0.125,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 0.25,
+      "duration": 0.25,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 0.75,
+      "duration": 0.125,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 0.875,
+      "duration": 0.125,
+      "velocity_factor": 0.45
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.25,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 1.5,
+      "duration": 0.125,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 1.625,
+      "duration": 0.125,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 1.75,
+      "duration": 0.25,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 2.25,
+      "duration": 0.125,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 2.375,
+      "duration": 0.125,
+      "velocity_factor": 0.45
+    },
+    {
+      "onset": 2.5,
+      "duration": 0.25,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 3.0,
+      "duration": 0.125,
+      "velocity_factor": 0.95
+    },
+    {
+      "onset": 3.125,
+      "duration": 0.125,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 3.25,
+      "duration": 0.25,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 3.75,
+      "duration": 0.25,
+      "velocity_factor": 0.6
+    }
+  ]
+}

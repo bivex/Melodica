@@ -1,0 +1,51 @@
+{
+  "name": "hc_stack_builder",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.125,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 0.125,
+      "duration": 0.125,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 0.25,
+      "duration": 0.125,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 0.5,
+      "duration": 0.125,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 0.625,
+      "duration": 0.125,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 0.75,
+      "duration": 0.125,
+      "velocity_factor": 0.65
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.125,
+      "velocity_factor": 0.95
+    },
+    {
+      "onset": 1.125,
+      "duration": 0.125,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 1.25,
+      "duration": 0.125,
+      "velocity_factor": 0.7
+    }
+  ]
+}
