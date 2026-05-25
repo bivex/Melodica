@@ -255,11 +255,12 @@ def main():
     }
 
     pnote = torch.full((N_TONES, N_TYPES), 0.12, device=device)
-    ON_PROB  = 0.85
+    ON_PROB  = 0.90
 
     for t_idx, notes in CHORD_NOTES.items():
         for n in notes:
-            pnote[n, t_idx] = ON_PROB
+            # Boost 3-note triads so they aren't out-multiplied by 4/5-note extended chords initially
+            pnote[n, t_idx] = ON_PROB if len(notes) == 3 else 0.85
 
     # Особые ноты (характерные интервалы для extended chords)
     pnote[11, 6] = 0.95   # Maj7 — maj7 очень характерна
@@ -273,7 +274,7 @@ def main():
     pnote[11, 11] = 0.001 # Add9 НЕ содержит maj7
     pnote[10, 11] = 0.001 # Add9 НЕ содержит min7
 
-    pchord = torch.tensor([2.0, 2.0, 0.8, 0.01, 0.3, 0.3, 1.0, 1.0, 1.5, 0.2, 0.2, 0.4], device=device)
+    pchord = torch.tensor([3.0, 3.0, 1.0, 0.01, 0.5, 0.5, 0.8, 0.8, 1.5, 0.1, 0.1, 0.2], device=device)
     pchord /= pchord.sum()
 
     pchange = torch.ones(N_TYPES, N_TONES, N_TYPES, device=device) / (N_TONES * N_TYPES)
@@ -430,7 +431,8 @@ def main():
             best_pchange = pchange.clone()
             stagnation = 0
         else:
-            stagnation += 1
+            if iter_idx >= 50:
+                stagnation += 1
 
         pbar.set_postfix({"dN": f"{delta_note:.6f}", "dC": f"{delta_change:.6f}", "LL": f"{total_ll:.1f}"})
 
