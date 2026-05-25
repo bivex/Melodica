@@ -19,6 +19,15 @@ from melodica.modifiers.rhythmic import (
     HumanizeModifier,
     SwingController,
     AdjustNoteLengthsModifier,
+    FollowRhythmModifier,
+)
+from melodica.types import NoteInfo, ChordLabel, Quality, Scale, Mode, MusicTimeline, KeyLabel
+from melodica.modifiers import ModifierContext
+from melodica.modifiers.rhythmic import (
+    QuantizeModifier,
+    HumanizeModifier,
+    SwingController,
+    AdjustNoteLengthsModifier,
 )
 from melodica.modifiers.harmonic import (
     NoteDoublerModifier,
@@ -384,3 +393,305 @@ def test_midi_echo(dummy_context):
     ctx = ModifierContext(duration_beats=4.0, chords=[], timeline=None, scale=None)
     result = mod.modify(_make_notes(), ctx)
     assert len(result) > 4  # originals + echoes
+
+
+# ---------------------------------------------------------------------------
+# FollowRhythmModifier tests
+# ---------------------------------------------------------------------------
+
+
+def test_follow_rhythm_basic(dummy_context):
+    """Basic: follower notes get source onsets and inter-onset durations."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.3),
+        NoteInfo(pitch=64, start=0.5, duration=0.3),
+        NoteInfo(pitch=67, start=1.0, duration=0.3),
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.0, duration=1.0),
+        NoteInfo(pitch=52, start=0.5, duration=1.0),
+        NoteInfo(pitch=55, start=1.0, duration=1.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    assert len(result) == 3
+    # Onsets match source
+    assert result[0].start == 0.0
+    assert result[1].start == 0.5
+    assert result[2].start == 1.0
+    # Durations are gaps to next onset (0.5, 0.5)
+    # Last onset duration extends to timeline end
+    assert result[0].duration == 0.5
+    assert result[1].duration == 0.5
+
+
+def test_follow_rhythm_polyphonic_no_duplicates(dummy_context):
+    """Polyphonic source onset should produce only ONE output note, not duplicates."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.3),
+        NoteInfo(pitch=64, start=0.0, duration=0.5),  # Same onset, different pitch/dur
+        NoteInfo(pitch=67, start=0.5, duration=0.3),
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.1, duration=1.0),
+        NoteInfo(pitch=52, start=0.6, duration=1.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    # Should be exactly 2 notes (one per unique onset time), not 3
+    assert len(result) == 2
+    # All notes have unique start times
+    starts = [n.start for n in result]
+    assert len(set(starts)) == 2
+
+
+def test_follow_rhythm_articulation_expression_preserved(dummy_context):
+    """Articulation and expression should be copied from source note."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.3),
+        NoteInfo(pitch=64, start=0.5, duration=0.3),
+    ]
+    follower_notes = [
+        NoteInfo(
+            pitch=48, start=0.0, duration=1.0, articulation="staccato", expression={1: 64, 7: 100}
+        ),
+        NoteInfo(pitch=52, start=0.5, duration=1.0, articulation="sustain", expression={1: 100}),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    # Both notes should have articulation and expression copied
+    assert result[0].articulation == "staccato"
+    assert result[0].expression == {1: 64, 7: 100}
+    assert result[1].articulation == "sustain"
+    assert result[1].expression == {1: 100}
+
+
+def test_follow_rhythm_duration_is_inter_onset_gap(dummy_context):
+    """Duration should be gap to next onset, NOT max(original duration)."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=2.0),  # Long note but gap matters
+        NoteInfo(pitch=64, start=0.5, duration=0.1),  # Short note
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.25, duration=1.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    # First onset (0.0) duration should be gap to next onset (0.5)
+    assert result[0].start == 0.0
+    assert result[0].duration == 0.5  # NOT 2.0 from original
+    # Second onset (0.5) duration extends to timeline end
+    assert result[1].duration < 4.0
+
+
+def test_follow_rhythm_empty_source_returns_original(dummy_context):
+    """Empty source track should return original notes unchanged."""
+    follower_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=1.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": []}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    assert len(result) == 1
+    assert result[0].start == 0.0
+    assert result[0].duration == 1.0
+
+
+def test_follow_rhythm_missing_source_track_returns_original(dummy_context):
+    """Missing source track should return original notes unchanged."""
+    follower_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=1.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0,
+        chords=[],
+        timeline=None,
+        scale=None,
+        tracks={},  # No Melody track
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    assert len(result) == 1
+    assert result[0].start == 0.0
+    assert result[0].duration == 1.0
+
+
+def test_follow_rhythm_closest_note_selected(dummy_context):
+    """The note whose start is closest to onset should be selected for pitch."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.5),
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.01, duration=1.0),  # Closer to 0.0
+        NoteInfo(pitch=52, start=0.5, duration=1.0),  # Further from 0.0
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    assert result[0].pitch == 48  # Closer note selected
+
+
+def test_follow_rhythm_minimum_duration(dummy_context):
+    """Durations should be clamped to minimum of 0.05 beats."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.1),
+        NoteInfo(pitch=64, start=0.01, duration=0.1),  # Very short gap
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.005, duration=1.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    # Gap is 0.01, but should be clamped to 0.05
+    assert result[0].duration >= 0.05
+
+
+def test_follow_rhythm_preserves_velocity_and_absolute(dummy_context):
+    """Velocity and absolute flag should be copied from selected follower note."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.5),
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.0, duration=1.0, velocity=100, absolute=True),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    assert result[0].velocity == 100
+    assert result[0].absolute == True
+
+
+def test_follow_rhythm_sparse_source_long_gaps(dummy_context):
+    """Sparse source with large gaps should produce long durations."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.5),
+        NoteInfo(pitch=64, start=4.0, duration=0.5),  # Large gap
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=2.0, duration=1.0),  # Midpoint
+    ]
+    ctx = ModifierContext(
+        duration_beats=8.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    assert len(result) == 2
+    # First note duration should be 4.0 (gap to next onset)
+    assert result[0].duration == 4.0
+    # Second note duration extends to timeline end (max(3.0, 4.5) - 4.0 = 0.5)
+    assert result[1].duration == 0.5
+
+
+def test_follow_rhythm_single_source_note(dummy_context):
+    """Single source note should produce one output with appropriate duration."""
+    source_notes = [
+        NoteInfo(pitch=60, start=1.0, duration=0.5),
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.5, duration=2.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    assert len(result) == 1
+    assert result[0].start == 1.0
+    # Duration should extend to timeline_end (max(2.5, 1.5) - 1.0 = 1.5)
+    assert result[0].duration == 1.5
+
+
+def test_follow_rhythm_float_precision_in_onsets(dummy_context):
+    """Onsets with floating point noise should be deduplicated correctly."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.5),
+        NoteInfo(pitch=64, start=0.0000001, duration=0.5),  # Very close to 0.0
+        NoteInfo(pitch=67, start=0.5, duration=0.5),
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.25, duration=1.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    # Round to 4 decimals should treat 0.0 and 0.0000001 as same onset
+    unique_starts = len(set(round(n.start, 4) for n in result))
+    assert unique_starts == 2  # Two unique onsets after rounding
+
+
+def test_follow_rhythm_source_shorter_than_follower(dummy_context):
+    """Source track shorter than follower should still work correctly."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.25),
+        NoteInfo(pitch=64, start=1.0, duration=0.25),
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.0, duration=4.0),
+        NoteInfo(pitch=52, start=2.0, duration=4.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=8.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    # Should have same number of notes as unique source onsets
+    assert len(result) == 2
+    assert result[0].start == 0.0
+    assert result[1].start == 1.0
+
+
+def test_follow_rhythm_identical_onset_different_pitches(dummy_context):
+    """Multiple notes at same onset time should produce one output note."""
+    source_notes = [
+        NoteInfo(pitch=60, start=0.0, duration=0.5),
+        NoteInfo(pitch=64, start=0.0, duration=0.5),  # Same start, different pitch
+        NoteInfo(pitch=67, start=0.0, duration=0.3),  # Same start, different duration
+    ]
+    follower_notes = [
+        NoteInfo(pitch=48, start=0.0, duration=1.0),
+    ]
+    ctx = ModifierContext(
+        duration_beats=4.0, chords=[], timeline=None, scale=None, tracks={"Melody": source_notes}
+    )
+    mod = FollowRhythmModifier(source_track="Melody")
+    result = mod.modify(follower_notes, ctx)
+
+    # All three source notes at same onset should produce exactly one output
+    assert len(result) == 1
+    assert result[0].start == 0.0

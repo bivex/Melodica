@@ -254,15 +254,14 @@ def test_follow_rhythm_integration():
     result = mod.modify(chord_notes, ctx)
 
     # 4. Verify
-    # We expect 3 groups of notes (one for each melody onset)
-    # Each group should have 3 notes (the chord tones)
-    assert len(result) == 3 * 3
+    # We expect exactly 3 notes (one for each melody onset, choosing the closest follower pitch)
+    assert len(result) == 3
 
     onsets = sorted(list(set(n.start for n in result)))
     assert onsets == [0.0, 0.75, 1.0]
 
-    # Check durations match melody
+    # Check durations match gap to next onset
     durations = {n.start: n.duration for n in result}
-    assert durations[0.0] == 0.25
+    assert durations[0.0] == 0.75
     assert durations[0.75] == 0.25
-    assert durations[1.0] == 0.5
+    assert durations[1.0] == 3.0
