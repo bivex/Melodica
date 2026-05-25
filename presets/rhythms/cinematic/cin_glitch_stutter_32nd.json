@@ -1,0 +1,106 @@
+{
+  "name": "cin_glitch_stutter_32nd",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.125,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.125,
+      "duration": 0.125,
+      "velocity_factor": 0.3
+    },
+    {
+      "onset": 0.25,
+      "duration": 0.125,
+      "velocity_factor": 0.8
+    },
+    {
+      "onset": 0.5,
+      "duration": 0.125,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 0.625,
+      "duration": 0.125,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 0.75,
+      "duration": 0.125,
+      "velocity_factor": 0.35
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.125,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 1.25,
+      "duration": 0.125,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 1.375,
+      "duration": 0.125,
+      "velocity_factor": 0.4
+    },
+    {
+      "onset": 1.5,
+      "duration": 0.125,
+      "velocity_factor": 0.95
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.125,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 2.125,
+      "duration": 0.125,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 2.25,
+      "duration": 0.125,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 2.375,
+      "duration": 0.125,
+      "velocity_factor": 0.8
+    },
+    {
+      "onset": 3.0,
+      "duration": 0.125,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 3.125,
+      "duration": 0.125,
+      "velocity_factor": 0.35
+    },
+    {
+      "onset": 3.25,
+      "duration": 0.125,
+      "velocity_factor": 0.75
+    },
+    {
+      "onset": 3.375,
+      "duration": 0.125,
+      "velocity_factor": 0.45
+    },
+    {
+      "onset": 3.5,
+      "duration": 0.125,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 3.625,
+      "duration": 0.125,
+      "velocity_factor": 0.3
+    }
+  ]
+}

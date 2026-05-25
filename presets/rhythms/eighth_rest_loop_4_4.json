@@ -1,0 +1,26 @@
+{
+  "name": "eighth_rest_loop_4_4",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 3.0,
+      "duration": 0.5,
+      "velocity_factor": 1.0
+    }
+  ]
+}

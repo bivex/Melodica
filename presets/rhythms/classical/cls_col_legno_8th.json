@@ -1,0 +1,46 @@
+{
+  "name": "cls_col_legno_8th",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.125,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 0.5,
+      "duration": 0.125,
+      "velocity_factor": 0.4
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.125,
+      "velocity_factor": 0.45
+    },
+    {
+      "onset": 1.5,
+      "duration": 0.125,
+      "velocity_factor": 0.4
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.125,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 2.5,
+      "duration": 0.125,
+      "velocity_factor": 0.4
+    },
+    {
+      "onset": 3.0,
+      "duration": 0.125,
+      "velocity_factor": 0.45
+    },
+    {
+      "onset": 3.5,
+      "duration": 0.125,
+      "velocity_factor": 0.4
+    }
+  ]
+}

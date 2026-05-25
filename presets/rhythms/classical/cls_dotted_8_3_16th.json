@@ -1,0 +1,31 @@
+{
+  "name": "cls_dotted_8_3_16th",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.75,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.75,
+      "duration": 0.25,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.25,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.25,
+      "duration": 0.25,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.5,
+      "duration": 0.25,
+      "velocity_factor": 1.0
+    }
+  ]
+}

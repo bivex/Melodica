@@ -1,0 +1,36 @@
+{
+  "name": "jp_awa_odori_2_4",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.333,
+      "velocity_factor": 1.1
+    },
+    {
+      "onset": 0.333,
+      "duration": 0.333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.666,
+      "duration": 0.333,
+      "velocity_factor": 1.2
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.333,
+      "velocity_factor": 1.1
+    },
+    {
+      "onset": 1.333,
+      "duration": 0.333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.666,
+      "duration": 0.333,
+      "velocity_factor": 1.2
+    }
+  ]
+}

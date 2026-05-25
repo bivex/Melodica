@@ -1,0 +1,56 @@
+{
+  "name": "jp_matsuri_festival_4_4",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.25,
+      "velocity_factor": 1.2
+    },
+    {
+      "onset": 0.25,
+      "duration": 0.125,
+      "velocity_factor": 0.8
+    },
+    {
+      "onset": 0.375,
+      "duration": 0.125,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 0.5,
+      "duration": 0.25,
+      "velocity_factor": 1.1
+    },
+    {
+      "onset": 0.75,
+      "duration": 0.25,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.25,
+      "velocity_factor": 1.2
+    },
+    {
+      "onset": 1.25,
+      "duration": 0.125,
+      "velocity_factor": 0.8
+    },
+    {
+      "onset": 1.375,
+      "duration": 0.125,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 1.5,
+      "duration": 0.25,
+      "velocity_factor": 1.1
+    },
+    {
+      "onset": 1.75,
+      "duration": 0.25,
+      "velocity_factor": 1.0
+    }
+  ]
+}

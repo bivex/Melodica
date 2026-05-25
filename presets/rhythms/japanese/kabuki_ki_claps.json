@@ -1,8 +1,0 @@
-{
-  "name": "kabuki_ki_claps",
-  "loop": false,
-  "events": [
-    {"onset": 0.0, "duration": 0.1, "velocity_factor": 1.27},
-    {"onset": 0.15, "duration": 0.1, "velocity_factor": 1.1}
-  ]
-}

@@ -1,0 +1,21 @@
+{
+  "name": "jp_enka_ballad_free",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.0,
+      "duration": 1.5,
+      "velocity_factor": 1.1
+    },
+    {
+      "onset": 3.5,
+      "duration": 0.5,
+      "velocity_factor": 0.8
+    }
+  ]
+}

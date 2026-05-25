@@ -1,0 +1,16 @@
+{
+  "name": "half_time_half",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.0,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.0,
+      "duration": 1.0,
+      "velocity_factor": 0.85
+    }
+  ]
+}

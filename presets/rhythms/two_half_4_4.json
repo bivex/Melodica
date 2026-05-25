@@ -1,0 +1,16 @@
+{
+  "name": "two_half_4_4",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 2.0,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.0,
+      "duration": 2.0,
+      "velocity_factor": 1.0
+    }
+  ]
+}

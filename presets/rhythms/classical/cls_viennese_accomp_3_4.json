@@ -1,0 +1,41 @@
+{
+  "name": "cls_viennese_accomp_3_4",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.5,
+      "duration": 0.5,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.33,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 1.33,
+      "duration": 0.33,
+      "velocity_factor": 0.45
+    },
+    {
+      "onset": 1.66,
+      "duration": 0.34,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.5,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 2.5,
+      "duration": 0.5,
+      "velocity_factor": 0.55
+    }
+  ]
+}

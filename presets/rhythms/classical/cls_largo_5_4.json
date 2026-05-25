@@ -1,0 +1,21 @@
+{
+  "name": "cls_largo_5_4",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 2.0,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.0,
+      "duration": 1.5,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 3.5,
+      "duration": 1.5,
+      "velocity_factor": 0.9
+    }
+  ]
+}

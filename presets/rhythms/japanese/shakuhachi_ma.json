@@ -1,8 +1,0 @@
-{
-  "name": "shakuhachi_ma",
-  "loop": false,
-  "events": [
-    {"onset": 0.0, "duration": 4.0, "velocity_factor": 1.0},
-    {"onset": 6.0, "duration": 2.0, "velocity_factor": 0.8}
-  ]
-}

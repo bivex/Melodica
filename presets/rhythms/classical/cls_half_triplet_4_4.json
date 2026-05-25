@@ -1,0 +1,21 @@
+{
+  "name": "cls_half_triplet_4_4",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.333333,
+      "duration": 1.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.666667,
+      "duration": 1.333333,
+      "velocity_factor": 1.0
+    }
+  ]
+}

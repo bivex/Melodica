@@ -1,0 +1,36 @@
+{
+  "name": "jp_koto_sakura_3_4",
+  "loop": false,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.0,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.0,
+      "duration": 1.0,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.0,
+      "duration": 2.0,
+      "velocity_factor": 1.1
+    },
+    {
+      "onset": 4.0,
+      "duration": 1.0,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 5.0,
+      "duration": 1.0,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 6.0,
+      "duration": 2.0,
+      "velocity_factor": 1.1
+    }
+  ]
+}
