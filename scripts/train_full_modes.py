@@ -387,7 +387,10 @@ def main():
         pnote = torch.clamp(pnote, 0.001, 0.999)
         pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
 
-        delta = torch.abs(pnote - old_pnote).max().item()
+        delta_note = torch.abs(pnote - old_pnote).max().item()
+        delta_change = torch.abs(pchange - old_pchange).max().item() if 'old_pchange' in dir() else 1.0
+        delta = max(delta_note, delta_change)
+        old_pchange = pchange.clone()
 
         # Validation: check for chord type collapse every 50 iters
         if iter_idx % 50 == 0 or iter_idx == MAX_ITER - 1:
@@ -403,22 +406,25 @@ def main():
                 pchange[dominant_type] *= 0.8
                 pchange /= pchange.sum(dim=(1, 2), keepdim=True)
 
-        pbar.set_postfix({"Delta": f"{delta:.6f}", "LL": f"{total_ll:.1f}"})
-        if delta < TARGET_DELTA:
+        # Track best weights (always, not just after warmup)
+        if total_ll.item() > best_ll + MIN_LL_DELTA:
+            best_ll = total_ll.item()
+            best_pnote = pnote.clone()
+            best_pchange = pchange.clone()
+            stagnation = 0
+        elif iter_idx >= 50:
+            stagnation += 1
+
+        pbar.set_postfix({"dN": f"{delta_note:.6f}", "dC": f"{delta_change:.6f}", "LL": f"{total_ll:.1f}"})
+
+        if delta < TARGET_DELTA and iter_idx >= 100:
+            pbar.write(f"  Converged at iter {iter_idx}")
             break
 
         # Early stopping by LL plateau (skip warmup)
-        if iter_idx >= 50:
-            if total_ll.item() > best_ll + MIN_LL_DELTA:
-                best_ll = total_ll.item()
-                best_pnote = pnote.clone()
-                best_pchange = pchange.clone()
-                stagnation = 0
-            else:
-                stagnation += 1
-            if stagnation >= PATIENCE:
-                pbar.write(f"  Early stop at iter {iter_idx}, LL plateau for {PATIENCE} iters (best LL={best_ll:.1f})")
-                break
+        if stagnation >= PATIENCE and iter_idx >= 50:
+            pbar.write(f"  Early stop at iter {iter_idx}, LL plateau for {PATIENCE} iters (best LL={best_ll:.1f})")
+            break
 
     # Restore best weights
     pnote = best_pnote
