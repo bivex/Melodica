@@ -34,6 +34,7 @@ def _build_tracks():
     # Ultra-slow, breathing rhythms
     lead_rhythm = get_rhythm("markov:ballad", syncopation=0.15, phrase_length=12)
     vocal_rhythm = get_rhythm("probabilistic:sparse", density=0.25)
+    groove_rhythm = get_rhythm("lofi_lazy_hats") # Using new JSON preset
 
     return [
         # Atmospheric Foundation: Continuous Drone
@@ -75,7 +76,8 @@ def _build_tracks():
                 variant="cloud", 
                 density_notes=4, 
                 pitch_spread=24,
-                use_scale_tones=False  # Use chord tones (including the nines!)
+                use_scale_tones=False,
+                rhythm=get_rhythm("downtempo_piano_stabs")
             ),
             instrument="pad",
             density=0.35,

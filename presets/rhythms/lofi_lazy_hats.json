@@ -1,0 +1,14 @@
+{
+  "name": "lofi_lazy_hats",
+  "loop": true,
+  "events": [
+    {"onset": 0.0,  "duration": 0.1, "velocity_factor": 1.0},
+    {"onset": 0.58, "duration": 0.1, "velocity_factor": 0.7},
+    {"onset": 1.0,  "duration": 0.1, "velocity_factor": 0.9},
+    {"onset": 1.58, "duration": 0.1, "velocity_factor": 0.75},
+    {"onset": 2.0,  "duration": 0.1, "velocity_factor": 1.0},
+    {"onset": 2.58, "duration": 0.1, "velocity_factor": 0.7},
+    {"onset": 3.0,  "duration": 0.1, "velocity_factor": 0.95},
+    {"onset": 3.58, "duration": 0.1, "velocity_factor": 0.8}
+  ]
+}
