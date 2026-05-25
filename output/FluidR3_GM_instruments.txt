@@ -1,0 +1,203 @@
+SOUNDFONT INSTRUMENT MAP
+File: FluidR3 GM.sf2
+Total Instruments: 189
+============================================================
+
+--- BANK 000 : General MIDI (Melodic) ---
+  Program 000 | Yamaha Grand Piano
+  Program 001 | Bright Yamaha Grand
+  Program 002 | Electric Piano
+  Program 003 | Honky Tonk
+  Program 004 | Rhodes EP
+  Program 005 | Legend EP 2
+  Program 006 | Harpsichord
+  Program 007 | Clavinet
+  Program 008 | Celesta
+  Program 009 | Glockenspiel
+  Program 010 | Music Box
+  Program 011 | Vibraphone
+  Program 012 | Marimba
+  Program 013 | Xylophone
+  Program 014 | Tubular Bells
+  Program 015 | Dulcimer
+  Program 016 | DrawbarOrgan
+  Program 017 | Percussive Organ
+  Program 018 | Rock Organ
+  Program 019 | Church Organ
+  Program 020 | Reed Organ
+  Program 021 | Accordian
+  Program 022 | Harmonica
+  Program 023 | Bandoneon
+  Program 024 | Nylon String Guitar
+  Program 025 | Steel String Guitar
+  Program 026 | Jazz Guitar
+  Program 027 | Clean Guitar
+  Program 028 | Palm Muted Guitar
+  Program 029 | Overdrive Guitar
+  Program 030 | Distortion Guitar
+  Program 031 | Guitar Harmonics
+  Program 032 | Acoustic Bass
+  Program 033 | Fingered Bass
+  Program 034 | Picked Bass
+  Program 035 | Fretless Bass
+  Program 036 | Slap Bass
+  Program 037 | Pop Bass
+  Program 038 | Synth Bass 1
+  Program 039 | Synth Bass 2
+  Program 040 | Violin
+  Program 041 | Viola
+  Program 042 | Cello
+  Program 043 | Contrabass
+  Program 044 | Tremolo
+  Program 045 | Pizzicato Section
+  Program 046 | Harp
+  Program 047 | Timpani
+  Program 048 | Strings
+  Program 049 | Slow Strings
+  Program 050 | Synth Strings 1
+  Program 051 | Synth Strings 2
+  Program 052 | Ahh Choir
+  Program 053 | Ohh Voices
+  Program 054 | Synth Voice
+  Program 055 | Orchestra Hit
+  Program 056 | Trumpet
+  Program 057 | Trombone
+  Program 058 | Tuba
+  Program 059 | Muted Trumpet
+  Program 060 | French Horns
+  Program 061 | Brass Section
+  Program 062 | Synth Brass 1
+  Program 063 | Synth Brass 2
+  Program 064 | Soprano Sax
+  Program 065 | Alto Sax
+  Program 066 | Tenor Sax
+  Program 067 | Baritone Sax
+  Program 068 | Oboe
+  Program 069 | English Horn
+  Program 070 | Bassoon
+  Program 071 | Clarinet
+  Program 072 | Piccolo
+  Program 073 | Flute
+  Program 074 | Recorder
+  Program 075 | Pan Flute
+  Program 076 | Bottle Chiff
+  Program 077 | Shakuhachi
+  Program 078 | Whistle
+  Program 079 | Ocarina
+  Program 080 | Square Lead
+  Program 081 | Saw Wave
+  Program 082 | Calliope Lead
+  Program 083 | Chiffer Lead
+  Program 084 | Charang
+  Program 085 | Solo Vox
+  Program 086 | Fifth Sawtooth Wave
+  Program 087 | Bass & Lead
+  Program 088 | Fantasia
+  Program 089 | Warm Pad
+  Program 090 | Polysynth
+  Program 091 | Space Voice
+  Program 092 | Bowed Glass
+  Program 093 | Metal Pad
+  Program 094 | Halo Pad
+  Program 095 | Sweep Pad
+  Program 096 | Ice Rain
+  Program 097 | Soundtrack
+  Program 098 | Crystal
+  Program 099 | Atmosphere
+  Program 100 | Brightness
+  Program 101 | Goblin
+  Program 102 | Echo Drops
+  Program 103 | Star Theme
+  Program 104 | Sitar
+  Program 105 | Banjo
+  Program 106 | Shamisen
+  Program 107 | Koto
+  Program 108 | Kalimba
+  Program 109 | BagPipe
+  Program 110 | Fiddle
+  Program 111 | Shenai
+  Program 112 | Tinker Bell
+  Program 113 | Agogo
+  Program 114 | Steel Drums
+  Program 115 | Woodblock
+  Program 116 | Taiko Drum
+  Program 117 | Melodic Tom
+  Program 118 | Synth Drum
+  Program 119 | Reverse Cymbal
+  Program 120 | Fret Noise
+  Program 121 | Breath Noise
+  Program 122 | Sea Shore
+  Program 123 | Bird Tweet
+  Program 124 | Telephone
+  Program 125 | Helicopter
+  Program 126 | Applause
+  Program 127 | Gun Shot
+
+--- BANK 008 : Variation / Custom Bank ---
+  Program 004 | Detuned EP 1
+  Program 005 | Detuned EP 2
+  Program 006 | Coupled Harpsichord
+  Program 014 | Church Bell
+  Program 016 | Detuned Organ 1
+  Program 017 | Detuned Organ 2
+  Program 019 | Church Organ 2
+  Program 021 | Italian Accordion
+  Program 024 | Ukulele
+  Program 025 | 12 String Guitar
+  Program 026 | Hawaiian Guitar
+  Program 028 | Funk Guitar
+  Program 030 | Feedback Guitar
+  Program 031 | Guitar Feedback
+  Program 038 | Synth Bass 3
+  Program 039 | Synth Bass 4
+  Program 040 | Slow Violin
+  Program 048 | Orchestral Pad
+  Program 050 | Synth Strings 3
+  Program 061 | Brass 2
+  Program 062 | Synth Brass 3
+  Program 063 | Synth Brass 4
+  Program 080 | Sine Wave
+  Program 107 | Taisho Koto
+  Program 115 | Castanets
+  Program 116 | Concert Bass Drum
+  Program 117 | Melo Tom 2
+  Program 118 | 808 Tom
+
+--- BANK 009 : Variation / Custom Bank ---
+  Program 125 | Burst Noise
+
+--- BANK 016 : Variation / Custom Bank ---
+  Program 025 | Mandolin
+
+--- BANK 128 : Percussion / Drum Kits ---
+  Program 000 | Standard
+  Program 001 | Standard 1
+  Program 002 | Standard 2
+  Program 003 | Standard 3
+  Program 004 | Standard 4
+  Program 005 | Standard 5
+  Program 006 | Standard 6
+  Program 007 | Standard 7
+  Program 008 | Room
+  Program 009 | Room 1
+  Program 010 | Room 2
+  Program 011 | Room 3
+  Program 012 | Room 4
+  Program 013 | Room 5
+  Program 014 | Room 6
+  Program 015 | Room 7
+  Program 016 | Power
+  Program 017 | Power 1
+  Program 018 | Power 2
+  Program 019 | Power 3
+  Program 024 | Electronic
+  Program 025 | TR-808
+  Program 032 | Jazz
+  Program 033 | Jazz 1
+  Program 034 | Jazz 2
+  Program 035 | Jazz 3
+  Program 036 | Jazz 4
+  Program 040 | Brush
+  Program 041 | Brush 1
+  Program 042 | Brush 2
+  Program 048 | Orchestra Kit
