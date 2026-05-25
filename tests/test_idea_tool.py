@@ -388,7 +388,7 @@ class TestQuickCompose:
         from melodica.generators.ambient import AmbientPadGenerator
 
         config = IdeaToolConfig(
-            scale=Scale(root=0, mode=Mode.MINOR),
+            scale=Scale(root=0, mode=Mode.NATURAL_MINOR),
             bars=8,
             style="cinematic_hybrid",
             use_harmonic_verifier=False,
@@ -401,7 +401,7 @@ class TestQuickCompose:
                 TrackConfig(name="lead", generator_type="lead", density=0.5),
                 TrackConfig(
                     name="Cinematic_Pad",
-                    generator=AmbientPadGenerator(basic_dens=0.6, human_dens=0.4),
+                    generator=AmbientPadGenerator(),
                 ),
             ],
         )
