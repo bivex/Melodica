@@ -298,7 +298,8 @@ def main():
     chords = notes_dict.get("_chords", [])
     for c in chords:
         ext_str = f"+{c.extensions}" if c.extensions else ""
-        print(f"    {c.start:5.1f}b | {c.quality.name:8} on {c.root:2} {ext_str}")
+        deg_str = f"({c.degree_roman})" if hasattr(c, "degree_roman") else f"(deg:{c.degree})"
+        print(f"    {c.start:5.1f}b | {c.quality.name:8} on {c.root:2} {deg_str:8} {ext_str}")
     print()
 
     # Post-processing
