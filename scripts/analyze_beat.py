@@ -3,14 +3,14 @@
 # Licensed under the MIT License.
 
 """
-scripts/analyze_midi.py — MIDI Monotony Analyzer
+scripts/analyze_beat.py — Beat Arrangement Monotony Analyzer
 
 Analyzes generated notes for uniformity problems that make output sound flat.
 Produces a per-track report with scores and specific issues.
 
 Usage:
-    python3 scripts/analyze_midi.py                    # analyze beat arrangement
-    python3 scripts/analyze_midi.py --script pro       # analyze demo_pro_structure
+    python3 scripts/analyze_beat.py                    # analyze beat arrangement
+    python3 scripts/analyze_beat.py --script pro       # analyze demo_pro_structure
 """
 
 import argparse
