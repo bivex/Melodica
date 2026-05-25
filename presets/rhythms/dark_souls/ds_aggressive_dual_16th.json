@@ -1,16 +1,16 @@
 {
-  "name": "ds_steady_16th_charge",
+  "name": "ds_aggressive_dual_16th",
   "loop": true,
   "events": [
     {
       "onset": 0.0,
       "duration": 0.25,
-      "velocity_factor": 0.9
+      "velocity_factor": 1.0
     },
     {
       "onset": 0.25,
       "duration": 0.25,
-      "velocity_factor": 0.6
+      "velocity_factor": 0.7
     },
     {
       "onset": 0.5,
@@ -20,37 +20,32 @@
     {
       "onset": 0.75,
       "duration": 0.25,
-      "velocity_factor": 0.7
+      "velocity_factor": 0.6
     },
     {
       "onset": 1.0,
-      "duration": 0.25,
+      "duration": 0.5,
       "velocity_factor": 0.95
-    },
-    {
-      "onset": 1.25,
-      "duration": 0.25,
-      "velocity_factor": 0.55
     },
     {
       "onset": 1.5,
       "duration": 0.25,
-      "velocity_factor": 0.8
+      "velocity_factor": 0.75
     },
     {
       "onset": 1.75,
       "duration": 0.25,
-      "velocity_factor": 0.65
+      "velocity_factor": 0.9
     },
     {
       "onset": 2.0,
       "duration": 0.25,
-      "velocity_factor": 0.9
+      "velocity_factor": 1.0
     },
     {
       "onset": 2.25,
       "duration": 0.25,
-      "velocity_factor": 0.6
+      "velocity_factor": 0.65
     },
     {
       "onset": 2.5,
@@ -60,17 +55,12 @@
     {
       "onset": 2.75,
       "duration": 0.25,
-      "velocity_factor": 0.7
+      "velocity_factor": 0.55
     },
     {
       "onset": 3.0,
-      "duration": 0.25,
-      "velocity_factor": 0.95
-    },
-    {
-      "onset": 3.25,
-      "duration": 0.25,
-      "velocity_factor": 0.55
+      "duration": 0.5,
+      "velocity_factor": 0.9
     },
     {
       "onset": 3.5,
@@ -80,7 +70,7 @@
     {
       "onset": 3.75,
       "duration": 0.25,
-      "velocity_factor": 0.65
+      "velocity_factor": 0.95
     }
   ]
 }

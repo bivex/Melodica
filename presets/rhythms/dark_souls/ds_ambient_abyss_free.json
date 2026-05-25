@@ -1,21 +1,26 @@
 {
-  "name": "ds_minimal_rest",
+  "name": "ds_ambient_abyss_free",
   "loop": true,
   "events": [
     {
       "onset": 0.0,
-      "duration": 1.0,
+      "duration": 2.0,
       "velocity_factor": 0.35
     },
     {
       "onset": 2.0,
-      "duration": 0.5,
+      "duration": 2.0,
       "velocity_factor": 0.3
     },
     {
-      "onset": 3.0,
+      "onset": 4.0,
       "duration": 1.0,
       "velocity_factor": 0.4
+    },
+    {
+      "onset": 5.5,
+      "duration": 0.5,
+      "velocity_factor": 0.45
     }
   ]
 }
