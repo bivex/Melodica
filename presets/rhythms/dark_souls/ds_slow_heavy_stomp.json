@@ -1,31 +1,31 @@
 {
-  "name": "ds_anor_londo",
+  "name": "ds_slow_heavy_stomp",
   "loop": true,
   "events": [
     {
       "onset": 0.0,
-      "duration": 1.5,
-      "velocity_factor": 0.6
+      "duration": 1.0,
+      "velocity_factor": 1.0
     },
     {
       "onset": 1.5,
       "duration": 0.5,
-      "velocity_factor": 0.5
+      "velocity_factor": 0.85
     },
     {
       "onset": 2.0,
       "duration": 1.0,
-      "velocity_factor": 0.65
+      "velocity_factor": 0.95
     },
     {
       "onset": 3.0,
       "duration": 0.5,
-      "velocity_factor": 0.55
+      "velocity_factor": 0.9
     },
     {
       "onset": 3.5,
       "duration": 0.5,
-      "velocity_factor": 0.45
+      "velocity_factor": 0.8
     }
   ]
 }

@@ -1,727 +1,152 @@
 # Copyright (c) 2026 Bivex
-#
 # Licensed under the MIT License.
 
 """
-scripts/album_dark_souls.py — "Lord of Cinder: A Dark Fantasy Symphony"
-A massive 40-minute, 7-track orchestral album generated via IdeaTool.
-Showcases dynamic Tempo Maps, Scale Modulations (Aeolian, Phrygian, Locrian),
-and massive multi-part suites using the `IdeaPart` hierarchical structure.
+scripts/album_dark_souls.py — Dark Souls Thematic Album Generator.
+
+Album: "Shadows of Lordran"
+Tracks:
+1. Ash and Embers (Melancholy Piano)
+2. The Abyss Marches (Heavy Orchestral March)
+3. Boreal Waltz (Graceful 3/2 swing tension)
+4. Final Cinder (Aggressive Boss climax)
+
+Powered by FLUID_R3_PROGRAMS, Coupled HMM, and Custom Dark Souls Rhythms.
 """
 
 from pathlib import Path
-
-from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart
+from melodica.idea_tool import (
+    IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart,
+    structure_to_schedule,
+)
+from melodica.fluid_r3_profile import FLUID_R3_PROGRAMS
+from melodica.generators.melody import MelodyGenerator
+from melodica.generators.chord_gen import ChordGenerator
+from melodica.generators.bass import BassGenerator
+from melodica.generators.nebula import NebulaGenerator
+from melodica.generators.drone import DroneGenerator
+from melodica.generators.strings_ensemble import StringsEnsembleGenerator
+from melodica.rhythm import get_rhythm
 from melodica.types import Scale, Mode
 from melodica.midi import export_multitrack_midi
-from melodica.tracer import EngineTracer
 
-# Generators
-from melodica.generators.orchestral_strings import (
-    ViolinGenerator,
-    ViolaGenerator,
-    CelloGenerator,
-    ContrabassGenerator,
-)
-from melodica.generators.strings_legato import StringsLegatoGenerator
-from melodica.generators.ostinato import OstinatoGenerator
-from melodica.generators.orchestral_brass import (
-    FrenchHornGenerator,
-    TrumpetGenerator,
-    TromboneGenerator,
-)
-from melodica.generators.orchestral_percussion import TimpaniGenerator
-from melodica.generators.orchestral_hit import OrchestralHitGenerator
-from melodica.generators.harp import HarpGenerator
-from melodica.generators.choir_ahhs import ChoirAahsGenerator
-from melodica.generators.woodwinds_ensemble import WoodwindsEnsembleGenerator
-from melodica.generators.piano_run import PianoRunGenerator
-from melodica.generators.strings_pizzicato import StringsPizzicatoGenerator
-
-
-from melodica.generators.tremolo_strings import TremoloStringsGenerator
-from melodica.generators.countermelody import CountermelodyGenerator
-from melodica.generators.brass_section import BrassSectionGenerator
-
-# ---------------------------------------------------------------------------
-# Track Builders
-# ---------------------------------------------------------------------------
-
-
-def generate_track_01():
-    """1. The Ashen Awakening (128 bars, ~5.5 mins) - Slow, melancholic"""
-    print("  -> 1. The Ashen Awakening")
-
-    parts = [
-        IdeaPart(name="Crypt", bars=48, scale=Scale(root=2, mode=Mode.AEOLIAN), tempo=90),
-        IdeaPart(name="First Light", bars=48, scale=Scale(root=2, mode=Mode.DORIAN), tempo=95),
-        IdeaPart(name="Desolate Vista", bars=32, scale=Scale(root=4, mode=Mode.AEOLIAN), tempo=85),
-    ]
-
+def generate_track(name, parts, tracks, out_dir, bpm):
+    print(f"  > Generating Track: '{name}'...")
     config = IdeaToolConfig(
-        style="cinematic",
-        workflow="generate_all",
-        use_tension_curve=True,
-        use_voice_leading=True,
-        use_texture_control=True,
-        use_mixing=True,
-        use_mastering=True,
-        target_lufs=-16.0,
-        progression_type="hmm3",
+        style="cinematic", # Dark, high tension
         parts=parts,
-        tracks=[
-            TrackConfig(
-                name="Harp Arpeggios",
-                generator=HarpGenerator(),
-                instrument="harp",
-                arrangement="ABAB",
-                density=0.7,
-                rhythm_rests=0.8,
-            ),
-            TrackConfig(
-                name="Woodwinds Motif",
-                generator=WoodwindsEnsembleGenerator(),
-                instrument="oboe",
-                arrangement="AABB",
-                density=0.5,
-                octave_shift=1,
-                variations=["humanize"],
-                rhythm_rests=0.7,
-            ),
-            TrackConfig(
-                name="Cello Solo",
-                generator=CelloGenerator(),
-                instrument="cello",
-                arrangement="ABCD",
-                density=0.6,
-                variations=["humanize"],
-                rhythm_swing=0.55,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Viola Counter",
-                generator=CountermelodyGenerator(motion_preference="contrary"),
-                instrument="viola",
-                arrangement="ABCD",
-                density=0.5,
-                depends_on="Cello Solo",
-                rhythm_rotate=0.125,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Tremolo Tension",
-                generator=TremoloStringsGenerator(),
-                instrument="strings",
-                arrangement="AABB",
-                density=0.8,
-                octave_shift=1,
-            ),
-            TrackConfig(
-                name="Choir Ahhs",
-                generator=ChoirAahsGenerator(),
-                instrument="choir",
-                arrangement="AABB",
-                density=0.4,
-                rhythm_rests=0.6,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Contrabass Sub",
-                generator=ContrabassGenerator(),
-                instrument="contrabass",
-                arrangement="AABB",
-                density=0.8,
-                octave_shift=-1,
-            ),
-        ],
-    )
-    return IdeaTool(config).generate(), parts
-
-
-def generate_track_02():
-    """2. Pilgrimage of the Hollows (176 bars, ~6.5 mins) - Creeping, descending scales"""
-    print("  -> 2. Pilgrimage of the Hollows")
-
-    parts = [
-        IdeaPart(name="The Trek", bars=64, scale=Scale(root=9, mode=Mode.AEOLIAN), tempo=100),
-        IdeaPart(name="Ambush", bars=64, scale=Scale(root=9, mode=Mode.PHRYGIAN), tempo=115),
-        IdeaPart(
-            name="Ruins", bars=48, scale=Scale(root=9, mode=Mode.LOCRIAN), tempo=105
-        ),  # Darkest mode
-    ]
-
-    config = IdeaToolConfig(
-        style="cinematic",
-        workflow="generate_all",
-        use_tension_curve=True,
+        tracks=tracks,
         use_voice_leading=True,
-        use_texture_control=True,
-        use_mixing=True,
-        use_mastering=True,
-        target_lufs=-14.0,
-        parts=parts,
-        tracks=[
-            TrackConfig(
-                name="Violins Pizzicato",
-                generator=StringsPizzicatoGenerator(),
-                instrument="pizzicato",
-                arrangement="ABCD",
-                density=0.8,
-                rhythm_dotted=True,
-            ),
-            TrackConfig(
-                name="Low Strings",
-                generator=StringsLegatoGenerator(),
-                instrument="strings",
-                arrangement="AABB",
-                density=0.9,
-                octave_shift=-1,
-            ),
-            TrackConfig(
-                name="Trombones",
-                generator=TromboneGenerator(),
-                instrument="trombone",
-                arrangement="ABAC",
-                density=0.7,
-                octave_shift=-1,
-                rhythm_rotate=-0.25,
-            ),
-            TrackConfig(
-                name="Timpani",
-                generator=TimpaniGenerator(),
-                instrument="timpani",
-                arrangement="ABAB",
-                density=0.8,
-                rhythm_rests=0.9,
-            ),
-            TrackConfig(
-                name="Choir",
-                generator=ChoirAahsGenerator(),
-                instrument="choir",
-                arrangement="AABB",
-                density=0.6,
-                rhythm_rests=0.5,
-            ),
-        ],
     )
-    return IdeaTool(config).generate(), parts
-
-
-def generate_track_03():
-    """3. Knight of the Abyss (192 bars, ~6.0 mins) - Fast, aggressive boss fight"""
-    print("  -> 3. Knight of the Abyss")
-
-    parts = [
-        IdeaPart(name="Phase 1", bars=64, scale=Scale(root=0, mode=Mode.HARMONIC_MINOR), tempo=120),
-        IdeaPart(name="Phase 2", bars=64, scale=Scale(root=2, mode=Mode.HARMONIC_MINOR), tempo=135),
-        IdeaPart(name="Despair", bars=64, scale=Scale(root=4, mode=Mode.PHRYGIAN), tempo=150),
-    ]
-
-    config = IdeaToolConfig(
-        style="cinematic",
-        workflow="generate_all",
-        use_tension_curve=True,
-        use_voice_leading=True,
-        use_texture_control=True,
-        use_mixing=True,
-        use_mastering=True,
-        target_lufs=-12.0,
-        parts=parts,
-        tracks=[
-            TrackConfig(
-                name="Ostinato Cellos",
-                generator=OstinatoGenerator(pattern="driving"),
-                instrument="cello",
-                arrangement="ABAB",
-                density=1.0,
-                octave_shift=-1,
-                rhythm_swing=0.6,
-            ),
-            TrackConfig(
-                name="Ostinato Violas",
-                generator=OstinatoGenerator(pattern="gallop"),
-                instrument="viola",
-                arrangement="ABAB",
-                density=1.0,
-                rhythm_rotate=0.125,
-            ),
-            TrackConfig(
-                name="Tremolo Violins",
-                generator=TremoloStringsGenerator(),
-                instrument="strings",
-                arrangement="ABCD",
-                density=1.0,
-                octave_shift=1,
-            ),
-            TrackConfig(
-                name="Brass Section",
-                generator=BrassSectionGenerator(),
-                instrument="brass",
-                arrangement="AABC",
-                density=0.9,
-            ),
-            TrackConfig(
-                name="French Horns",
-                generator=FrenchHornGenerator(),
-                instrument="french_horn",
-                arrangement="AABC",
-                density=0.8,
-                octave_shift=-1,
-                rhythm_rests=0.8,
-            ),
-            TrackConfig(
-                name="Trumpets Lead",
-                generator=TrumpetGenerator(),
-                instrument="trumpet",
-                arrangement="AABB",
-                density=0.8,
-                octave_shift=1,
-                variations=["octave_double"],
-            ),
-            TrackConfig(
-                name="Trombone Counter",
-                generator=CountermelodyGenerator(motion_preference="oblique"),
-                instrument="trombone",
-                arrangement="AABB",
-                density=0.7,
-                depends_on="Trumpets Lead",
-                rhythm_rotate=-0.125,
-            ),
-            TrackConfig(
-                name="Timpani",
-                generator=TimpaniGenerator(),
-                instrument="timpani",
-                arrangement="ABCD",
-                density=1.0,
-            ),
-            TrackConfig(
-                name="Orchestral Hits",
-                generator=OrchestralHitGenerator(hit_type="staccato"),
-                instrument="orchestral_hit",
-                arrangement="ABAB",
-                density=0.6,
-                rhythm_rests=0.7,
-            ),
-            TrackConfig(
-                name="Choir Epic",
-                generator=ChoirAahsGenerator(),
-                instrument="choir",
-                arrangement="ABCD",
-                density=1.0,
-            ),
-        ],
-    )
-    return IdeaTool(config).generate(), parts
-
-
-def generate_track_04():
-    """4. Catacombs of Despair (144 bars, ~7.0 mins) - Slow, ambient, terrifying"""
-    print("  -> 4. Catacombs of Despair")
-
-    parts = [
-        IdeaPart(name="Descent", bars=48, scale=Scale(root=1, mode=Mode.LOCRIAN), tempo=80),
-        IdeaPart(name="The Deep", bars=48, scale=Scale(root=6, mode=Mode.PHRYGIAN), tempo=85),
-        IdeaPart(name="Pitch Black", bars=48, scale=Scale(root=11, mode=Mode.LOCRIAN), tempo=75),
-    ]
-
-    config = IdeaToolConfig(
-        style="cinematic",
-        workflow="generate_all",
-        use_tension_curve=True,
-        use_voice_leading=True,
-        use_texture_control=True,
-        use_mixing=True,
-        use_mastering=True,
-        target_lufs=-15.0,
-        parts=parts,
-        tracks=[
-            TrackConfig(
-                name="Contrabass Drone",
-                generator=ContrabassGenerator(),
-                instrument="contrabass",
-                arrangement="AABB",
-                density=0.9,
-                octave_shift=-2,
-            ),
-            TrackConfig(
-                name="Woodwinds Dissonant",
-                generator=WoodwindsEnsembleGenerator(),
-                instrument="bassoon",
-                arrangement="ABCD",
-                density=0.4,
-                octave_shift=-1,
-            ),
-            TrackConfig(
-                name="Choir Whispers",
-                generator=ChoirAahsGenerator(),
-                instrument="choir",
-                arrangement="AABB",
-                density=0.3,
-            ),
-            TrackConfig(
-                name="Harp",
-                generator=HarpGenerator(),
-                instrument="harp",
-                arrangement="ABAC",
-                density=0.4,
-            ),
-            TrackConfig(
-                name="Pizzicato Creep",
-                generator=StringsPizzicatoGenerator(),
-                instrument="pizzicato",
-                arrangement="ABAB",
-                density=0.5,
-            ),
-        ],
-    )
-    return IdeaTool(config).generate(), parts
-
-
-def generate_track_05():
-    """5. The Nameless King's Fury (224 bars, ~6.5 mins) - Epic modulation boss fight"""
-    print("  -> 5. The Nameless King's Fury")
-
-    parts = [
-        IdeaPart(
-            name="Storm Approaches", bars=64, scale=Scale(root=7, mode=Mode.AEOLIAN), tempo=120
-        ),
-        IdeaPart(name="Dragon Rider", bars=64, scale=Scale(root=9, mode=Mode.AEOLIAN), tempo=130),
-        IdeaPart(
-            name="Lightning Strike",
-            bars=64,
-            scale=Scale(root=11, mode=Mode.HARMONIC_MINOR),
-            tempo=145,
-        ),
-        IdeaPart(
-            name="Fallen God", bars=32, scale=Scale(root=4, mode=Mode.AEOLIAN), tempo=100
-        ),  # Sudden slow down
-    ]
-
-    config = IdeaToolConfig(
-        style="cinematic",
-        workflow="generate_all",
-        use_tension_curve=True,
-        use_voice_leading=True,
-        use_texture_control=True,
-        use_mixing=True,
-        use_mastering=True,
-        target_lufs=-11.5,
-        parts=parts,
-        tracks=[
-            TrackConfig(
-                name="Piano Runs",
-                generator=PianoRunGenerator(),
-                instrument="piano",
-                arrangement="ABCD",
-                density=0.8,
-                octave_shift=1,
-                variations=["humanize"],
-            ),
-            TrackConfig(
-                name="Violins Melody",
-                generator=ViolinGenerator(),
-                instrument="violin",
-                arrangement="AABC",
-                density=0.9,
-                octave_shift=1,
-                variations=["octave_double"],
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Strings Legato",
-                generator=StringsLegatoGenerator(),
-                instrument="strings",
-                arrangement="AABC",
-                density=1.0,
-                octave_shift=1,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Viola Counter",
-                generator=CountermelodyGenerator(motion_preference="mixed"),
-                instrument="viola",
-                arrangement="AABC",
-                density=0.7,
-                depends_on="Violins Melody",
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Brass Section",
-                generator=BrassSectionGenerator(),
-                instrument="brass",
-                arrangement="AABB",
-                density=1.0,
-            ),
-            TrackConfig(
-                name="French Horns",
-                generator=FrenchHornGenerator(),
-                instrument="french_horn",
-                arrangement="AABB",
-                density=0.9,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Trombones",
-                generator=TromboneGenerator(),
-                instrument="trombone",
-                arrangement="AABB",
-                density=0.9,
-                octave_shift=-1,
-            ),
-            TrackConfig(
-                name="Tremolo Tension",
-                generator=TremoloStringsGenerator(),
-                instrument="strings",
-                arrangement="ABCD",
-                density=0.9,
-                octave_shift=2,
-            ),
-            TrackConfig(
-                name="Timpani",
-                generator=TimpaniGenerator(),
-                instrument="timpani",
-                arrangement="ABCD",
-                density=1.0,
-            ),
-            TrackConfig(
-                name="Choir Epic",
-                generator=ChoirAahsGenerator(),
-                instrument="choir",
-                arrangement="ABCD",
-                density=1.0,
-            ),
-            TrackConfig(
-                name="Contrabass",
-                generator=ContrabassGenerator(),
-                instrument="contrabass",
-                arrangement="AABB",
-                density=1.0,
-                octave_shift=-2,
-            ),
-        ],
-    )
-    return IdeaTool(config).generate(), parts
-
-
-def generate_track_06():
-    """6. Lord of Cinder (192 bars, ~7.5 mins) - The tragic final boss. Tempo & emotion shifts."""
-    print("  -> 6. Lord of Cinder")
-
-    parts = [
-        IdeaPart(name="The Old King", bars=32, scale=Scale(root=0, mode=Mode.AEOLIAN), tempo=85),
-        IdeaPart(
-            name="Rekindled Flame",
-            bars=64,
-            scale=Scale(root=2, mode=Mode.HARMONIC_MINOR),
-            tempo=120,
-        ),
-        IdeaPart(name="Desperation", bars=64, scale=Scale(root=4, mode=Mode.AEOLIAN), tempo=140),
-        IdeaPart(name="Fading Embers", bars=32, scale=Scale(root=9, mode=Mode.AEOLIAN), tempo=75),
-    ]
-
-    config = IdeaToolConfig(
-        style="cinematic",
-        workflow="generate_all",
-        use_tension_curve=True,
-        use_voice_leading=True,
-        use_texture_control=True,
-        use_mixing=True,
-        use_mastering=True,
-        target_lufs=-12.5,
-        parts=parts,
-        tracks=[
-            TrackConfig(
-                name="Solo Piano",
-                generator=PianoRunGenerator(),
-                instrument="piano",
-                arrangement="ABCD",
-                density=0.7,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Cello Solo",
-                generator=CelloGenerator(),
-                instrument="cello",
-                arrangement="ABAC",
-                density=0.6,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Strings Legato",
-                generator=StringsLegatoGenerator(),
-                instrument="strings",
-                arrangement="AABB",
-                density=0.8,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Brass Section",
-                generator=FrenchHornGenerator(),
-                instrument="brass",
-                arrangement="ABCD",
-                density=0.7,
-            ),
-            TrackConfig(
-                name="Choir Epic",
-                generator=ChoirAahsGenerator(),
-                instrument="choir",
-                arrangement="ABCD",
-                density=0.8,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Timpani",
-                generator=TimpaniGenerator(),
-                instrument="timpani",
-                arrangement="AABB",
-                density=0.7,
-            ),
-            TrackConfig(
-                name="Contrabass",
-                generator=ContrabassGenerator(),
-                instrument="contrabass",
-                arrangement="AABB",
-                density=0.8,
-                octave_shift=-1,
-            ),
-        ],
-    )
-    return IdeaTool(config).generate(), parts
-
-
-def generate_track_07():
-    """7. Age of Dark (128 bars, ~6.0 mins) - Somber, resolving, fading out"""
-    print("  -> 7. Age of Dark")
-
-    parts = [
-        IdeaPart(name="The Choice", bars=48, scale=Scale(root=9, mode=Mode.AEOLIAN), tempo=85),
-        IdeaPart(name="Fading Fire", bars=48, scale=Scale(root=4, mode=Mode.AEOLIAN), tempo=80),
-        IdeaPart(name="Darkness", bars=32, scale=Scale(root=11, mode=Mode.PHRYGIAN), tempo=70),
-    ]
-
-    config = IdeaToolConfig(
-        style="cinematic",
-        workflow="generate_all",
-        use_tension_curve=True,
-        use_voice_leading=True,
-        use_texture_control=True,
-        use_mixing=True,
-        use_mastering=True,
-        target_lufs=-16.0,
-        progression_type="hmm3",
-        parts=parts,
-        tracks=[
-            TrackConfig(
-                name="Harp",
-                generator=HarpGenerator(),
-                instrument="harp",
-                arrangement="AABB",
-                density=0.4,
-            ),
-            TrackConfig(
-                name="Choir Whispers",
-                generator=ChoirAahsGenerator(),
-                instrument="choir",
-                arrangement="ABCD",
-                density=0.5,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Violins High",
-                generator=ViolinGenerator(),
-                instrument="violin",
-                arrangement="AABB",
-                density=0.6,
-                octave_shift=2,
-                mpe=True,
-            ),
-            TrackConfig(
-                name="Contrabass Drone",
-                generator=ContrabassGenerator(),
-                instrument="contrabass",
-                arrangement="AABB",
-                density=0.8,
-                octave_shift=-2,
-            ),
-        ],
-    )
-    return IdeaTool(config).generate(), parts
-
-
-# ---------------------------------------------------------------------------
-# Main Builder
-# ---------------------------------------------------------------------------
-
+    notes_dict = IdeaTool(config).generate()
+    tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
+    
+    # Crucial: Using the exact FluidR3 GM mappings for highest quality
+    instruments_map = {t.name: FLUID_R3_PROGRAMS.get(t.instrument, 0) for t in tracks}
+    
+    file_path = out_dir / f"{name.replace(' ', '_')}.mid"
+    export_multitrack_midi(tracks_data, str(file_path), bpm=bpm, instruments=instruments_map)
+    return file_path
 
 def main():
-    album_dir = Path("output/album_dark_souls")
-    album_dir.mkdir(exist_ok=True, parents=True)
+    print("================================================================================")
+    print("  A L B U M   G E N E R A T O R :   S H A D O W S   O F   L O R D R A N")
+    print("================================================================================")
 
-    print()
-    print("=" * 80)
-    print("        L O R D   O F   C I N D E R")
-    print("        A 40-Minute Dark Fantasy Symphony")
-    print("=" * 80)
+    out_dir = Path("output/album_dark_souls")
+    out_dir.mkdir(exist_ok=True, parents=True)
 
-    tracks = [
-        (generate_track_01, "01_The_Ashen_Awakening.mid"),
-        (generate_track_02, "02_Pilgrimage_of_the_Hollows.mid"),
-        (generate_track_03, "03_Knight_of_the_Abyss.mid"),
-        (generate_track_04, "04_Catacombs_of_Despair.mid"),
-        (generate_track_05, "05_The_Nameless_Kings_Fury.mid"),
-        (generate_track_06, "06_Lord_of_Cinder.mid"),
-        (generate_track_07, "07_Age_of_Dark.mid"),
+    # Dark Souls aesthetic demands Harmonic Minor (very dark, classical tension)
+    scale = Scale(2, Mode.HARMONIC_MINOR) # D Harmonic Minor
+
+    # --- TRACK 1: Ash and Embers ---
+    t1_tracks = [
+        TrackConfig(name="Melancholy_Piano", generator=MelodyGenerator(mode="chord_tones", rhythm=get_rhythm("ds_gwyn_lord_of_cinder")), instrument="piano", density=0.7),
+        TrackConfig(name="Shrine_Echo", generator=NebulaGenerator(variant="cloud", rhythm=get_rhythm("ds_firelink_shrine")), instrument="dark_pad", density=0.4),
+        TrackConfig(name="Cello_Weep", generator=MelodyGenerator(mode="downbeat_chord", rhythm=get_rhythm("markov:ballad")), instrument="cello", density=0.5)
     ]
-
-    total_notes = 0
-    time_signature = (4, 4)  # Hardcoded globally for the time calculation
-
-    with EngineTracer(show_private=False, show_duration=True, max_depth=2, use_colors=True):
-        for producer, filename in tracks:
-            print("-" * 80)
-            notes_dict, parts_config = producer()
-
-            # Construct Tempo Map for automation
-            tempo_map = []
-            current_beat = 0.0
-            for p in parts_config:
-                tempo_map.append((current_beat, p.tempo))
-                current_beat += p.bars * time_signature[0]
-
-            # Filter out non-track keys
-            tracks_data = {
-                k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)
+    t1_parts = [
+        IdeaPart(
+            name="Rest", bars=16, scale=scale, tempo=65, progression_type="coupled_hmm",
+            track_phrase_schedules={
+                "Melancholy_Piano": structure_to_schedule("A B", 8),
+                "Shrine_Echo":      structure_to_schedule("A", 16),
+                "Cello_Weep":       structure_to_schedule("R A", 8),
             }
+        )
+    ]
+    generate_track("1 Ash and Embers", t1_parts, t1_tracks, out_dir, 65)
 
-            # Extract CC automation events (expression, reverb, etc.)
-            cc_events = notes_dict.get("_cc_events", {})
+    # --- TRACK 2: The Abyss Marches ---
+    t2_tracks = [
+        TrackConfig(name="Abyss_March", generator=MelodyGenerator(mode="chord_tones", rhythm=get_rhythm("ds_abyss_watcher")), instrument="timpani", density=1.0),
+        TrackConfig(name="Ashen_Choir", generator=ChordGenerator(voicing="closed", rhythm=get_rhythm("ds_ashen_castle")), instrument="choir", density=0.8),
+        TrackConfig(name="Tremolo_Tension", generator=StringsEnsembleGenerator(section_size="full", articulation="tremolo"), instrument="tremolo_strings", density=0.9, octave_shift=1),
+        TrackConfig(name="Low_Brass", generator=BassGenerator(style="root_fifth"), instrument="tuba", density=0.8, octave_shift=-1)
+    ]
+    t2_parts = [
+        IdeaPart(
+            name="March", bars=16, scale=scale, tempo=85, progression_type="coupled_hmm",
+            track_phrase_schedules={
+                "Abyss_March":     structure_to_schedule("A B", 8),
+                "Ashen_Choir":     structure_to_schedule("A", 16),
+                "Tremolo_Tension": structure_to_schedule("R A", 8),
+                "Low_Brass":       structure_to_schedule("A", 16),
+            }
+        )
+    ]
+    generate_track("2 The Abyss Marches", t2_parts, t2_tracks, out_dir, 85)
 
-            # Extract MPE track names for per-note expression channels
-            mpe_tracks = notes_dict.get("_mpe_tracks", set())
+    # --- TRACK 3: Boreal Waltz ---
+    t3_tracks = [
+        TrackConfig(name="Dancer_Strings", generator=StringsEnsembleGenerator(section_size="chamber", articulation="sustained", rhythm=get_rhythm("ds_dancer")), instrument="violin", density=0.9),
+        TrackConfig(name="Cold_Music_Box", generator=MelodyGenerator(mode="scale_walk", rhythm=get_rhythm("ds_irithyll")), instrument="music_box", density=0.7, octave_shift=1),
+        TrackConfig(name="Deep_Abyss", generator=DroneGenerator(variant="tonic"), instrument="dark_pad", density=0.5, octave_shift=-1)
+    ]
+    t3_parts = [
+        IdeaPart(
+            name="Waltz", bars=16, scale=scale, tempo=95, progression_type="coupled_hmm",
+            track_phrase_schedules={
+                "Dancer_Strings": structure_to_schedule("A B", 8),
+                "Cold_Music_Box": structure_to_schedule("A A:var", 8),
+                "Deep_Abyss":     structure_to_schedule("A", 16),
+            }
+        )
+    ]
+    generate_track("3 Boreal Waltz", t3_parts, t3_tracks, out_dir, 95)
 
-            # Export with tempo automation and CC events!
-            export_multitrack_midi(
-                tracks_data,
-                str(album_dir / filename),
-                bpm=parts_config[0].tempo,  # Base BPM
-                tempo_events=tempo_map,  # Dynamic BPM automation!
-                cc_events=cc_events,  # CC11 expression + CC91 reverb!
-                mpe_tracks=mpe_tracks,  # MPE per-note channels!
-            )
+    # --- TRACK 4: Final Cinder ---
+    t4_tracks = [
+        TrackConfig(name="Cinder_Drums", generator=MelodyGenerator(mode="chord_tones", rhythm=get_rhythm("ds_soul_of_cinder")), instrument="drums", density=1.0),
+        TrackConfig(name="Gael_Agression", generator=MelodyGenerator(mode="scale_walk", rhythm=get_rhythm("ds_gael")), instrument="choir", density=1.0),
+        TrackConfig(name="Frantic_Strings", generator=StringsEnsembleGenerator(section_size="full", articulation="staccato", rhythm=get_rhythm("ds_champion_gundyr")), instrument="strings", density=0.9),
+        TrackConfig(name="Boss_Brass", generator=BassGenerator(style="walking"), instrument="brass", density=0.8, octave_shift=-1)
+    ]
+    t4_parts = [
+        IdeaPart(
+            name="Phase1", bars=8, scale=scale, tempo=120, progression_type="coupled_hmm",
+            track_phrase_schedules={
+                "Cinder_Drums":    structure_to_schedule("A", 8),
+                "Gael_Agression":  structure_to_schedule("R", 8),
+                "Frantic_Strings": structure_to_schedule("A", 8),
+                "Boss_Brass":      structure_to_schedule("A", 8),
+            }
+        ),
+        IdeaPart(
+            name="Phase2_Berserk", bars=16, scale=scale, tempo=135, progression_type="coupled_hmm",
+            track_phrase_schedules={
+                "Cinder_Drums":    structure_to_schedule("B C", 8),
+                "Gael_Agression":  structure_to_schedule("A B", 8),
+                "Frantic_Strings": structure_to_schedule("B", 16),
+                "Boss_Brass":      structure_to_schedule("B", 16),
+            }
+        )
+    ]
+    generate_track("4 Final Cinder", t4_parts, t4_tracks, out_dir, 120)
 
-            # Count notes
-            note_count = sum(len(n) for k, n in tracks_data.items())
-            total_notes += note_count
-            print(f"    Exported {filename}")
-            print(f"      - Notes: {note_count}")
-            print(f"      - Tempo Map: {', '.join(f'{bpm}bpm@{beat}b' for beat, bpm in tempo_map)}")
-
-    print()
-    print("=" * 80)
-    print(f"  COMPLETE: Lord of Cinder Album — {total_notes} total notes across 7 epic tracks")
-    print(f"  Output folder: {album_dir.resolve()}")
-    print("=" * 80)
-
+    print("\n  SUCCESS! Dark Souls Album 'Shadows of Lordran' generated.")
+    print(f"  Files saved in: {out_dir.absolute()}")
+    print("================================================================================")
 
 if __name__ == "__main__":
     main()
