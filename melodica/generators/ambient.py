@@ -86,6 +86,18 @@ class AmbientPadGenerator(PhraseGenerator):
             self.note_range_high if self.note_range_high is not None else self.params.key_range_high
         )
 
+        def _fit_to_range(pitches):
+            """Shift out-of-range pitches by octaves instead of dropping them."""
+            fitted = []
+            for p in pitches:
+                while p < low:
+                    p += 12
+                while p > high:
+                    p -= 12
+                if low <= p <= high:
+                    fitted.append(snap_to_scale(p, key))
+            return fitted
+
         last_chord = chords[-1]
         last_voicing_pitches: list[int] = []
         prev_pitches: list[int] = (
@@ -100,7 +112,7 @@ class AmbientPadGenerator(PhraseGenerator):
                     continue
                 last_chord = chord
                 pitches = voicing_fn(chord, self.params.key_range_low)
-                pitches = [snap_to_scale(p, key) for p in pitches if low <= p <= high]
+                pitches = _fit_to_range(pitches)
 
                 # Voice lead: shift pitches to minimize movement from previous
                 if prev_pitches:
@@ -122,7 +134,7 @@ class AmbientPadGenerator(PhraseGenerator):
         else:
             for chord in chords:
                 pitches = voicing_fn(chord, self.params.key_range_low)
-                pitches = [snap_to_scale(p, key) for p in pitches if low <= p <= high]
+                pitches = _fit_to_range(pitches)
 
                 # Voice lead
                 if prev_pitches:
