@@ -299,7 +299,22 @@ class CoupledHMMHarmonizer:
 
             # Anti-stagnation: penalize same chord type as previous step
             for k in range(N_TYPES):
-                scores[k::N_TYPES, k::N_TYPES] -= 2.0  # same type penalty regardless of root
+                scores[k::N_TYPES, k::N_TYPES] -= 2.0
+
+            # Interval diversity: penalize repeating the same root interval
+            if t_step >= 2:
+                # Get interval of previous transition from backtrack
+                prev_s = backtrack[t_step - 1, np.argmax(dp[t_step - 1])]
+                prevprev_s = backtrack[t_step - 2, prev_s] if t_step >= 2 else 0
+                prev_root = prev_s // N_TYPES
+                prevprev_root = prevprev_s // N_TYPES
+                last_interval = (prev_root - prevprev_root) % 12
+                # Penalize ALL transitions using that same interval
+                for r_from in range(N_TONES):
+                    r_to = (r_from + last_interval) % 12
+                    s_from = r_from * N_TYPES
+                    s_to = r_to * N_TYPES
+                    scores[s_from:s_from + N_TYPES, s_to:s_to + N_TYPES] -= 1.5
 
             best_prev = np.argmax(scores, axis=0)
             best_scores = scores[best_prev, np.arange(n_s)]

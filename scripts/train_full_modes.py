@@ -506,6 +506,20 @@ def main():
                 pchange[t, 0, t] = SELF_LOOP_CAP
     pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
 
+    # Cap any single cell at 25% to prevent dominating transitions
+    CELL_CAP = 0.25
+    for k in range(N_TYPES):
+        for i in range(N_TONES):
+            for j in range(N_TYPES):
+                if pchange[k, i, j] > CELL_CAP:
+                    excess = pchange[k, i, j] - CELL_CAP
+                    pchange[k, i, j] = CELL_CAP
+                    others = pchange[k].sum() - pchange[k, i, j]
+                    if others > 1e-8:
+                        pchange[k] *= (1.0 + excess / others)
+                        pchange[k, i, j] = CELL_CAP
+    pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
+
     # Iteratively suppress overrepresented target types
     for _round in range(5):
         target_dist = pchange.sum(dim=(0, 1))  # [next_type]
@@ -513,11 +527,10 @@ def main():
         worst = target_dist.argmax().item()
         if target_dist[worst] <= MAX_TYPE_SHARE:
             break
-        # Scale down all transitions INTO this type
         pchange[:, :, worst] *= MAX_TYPE_SHARE / target_dist[worst]
         pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
 
-    print(f"  Applied post-processing: self-loop cap {SELF_LOOP_CAP*100:.0f}%, max type {MAX_TYPE_SHARE*100:.0f}%")
+    print(f"  Applied post-processing: self-loop cap {SELF_LOOP_CAP*100:.0f}%, cell cap {CELL_CAP*100:.0f}%, max type {MAX_TYPE_SHARE*100:.0f}%")
 
     # Save weights + checkpoint
     out_dir = Path("melodica/harmonize/weights")
