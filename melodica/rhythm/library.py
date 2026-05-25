@@ -109,7 +109,7 @@ def _populate_library():
     # 2. Load project/cwd presets (can override packaged presets or define custom ones)
     cwd_dir = Path("presets/rhythms")
     if cwd_dir.is_dir():
-        for path in cwd_dir.glob("*.json"):
+        for path in cwd_dir.rglob("*.json"):
             _load_file(path)
             
     # 3. Hardcoded fallback in case both directories are missing or unreadable

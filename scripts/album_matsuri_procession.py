@@ -59,7 +59,16 @@ def main():
         TrackConfig("Gagaku_Stabs", "chord", "harpsichord", density=0.7, params={"rhythm": get_rhythm("gagaku_kakko_pattern")}),
         TrackConfig("Distant_Taiko", "melody", "drums", density=0.5, params={"mode": "chord_tones", "rhythm": get_rhythm("noh_taiko_mitsuji")})
     ]
-    t1_parts = [IdeaPart("Opening", 16, scale, 75)]
+    t1_parts = [
+        IdeaPart(
+            name="Opening", bars=16, scale=scale, tempo=75,
+            track_phrase_schedules={
+                "Shrine_Drone":  structure_to_schedule("A", 16),
+                "Gagaku_Stabs":  structure_to_schedule("R A R B", 4),
+                "Distant_Taiko": structure_to_schedule("R R A B", 4),
+            }
+        )
+    ]
     generate_track("1 Gathering at the Shrine", t1_parts, t1_tracks, out_dir, 75)
 
     # --- TRACK 2: The Golden Float ---
@@ -70,8 +79,24 @@ def main():
         TrackConfig("Flute_Call", "melody", "flute", density=0.6, params={"mode": "downbeat_chord", "rhythm": get_rhythm("markov:ballad")})
     ]
     t2_parts = [
-        IdeaPart("Procession", 8, scale, 140),
-        IdeaPart("Climax", 8, scale, 145)
+        IdeaPart(
+            name="Procession", bars=16, scale=scale, tempo=140,
+            track_phrase_schedules={
+                "Festival_Drums": structure_to_schedule("A B", 8),
+                "Shamisen_Lead":  structure_to_schedule("A", 16),
+                "Heavy_Bass":     structure_to_schedule("A", 16),
+                "Flute_Call":     structure_to_schedule("R A", 8),
+            }
+        ),
+        IdeaPart(
+            name="Climax", bars=16, scale=scale, tempo=145,
+            track_phrase_schedules={
+                "Festival_Drums": structure_to_schedule("C", 16),
+                "Shamisen_Lead":  structure_to_schedule("B", 16),
+                "Heavy_Bass":     structure_to_schedule("B", 16),
+                "Flute_Call":     structure_to_schedule("B", 16),
+            }
+        )
     ]
     generate_track("2 The Golden Float", t2_parts, t2_tracks, out_dir, 140)
 
@@ -81,7 +106,16 @@ def main():
         TrackConfig("Koto_Arp", "melody", "koto", density=0.8, params={"mode": "scale_walk", "rhythm": get_rhythm("koto_sakura_sakura")}),
         TrackConfig("Spirit_Voices", "nebula", "voice", density=0.4, params={"variant": "cloud"})
     ]
-    t3_parts = [IdeaPart("Dance", 16, scale, 120)]
+    t3_parts = [
+        IdeaPart(
+            name="Dance", bars=24, scale=scale, tempo=120,
+            track_phrase_schedules={
+                "Bon_Odori_Groove": structure_to_schedule("A B A C", 6),
+                "Koto_Arp":         structure_to_schedule("A B A B:var", 6),
+                "Spirit_Voices":    structure_to_schedule("R A R B", 6),
+            }
+        )
+    ]
     generate_track("3 Night Dance of the Spirits", t3_parts, t3_tracks, out_dir, 120)
 
     # --- TRACK 4: Departure of the Gods ---
@@ -90,7 +124,16 @@ def main():
         TrackConfig("Lone_Shakuhachi", "melody", "flute", density=0.4, params={"mode": "downbeat_chord", "rhythm": get_rhythm("shakuhachi_ma")}),
         TrackConfig("Vinyl_Crackle", "nebula", "synth_fx", density=0.2, params={"variant": "swell"})
     ]
-    t4_parts = [IdeaPart("Ending", 8, scale, 65)]
+    t4_parts = [
+        IdeaPart(
+            name="Ending", bars=16, scale=scale, tempo=65,
+            track_phrase_schedules={
+                "Fading_Drone":   structure_to_schedule("A", 16),
+                "Lone_Shakuhachi":structure_to_schedule("R A R B", 4),
+                "Vinyl_Crackle":  structure_to_schedule("A B", 8),
+            }
+        )
+    ]
     generate_track("4 Departure of the Gods", t4_parts, t4_tracks, out_dir, 65)
 
     print("\n  SUCCESS! Album 'Matsuri Procession' generated.")
