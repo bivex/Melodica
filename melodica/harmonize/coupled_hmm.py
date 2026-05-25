@@ -296,6 +296,11 @@ class CoupledHMMHarmonizer:
                 target_chord = next((c for c in constraints if c.start <= cp < c.start + c.duration), None)
 
             scores = dp[t_step - 1][:, None] + trans  # [n_s, n_s]
+
+            # Anti-stagnation: penalize same chord type as previous step
+            for k in range(N_TYPES):
+                scores[k::N_TYPES, k::N_TYPES] -= 2.0  # same type penalty regardless of root
+
             best_prev = np.argmax(scores, axis=0)
             best_scores = scores[best_prev, np.arange(n_s)]
 

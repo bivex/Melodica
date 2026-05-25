@@ -491,6 +491,34 @@ def main():
 
     print(f"\n  Training finished in {elapsed:.1f}s, best LL={best_ll:.1f}")
 
+    # Post-process: rebalance final weights
+    SELF_LOOP_CAP = 0.25
+    MAX_TYPE_SHARE = 0.12  # no single chord type > 12% of transitions
+
+    # Cap self-loops (same type at unison)
+    for t in range(N_TYPES):
+        if pchange[t, 0, t] > SELF_LOOP_CAP:
+            excess = pchange[t, 0, t] - SELF_LOOP_CAP
+            pchange[t, 0, t] = SELF_LOOP_CAP
+            others = pchange[t].sum() - pchange[t, 0, t]
+            if others > 1e-8:
+                pchange[t] *= (1.0 + excess / others)
+                pchange[t, 0, t] = SELF_LOOP_CAP
+    pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
+
+    # Iteratively suppress overrepresented target types
+    for _round in range(5):
+        target_dist = pchange.sum(dim=(0, 1))  # [next_type]
+        target_dist = target_dist / target_dist.sum()
+        worst = target_dist.argmax().item()
+        if target_dist[worst] <= MAX_TYPE_SHARE:
+            break
+        # Scale down all transitions INTO this type
+        pchange[:, :, worst] *= MAX_TYPE_SHARE / target_dist[worst]
+        pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
+
+    print(f"  Applied post-processing: self-loop cap {SELF_LOOP_CAP*100:.0f}%, max type {MAX_TYPE_SHARE*100:.0f}%")
+
     # Save weights + checkpoint
     out_dir = Path("melodica/harmonize/weights")
     out_dir.mkdir(exist_ok=True, parents=True)
