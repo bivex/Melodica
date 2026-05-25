@@ -51,7 +51,7 @@ def _build_tracks():
         TrackConfig(name="Trap_Drums", generator=TrapDrumsGenerator(hat_roll_density=0.7, ghost_snare_prob=0.3), instrument="drums", density=0.8),
         TrackConfig(name="Lead_Synth", generator=LeadSynthGenerator(style="trance", portamento=0.15, note_length="mixed", rhythm=lead_rhythm), instrument="synth_lead", density=0.6, octave_shift=1),
         TrackConfig(name="Vocal_Chops", generator=VocalChopsGenerator(density=0.6, chop_pattern="syncopated", rhythm=vocal_rhythm), instrument="synth_voice", density=0.5),
-        TrackConfig(name="Brass_Hits", generator=BrassSectionGenerator(articulation="hit", intensity=0.9), instrument="brass", density=0.3),
+        TrackConfig(name="Brass_Hits", generator=BrassSectionGenerator(articulation="hit", intensity=0.9), instrument="brass", density=0.3, follow_rhythm_track="Lead_Synth"),
         TrackConfig(name="FX_Riser", generator=FXRiserGenerator(riser_type="synth", length_beats=8.0), instrument="synth_fx", density=0.3),
         TrackConfig(name="FX_Impact", generator=FXImpactGenerator(impact_type="boom", tail_length=2.0), instrument="synth_fx", density=0.2),
         TrackConfig(name="Counter_Lead", generator=CountermelodyGenerator(interval_limit=7, rhythm=counter_rhythm), instrument="synth_lead", density=0.4),
