@@ -81,7 +81,12 @@ def run_sanity_check(pnote, pchange, pchord):
     # Aug not dominant
     aug_idx = 3
     pchange_marginal = pc.sum(axis=(1, 2))
-    pchange_marginal = pchange_marginal / pchange_marginal.sum()
+    total = pchange_marginal.sum()
+    if total > 0 and np.isfinite(total):
+        pchange_marginal = pchange_marginal / total
+    else:
+        pchange_marginal = np.ones(N_TYPES) / N_TYPES
+        print("    [WARN] pchange marginal is NaN/zero, using uniform")
     checks["aug_not_dominant"] = pchange_marginal[aug_idx] <= 0.15
 
     # Dom7 -> Min strong at P4
@@ -104,7 +109,7 @@ def run_sanity_check(pnote, pchange, pchord):
     print(f"\n  Chord transition distribution:")
     for i, name in enumerate(TYPE_NAMES):
         pct = pchange_marginal[i] * 100
-        bar = "#" * int(pct * 2)
+        bar = "#" * int(min(max(pct, 0), 100) * 2)
         print(f"    {name:6s} {pct:5.1f}%  {bar}")
 
     return all_ok
@@ -119,7 +124,7 @@ def finetune_pchange_only(pchange, frozen_pnote, songs_batched, mask,
     pnote = frozen_pnote
     n_types = 12
 
-    for fi in range(n_iter):
+    for fi in tqdm(range(n_iter), desc="Finetune pchange"):
         log_pnote = torch.log(pnote + eps)
         log_not_pnote = torch.log(1.0 - pnote + eps)
         songs_expanded = songs_batched[:, :, shifts]
