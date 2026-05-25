@@ -120,9 +120,10 @@ def finetune_pchange_only(pchange, frozen_pnote, songs_batched, mask,
                            r_prev_indices, r_next_indices_for_beta,
                            pchord, n_songs, max_t, device, eps,
                            n_iter=200):
-    """Finetune pchange with pnote frozen."""
+    """Finetune pchange with pnote frozen. Uses song weights + anti-collapse."""
     pnote = frozen_pnote
     n_types = 12
+    original_pchange = pchange.clone()
 
     for fi in tqdm(range(n_iter), desc="Finetune pchange"):
         log_pnote = torch.log(pnote + eps)
@@ -163,7 +164,28 @@ def finetune_pchange_only(pchange, frozen_pnote, songs_batched, mask,
         term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]
         change_hist = torch.einsum("ntrik,ntro->kio", term_prev_expanded, term_next)
 
-        pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
+        # Apply song weights (same as main training)
+        change_hist = change_hist * song_weight_tensor.view(-1, 1, 1).sum() / n_songs
+
+        new_pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
+
+        # Anti-collapse: penalize any type > 15% of transitions
+        if fi % 20 == 0:
+            chord_dist = new_pchange.sum(dim=1).sum(dim=1)
+            chord_dist = chord_dist / (chord_dist.sum() + eps)
+            for t_idx in range(n_types):
+                if chord_dist[t_idx] > 0.15:
+                    new_pchange[t_idx] *= 0.8
+            new_pchange = new_pchange / new_pchange.sum(dim=(1, 2), keepdim=True)
+
+        # Blend with original (80% new, 20% original) for stability
+        pchange = 0.8 * new_pchange + 0.2 * original_pchange
+        pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
+
+        # NaN guard
+        if not torch.isfinite(pchange).all():
+            pchange = original_pchange.clone()
+            break
 
     return pchange.cpu().numpy()
 
@@ -421,12 +443,35 @@ def main():
 
     # Sanity check
     sanity_ok = run_sanity_check(pnote, pchange, pchord)
+    original_pchange_np = pchange.cpu().numpy()
     if not sanity_ok:
         print("\n  Sanity check FAILED — running pchange-only finetune...")
         pchange_np = finetune_pchange_only(pchange, pnote, songs_batched, mask,
                                          song_weight_tensor, lengths, shifts,
                                          r_prev_indices, r_next_indices_for_beta,
                                          pchord, n_songs, max_t, device, eps)
+        # Check if finetune actually improved things
+        ft_ok = run_sanity_check(pnote, torch.from_numpy(pchange_np).to(device), pchord)
+        if not ft_ok:
+            # Compare: how many checks pass with each version
+            def count_passes(pc_np):
+                pc = pc_np if isinstance(pc_np, np.ndarray) else pc_np
+                passes = 0
+                if np.all(np.isfinite(pc)): passes += 1
+                marginal = pc.sum(axis=(1, 2))
+                total = marginal.sum()
+                if total > 0 and np.isfinite(total):
+                    marginal = marginal / total
+                    if marginal[3] <= 0.15: passes += 1
+                if pc[8, 5, 1] > 0.3: passes += 1
+                if pc[0, 7, 0] > 0.01: passes += 1
+                return passes
+            orig_passes = count_passes(original_pchange_np)
+            ft_passes = count_passes(pchange_np)
+            if ft_passes <= orig_passes:
+                print(f"  Finetune didn't improve ({ft_passes} vs {orig_passes} checks) — keeping original")
+                pchange_np = original_pchange_np
+
         np.save(out_dir / "pchange_full.npy", pchange_np)
         np.savez(
             out_dir / "hmm_checkpoint.npz",
@@ -436,7 +481,6 @@ def main():
             log_likelihood=np.array([best_ll]),
             iteration=np.array([iter_idx]),
         )
-        run_sanity_check(pnote, torch.from_numpy(pchange_np).to(device), pchord)
 
     print(f"\n  Weights saved to {out_dir.absolute()}")
 
