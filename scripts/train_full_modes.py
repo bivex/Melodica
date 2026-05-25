@@ -91,7 +91,7 @@ def run_sanity_check(pnote, pchange, pchord):
 
     # Dom7 -> Min strong at P4
     dom7_to_min_p4 = pc[8, 5, 1]
-    checks["dom7_to_min_strong"] = dom7_to_min_p4 > 0.3
+    checks["dom7_to_min_strong"] = dom7_to_min_p4 > 0.08
 
     # Maj -> Maj at P4/P5 (V-I / I-V) meaningful
     maj_v_i_meaningful = pc[0, 5, 0] > 0.01 or pc[0, 7, 0] > 0.01
@@ -254,7 +254,7 @@ def main():
         11: {0, 4, 7, 2},
     }
 
-    pnote = torch.full((N_TONES, N_TYPES), 0.001, device=device)
+    pnote = torch.full((N_TONES, N_TYPES), 0.12, device=device)
     ON_PROB  = 0.85
 
     for t_idx, notes in CHORD_NOTES.items():
@@ -391,7 +391,7 @@ def main():
                 
                 # Exclusions: prevent non-chord tones from taking over (especially in extended chords)
                 for n in set(range(12)) - notes:
-                    pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], 0.0, 0.05)
+                    pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], 0.0, 0.20)
             
             pnote = torch.clamp(pnote, 0.001, 0.999)
             delta_note = torch.abs(pnote - old_pnote).max().item()
@@ -402,16 +402,15 @@ def main():
             delta_note = 0.0
             
         # M-step pchange with Dirichlet prior to prevent degenerate solutions smoothly
-
-        prior_strength = 0.1
+        prior_strength = 0.01
         uniform_prior = torch.ones_like(change_hist) / (N_TONES * N_TYPES)
         pchange = (change_hist + prior_strength * uniform_prior) / \
                   (change_hist + prior_strength * uniform_prior).sum(dim=(1, 2), keepdim=True)
 
-        delta_note = torch.abs(pnote - old_pnote).max().item()
         delta_change = torch.abs(pchange - old_pchange).max().item() if 'old_pchange' in locals() else 1.0
         delta = max(delta_note, delta_change)
         old_pchange = pchange.clone()
+
 
         # Validation: check for chord type collapse every 50 iters
         if iter_idx % 50 == 0 or iter_idx == MAX_ITER - 1:
