@@ -1,0 +1,41 @@
+{
+  "name": "strauss_waltz_elegant",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.5,
+      "duration": 0.5,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.33,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 1.33,
+      "duration": 0.34,
+      "velocity_factor": 0.55
+    },
+    {
+      "onset": 1.67,
+      "duration": 0.33,
+      "velocity_factor": 0.65
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.75,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 2.75,
+      "duration": 0.25,
+      "velocity_factor": 0.6
+    }
+  ]
+}

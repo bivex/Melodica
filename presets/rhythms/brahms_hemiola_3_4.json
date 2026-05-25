@@ -1,0 +1,36 @@
+{
+  "name": "brahms_hemiola_3_4",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.0,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.0,
+      "duration": 1.0,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 2.0,
+      "duration": 1.0,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 3.0,
+      "duration": 1.0,
+      "velocity_factor": 0.8
+    },
+    {
+      "onset": 4.0,
+      "duration": 1.0,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 5.0,
+      "duration": 1.0,
+      "velocity_factor": 0.85
+    }
+  ]
+}
