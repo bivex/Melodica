@@ -133,9 +133,16 @@ from melodica.modifiers.rc_variations_structural import (
     MotifTransformModifier,
 )
 
+from melodica.modifiers.glue import (
+    DropSilenceModifier,
+    DrumFillModifier,
+)
+
 __all__ = [
     "PhraseModifier",
     "ModifierContext",
+    "DropSilenceModifier",
+    "DrumFillModifier",
     "QuantizeModifier",
     "FollowRhythmModifier",
     "HumanizeModifier",
