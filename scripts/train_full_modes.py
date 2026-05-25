@@ -21,15 +21,22 @@ TARGET_DELTA = 1e-5
 
 
 def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
-    """Load .ntc files and return as a list of tensors."""
+    """Load .ntc files and return as a list of tensors + per-song weights."""
     songs = []
+    weights = []
     songlist_path = data_dir / songlist_file
     if not songlist_path.exists():
         names = [p.stem for p in sorted(data_dir.glob("*.ntc"))]
     else:
         names = [line.strip() for line in songlist_path.read_text().splitlines() if line.strip()]
 
-    for name in names:
+    # Load per-song weights if available (genre-weighted corpus)
+    weights_path = data_dir / "song_weights.txt"
+    raw_weights = None
+    if weights_path.exists():
+        raw_weights = [float(w) for w in weights_path.read_text().splitlines() if w.strip()]
+
+    for i, name in enumerate(names):
         filepath = data_dir / f"{name}.ntc"
         if not filepath.exists():
             continue
@@ -47,7 +54,12 @@ def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
                 song_steps.append(vec)
         if song_steps:
             songs.append(torch.stack(song_steps))
-    return songs
+            w = raw_weights[i] if raw_weights and i < len(raw_weights) else 1.0
+            # Invert: more songs for a mode → each song gets lower weight
+            # This way Common modes still dominate but don't overwhelm
+            weights.append(1.0 / max(w, 1.0))
+
+    return songs, weights
 
 
 def main():
@@ -57,7 +69,7 @@ def main():
     # Load corpora
     synth_dir = Path("tymoczko_code/Code/First step/synth_data")
     print("  Loading synthetic corpus...")
-    raw_songs = load_ntc_songs(synth_dir)
+    raw_songs, raw_weights = load_ntc_songs(synth_dir)
     print(f"    Loaded {len(raw_songs)} songs")
 
     # Batching: Pad to max length
@@ -66,13 +78,18 @@ def main():
 
     songs_batched = torch.zeros(n_songs, max_t, N_TONES, device=device)
     mask = torch.zeros(n_songs, max_t, device=device)
+    song_weight_tensor = torch.zeros(n_songs, device=device)
     lengths = []
 
     for i, s in enumerate(raw_songs):
         t = s.shape[0]
         songs_batched[i, :t, :] = s.to(device)
         mask[i, :t] = 1.0
+        song_weight_tensor[i] = raw_weights[i]
         lengths.append(t)
+
+    # Normalize weights so they average to 1.0
+    song_weight_tensor = song_weight_tensor / song_weight_tensor.mean()
 
     # Pre-calculate circulant indices
     # shifts[r, p] = (p + r) % 12
@@ -121,7 +138,7 @@ def main():
 
     pnote /= pnote.sum(dim=0, keepdim=True)
 
-    pchord = torch.tensor([2.0, 2.0, 1.0, 0.5, 0.3, 0.3, 1.0, 1.0, 1.5, 0.8, 0.8, 1.2], device=device)
+    pchord = torch.tensor([2.0, 2.0, 1.0, 0.05, 0.3, 0.3, 1.0, 1.0, 1.5, 0.8, 0.8, 1.2], device=device)
     pchord /= pchord.sum()
 
     pchange = torch.ones(N_TYPES, N_TONES, N_TYPES, device=device) / (N_TONES * N_TYPES)
@@ -194,13 +211,17 @@ def main():
 
         gamma *= mask.view(n_songs, max_t, 1, 1)
 
-        chord_hist = gamma.sum(dim=(0, 1, 2))
-        note_hist = torch.einsum("ntrp,ntrk->pk", songs_expanded, gamma)
+        # Apply per-song weights (common modes get more influence)
+        gamma_weighted = gamma * song_weight_tensor.view(n_songs, 1, 1, 1)
+
+        chord_hist = gamma_weighted.sum(dim=(0, 1, 2))
+        note_hist = torch.einsum("ntrp,ntrk->pk", songs_expanded, gamma_weighted)
 
         # change_hist[t_p, i, t_n]
         term_next = psets[:, 1:] * beta[:, 1:]  # [N, T-1, 12, K]
         term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]  # [N, T-1, 12, 12, K]
         change_hist = torch.einsum("ntrik,ntro->kio", term_prev_expanded, term_next)
+        change_hist = change_hist * song_weight_tensor.view(-1, 1, 1).sum() / n_songs  # approximate weighting
 
         # 5. M-step
         old_pnote = pnote.clone()
@@ -233,6 +254,21 @@ def main():
         pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
 
         delta = torch.abs(pnote - old_pnote).max().item()
+
+        # Validation: check for chord type collapse every 50 iters
+        if iter_idx % 50 == 0 or iter_idx == MAX_ITER - 1:
+            type_names = ["Maj", "Min", "Dim", "Aug", "sus2", "sus4",
+                          "Maj7", "Min7", "Dom7", "Maj9", "Min9", "Add9"]
+            chord_dist = pchange.sum(dim=1).sum(dim=1)  # [N_TYPES] — how much each type appears in transitions
+            chord_dist = chord_dist / chord_dist.sum()
+            dominant_type = chord_dist.argmax().item()
+            dominant_pct = chord_dist[dominant_type].item() * 100
+            if dominant_pct > 20:
+                pbar.write(f"  WARNING: {type_names[dominant_type]} dominates {dominant_pct:.1f}% of transitions at iter {iter_idx}")
+                # Penalize dominant type in pchange to prevent collapse
+                pchange[dominant_type] *= 0.8
+                pchange /= pchange.sum(dim=(1, 2), keepdim=True)
+
         pbar.set_postfix({"Delta": f"{delta:.6f}", "LL": f"{total_ll:.1f}"})
         if delta < TARGET_DELTA:
             break

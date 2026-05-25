@@ -201,20 +201,51 @@ def generate_song(mode_intervals, triads, bars=8, beats_per_bar=4):
     return lines
 
 
+# Real-world frequency weights by mode category.
+# Common modes dominate real music; exotic modes are rare.
+MODE_WEIGHTS = {
+    # Common (western pop/classical backbone)
+    "Common": 500, "Pentatonic": 400, "Blues": 300,
+    # Jazz / extended
+    "Jazz": 200, "Bebop": 150,
+    # Film / atmosphere
+    "Film": 120, "Atmospheric": 100, "Cinematic": 100,
+    # Modernist / theoretical
+    "Symmetric": 50, "Modernist": 40, "Theoretical": 30, "Scriabin": 30,
+    "Verdi": 20, "Classical": 80,
+    # Ethnic / world
+    "Ethnic": 60, "Exotic": 40,
+    # Production genres
+    "Trap": 150, "Lo-Fi": 150, "Ambient": 100,
+    # Fallback
+    None: 50,
+}
+
+
 def main():
     out_dir = Path("tymoczko_code/Code/First step/synth_data")
     out_dir.mkdir(exist_ok=True, parents=True)
 
     songlist = []
+    song_weights = []
     total_songs = 0
+
+    type_names = {
+        0: "Maj", 1: "Min", 2: "Dim", 3: "Aug",
+        4: "sus2", 5: "sus4", 6: "Maj7", 7: "Min7", 8: "Dom7",
+        9: "Maj9", 10: "Min9", 11: "Add9"
+    }
 
     for mode_idx, (mode, definition) in enumerate(MODE_DATABASE.items()):
         intervals = definition.intervals
         triads = build_mode_triads(intervals)
         scale_pcs = [round(iv) % 12 for iv in intervals]
 
-        # Generate 100 songs per mode
-        n_songs = 100
+        # Weight songs by mode category (real-world frequency)
+        n_songs = MODE_WEIGHTS.get(definition.category, MODE_WEIGHTS[None])
+        # Normalize: divide by 100 so total corpus ~ same size as before
+        n_songs = max(n_songs // 10, 5)
+
         for song_i in range(n_songs):
             name = f"synth_{mode.value}_{song_i:03d}"
             bars = random.choice([8, 12, 16])
@@ -227,24 +258,24 @@ def main():
                 f.write("\n".join(lines) + "\n")
 
             songlist.append(name)
+            song_weights.append(n_songs)
             total_songs += 1
 
         # Summary for this mode
         triad_types = set(t for _, t in triads)
-        type_names = {
-            0: "Maj", 1: "Min", 2: "Dim", 3: "Aug", 
-            4: "sus2", 5: "sus4", 6: "Maj7", 7: "Min7", 8: "Dom7",
-            9: "Maj9", 10: "Min9", 11: "Add9"
-        }
         types_str = ", ".join(type_names.get(t, "?") for t in sorted(triad_types))
-        print(f"  {mode.value:30s} intervals={intervals}  chords=[{types_str}]")
+        print(f"  {mode.value:30s} cat={definition.category:12s} n={n_songs:4d} chords=[{types_str}]")
 
-    # Write songlist
+    # Write songlist with weights
     songlist_path = out_dir / "songlist.txt"
     songlist_path.write_text("\n".join(songlist) + "\n")
 
-    print(f"\n  Generated {total_songs} synthetic songs for {len(MODE_DATABASE)} modes")
+    weights_path = out_dir / "song_weights.txt"
+    weights_path.write_text("\n".join(str(w) for w in song_weights) + "\n")
+
+    print(f"\n  Generated {total_songs} weighted synthetic songs for {len(MODE_DATABASE)} modes")
     print(f"  Songlist: {songlist_path}")
+    print(f"  Weights:  {weights_path}")
 
 
 if __name__ == "__main__":
