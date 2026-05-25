@@ -71,7 +71,12 @@ def _build_tracks():
         # Evolving Nebula Clouds
         TrackConfig(
             name="Nebula_Clouds",
-            generator=NebulaGenerator(variant="cloud", density_notes=4, pitch_spread=24),
+            generator=NebulaGenerator(
+                variant="cloud", 
+                density_notes=4, 
+                pitch_spread=24,
+                use_scale_tones=False  # Use chord tones (including the nines!)
+            ),
             instrument="pad",
             density=0.35,
             octave_shift=0
@@ -118,10 +123,17 @@ def _build_tracks():
 
 
 def _build_parts(scale):
+    # Progressions with 9ths ("девятки")
+    prog_intro = ["im9 ivm9 VII9 IIImaj9"]
+    prog_verse = ["im9 bVImaj9 iim7b5 V9", "im9 ivm9 bVII9 IIImaj9"]
+    prog_hook  = ["im9 ivm9 V9 im9", "bVImaj9 bIImaj9 iim9 V9"]
+    
     return [
         # 1. Opening (8 bars) — Sparse Drone & Vinyl
         IdeaPart(
             name="Opening", bars=8, scale=scale, tempo=68,
+            progression_type="from_list",
+            progression_list=prog_intro,
             track_phrase_schedules={
                 "Dark_Drone":    structure_to_schedule("A", 8),
                 "LoFi_Groove":   structure_to_schedule("R", 8),
@@ -137,6 +149,8 @@ def _build_parts(scale):
         # 2. Arrival (8 bars) — Groove enters
         IdeaPart(
             name="Arrival", bars=8, scale=scale, tempo=70,
+            progression_type="from_list",
+            progression_list=prog_intro,
             track_phrase_schedules={
                 "Dark_Drone":    structure_to_schedule("A", 8),
                 "LoFi_Groove":   structure_to_schedule("A", 8),
@@ -152,6 +166,8 @@ def _build_parts(scale):
         # 3. Verse 1 (16 bars)
         IdeaPart(
             name="Verse1", bars=16, scale=scale, tempo=72,
+            progression_type="from_list",
+            progression_list=prog_verse,
             track_phrase_schedules={
                 "Dark_Drone":    structure_to_schedule("A", 16),
                 "LoFi_Groove":   structure_to_schedule("A B", 8),
@@ -167,6 +183,8 @@ def _build_parts(scale):
         # 4. Deep Vibe (12 bars) — Peak Atmosphere
         IdeaPart(
             name="DeepVibe", bars=12, scale=scale, tempo=74,
+            progression_type="from_list",
+            progression_list=prog_hook,
             track_phrase_schedules={
                 "Dark_Drone":    structure_to_schedule("A", 12),
                 "LoFi_Groove":   structure_to_schedule("C", 12),
@@ -179,9 +197,11 @@ def _build_parts(scale):
             },
         ),
 
-        # 5. Breakdown (8 bars) — Submerged
+        # 5. Submerged (8 bars) — Breakdown
         IdeaPart(
             name="Submerged", bars=8, scale=scale, tempo=65,
+            progression_type="from_list",
+            progression_list=prog_intro,
             track_phrase_schedules={
                 "Dark_Drone":    structure_to_schedule("B", 8),
                 "LoFi_Groove":   structure_to_schedule("D", 8),
@@ -197,6 +217,8 @@ def _build_parts(scale):
         # 6. Rebuild (12 bars)
         IdeaPart(
             name="Rebuild", bars=12, scale=scale, tempo=72,
+            progression_type="from_list",
+            progression_list=prog_verse,
             track_phrase_schedules={
                 "Dark_Drone":    structure_to_schedule("A", 12),
                 "LoFi_Groove":   structure_to_schedule("A:var", 12),
@@ -209,9 +231,11 @@ def _build_parts(scale):
             },
         ),
 
-        # 7. Climax (8 bars) — Orchestral Depth
+        # 7. Climax (8 bars) — Peak Energy with 9ths
         IdeaPart(
             name="Climax", bars=8, scale=scale, tempo=78,
+            progression_type="from_list",
+            progression_list=prog_hook,
             track_phrase_schedules={
                 "Dark_Drone":    structure_to_schedule("A", 8),
                 "LoFi_Groove":   structure_to_schedule("C:var", 8),
@@ -227,6 +251,8 @@ def _build_parts(scale):
         # 8. Dissolve (8 bars) — Fade Out
         IdeaPart(
             name="Dissolve", bars=8, scale=scale, tempo=68,
+            progression_type="from_list",
+            progression_list=prog_intro,
             track_phrase_schedules={
                 "Dark_Drone":    structure_to_schedule("A", 8),
                 "LoFi_Groove":   structure_to_schedule("D R", 4),
