@@ -1,0 +1,36 @@
+{
+  "name": "ds_irithyll",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.67,
+      "velocity_factor": 0.55
+    },
+    {
+      "onset": 0.67,
+      "duration": 0.33,
+      "velocity_factor": 0.4
+    },
+    {
+      "onset": 1.0,
+      "duration": 1.0,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.67,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 2.67,
+      "duration": 0.33,
+      "velocity_factor": 0.4
+    },
+    {
+      "onset": 3.0,
+      "duration": 1.0,
+      "velocity_factor": 0.45
+    }
+  ]
+}

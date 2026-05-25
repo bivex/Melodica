@@ -1,0 +1,21 @@
+{
+  "name": "ds_firelink_shrine",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 2.0,
+      "velocity_factor": 0.4
+    },
+    {
+      "onset": 2.5,
+      "duration": 1.0,
+      "velocity_factor": 0.35
+    },
+    {
+      "onset": 3.75,
+      "duration": 0.25,
+      "velocity_factor": 0.3
+    }
+  ]
+}

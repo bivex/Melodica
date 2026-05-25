@@ -9,9 +9,10 @@ Showcases bouncy, upbeat, and repetitive rhythms using the custom hc_* library.
 
 from pathlib import Path
 from melodica.idea_tool import (
-    IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart, _GM_PROGRAMS,
+    IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart,
     structure_to_schedule,
 )
+from melodica.fluid_r3_profile import FLUID_R3_PROGRAMS
 from melodica.generators.melody import MelodyGenerator
 from melodica.generators.chord_gen import ChordGenerator
 from melodica.generators.bass import BassGenerator
@@ -47,7 +48,7 @@ def main():
         TrackConfig(
             name="Synth_Bounce",
             generator=ChordGenerator(voicing="closed", rhythm=get_rhythm("hc_fever_mode")),
-            instrument="synth_lead", density=1.0
+            instrument="calliope_lead", density=1.0
         ),
         # Springy, jumping bass
         TrackConfig(
@@ -80,7 +81,7 @@ def main():
     
     notes_dict = IdeaTool(config).generate()
     tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
-    instruments_map = {t.name: _GM_PROGRAMS.get(t.instrument, 0) for t in tracks}
+    instruments_map = {t.name: FLUID_R3_PROGRAMS.get(t.instrument, 0) for t in tracks}
     
     file_path = out_dir / "Hyper_Casual_Loop.mid"
     export_multitrack_midi(tracks_data, str(file_path), bpm=135, instruments=instruments_map)

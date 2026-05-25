@@ -1,0 +1,21 @@
+{
+  "name": "ds_untended_graves",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 4.0,
+      "velocity_factor": 0.3
+    },
+    {
+      "onset": 4.0,
+      "duration": 2.0,
+      "velocity_factor": 0.25
+    },
+    {
+      "onset": 6.0,
+      "duration": 2.0,
+      "velocity_factor": 0.35
+    }
+  ]
+}

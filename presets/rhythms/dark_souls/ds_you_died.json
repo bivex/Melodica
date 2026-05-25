@@ -1,0 +1,26 @@
+{
+  "name": "ds_you_died",
+  "loop": false,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.5,
+      "duration": 0.5,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 1.0,
+      "duration": 1.0,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 2.5,
+      "duration": 1.5,
+      "velocity_factor": 0.3
+    }
+  ]
+}
