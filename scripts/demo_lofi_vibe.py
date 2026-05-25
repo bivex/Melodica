@@ -166,8 +166,7 @@ def _build_parts(scale):
         # 3. Verse 1 (16 bars)
         IdeaPart(
             name="Verse1", bars=16, scale=scale, tempo=72,
-            progression_type="from_list",
-            progression_list=prog_verse,
+            progression_type="coupled_hmm", # Let the HMM decide
             track_phrase_schedules={
                 "Dark_Drone":    structure_to_schedule("A", 16),
                 "LoFi_Groove":   structure_to_schedule("A B", 8),
@@ -291,6 +290,14 @@ def main():
     )
     
     notes_dict = IdeaTool(config).generate()
+
+    # Print chords for analysis
+    print("\n  [ANALYSIS] Generated Chord Progression:")
+    chords = notes_dict.get("_chords", [])
+    for c in chords:
+        ext_str = f"+{c.extensions}" if c.extensions else ""
+        print(f"    {c.start:5.1f}b | {c.quality.name:8} on {c.root:2} {ext_str}")
+    print()
 
     # Post-processing
     from melodica.modifiers import (
