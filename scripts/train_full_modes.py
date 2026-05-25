@@ -393,10 +393,11 @@ def main():
             [0, 4, 7, 2],    # 11: Add9
         ]
         
+        # Annealing: lower the floor over time to avoid oscillating with EM
+        clamp_floor = max(0.05, 0.3 * (1.0 - iter_idx / MAX_ITER))
         for t_idx, notes in enumerate(anchors):
             for n in notes:
-                # Force core notes to be present, but allow EM room to breathe (threshold lowered from 0.6)
-                pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], 0.3, 0.999)
+                pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], clamp_floor, 0.999)
         
         pnote = torch.clamp(pnote, 0.001, 0.999)
         pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
