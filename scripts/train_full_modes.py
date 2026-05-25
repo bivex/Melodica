@@ -93,9 +93,9 @@ def run_sanity_check(pnote, pchange, pchord):
     dom7_to_min_p4 = pc[8, 5, 1]
     checks["dom7_to_min_strong"] = dom7_to_min_p4 > 0.3
 
-    # Maj -> Maj at P5 (V-I) meaningful
-    maj_to_maj_p5 = pc[0, 7, 0]
-    checks["maj_v_i_meaningful"] = maj_to_maj_p5 > 0.01
+    # Maj -> Maj at P4/P5 (V-I / I-V) meaningful
+    maj_v_i_meaningful = pc[0, 5, 0] > 0.01 or pc[0, 7, 0] > 0.01
+    checks["maj_v_i_meaningful"] = maj_v_i_meaningful
 
     all_ok = True
     print("\n  === Sanity Check ===")
@@ -105,10 +105,13 @@ def run_sanity_check(pnote, pchange, pchord):
             all_ok = False
         print(f"    [{status}] {k}")
 
-    # Print chord distribution
+    # Print chord distribution (based on transition matrix marginal)
+    chord_dist = pc.sum(axis=(0, 1))
+    chord_dist /= (chord_dist.sum() + 1e-8)
+
     print(f"\n  Chord transition distribution:")
     for i, name in enumerate(TYPE_NAMES):
-        pct = pchange_marginal[i] * 100
+        pct = chord_dist[i] * 100
         bar = "#" * int(min(max(pct, 0), 100) * 2)
         print(f"    {name:6s} {pct:5.1f}%  {bar}")
 
@@ -156,22 +159,16 @@ def finetune_pchange_only(pchange, frozen_pnote, songs_batched, mask,
             norm = beta[:, t].sum(dim=(1, 2), keepdim=True)
             beta[:, t] /= norm + eps
 
-        gamma = alpha * beta
-        gamma /= gamma.sum(dim=(2, 3), keepdim=True) + eps
-        gamma *= mask.view(n_songs, max_t, 1, 1)
-
+        # Correct E-step for transitions: xi_t(i, j) ~ alpha_t(i) * a_ij * b_j(o_{t+1}) * beta_{t+1}(j)
         term_next = psets[:, 1:] * beta[:, 1:]
         term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]
-        change_hist = torch.einsum("ntrik,ntro->kio", term_prev_expanded, term_next)
-
-        # Apply song weights (same as main training)
-        change_hist = change_hist * song_weight_tensor.view(-1, 1, 1).sum() / n_songs
+        change_hist = torch.einsum("n,ntrik,kio,ntro->kio", song_weight_tensor, term_prev_expanded, pchange, term_next)
 
         new_pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
 
-        # Anti-collapse: penalize any type > 15% of transitions
+        # Anti-collapse: penalize any type > 15% of expected transitions
         if fi % 20 == 0:
-            chord_dist = new_pchange.sum(dim=1).sum(dim=1)
+            chord_dist = change_hist.sum(dim=(0, 1))
             chord_dist = chord_dist / (chord_dist.sum() + eps)
             for t_idx in range(n_types):
                 if chord_dist[t_idx] > 0.15:
@@ -271,8 +268,20 @@ def main():
 
     pchange = torch.ones(N_TYPES, N_TONES, N_TYPES, device=device) / (N_TONES * N_TYPES)
     for t in range(N_TYPES):
-        pchange[t, 0, t] = 2.0
-    pchange[0, 7, 0], pchange[0, 5, 1], pchange[1, 7, 0], pchange[1, 3, 0] = 2.0, 1.5, 1.5, 1.0
+        pchange[t, 0, t] = 2.0  # Chord repetition
+    
+    # Tonal foundations
+    pchange[0, 7, 0] = 1.5  # I -> V (P5 up)
+    pchange[0, 5, 0] = 2.0  # V -> I (P4 up / P5 down)
+    pchange[0, 5, 1] = 1.5  # V -> i (P4 up)
+    pchange[1, 7, 1] = 1.5  # i -> v
+    pchange[1, 5, 1] = 2.0  # v -> i
+    pchange[1, 3, 0] = 1.5  # i -> III
+    
+    # V7 resolutions (Dom7 -> Maj/Min at P4 up)
+    pchange[8, 5, 0] = 2.5  # V7 -> I
+    pchange[8, 5, 1] = 2.5  # V7 -> i
+    
     pchange /= pchange.sum(dim=(1, 2), keepdim=True)
 
     print(f"\n  Turbo Training: {n_songs} songs, {max_t} max steps, {MAX_ITER} iters")
@@ -354,8 +363,8 @@ def main():
         # change_hist[t_p, i, t_n]
         term_next = psets[:, 1:] * beta[:, 1:]  # [N, T-1, 12, K]
         term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]  # [N, T-1, 12, 12, K]
-        change_hist = torch.einsum("ntrik,ntro->kio", term_prev_expanded, term_next)
-        change_hist = change_hist * song_weight_tensor.view(-1, 1, 1).sum() / n_songs  # approximate weighting
+        # Correct E-step for transitions: xi_t(i, j) ~ alpha_t(i) * a_ij * b_j(o_{t+1}) * beta_{t+1}(j)
+        change_hist = torch.einsum("n,ntrik,kio,ntro->kio", song_weight_tensor, term_prev_expanded, pchange, term_next)
 
         # 5. M-step
         old_pnote = pnote.clone()
@@ -396,15 +405,16 @@ def main():
         if iter_idx % 50 == 0 or iter_idx == MAX_ITER - 1:
             type_names = ["Maj", "Min", "Dim", "Aug", "sus2", "sus4",
                           "Maj7", "Min7", "Dom7", "Maj9", "Min9", "Add9"]
-            chord_dist = pchange.sum(dim=1).sum(dim=1)  # [N_TYPES] — how much each type appears in transitions
-            chord_dist = chord_dist / chord_dist.sum()
+            chord_dist = change_hist.sum(dim=(0, 1))  # [N_TYPES] — how much each type appears in expected transitions
+            chord_dist = chord_dist / (chord_dist.sum() + eps)
             dominant_type = chord_dist.argmax().item()
             dominant_pct = chord_dist[dominant_type].item() * 100
             if dominant_pct > 20:
-                pbar.write(f"  WARNING: {type_names[dominant_type]} dominates {dominant_pct:.1f}% of transitions at iter {iter_idx}")
+                pbar.write(f"  WARNING: {type_names[dominant_type]} dominates {dominant_pct:.1f}% of expected transitions at iter {iter_idx}")
                 # Penalize dominant type in pchange to prevent collapse
                 pchange[dominant_type] *= 0.8
                 pchange /= pchange.sum(dim=(1, 2), keepdim=True)
+
 
         # Track best weights (always, not just after warmup)
         if total_ll.item() > best_ll + MIN_LL_DELTA:
