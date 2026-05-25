@@ -57,8 +57,11 @@ class QuantizeModifier(PhraseModifier):
 @dataclass
 class FollowRhythmModifier(PhraseModifier):
     """
-    Takes the onsets and durations from a source track and applies them 
-    to the pitch choices of the current phrase.
+    Re-rhythmize notes by adopting onsets and inter-onset durations from a source track.
+
+    For each unique onset in the source, the closest pitch from the follower notes
+    is placed at that onset. Duration = gap to the next source onset (or remaining
+    time for the last onset). Polyphonic source onsets produce a single rhythm event.
     """
     source_track: str = "Melody"
 
@@ -66,33 +69,40 @@ class FollowRhythmModifier(PhraseModifier):
         source_notes = context.tracks.get(self.source_track)
         if not source_notes or not notes:
             return notes
-            
-        # Get unique rhythm events from source (grouped by onset)
-        onsets = {} # onset -> max duration
-        for sn in source_notes:
-            t = round(sn.start, 6)
-            onsets[t] = max(onsets.get(t, 0), sn.duration)
-            
-        # For each onset in source, we want to play what 'notes' was playing at that time
+
+        # Unique onset times from source (sorted)
+        onset_times = sorted(set(round(sn.start, 4) for sn in source_notes))
+        if not onset_times:
+            return notes
+
+        # Duration = gap to next onset; last onset extends to cover remaining time
+        max_end = max(n.start + n.duration for n in notes)
+        src_end = max(sn.start + sn.duration for sn in source_notes)
+        timeline_end = max(max_end, src_end)
+        onset_durs = []
+        for i, t in enumerate(onset_times):
+            if i + 1 < len(onset_times):
+                onset_durs.append((t, round(onset_times[i + 1] - t, 6)))
+            else:
+                onset_durs.append((t, round(timeline_end - t, 6)))
+
+        # Sort follower notes by start time for efficient lookup
+        sorted_notes = sorted(notes, key=lambda n: n.start)
+
         result = []
-        for onset, dur in sorted(onsets.items()):
-            # Find which notes in the current phrase are 'active' at this onset
-            # If none, find the notes that WERE playing at the original phrase's closest point
-            active_notes = [n for n in notes if n.start <= onset < n.start + n.duration]
-            
-            if not active_notes:
-                # Fallback: pick the closest notes in time
-                closest_start = min(notes, key=lambda n: abs(n.start - onset)).start
-                active_notes = [n for n in notes if n.start == closest_start]
-                
-            for n in active_notes:
-                result.append(NoteInfo(
-                    pitch=n.pitch,
-                    start=onset,
-                    duration=dur,
-                    velocity=n.velocity,
-                    absolute=n.absolute
-                ))
+        for onset, dur in onset_durs:
+            # Find the follower note whose start is closest to this onset
+            best = min(sorted_notes, key=lambda n: abs(n.start - onset))
+            # Pick one note per onset — no duplicates from polyphony
+            result.append(NoteInfo(
+                pitch=best.pitch,
+                start=onset,
+                duration=max(0.05, dur),
+                velocity=best.velocity,
+                absolute=best.absolute,
+                articulation=best.articulation,
+                expression=dict(best.expression) if best.expression else {},
+            ))
         return result
 
 
