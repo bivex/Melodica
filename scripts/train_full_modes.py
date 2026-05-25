@@ -239,39 +239,41 @@ def main():
 
     # Initialize parameters with STRONGER differentiation to avoid oscillation
     # pnote[pitch, type]
-    pnote = torch.rand(N_TONES, N_TYPES, device=device) * 0.1 + 0.01
-    
-    # 0: Major (0, 4, 7)
-    pnote[0, 0], pnote[4, 0], pnote[7, 0] = 0.9, 0.8, 0.8
-    # 1: Minor (0, 3, 7)
-    pnote[0, 1], pnote[3, 1], pnote[7, 1] = 0.9, 0.8, 0.8
-    # 2: Dim (0, 3, 6)
-    pnote[0, 2], pnote[3, 2], pnote[6, 2] = 0.8, 0.8, 0.8
-    # 3: Aug (0, 4, 8)
-    pnote[0, 3], pnote[4, 3], pnote[8, 3] = 0.8, 0.8, 0.8
-    # Aug exclusions: explicitly suppress notes NOT in the triad to break symmetry
-    for excl_note in [1, 2, 3, 5, 6, 9, 10, 11]:
-        pnote[excl_note, 3] = 0.001
+    CHORD_NOTES = {
+        0:  {0, 4, 7},
+        1:  {0, 3, 7},
+        2:  {0, 3, 6},
+        3:  {0, 4, 8},
+        4:  {0, 2, 7},
+        5:  {0, 5, 7},
+        6:  {0, 4, 7, 11},
+        7:  {0, 3, 7, 10},
+        8:  {0, 4, 7, 10},
+        9:  {0, 4, 7, 11, 2},
+        10: {0, 3, 7, 10, 2},
+        11: {0, 4, 7, 2},
+    }
 
-    # 4: sus2 (0, 2, 7)
-    pnote[0, 4], pnote[2, 4], pnote[7, 4] = 0.8, 0.9, 0.8
-    # 5: sus4 (0, 5, 7)
-    pnote[0, 5], pnote[5, 5], pnote[7, 5] = 0.8, 0.9, 0.8
-    # 6: Maj7 (0, 4, 7, 11) - Focus on 11
-    pnote[0, 6], pnote[4, 6], pnote[7, 6], pnote[11, 6] = 0.7, 0.6, 0.6, 0.99
-    # 7: Min7 (0, 3, 7, 10) - Focus on 10
-    pnote[0, 7], pnote[3, 7], pnote[7, 7], pnote[10, 7] = 0.7, 0.6, 0.6, 0.99
-    # 8: Dom7 (0, 4, 7, 10) - Focus on 10
-    pnote[0, 8], pnote[4, 8], pnote[7, 8], pnote[10, 8] = 0.7, 0.6, 0.6, 0.99
-    # 9: Maj9 (0, 4, 7, 11, 2) - EXTREME focus on 2 and 11
-    pnote[0, 9], pnote[4, 9], pnote[7, 9], pnote[11, 9], pnote[2, 9] = 0.5, 0.5, 0.5, 0.99, 0.99
-    # 10: Min9 (0, 3, 7, 10, 2) - EXTREME focus on 2 and 10
-    pnote[0, 10], pnote[3, 10], pnote[7, 10], pnote[10, 10], pnote[2, 10] = 0.5, 0.5, 0.5, 0.99, 0.99
-    # 11: Add9 (0, 4, 7, 2) - Focus on 2, NO 11/10
-    pnote[0, 11], pnote[4, 11], pnote[7, 11], pnote[2, 11] = 0.7, 0.7, 0.7, 0.99
-    pnote[11, 11], pnote[10, 11] = 0.001, 0.001
+    pnote = torch.full((N_TONES, N_TYPES), 0.001, device=device)
+    ON_PROB  = 0.85
 
-    pchord = torch.tensor([2.0, 2.0, 1.0, 0.01, 0.3, 0.3, 1.0, 1.0, 1.5, 0.8, 0.8, 1.2], device=device)
+    for t_idx, notes in CHORD_NOTES.items():
+        for n in notes:
+            pnote[n, t_idx] = ON_PROB
+
+    # Особые ноты (характерные интервалы для extended chords)
+    pnote[11, 6] = 0.95   # Maj7 — maj7 очень характерна
+    pnote[10, 7] = 0.95   # Min7 — min7
+    pnote[10, 8] = 0.95   # Dom7 — b7
+    pnote[11, 9] = 0.95   # Maj9
+    pnote[2,  9] = 0.92
+    pnote[10, 10] = 0.95  # Min9
+    pnote[2,  10] = 0.92
+    pnote[2,  11] = 0.95  # Add9 — 9я характерна
+    pnote[11, 11] = 0.001 # Add9 НЕ содержит maj7
+    pnote[10, 11] = 0.001 # Add9 НЕ содержит min7
+
+    pchord = torch.tensor([2.0, 2.0, 0.8, 0.01, 0.3, 0.3, 1.0, 1.0, 1.5, 0.2, 0.2, 0.4], device=device)
     pchord /= pchord.sum()
 
     pchange = torch.ones(N_TYPES, N_TONES, N_TYPES, device=device) / (N_TONES * N_TYPES)
@@ -376,36 +378,31 @@ def main():
         change_hist = torch.einsum("n,ntrik,kio,ntro->kio", song_weight_tensor, term_prev_expanded, pchange, term_next)
 
         # 5. M-step
-        old_pnote = pnote.clone()
-        pnote = note_hist / (chord_hist.view(1, N_TYPES) + eps)
-        
-        # --- STRUCTURAL ANCHORS: Force states to keep their musical meaning ---
-        # Each column must prioritize its defining intervals
-        # 0: Maj, 1: Min, 2: Dim, 3: Aug, 4: sus2, 5: sus4, 6: Maj7, 7: Min7, 8: Dom7, 9: Maj9, 10: Min9, 11: Add9
-        anchors = [
-            [0, 4, 7],       # 0: Major
-            [0, 3, 7],       # 1: Minor
-            [0, 3, 6],       # 2: Dim
-            [0, 4, 8],       # 3: Aug
-            [0, 2, 7],       # 4: sus2
-            [0, 5, 7],       # 5: sus4
-            [0, 4, 7, 11],   # 6: Maj7
-            [0, 3, 7, 10],   # 7: Min7
-            [0, 4, 7, 10],   # 8: Dom7
-            [0, 4, 7, 11, 2],# 9: Maj9
-            [0, 3, 7, 10, 2],# 10: Min9
-            [0, 4, 7, 2],    # 11: Add9
-        ]
-        
-        # Annealing: lower the floor over time to avoid oscillating with EM
-        clamp_floor = max(0.05, 0.3 * (1.0 - iter_idx / MAX_ITER))
-        for t_idx, notes in enumerate(anchors):
-            for n in notes:
-                pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], clamp_floor, 0.999)
-        
-        pnote = torch.clamp(pnote, 0.001, 0.999)
-        
+        if iter_idx < 50:
+            old_pnote = pnote.clone()
+            pnote = note_hist / (chord_hist.view(1, N_TYPES) + eps)
+            
+            # --- STRUCTURAL ANCHORS: Force states to keep their musical meaning ---
+            # Annealing: lower the floor over time to avoid oscillating with EM
+            clamp_floor = max(0.05, 0.3 * (1.0 - iter_idx / 50.0))
+            for t_idx, notes in CHORD_NOTES.items():
+                for n in notes:
+                    pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], clamp_floor, 0.999)
+                
+                # Exclusions: prevent non-chord tones from taking over (especially in extended chords)
+                for n in set(range(12)) - notes:
+                    pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], 0.0, 0.05)
+            
+            pnote = torch.clamp(pnote, 0.001, 0.999)
+            delta_note = torch.abs(pnote - old_pnote).max().item()
+        else:
+            if not hasattr(pbar, '_pnote_frozen'):
+                pnote = pnote.detach().clone()
+                pbar._pnote_frozen = True
+            delta_note = 0.0
+            
         # M-step pchange with Dirichlet prior to prevent degenerate solutions smoothly
+
         prior_strength = 0.1
         uniform_prior = torch.ones_like(change_hist) / (N_TONES * N_TYPES)
         pchange = (change_hist + prior_strength * uniform_prior) / \
