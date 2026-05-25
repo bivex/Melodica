@@ -181,6 +181,18 @@ def finetune_pchange_only(pchange, frozen_pnote, songs_batched, mask,
                     new_pchange[t_idx] *= 0.8
             new_pchange = new_pchange / new_pchange.sum(dim=(1, 2), keepdim=True)
 
+        # Anti-stick: cap self-loops so chords don't repeat forever
+        max_self = 0.40
+        for t in range(n_types):
+            if new_pchange[t, 0, t] > max_self:
+                excess = new_pchange[t, 0, t] - max_self
+                new_pchange[t, 0, t] = max_self
+                others = new_pchange[t].sum() - new_pchange[t, 0, t]
+                if others > 1e-8:
+                    new_pchange[t] *= (1.0 + excess / others)
+                    new_pchange[t, 0, t] = max_self
+        new_pchange = new_pchange / new_pchange.sum(dim=(1, 2), keepdim=True)
+
         # Blend with original (80% new, 20% original) for stability
         pchange = 0.8 * new_pchange + 0.2 * original_pchange
         pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
@@ -419,6 +431,20 @@ def main():
             dom7_floor = max(0.05, 0.12 * (1.0 - iter_idx / 300.0))
             pchange[8, 5, 0] = torch.clamp(pchange[8, 5, 0], min=dom7_floor)  # V7 -> I
             pchange[8, 5, 1] = torch.clamp(pchange[8, 5, 1], min=dom7_floor)  # V7 -> i
+            pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
+
+        # Anti-stick: penalize self-loops (type t at unison -> type t) so chords move
+        if iter_idx < 500:
+            max_self = max(0.30, 0.60 * (1.0 - iter_idx / 500.0))
+            for t in range(N_TYPES):
+                self_prob = pchange[t, 0, t]
+                if self_prob > max_self:
+                    excess = self_prob - max_self
+                    pchange[t, 0, t] = max_self
+                    others = pchange[t].sum() - pchange[t, 0, t]
+                    if others > eps:
+                        pchange[t] *= (1.0 + excess / others)
+                        pchange[t, 0, t] = max_self
             pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
 
         delta_change = torch.abs(pchange - old_pchange).max().item() if 'old_pchange' in locals() else 1.0
