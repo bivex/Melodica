@@ -55,11 +55,13 @@ class DropSilenceModifier:
 @dataclass
 class DrumFillModifier:
     """Replaces a section of drum pattern with a crescendo fill (e.g. snare roll)."""
-    fill_duration: float = 1.0
+    fill_duration: float = 2.0
     fill_pitch: int = 38
     subdivision: float = 0.25
-    velocity_start: int = 50
-    velocity_end: int = 110
+    velocity_start: int = 40
+    velocity_end: int = 127
+    accent_on_drop: bool = True
+    accent_pitch: int = 36
     apply_at_end: bool = True
     specific_beats: list[float] = field(default_factory=list)
 
@@ -97,14 +99,24 @@ class DrumFillModifier:
             vel_range = self.velocity_end - self.velocity_start
             while t < target_end - 0.01:
                 progress = (t - fill_start) / self.fill_duration
-                vel = int(self.velocity_start + vel_range * progress)
+                # Exponential curve for more dramatic build
+                vel = int(self.velocity_start + vel_range * (progress ** 1.5))
                 result.append(NoteInfo(
                     pitch=self.fill_pitch,
                     start=round(t, 6),
-                    duration=self.subdivision * 0.9,
+                    duration=self.subdivision * 0.85,
                     velocity=vel,
                 ))
                 t += self.subdivision
+
+            # Accent hit exactly on the drop beat
+            if self.accent_on_drop:
+                result.append(NoteInfo(
+                    pitch=self.accent_pitch,
+                    start=target_end,
+                    duration=0.5,
+                    velocity=127,
+                ))
 
         result.sort(key=lambda x: x.start)
         return result

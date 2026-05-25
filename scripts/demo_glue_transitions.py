@@ -117,13 +117,15 @@ def main():
     drop_beat = 16.0
 
     pipelines = {
-        # 1. Mute bass, chords, and sweep FX for exactly 1 beat before the drop
-        "Huge_Bass":  [DropSilenceModifier(silence_duration=1.0, specific_beats=[drop_beat], apply_at_end=False)],
-        "EDM_Chords": [DropSilenceModifier(silence_duration=1.0, specific_beats=[drop_beat], apply_at_end=False)],
-        "Sweep_FX":   [DropSilenceModifier(silence_duration=1.0, specific_beats=[drop_beat], apply_at_end=False)],
-        
-        # 2. Override the last beat of the drums with a fast 16th note snare fill
-        "Main_Drums": [DrumFillModifier(fill_duration=1.0, subdivision=0.25, fill_pitch=38, specific_beats=[drop_beat], apply_at_end=False)]
+        # 1. Mute bass, chords, and sweep FX for 2 beats before the drop
+        "Huge_Bass":  [DropSilenceModifier(silence_duration=2.0, specific_beats=[drop_beat], apply_at_end=False)],
+        "EDM_Chords": [DropSilenceModifier(silence_duration=2.0, specific_beats=[drop_beat], apply_at_end=False)],
+        "Sweep_FX":   [DropSilenceModifier(silence_duration=2.0, specific_beats=[drop_beat], apply_at_end=False)],
+
+        # 2. Override the last 2 beats of drums with a fast 16th note snare roll + accent hit
+        "Main_Drums": [DrumFillModifier(fill_duration=2.0, subdivision=0.25, fill_pitch=38,
+                                        velocity_start=40, velocity_end=127, accent_on_drop=True,
+                                        specific_beats=[drop_beat], apply_at_end=False)]
     }
 
     for name, modifiers in pipelines.items():
@@ -142,8 +144,8 @@ def main():
 
     print()
     print("  SUCCESS! Transitions applied.")
-    print("  Listen to beat 15.0 - 16.0: All synths cut out, snare roll builds up,")
-    print("  and then the Drop hits exactly at beat 16.0!")
+    print("  Listen to beats 14.0 - 16.0: All synths cut out, snare roll builds up")
+    print("  with exponential crescendo, and the Drop hits hard at beat 16.0!")
     print(f"  Exported to: {file_path.absolute()}")
     print("================================================================================")
 
