@@ -253,6 +253,10 @@ class TrackConfig:
     # Phrase-level scheduling within a part (None = use arrangement pattern as before)
     phrase_schedule: PhraseSchedule | None = None
 
+    # Follow Track Rhythm: apply another track's onsets/durations to this track's notes.
+    # Set to a track name to enable. Post-processing step — the source track must already be rendered.
+    follow_rhythm_track: str | None = None
+
 
 @dataclass
 class IdeaPart:
@@ -1606,6 +1610,26 @@ class IdeaTool:
             # Invalidate cache so the generator is rebuilt with injected notes
             self._generator_cache.pop(cfg.name, None)
             result[cfg.name] = self._generate_track(cfg, chords, tension_curve, parts)
+
+        # Phase 3: follow-rhythm tracks — re-rhythmize notes from another track
+        follow = [
+            t for t in self.config.tracks
+            if t.follow_rhythm_track is not None and t.name not in _skip
+            and t.depends_on is None  # already handled above
+        ]
+        for cfg in follow:
+            src = result.get(cfg.follow_rhythm_track, [])
+            if src and cfg.name in result and result[cfg.name]:
+                from melodica.modifiers.rhythmic import FollowRhythmModifier
+                mod = FollowRhythmModifier(source_track=cfg.follow_rhythm_track)
+                mctx = ModifierContext(
+                    duration_beats=0,
+                    chords=chords,
+                    timeline=None,
+                    scale=self.config.scale,
+                    tracks={cfg.follow_rhythm_track: src},
+                )
+                result[cfg.name] = mod.modify(result[cfg.name], mctx)
 
     def _create_generator(self, cfg: TrackConfig, params: GeneratorParams):
         """Create a generator based on track config."""

@@ -69,6 +69,7 @@ Key fields:
 | `density` | `float` | 0.0–1.0, overall note density |
 | `octave_shift` | `int` | Transpose rendered notes by N octaves |
 | `modifiers` | `list` | Optional per-track modifier stack |
+| `follow_rhythm_track` | `str \| None` | Name of another track whose onsets/durations to apply to this track's notes |
 
 ### Available Generators for Beats
 
@@ -173,6 +174,27 @@ notes_dict = IdeaTool(config).generate()
 ```
 
 Returns a dict: `{track_name: [NoteInfo, ...], "_chords": [...], "_timeline": MusicTimeline}`.
+
+### Follow Track Rhythm
+
+One track can adopt the rhythm (onsets and durations) of another track. Set `follow_rhythm_track` on the receiving track:
+
+```python
+TrackConfig(
+    name="Brass_Hits",
+    generator=BrassSectionGenerator(articulation="hit"),
+    instrument="brass",
+    density=0.3,
+    follow_rhythm_track="Lead_Synth",  # brass plays when lead plays
+)
+```
+
+How it works:
+1. The source track renders normally (Phase 1/2 of `_generate_all_tracks`)
+2. After the receiving track generates its own notes, `FollowRhythmModifier` replacess their onsets/durations with the source track's rhythm
+3. The receiving track keeps its own pitches and velocities — only timing changes
+
+This is a post-processing step, so the source track must be independent (not depend on the follower).
 
 ### Pipeline Flags
 

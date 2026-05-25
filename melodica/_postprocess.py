@@ -140,7 +140,8 @@ def apply_velocity_shaping(
         result[track_cfg.name] = shaped
 
 
-def apply_track_modifiers(notes, cfg, chords, scale, time_signature, total_beats):
+def apply_track_modifiers(notes, cfg, chords, scale, time_signature, total_beats,
+                          all_tracks=None):
     """Apply SDK modifier instances from TrackConfig.modifiers to notes."""
     if not cfg.modifiers:
         return notes
@@ -166,6 +167,7 @@ def apply_track_modifiers(notes, cfg, chords, scale, time_signature, total_beats
         chords=chords,
         timeline=timeline,
         scale=scale,
+        tracks=all_tracks or {},
     )
     for mod in cfg.modifiers:
         if hasattr(mod, "modify"):
