@@ -1138,16 +1138,20 @@ class IdeaTool:
                         section_chords = [before[-1]] if before else (chords[:1] if chords else [])
 
                     # Adjust chord times to section-local origin; clip durations at section boundary
-                    adjusted = [
-                        ChordLabel(
-                            root=c.root,
-                            quality=c.quality,
-                            start=max(0.0, c.start - section_start),
-                            duration=min(c.end, section_end) - max(c.start, section_start),
-                            degree=c.degree,
-                        )
-                        for c in section_chords
-                    ]
+                    adjusted = []
+                    for c in section_chords:
+                        dur = min(c.end, section_end) - max(c.start, section_start)
+                        if dur > 0.001:
+                            adjusted.append(
+                                ChordLabel(
+                                    root=c.root,
+                                    quality=c.quality,
+                                    extensions=list(c.extensions),
+                                    start=max(0.0, c.start - section_start),
+                                    duration=dur,
+                                    degree=c.degree,
+                                )
+                            )
 
                     # Seed the random generator to ensure that repeating sections (e.g., A, A)
                     # generate the exact same rhythmic and melodic contours, but perfectly
@@ -1457,16 +1461,20 @@ class IdeaTool:
                 before = [c for c in chords if c.start < section_end]
                 section_chords = [before[-1]] if before else (chords[:1] if chords else [])
 
-            adjusted = [
-                ChordLabel(
-                    root=c.root,
-                    quality=c.quality,
-                    start=max(0.0, c.start - section_start),
-                    duration=min(c.end, section_end) - max(c.start, section_start),
-                    degree=c.degree,
-                )
-                for c in section_chords
-            ]
+            adjusted = []
+            for c in section_chords:
+                dur = min(c.end, section_end) - max(c.start, section_start)
+                if dur > 0.001:
+                    adjusted.append(
+                        ChordLabel(
+                            root=c.root,
+                            quality=c.quality,
+                            extensions=list(c.extensions),
+                            start=max(0.0, c.start - section_start),
+                            duration=dur,
+                            degree=c.degree,
+                        )
+                    )
 
             # Pool lookup: reuse existing phrase if available
             section_notes: list[NoteInfo] | None = None
