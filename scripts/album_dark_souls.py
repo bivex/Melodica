@@ -123,24 +123,24 @@ def main():
         TrackConfig(name="Boss_Brass", generator=BassGenerator(style="walking"), instrument="brass", density=0.8, octave_shift=-1)
     ]
     t4_parts = [
-        IdeaPart(
-            name="Phase1", bars=8, scale=scale, tempo=120, progression_type="coupled_hmm",
-            track_phrase_schedules={
-                "Cinder_Drums":    structure_to_schedule("A", 8),
-                "Gael_Agression":  structure_to_schedule("R", 8),
-                "Frantic_Strings": structure_to_schedule("A", 8),
-                "Boss_Brass":      structure_to_schedule("A", 8),
-            }
-        ),
-        IdeaPart(
-            name="Phase2_Berserk", bars=16, scale=scale, tempo=135, progression_type="coupled_hmm",
-            track_phrase_schedules={
-                "Cinder_Drums":    structure_to_schedule("B C", 8),
-                "Gael_Agression":  structure_to_schedule("A B", 8),
-                "Frantic_Strings": structure_to_schedule("B", 16),
-                "Boss_Brass":      structure_to_schedule("B", 16),
-            }
-        )
+        IdeaPart("Phase1_Evaluation", 16, scale, 115, progression_type="coupled_hmm", track_phrase_schedules={
+            "Cinder_Drums":    structure_to_schedule("A B", 8),
+            "Gael_Agression":  structure_to_schedule("R A", 8),
+            "Frantic_Strings": structure_to_schedule("R R A B", 4),
+            "Boss_Brass":      structure_to_schedule("A B", 8),
+        }),
+        IdeaPart("Phase1_5_Transition", 8, scale, 100, progression_type="coupled_hmm", track_phrase_schedules={
+            "Cinder_Drums":    structure_to_schedule("C", 8),
+            "Gael_Agression":  structure_to_schedule("B", 8),
+            "Frantic_Strings": structure_to_schedule("C", 8),
+            "Boss_Brass":      structure_to_schedule("C", 8),
+        }),
+        IdeaPart("Phase2_LordOfCinder", 16, scale, 135, progression_type="coupled_hmm", track_phrase_schedules={
+            "Cinder_Drums":    structure_to_schedule("D E", 8),
+            "Gael_Agression":  structure_to_schedule("C D", 8),
+            "Frantic_Strings": structure_to_schedule("D E", 8),
+            "Boss_Brass":      structure_to_schedule("D E", 8),
+        })
     ]
     generate_track("4 Final Cinder", t4_parts, t4_tracks, out_dir, 120)
 
