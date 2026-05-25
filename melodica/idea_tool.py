@@ -388,6 +388,10 @@ class IdeaTool:
                         progression_list=p.progression_list
                         if p.progression_list is not None
                         else self.config.progression_list,
+                        track_density=p.track_density,
+                        track_mute=p.track_mute,
+                        track_velocity_scale=p.track_velocity_scale,
+                        track_phrase_schedules=p.track_phrase_schedules,
                     )
                 )
             return parts
