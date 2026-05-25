@@ -1,0 +1,21 @@
+{
+  "name": "tresillo",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.5,
+      "duration": 1.5,
+      "velocity_factor": 0.95
+    },
+    {
+      "onset": 3.0,
+      "duration": 1.0,
+      "velocity_factor": 0.9
+    }
+  ]
+}

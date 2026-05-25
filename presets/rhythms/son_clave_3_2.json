@@ -1,0 +1,31 @@
+{
+  "name": "son_clave_3_2",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.5,
+      "duration": 1.5,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 3.0,
+      "duration": 2.0,
+      "velocity_factor": 0.95
+    },
+    {
+      "onset": 5.0,
+      "duration": 1.5,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 6.5,
+      "duration": 1.5,
+      "velocity_factor": 0.8
+    }
+  ]
+}
