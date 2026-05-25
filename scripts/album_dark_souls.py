@@ -67,7 +67,7 @@ def main():
     ]
     t1_parts = [
         IdeaPart(
-            name="Rest", bars=16, scale=scale, tempo=65, progression_type="coupled_hmm",
+            name="Rest", bars=16, scale=scale, tempo=65, progression_type="functional_hmm",
             track_phrase_schedules={
                 "Melancholy_Piano": structure_to_schedule("A B", 8),
                 "Shrine_Echo":      structure_to_schedule("A", 16),

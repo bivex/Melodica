@@ -888,6 +888,19 @@ class IdeaTool:
                     contour, scale, part_beats, constraints=constraints, tension_curve=tension_curve
                 )
 
+            # Functional HMM (T/S/D planning + HMM emission scoring)
+            elif part.progression_type == "functional_hmm":
+                from melodica.harmonize.functional_hmm import FunctionalHMMHarmonizer
+
+                harmonizer = FunctionalHMMHarmonizer(
+                    chord_change=self.config.hmm3_chord_change,
+                    bar_grid=bar_grid,
+                )
+                contour = self._build_melody_contour(scale, bars, beats_per_bar)
+                part_chords = harmonizer.harmonize(
+                    contour, scale, part_beats, tension_curve=tension_curve
+                )
+
             # Rules-based harmonizer
             elif part.progression_type == "rules":
                 harmonizer = RuleBasedHarmonizer(
