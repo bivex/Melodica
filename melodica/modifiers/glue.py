@@ -11,57 +11,15 @@ Contains modifiers for "glueing" an arrangement together:
 
 from __future__ import annotations
 
-import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from melodica.types import NoteInfo
 from melodica.modifiers import ModifierContext
 
 
 @dataclass
 class DropSilenceModifier:
-    """
-    Creates a 'Drop Silence' effect (muting all notes) right before a climax.
-    Can trigger at specific beats or automatically at the end of the phrase.
-    """
-    silence_duration: float = 1.0  # How many beats to silence
-    apply_at_end: bool = True      # Automatically silence the end of the full duration
-    specific_beats: list[float] = field(default_factory=list) # Exact beats to end the silence at
-
-    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
-        if not notes:
-            return []
-
-        targets = list(self.specific_beats)
-        if self.apply_at_end:
-            targets.append(context.duration_beats)
-
-        result = []
-        for n in notes:
-            muted = False
-            for target_end in targets:
-                target_start = target_end - self.silence_duration
-                # If note falls within the silence window
-                if target_start <= n.start < target_end:
-                    muted = True
-                    break
-                # If note overlaps into the silence window, truncate it
-                elif n.start < target_start and n.start + n.duration > target_start:
-                    n.duration = target_start - n.start
-                    
-            if not muted and n.duration > 0.001:
-                result.append(n)
-                
-        return result
-
-
-@dataclass
-class DrumFillModifier:
-    """
-    Overrides the end of a drum pattern with a fast fill (e.g. 16ths/32nds snare roll).
-    """
-    fill_duration: float = 1.0   # Length of the fill in beats (e.g. 1 beat = 1/4 note)
-    fill_pitch: int = 38         # Snare drum pitch by default
-    subdivision: float = 0.25    # 16th notes
+    """Mutes all notes within a window before a target beat (drop silence / vacuum effect)."""
+    silence_duration: float = 1.0
     apply_at_end: bool = True
     specific_beats: list[float] = field(default_factory=list)
 
@@ -74,43 +32,79 @@ class DrumFillModifier:
             targets.append(context.duration_beats)
 
         result = []
-        # First, remove original notes in the fill windows
         for n in notes:
-            in_fill_window = False
+            note_end = n.start + n.duration
+            new_dur = n.duration
+
             for target_end in targets:
-                target_start = target_end - self.fill_duration
-                if target_start <= n.start < target_end:
-                    in_fill_window = True
+                sil_start = target_end - self.silence_duration
+                # Note starts inside silence window — skip entirely
+                if n.start >= sil_start and n.start < target_end:
+                    new_dur = 0
                     break
-                elif n.start < target_start and n.start + n.duration > target_start:
-                    n.duration = target_start - n.start
-            
-            if not in_fill_window and n.duration > 0.001:
-                result.append(n)
+                # Note overlaps into silence window — truncate
+                if n.start < sil_start and note_end > sil_start:
+                    new_dur = sil_start - n.start
 
-        # Second, generate the fills
+            if new_dur > 0.001:
+                result.append(replace(n, duration=new_dur) if new_dur != n.duration else n)
+
+        return result
+
+
+@dataclass
+class DrumFillModifier:
+    """Replaces a section of drum pattern with a crescendo fill (e.g. snare roll)."""
+    fill_duration: float = 1.0
+    fill_pitch: int = 38
+    subdivision: float = 0.25
+    velocity_start: int = 50
+    velocity_end: int = 110
+    apply_at_end: bool = True
+    specific_beats: list[float] = field(default_factory=list)
+
+    def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
+        if not notes:
+            return []
+
+        targets = list(self.specific_beats)
+        if self.apply_at_end:
+            targets.append(context.duration_beats)
+
+        result = []
+        for n in notes:
+            note_end = n.start + n.duration
+            new_dur = n.duration
+
+            for target_end in targets:
+                fill_start = target_end - self.fill_duration
+                if n.start >= fill_start and n.start < target_end:
+                    new_dur = 0
+                    break
+                if n.start < fill_start and note_end > fill_start:
+                    new_dur = fill_start - n.start
+
+            if new_dur > 0.001:
+                result.append(replace(n, duration=new_dur) if new_dur != n.duration else n)
+
+        # Generate fill notes with crescendo
         for target_end in targets:
-            target_start = target_end - self.fill_duration
-            if target_start < 0:
+            fill_start = target_end - self.fill_duration
+            if fill_start < 0:
                 continue
-                
-            current_time = target_start
-            velocity_start = 50
-            velocity_end = 110
-            
-            while current_time < target_end - 0.01:
-                # Calculate crescendo velocity
-                progress = (current_time - target_start) / self.fill_duration
-                vel = int(velocity_start + (velocity_end - velocity_start) * progress)
-                
-                result.append(
-                    NoteInfo(
-                        pitch=self.fill_pitch,
-                        start=round(current_time, 6),
-                        duration=self.subdivision * 0.9, # Slight staccato
-                        velocity=vel
-                    )
-                )
-                current_time += self.subdivision
 
-        return sorted(result, key=lambda x: x.start)
+            t = fill_start
+            vel_range = self.velocity_end - self.velocity_start
+            while t < target_end - 0.01:
+                progress = (t - fill_start) / self.fill_duration
+                vel = int(self.velocity_start + vel_range * progress)
+                result.append(NoteInfo(
+                    pitch=self.fill_pitch,
+                    start=round(t, 6),
+                    duration=self.subdivision * 0.9,
+                    velocity=vel,
+                ))
+                t += self.subdivision
+
+        result.sort(key=lambda x: x.start)
+        return result
