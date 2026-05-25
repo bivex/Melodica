@@ -18,7 +18,7 @@ N_TONES = 12
 N_TYPES = 12  # Cinematic Expanded (Maj, Min, Dim, Aug, sus2, sus4, Maj7, Min7, Dom7, Maj9, Min9, Add9)
 MAX_ITER = 2000
 TARGET_DELTA = 1e-5
-PATIENCE = 100
+PATIENCE = 300
 MIN_LL_DELTA = 1.0
 
 
@@ -249,6 +249,10 @@ def main():
     pnote[0, 2], pnote[3, 2], pnote[6, 2] = 0.8, 0.8, 0.8
     # 3: Aug (0, 4, 8)
     pnote[0, 3], pnote[4, 3], pnote[8, 3] = 0.8, 0.8, 0.8
+    # Aug exclusions: explicitly suppress notes NOT in the triad to break symmetry
+    for excl_note in [1, 2, 3, 5, 6, 9, 10, 11]:
+        pnote[excl_note, 3] = 0.001
+
     # 4: sus2 (0, 2, 7)
     pnote[0, 4], pnote[2, 4], pnote[7, 4] = 0.8, 0.9, 0.8
     # 5: sus4 (0, 5, 7)
@@ -267,7 +271,7 @@ def main():
     pnote[0, 11], pnote[4, 11], pnote[7, 11], pnote[2, 11] = 0.7, 0.7, 0.7, 0.99
     pnote[11, 11], pnote[10, 11] = 0.001, 0.001
 
-    pchord = torch.tensor([2.0, 2.0, 1.0, 0.05, 0.3, 0.3, 1.0, 1.0, 1.5, 0.8, 0.8, 1.2], device=device)
+    pchord = torch.tensor([2.0, 2.0, 1.0, 0.01, 0.3, 0.3, 1.0, 1.0, 1.5, 0.8, 0.8, 1.2], device=device)
     pchord /= pchord.sum()
 
     pchange = torch.ones(N_TYPES, N_TONES, N_TYPES, device=device) / (N_TONES * N_TYPES)
@@ -283,8 +287,8 @@ def main():
     pchange[1, 3, 0] = 1.5  # i -> III
     
     # V7 resolutions (Dom7 -> Maj/Min at P4 up)
-    pchange[8, 5, 0] = 2.5  # V7 -> I
-    pchange[8, 5, 1] = 2.5  # V7 -> i
+    pchange[8, 5, 0] = 4.0  # V7 -> I
+    pchange[8, 5, 1] = 4.0  # V7 -> i
     
     pchange /= pchange.sum(dim=(1, 2), keepdim=True)
 
@@ -400,7 +404,12 @@ def main():
                 pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], clamp_floor, 0.999)
         
         pnote = torch.clamp(pnote, 0.001, 0.999)
-        pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
+        
+        # M-step pchange with Dirichlet prior to prevent degenerate solutions smoothly
+        prior_strength = 0.1
+        uniform_prior = torch.ones_like(change_hist) / (N_TONES * N_TYPES)
+        pchange = (change_hist + prior_strength * uniform_prior) / \
+                  (change_hist + prior_strength * uniform_prior).sum(dim=(1, 2), keepdim=True)
 
         delta_note = torch.abs(pnote - old_pnote).max().item()
         delta_change = torch.abs(pchange - old_pchange).max().item() if 'old_pchange' in locals() else 1.0
@@ -417,10 +426,6 @@ def main():
             dominant_pct = chord_dist[dominant_type].item() * 100
             if dominant_pct > 20:
                 pbar.write(f"  WARNING: {type_names[dominant_type]} dominates {dominant_pct:.1f}% of expected transitions at iter {iter_idx}")
-                # Penalize dominant type in pchange to prevent collapse
-                pchange[dominant_type] *= 0.8
-                pchange /= pchange.sum(dim=(1, 2), keepdim=True)
-
 
         # Track best weights (always, not just after warmup)
         if total_ll.item() > best_ll + MIN_LL_DELTA:
@@ -428,7 +433,7 @@ def main():
             best_pnote = pnote.clone()
             best_pchange = pchange.clone()
             stagnation = 0
-        elif iter_idx >= 50:
+        else:
             stagnation += 1
 
         pbar.set_postfix({"dN": f"{delta_note:.6f}", "dC": f"{delta_change:.6f}", "LL": f"{total_ll:.1f}"})
