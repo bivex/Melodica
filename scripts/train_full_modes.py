@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 N_TONES = 12
 N_TYPES = 12  # Cinematic Expanded (Maj, Min, Dim, Aug, sus2, sus4, Maj7, Min7, Dom7, Maj9, Min9, Add9)
-MAX_ITER = 500
+MAX_ITER = 2000
 TARGET_DELTA = 1e-5
 
 
