@@ -1,0 +1,31 @@
+{
+  "name": "epiphany",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 2.0,
+      "velocity_factor": 0.5
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.5,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 2.5,
+      "duration": 0.5,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 3.0,
+      "duration": 0.5,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 3.5,
+      "duration": 0.5,
+      "velocity_factor": 1.0
+    }
+  ]
+}

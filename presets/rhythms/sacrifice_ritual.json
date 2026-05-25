@@ -1,0 +1,46 @@
+{
+  "name": "sacrifice_ritual",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.0,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.5,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 1.5,
+      "duration": 0.5,
+      "velocity_factor": 0.65
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.5,
+      "velocity_factor": 0.8
+    },
+    {
+      "onset": 2.5,
+      "duration": 0.25,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 2.75,
+      "duration": 0.25,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 3.0,
+      "duration": 0.25,
+      "velocity_factor": 0.95
+    },
+    {
+      "onset": 3.25,
+      "duration": 0.75,
+      "velocity_factor": 1.0
+    }
+  ]
+}

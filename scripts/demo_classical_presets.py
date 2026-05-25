@@ -41,7 +41,7 @@ def run_demo():
         ),
         TrackConfig(
             name="Cello_Bass",
-            generator=BassGenerator(pattern="simple"),
+            generator=BassGenerator(style="root_only"),
             instrument="cello", density=0.5, octave_shift=-1
         )
     ]
