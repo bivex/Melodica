@@ -2,10 +2,9 @@
   "name": "chorale_4part",
   "loop": true,
   "events": [
-    {
-      "onset": 0.0,
-      "duration": 4.0,
-      "velocity_factor": 0.85
-    }
+    {"onset": 0.0, "duration": 1.0, "velocity_factor": 1.0},
+    {"onset": 1.0, "duration": 1.0, "velocity_factor": 1.0},
+    {"onset": 2.0, "duration": 1.0, "velocity_factor": 1.0},
+    {"onset": 3.0, "duration": 1.0, "velocity_factor": 1.0}
   ]
 }

@@ -2,45 +2,22 @@
   "name": "bolero_ravel",
   "loop": true,
   "events": [
-    {
-      "onset": 0.0,
-      "duration": 0.5,
-      "velocity_factor": 0.8
-    },
-    {
-      "onset": 0.5,
-      "duration": 0.25,
-      "velocity_factor": 0.6
-    },
-    {
-      "onset": 0.75,
-      "duration": 0.25,
-      "velocity_factor": 0.55
-    },
-    {
-      "onset": 1.0,
-      "duration": 0.5,
-      "velocity_factor": 0.7
-    },
-    {
-      "onset": 1.5,
-      "duration": 0.5,
-      "velocity_factor": 0.65
-    },
-    {
-      "onset": 2.0,
-      "duration": 0.5,
-      "velocity_factor": 0.85
-    },
-    {
-      "onset": 2.5,
-      "duration": 0.25,
-      "velocity_factor": 0.6
-    },
-    {
-      "onset": 2.75,
-      "duration": 0.25,
-      "velocity_factor": 0.55
-    }
+    {"onset": 0.0,   "duration": 0.166, "velocity_factor": 1.0},
+    {"onset": 0.166, "duration": 0.166, "velocity_factor": 0.8},
+    {"onset": 0.333, "duration": 0.166, "velocity_factor": 0.8},
+    {"onset": 0.5,   "duration": 0.166, "velocity_factor": 1.0},
+    {"onset": 0.666, "duration": 0.166, "velocity_factor": 0.8},
+    {"onset": 0.833, "duration": 0.166, "velocity_factor": 0.8},
+    {"onset": 1.0,   "duration": 0.333, "velocity_factor": 1.1},
+    {"onset": 1.333, "duration": 0.333, "velocity_factor": 1.0},
+    {"onset": 1.666, "duration": 0.333, "velocity_factor": 1.0},
+    {"onset": 2.0,   "duration": 0.166, "velocity_factor": 1.0},
+    {"onset": 2.166, "duration": 0.166, "velocity_factor": 0.8},
+    {"onset": 2.333, "duration": 0.166, "velocity_factor": 0.8},
+    {"onset": 2.5,   "duration": 0.166, "velocity_factor": 1.0},
+    {"onset": 2.666, "duration": 0.166, "velocity_factor": 0.8},
+    {"onset": 2.833, "duration": 0.166, "velocity_factor": 0.8},
+    {"onset": 3.0,   "duration": 0.5,   "velocity_factor": 1.1},
+    {"onset": 3.5,   "duration": 0.5,   "velocity_factor": 1.1}
   ]
 }

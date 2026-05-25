@@ -1,46 +1,10 @@
 {
   "name": "beethoven_motif_fifth",
-  "loop": true,
+  "loop": false,
   "events": [
-    {
-      "onset": 0.0,
-      "duration": 0.25,
-      "velocity_factor": 1.0
-    },
-    {
-      "onset": 0.25,
-      "duration": 0.25,
-      "velocity_factor": 1.0
-    },
-    {
-      "onset": 0.5,
-      "duration": 0.25,
-      "velocity_factor": 1.0
-    },
-    {
-      "onset": 0.75,
-      "duration": 1.25,
-      "velocity_factor": 0.9
-    },
-    {
-      "onset": 2.0,
-      "duration": 0.25,
-      "velocity_factor": 0.95
-    },
-    {
-      "onset": 2.25,
-      "duration": 0.25,
-      "velocity_factor": 0.95
-    },
-    {
-      "onset": 2.5,
-      "duration": 0.25,
-      "velocity_factor": 0.95
-    },
-    {
-      "onset": 2.75,
-      "duration": 1.25,
-      "velocity_factor": 0.85
-    }
+    {"onset": 0.0,   "duration": 0.25, "velocity_factor": 0.9},
+    {"onset": 0.25,  "duration": 0.25, "velocity_factor": 0.9},
+    {"onset": 0.5,   "duration": 0.25, "velocity_factor": 0.9},
+    {"onset": 0.75,  "duration": 2.0,  "velocity_factor": 1.2}
   ]
 }
