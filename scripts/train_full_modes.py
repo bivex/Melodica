@@ -18,6 +18,8 @@ N_TONES = 12
 N_TYPES = 12  # Cinematic Expanded (Maj, Min, Dim, Aug, sus2, sus4, Maj7, Min7, Dom7, Maj9, Min9, Add9)
 MAX_ITER = 2000
 TARGET_DELTA = 1e-5
+PATIENCE = 100
+MIN_LL_DELTA = 1.0
 
 
 def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
@@ -60,6 +62,105 @@ def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
             weights.append(1.0 / max(w, 1.0))
 
     return songs, weights
+
+
+TYPE_NAMES = ["Maj", "Min", "Dim", "Aug", "sus2", "sus4",
+              "Maj7", "Min7", "Dom7", "Maj9", "Min9", "Add9"]
+
+
+def run_sanity_check(pnote, pchange, pchord):
+    """Validate trained weights before use."""
+    pn = pnote.cpu().numpy() if isinstance(pnote, torch.Tensor) else pnote
+    pc = pchange.cpu().numpy() if isinstance(pchange, torch.Tensor) else pchange
+    pch = pchord.cpu().numpy() if isinstance(pchord, torch.Tensor) else pchord
+
+    checks = {}
+    checks["pnote_finite"] = np.all(np.isfinite(pn))
+    checks["pchange_finite"] = np.all(np.isfinite(pc))
+
+    # Aug not dominant
+    aug_idx = 3
+    pchange_marginal = pc.sum(axis=(1, 2))
+    pchange_marginal = pchange_marginal / pchange_marginal.sum()
+    checks["aug_not_dominant"] = pchange_marginal[aug_idx] <= 0.15
+
+    # Dom7 -> Min strong at P4
+    dom7_to_min_p4 = pc[8, 5, 1]
+    checks["dom7_to_min_strong"] = dom7_to_min_p4 > 0.3
+
+    # Maj -> Maj at P5 (V-I) meaningful
+    maj_to_maj_p5 = pc[0, 7, 0]
+    checks["maj_v_i_meaningful"] = maj_to_maj_p5 > 0.01
+
+    all_ok = True
+    print("\n  === Sanity Check ===")
+    for k, v in checks.items():
+        status = "OK" if v else "FAIL"
+        if not v:
+            all_ok = False
+        print(f"    [{status}] {k}")
+
+    # Print chord distribution
+    print(f"\n  Chord transition distribution:")
+    for i, name in enumerate(TYPE_NAMES):
+        pct = pchange_marginal[i] * 100
+        bar = "#" * int(pct * 2)
+        print(f"    {name:6s} {pct:5.1f}%  {bar}")
+
+    return all_ok
+
+
+def finetune_pchange_only(pchange, frozen_pnote, songs_batched, mask,
+                           song_weight_tensor, lengths, shifts,
+                           r_prev_indices, r_next_indices_for_beta,
+                           pchord, n_songs, max_t, device, eps,
+                           n_iter=200):
+    """Finetune pchange with pnote frozen."""
+    pnote = frozen_pnote
+    n_types = 12
+
+    for fi in range(n_iter):
+        log_pnote = torch.log(pnote + eps)
+        log_not_pnote = torch.log(1.0 - pnote + eps)
+        songs_expanded = songs_batched[:, :, shifts]
+        diff = log_pnote - log_not_pnote
+        psets_log = torch.einsum("ntrp,pk->ntrk", songs_expanded, diff) + log_not_pnote.sum(dim=0)
+        psets = torch.exp(psets_log) * mask.view(n_songs, max_t, 1, 1)
+
+        alpha = torch.zeros(n_songs, max_t, N_TONES, n_types, device=device)
+        alpha[:, 0] = (pchord / N_TONES) * psets[:, 0]
+        norm = alpha[:, 0].sum(dim=(1, 2), keepdim=True)
+        alpha[:, 0] /= norm + eps
+
+        for t in range(1, max_t):
+            prev_expanded = alpha[:, t - 1][:, :, r_prev_indices]
+            combined_prev = torch.einsum("nrik,kio->nro", prev_expanded, pchange)
+            alpha[:, t] = combined_prev * psets[:, t]
+            norm = alpha[:, t].sum(dim=(1, 2), keepdim=True)
+            alpha[:, t] /= norm + eps
+
+        beta = torch.zeros(n_songs, max_t, N_TONES, n_types, device=device)
+        for i, length in enumerate(lengths):
+            beta[i, length - 1] = 1.0
+        for t in range(max_t - 2, -1, -1):
+            next_val = psets[:, t + 1] * beta[:, t + 1]
+            next_expanded = next_val[:, :, r_next_indices_for_beta]
+            combined_next = torch.einsum("nrio,kio->nrk", next_expanded, pchange)
+            beta[:, t] = combined_next
+            norm = beta[:, t].sum(dim=(1, 2), keepdim=True)
+            beta[:, t] /= norm + eps
+
+        gamma = alpha * beta
+        gamma /= gamma.sum(dim=(2, 3), keepdim=True) + eps
+        gamma *= mask.view(n_songs, max_t, 1, 1)
+
+        term_next = psets[:, 1:] * beta[:, 1:]
+        term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]
+        change_hist = torch.einsum("ntrik,ntro->kio", term_prev_expanded, term_next)
+
+        pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
+
+    return pchange.cpu().numpy()
 
 
 def main():
@@ -150,6 +251,12 @@ def main():
     print(f"\n  Turbo Training: {n_songs} songs, {max_t} max steps, {MAX_ITER} iters")
     start_time = time.time()
     eps = 1e-8
+
+    # Early stopping state
+    best_ll = -float("inf")
+    best_pnote = pnote.clone()
+    best_pchange = pchange.clone()
+    stagnation = 0
 
     pbar = tqdm(range(MAX_ITER), desc="Training")
     for iter_idx in pbar:
@@ -273,12 +380,60 @@ def main():
         if delta < TARGET_DELTA:
             break
 
-    print(f"\n  Turbo training finished in {time.time() - start_time:.1f}s")
+        # Early stopping by LL plateau (skip warmup)
+        if iter_idx >= 50:
+            if total_ll.item() > best_ll + MIN_LL_DELTA:
+                best_ll = total_ll.item()
+                best_pnote = pnote.clone()
+                best_pchange = pchange.clone()
+                stagnation = 0
+            else:
+                stagnation += 1
+            if stagnation >= PATIENCE:
+                pbar.write(f"  Early stop at iter {iter_idx}, LL plateau for {PATIENCE} iters (best LL={best_ll:.1f})")
+                break
 
+    # Restore best weights
+    pnote = best_pnote
+    pchange = best_pchange
+    elapsed = time.time() - start_time
+
+    print(f"\n  Training finished in {elapsed:.1f}s, best LL={best_ll:.1f}")
+
+    # Save weights + checkpoint
     out_dir = Path("melodica/harmonize/weights")
     out_dir.mkdir(exist_ok=True, parents=True)
     np.savetxt(out_dir / "pnote_full.txt", pnote.cpu().numpy())
     np.save(out_dir / "pchange_full.npy", pchange.cpu().numpy())
+    np.savez(
+        out_dir / "hmm_checkpoint.npz",
+        pnote=pnote.cpu().numpy(),
+        pchange=pchange.cpu().numpy(),
+        pchord=pchord.cpu().numpy(),
+        log_likelihood=np.array([best_ll]),
+        iteration=np.array([iter_idx]),
+    )
+
+    # Sanity check
+    sanity_ok = run_sanity_check(pnote, pchange, pchord)
+    if not sanity_ok:
+        print("\n  Sanity check FAILED — running pchange-only finetune...")
+        pchange_np = finetune_pchange_only(pchange, pnote, songs_batched, mask,
+                                         song_weight_tensor, lengths, shifts,
+                                         r_prev_indices, r_next_indices_for_beta,
+                                         pchord, n_songs, max_t, device, eps)
+        np.save(out_dir / "pchange_full.npy", pchange_np)
+        np.savez(
+            out_dir / "hmm_checkpoint.npz",
+            pnote=pnote.cpu().numpy(),
+            pchange=pchange_np,
+            pchord=pchord.cpu().numpy(),
+            log_likelihood=np.array([best_ll]),
+            iteration=np.array([iter_idx]),
+        )
+        run_sanity_check(pnote, torch.from_numpy(pchange_np).to(device), pchord)
+
+    print(f"\n  Weights saved to {out_dir.absolute()}")
 
 
 if __name__ == "__main__":
