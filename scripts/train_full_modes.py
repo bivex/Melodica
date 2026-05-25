@@ -59,7 +59,7 @@ def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
             w = raw_weights[i] if raw_weights and i < len(raw_weights) else 1.0
             # Invert: more songs for a mode → each song gets lower weight
             # This way Common modes still dominate but don't overwhelm
-            weights.append(1.0 / max(w, 1.0))
+            weights.append(1.0 / max(w, 1e-3))
 
     return songs, weights
 
@@ -153,11 +153,17 @@ def finetune_pchange_only(pchange, frozen_pnote, songs_batched, mask,
             beta[i, length - 1] = 1.0
         for t in range(max_t - 2, -1, -1):
             next_val = psets[:, t + 1] * beta[:, t + 1]
-            next_expanded = next_val[:, :, r_next_indices_for_beta]
+            next_expanded = next_val[:, r_next_indices_for_beta]
             combined_next = torch.einsum("nrio,kio->nrk", next_expanded, pchange)
-            beta[:, t] = combined_next
+
+            # Only update steps that are BEFORE the end of the song
+            active = torch.tensor([t < l - 1 for l in lengths],
+                                   dtype=torch.float32, device=device).view(-1, 1, 1)
+            beta[:, t] = combined_next * active + beta[:, t] * (1 - active)
+
             norm = beta[:, t].sum(dim=(1, 2), keepdim=True)
             beta[:, t] /= norm + eps
+
 
         # Correct E-step for transitions: xi_t(i, j) ~ alpha_t(i) * a_ij * b_j(o_{t+1}) * beta_{t+1}(j)
         term_next = psets[:, 1:] * beta[:, 1:]
@@ -261,8 +267,6 @@ def main():
     pnote[0, 11], pnote[4, 11], pnote[7, 11], pnote[2, 11] = 0.7, 0.7, 0.7, 0.99
     pnote[11, 11], pnote[10, 11] = 0.001, 0.001
 
-    pnote /= pnote.sum(dim=0, keepdim=True)
-
     pchord = torch.tensor([2.0, 2.0, 1.0, 0.05, 0.3, 0.3, 1.0, 1.0, 1.5, 0.8, 0.8, 1.2], device=device)
     pchord /= pchord.sum()
 
@@ -337,7 +341,12 @@ def main():
             next_val = psets[:, t + 1] * beta[:, t + 1]  # [N, 12, K]
             next_expanded = next_val[:, r_next_indices_for_beta]  # [N, r_p, i, t_n]
             combined_next = torch.einsum("nrio,kio->nrk", next_expanded, pchange)
-            beta[:, t] = combined_next
+            
+            # Only update steps that are BEFORE the end of the song
+            active = torch.tensor([t < l - 1 for l in lengths],
+                                   dtype=torch.float32, device=device).view(-1, 1, 1)
+            beta[:, t] = combined_next * active + beta[:, t] * (1 - active)
+            
             norm = beta[:, t].sum(dim=(1, 2), keepdim=True)
             beta[:, t] /= norm + eps
 
@@ -346,12 +355,8 @@ def main():
         gamma /= gamma.sum(dim=(2, 3), keepdim=True) + eps
 
         # --- 3-PHASE EM SCHEDULE ---
-        if 50 <= iter_idx < 150:
-            # Phase 2: Sharpening (Beta=1.5) to break symmetry between similar chords
-            gamma = gamma ** 1.5
-            gamma /= gamma.sum(dim=(2, 3), keepdim=True) + eps
-        # (Phase 1 and Phase 3 are normal Soft-EM to allow settling)
-
+        # (Phase 2 sharpening disabled because it conflicts with structural anchors)
+        
         gamma *= mask.view(n_songs, max_t, 1, 1)
 
         # Apply per-song weights (common modes get more influence)
@@ -390,14 +395,14 @@ def main():
         
         for t_idx, notes in enumerate(anchors):
             for n in notes:
-                # Force core notes to be high
-                pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], 0.6, 0.999)
+                # Force core notes to be present, but allow EM room to breathe (threshold lowered from 0.6)
+                pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], 0.3, 0.999)
         
         pnote = torch.clamp(pnote, 0.001, 0.999)
         pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
 
         delta_note = torch.abs(pnote - old_pnote).max().item()
-        delta_change = torch.abs(pchange - old_pchange).max().item() if 'old_pchange' in dir() else 1.0
+        delta_change = torch.abs(pchange - old_pchange).max().item() if 'old_pchange' in locals() else 1.0
         delta = max(delta_note, delta_change)
         old_pchange = pchange.clone()
 
@@ -466,21 +471,22 @@ def main():
                                          song_weight_tensor, lengths, shifts,
                                          r_prev_indices, r_next_indices_for_beta,
                                          pchord, n_songs, max_t, device, eps)
+        
         # Check if finetune actually improved things
         ft_ok = run_sanity_check(pnote, torch.from_numpy(pchange_np).to(device), pchord)
         if not ft_ok:
             # Compare: how many checks pass with each version
-            def count_passes(pc_np):
-                pc = pc_np if isinstance(pc_np, np.ndarray) else pc_np
+            def count_passes(pc_inp):
+                pc = pc_inp.cpu().numpy() if isinstance(pc_inp, torch.Tensor) else pc_inp
                 passes = 0
                 if np.all(np.isfinite(pc)): passes += 1
-                marginal = pc.sum(axis=(1, 2))
+                marginal = pc.sum(axis=(0, 1))
                 total = marginal.sum()
                 if total > 0 and np.isfinite(total):
                     marginal = marginal / total
                     if marginal[3] <= 0.15: passes += 1
                 if pc[8, 5, 1] > 0.3: passes += 1
-                if pc[0, 7, 0] > 0.01: passes += 1
+                if pc[0, 5, 0] > 0.01 or pc[0, 7, 0] > 0.01: passes += 1
                 return passes
             orig_passes = count_passes(original_pchange_np)
             ft_passes = count_passes(pchange_np)
