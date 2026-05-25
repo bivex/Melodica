@@ -44,7 +44,7 @@ The arrangement is divided into distinct structural sections to demonstrate dive
 *   **Countermelody**: 
     - Register: Alto sax range `50` to `68` underneath the Trombone.
     - `motion_preference="mixed"` (tasteful blend of contrary, parallel, and oblique motion).
-    - Rhythm: `MarkovRhythmGenerator(style="swing", syncopation=0.25)` (clean syncopated swing counter-phrases).
+    - Rhythm: `get_rhythm("markov:swing", syncopation=0.25)` (clean syncopated swing counter-phrases).
 
 ### 2. Section C: Bridge (Beats 48.0 - 80.0) — High-Energy Virtuoso Solo
 *   **Melodic Goal**: Modulates to D Dorian for bright, fast-paced jazz-fusion virtuosity.
@@ -57,7 +57,7 @@ The arrangement is divided into distinct structural sections to demonstrate dive
 *   **Countermelody**:
     - Register: active alto sax range `48` to `65`.
     - `motion_preference="contrary"` (contrary motion for maximum contrapuntal separation).
-    - Rhythm: `MarkovRhythmGenerator(style="swing", syncopation=0.3)` (active swing accents).
+    - Rhythm: `get_rhythm("markov:swing", syncopation=0.3)` (active swing accents).
 
 ### 3. Section D: Outro (Beats 80.0 - 96.0) — Spacious Ambient Farewell
 *   **Melodic Goal**: Deep modal-ambient trumpet/sax fading away slowly over drone-like chords.

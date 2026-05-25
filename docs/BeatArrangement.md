@@ -30,9 +30,9 @@ from melodica.generators.trap_drums import TrapDrumsGenerator
 from melodica.generators.bass_808_sliding import Bass808SlidingGenerator
 from melodica.generators.lead_synth import LeadSynthGenerator
 from melodica.generators.nebula import NebulaGenerator
-from melodica.rhythm.markov_rhythm import MarkovRhythmGenerator
+from melodica.rhythm import get_rhythm
 
-lead_rhythm = MarkovRhythmGenerator(style="syncopated", syncopation=0.3)
+lead_rhythm = get_rhythm("markov:syncopated")
 
 tracks = [
     TrackConfig(

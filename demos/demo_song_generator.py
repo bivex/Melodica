@@ -33,7 +33,7 @@ from melodica.modifiers import (
     HumanizeModifier, SwingController, LimitNoteRangeModifier, QuantizeModifier
 )
 from melodica.rhythm import (
-    EuclideanRhythmGenerator, ProbabilisticRhythmGenerator, SubdivisionGenerator
+    EuclideanRhythmGenerator, ProbabilisticRhythmGenerator, SubdivisionGenerator, get_rhythm
 )
 
 def create_demo_song():
@@ -93,8 +93,8 @@ def create_demo_song():
     melody_gen = MelodyGenerator(
         params=GeneratorParams(density=0.6, key_range_low=72, key_range_high=85),
         prefer_chord_tones=0.8,
-        rhythm=ProbabilisticRhythmGenerator(
-            grid_resolution=0.25, density=0.5, syncopation=0.3
+        rhythm=get_rhythm(
+            "probabilistic", grid_resolution=0.25, density=0.5, syncopation=0.3
         )
     )
     lead_phrase = PhraseInstance(

@@ -34,16 +34,15 @@ from melodica.generators.fx_impact import FXImpactGenerator
 from melodica.generators.vocal_chops import VocalChopsGenerator
 from melodica.generators.brass_section import BrassSectionGenerator
 from melodica.generators.hihat_stutter import HiHatStutterGenerator
-from melodica.rhythm.probabilistic import ProbabilisticRhythmGenerator
-from melodica.rhythm.markov_rhythm import MarkovRhythmGenerator
+from melodica.rhythm import get_rhythm, ProbabilisticRhythmGenerator, MarkovRhythmGenerator
 from melodica.types import Scale, Mode
 from melodica.midi import export_multitrack_midi
 
 
 def _build_tracks():
-    lead_rhythm = MarkovRhythmGenerator(style="syncopated", syncopation=0.3, downbeat_preference=0.2)
-    vocal_rhythm = ProbabilisticRhythmGenerator(grid_resolution=0.25, density=0.55, syncopation=0.25)
-    counter_rhythm = MarkovRhythmGenerator(style="swing", syncopation=0.2, phrase_length=8)
+    lead_rhythm = get_rhythm("markov:syncopated")
+    vocal_rhythm = get_rhythm("probabilistic:dense")
+    counter_rhythm = get_rhythm("markov:swing")
 
     return [
         TrackConfig(name="Ambient_Pad", generator=NebulaGenerator(variant="swell", density_notes=6), instrument="dark_pad", density=0.4, octave_shift=-1),

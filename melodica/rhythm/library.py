@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from dataclasses import dataclass
+from typing import Callable, Any
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 
 
@@ -61,6 +62,14 @@ class StaticRhythmGenerator(RhythmGenerator):
 
 RHYTHM_LIBRARY: dict[str, list[RhythmEvent]] = {}
 _RHYTHM_LOOP_PREFERENCE: dict[str, bool] = {}
+
+# Registry for dynamic generators (Markov, Probabilistic, etc.)
+DYNAMIC_RHYTHM_REGISTRY: dict[str, Callable[..., RhythmGenerator]] = {}
+
+
+def register_dynamic_rhythm(name: str, factory: Callable[..., RhythmGenerator]):
+    """Register a factory function for a dynamic rhythm generator."""
+    DYNAMIC_RHYTHM_REGISTRY[name] = factory
 
 
 def _load_file(path: Path):
@@ -109,13 +118,54 @@ def _populate_library():
         RHYTHM_LIBRARY["straight_quarters"] = fallback_events
         _RHYTHM_LOOP_PREFERENCE["straight_quarters"] = True
 
+    # 4. Register standard dynamic rhythms
+    from melodica.rhythm.markov_rhythm import MarkovRhythmGenerator
+    from melodica.rhythm.probabilistic import ProbabilisticRhythmGenerator
+    
+    # Generic factories that pass through all kwargs
+    register_dynamic_rhythm("markov", lambda **kw: MarkovRhythmGenerator(**kw))
+    register_dynamic_rhythm("probabilistic", lambda **kw: ProbabilisticRhythmGenerator(**kw))
+
+    # Named presets (can still be overridden by kwargs)
+    register_dynamic_rhythm(
+        "markov:syncopated", 
+        lambda **kw: MarkovRhythmGenerator(**{"style": "straight", "syncopation": 0.3, "downbeat_preference": 0.2, **kw})
+    )
+    register_dynamic_rhythm(
+        "markov:swing", 
+        lambda **kw: MarkovRhythmGenerator(**{"style": "swing", "syncopation": 0.2, "phrase_length": 8, **kw})
+    )
+    register_dynamic_rhythm(
+        "markov:ballad", 
+        lambda **kw: MarkovRhythmGenerator(**{"style": "ballad", "syncopation": 0.1, **kw})
+    )
+    register_dynamic_rhythm(
+        "probabilistic:dense", 
+        lambda **kw: ProbabilisticRhythmGenerator(**{"grid_resolution": 0.25, "density": 0.55, "syncopation": 0.25, **kw})
+    )
+    register_dynamic_rhythm(
+        "probabilistic:sparse", 
+        lambda **kw: ProbabilisticRhythmGenerator(**{"grid_resolution": 0.5, "density": 0.3, "syncopation": 0.1, **kw})
+    )
+
 
 # Populate library on module load
 _populate_library()
 
 
-def get_rhythm(name: str) -> RhythmGenerator:
-    """Helper to get a generator for a named preset."""
+def get_rhythm(name: str, **kwargs) -> RhythmGenerator:
+    """
+    Helper to get a generator for a named preset.
+    
+    Supports:
+    1. Static presets (from JSON files or RHYTHM_LIBRARY)
+    2. Dynamic presets (starting with 'markov:', 'probabilistic:', etc.)
+    """
+    # Check dynamic registry first
+    if name in DYNAMIC_RHYTHM_REGISTRY:
+        return DYNAMIC_RHYTHM_REGISTRY[name](**kwargs)
+
+    # Fallback to static library
     events = RHYTHM_LIBRARY.get(name)
     if events is None:
         # Fallback to straight_quarters

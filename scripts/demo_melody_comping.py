@@ -24,7 +24,7 @@ from melodica.generators.modern_bass_2025 import ModernBass2025Generator
 from melodica.generators.solo_melody import SoloMelodyGenerator
 from melodica.generators.melody import MelodyGenerator
 from melodica.generators.countermelody import CountermelodyGenerator
-from melodica.rhythm import MarkovRhythmGenerator
+from melodica.rhythm import get_rhythm
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -275,7 +275,7 @@ def produce_demo_track():
     
     # Countermelody: Swing style counterpoint against melody_B
     counter_params_B = GeneratorParams(density=0.35, key_range_low=50, key_range_high=68, complexity=0.5)
-    counter_rhythm_B = MarkovRhythmGenerator(style="swing", syncopation=0.25, seed=42)
+    counter_rhythm_B = get_rhythm("markov:swing", syncopation=0.25, seed=42)
     counter_gen_B = CountermelodyGenerator(
         counter_params_B,
         primary_melody=melody_B,
@@ -337,7 +337,7 @@ def produce_demo_track():
     
     # Countermelody: Active contrary motion counterpoint against melody_C
     counter_params_C = GeneratorParams(density=0.5, key_range_low=48, key_range_high=65, complexity=0.6)
-    counter_rhythm_C = MarkovRhythmGenerator(style="swing", syncopation=0.3, seed=43)
+    counter_rhythm_C = get_rhythm("markov:swing", syncopation=0.3, seed=43)
     counter_gen_C = CountermelodyGenerator(
         counter_params_C,
         primary_melody=melody_C,
@@ -405,7 +405,7 @@ def produce_demo_track():
     
     # Countermelody: Oblique holding voice for spacious closing outro
     counter_params_D = GeneratorParams(density=0.2, key_range_low=50, key_range_high=68, complexity=0.3)
-    counter_rhythm_D = MarkovRhythmGenerator(style="ballad", syncopation=0.1, seed=44)
+    counter_rhythm_D = get_rhythm("markov:ballad", syncopation=0.1, seed=44)
     counter_gen_D = CountermelodyGenerator(
         counter_params_D,
         primary_melody=melody_D,
