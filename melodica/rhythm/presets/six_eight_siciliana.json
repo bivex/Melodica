@@ -1,0 +1,56 @@
+{
+  "name": "six_eight_siciliana",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.75,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.75,
+      "duration": 0.25,
+      "velocity_factor": 0.75
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.75,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 1.75,
+      "duration": 0.25,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 2.0,
+      "duration": 1.0,
+      "velocity_factor": 0.9
+    },
+    {
+      "onset": 3.0,
+      "duration": 0.75,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 3.75,
+      "duration": 0.25,
+      "velocity_factor": 0.75
+    },
+    {
+      "onset": 4.0,
+      "duration": 0.75,
+      "velocity_factor": 0.85
+    },
+    {
+      "onset": 4.75,
+      "duration": 0.25,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 5.0,
+      "duration": 1.0,
+      "velocity_factor": 0.9
+    }
+  ]
+}

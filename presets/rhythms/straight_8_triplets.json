@@ -1,0 +1,66 @@
+{
+  "name": "straight_8_triplets",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.333333,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.666667,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.0,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.333333,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.666667,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.333333,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.666667,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 3.0,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 3.333333,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 3.666667,
+      "duration": 0.333333,
+      "velocity_factor": 1.0
+    }
+  ]
+}

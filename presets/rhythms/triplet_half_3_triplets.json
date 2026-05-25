@@ -1,0 +1,31 @@
+{
+  "name": "triplet_half_3_triplets",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.333333,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 1.333333,
+      "duration": 0.666667,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.0,
+      "duration": 0.666667,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.666667,
+      "duration": 0.666667,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 3.333333,
+      "duration": 0.666667,
+      "velocity_factor": 1.0
+    }
+  ]
+}

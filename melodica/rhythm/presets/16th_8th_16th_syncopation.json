@@ -1,0 +1,21 @@
+{
+  "name": "16th_8th_16th_syncopation",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 0.25,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.25,
+      "duration": 0.5,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 0.75,
+      "duration": 0.25,
+      "velocity_factor": 1.0
+    }
+  ]
+}

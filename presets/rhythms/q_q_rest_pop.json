@@ -1,0 +1,16 @@
+{
+  "name": "q_q_rest_pop",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 1.0,
+      "velocity_factor": 1.0
+    },
+    {
+      "onset": 2.0,
+      "duration": 1.0,
+      "velocity_factor": 1.0
+    }
+  ]
+}
