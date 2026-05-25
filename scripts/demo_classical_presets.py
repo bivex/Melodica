@@ -55,7 +55,7 @@ def run_demo():
     alberti_tracks = [
         TrackConfig(
             name="Piano_RH",
-            generator=MelodyGenerator(mode="scale_walk", density=0.6),
+            generator=MelodyGenerator(mode="scale_walk"),
             instrument="piano", density=0.6
         ),
         TrackConfig(

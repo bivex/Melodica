@@ -1,0 +1,31 @@
+{
+  "name": "gagaku_eda_joritsu",
+  "loop": true,
+  "events": [
+    {
+      "onset": 0.0,
+      "duration": 2.0,
+      "velocity_factor": 0.7
+    },
+    {
+      "onset": 2.0,
+      "duration": 1.0,
+      "velocity_factor": 0.6
+    },
+    {
+      "onset": 3.0,
+      "duration": 1.0,
+      "velocity_factor": 0.65
+    },
+    {
+      "onset": 4.0,
+      "duration": 2.0,
+      "velocity_factor": 0.75
+    },
+    {
+      "onset": 6.0,
+      "duration": 2.0,
+      "velocity_factor": 0.6
+    }
+  ]
+}
