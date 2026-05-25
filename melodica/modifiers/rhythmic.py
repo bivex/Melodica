@@ -75,10 +75,11 @@ class FollowRhythmModifier(PhraseModifier):
         if not onset_times:
             return notes
 
-        # Duration = gap to next onset; last onset extends to cover remaining time
-        max_end = max(n.start + n.duration for n in notes)
+        # Duration = gap to next onset; last onset extends to end of source/section.
+        # We deliberately ignore follower note lengths — a long pad shouldn't stretch
+        # the last rhythm event beyond what the source track implies.
         src_end = max(sn.start + sn.duration for sn in source_notes)
-        timeline_end = max(max_end, src_end)
+        timeline_end = max(src_end, context.duration_beats)
         onset_durs = []
         for i, t in enumerate(onset_times):
             if i + 1 < len(onset_times):

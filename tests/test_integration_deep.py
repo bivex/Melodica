@@ -260,8 +260,9 @@ def test_follow_rhythm_integration():
     onsets = sorted(list(set(n.start for n in result)))
     assert onsets == [0.0, 0.75, 1.0]
 
-    # Check durations match gap to next onset
+    # Check durations match inter-onset gaps
     durations = {n.start: n.duration for n in result}
     assert durations[0.0] == 0.75
     assert durations[0.75] == 0.25
+    # last onset: timeline_end = max(src_end=1.5, duration_beats=4.0) = 4.0 → 4.0 - 1.0 = 3.0
     assert durations[1.0] == 3.0

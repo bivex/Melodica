@@ -496,8 +496,9 @@ def test_follow_rhythm_duration_is_inter_onset_gap(dummy_context):
     # First onset (0.0) duration should be gap to next onset (0.5)
     assert result[0].start == 0.0
     assert result[0].duration == 0.5  # NOT 2.0 from original
-    # Second onset (0.5) duration extends to timeline end
-    assert result[1].duration < 4.0
+    # Second onset (0.5): timeline_end = max(src_end=0.6, duration_beats=4.0) = 4.0
+    # duration = 4.0 - 0.5 = 3.5
+    assert result[1].duration == 3.5
 
 
 def test_follow_rhythm_empty_source_returns_original(dummy_context):
@@ -609,8 +610,9 @@ def test_follow_rhythm_sparse_source_long_gaps(dummy_context):
     assert len(result) == 2
     # First note duration should be 4.0 (gap to next onset)
     assert result[0].duration == 4.0
-    # Second note duration extends to timeline end (max(3.0, 4.5) - 4.0 = 0.5)
-    assert result[1].duration == 0.5
+    # Second note: timeline_end = max(src_end=4.5, duration_beats=8.0) = 8.0
+    # duration = 8.0 - 4.0 = 4.0
+    assert result[1].duration == 4.0
 
 
 def test_follow_rhythm_single_source_note(dummy_context):
@@ -629,8 +631,9 @@ def test_follow_rhythm_single_source_note(dummy_context):
 
     assert len(result) == 1
     assert result[0].start == 1.0
-    # Duration should extend to timeline_end (max(2.5, 1.5) - 1.0 = 1.5)
-    assert result[0].duration == 1.5
+    # timeline_end = max(src_end=1.5, duration_beats=4.0) = 4.0
+    # duration = 4.0 - 1.0 = 3.0
+    assert result[0].duration == 3.0
 
 
 def test_follow_rhythm_float_precision_in_onsets(dummy_context):
