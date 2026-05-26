@@ -384,6 +384,11 @@ class FunctionalHMMHarmonizer:
                 deg_penalty = -6.0 if result and result[-1][1] == deg else 0.0
                 root_penalty = -5.0 if result and result[-1][0] == root_pc else 0.0
 
+                # Quality repeat: penalize matching previous chord quality
+                prev_quality = diatonic[(result[-1][1] - 1) % len(diatonic)][1] if result else None
+                cur_quality = diatonic[(deg - 1) % len(diatonic)][1]
+                quality_penalty = -8.0 if prev_quality == cur_quality else 0.0
+
                 interval_penalty = 0.0
                 if len(result) >= 2:
                     prev_iv = (result[-1][0] - result[-2][0]) % 12
@@ -393,8 +398,12 @@ class FunctionalHMMHarmonizer:
 
                 aba_penalty = -3.0 if len(result) >= 2 and result[-2][0] == root_pc else 0.0
 
+                # Random exploration noise so candidates differ
+                noise = random.gauss(0, 1.5)
+
                 score = (emit_score + cof_score + grav_bonus + fn_match
-                         + deg_penalty + root_penalty + interval_penalty + aba_penalty)
+                         + deg_penalty + root_penalty + quality_penalty
+                         + interval_penalty + aba_penalty + noise)
                 if score > best_score:
                     best_score = score
                     best_deg = deg
@@ -614,6 +623,9 @@ class FunctionalHMMHarmonizer:
             score += 3.0
         if n >= 2 and chords[-1].function == HarmonicFunction.TONIC and chords[-2].function == HarmonicFunction.DOMINANT:
             score += 4.0
+
+        # Random noise so that equally-good candidates don't collapse to one
+        score += random.gauss(0, 2.0)
 
         return score
 
