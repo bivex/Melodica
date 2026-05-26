@@ -202,7 +202,8 @@ class PianoRunGenerator(PhraseGenerator):
         from melodica.generators._postprocess import apply_phrase_arch
 
         notes = apply_phrase_arch(
-            notes, duration_beats, context.phrase_position if context else 0.0
+            notes, duration_beats, context.phrase_position if context else 0.0,
+            section_type=getattr(context, "section_type", None),
         )
 
         if notes:

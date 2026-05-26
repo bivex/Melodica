@@ -17,12 +17,44 @@ types.py -- Core domain types (re-export hub).
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 # Constants
 OCTAVE: int = 12
 MIDI_MAX: int = 127
 TICKS_PER_BEAT: int = 480
 VELOCITY_DEFAULT: int = 64
 VELOCITY_MAX: int = 127
+
+
+class SectionType(StrEnum):
+    """Unified section type vocabulary for arrangement structure."""
+
+    INTRO = "intro"
+    VERSE = "verse"
+    PRE_CHORUS = "pre_chorus"
+    CHORUS = "chorus"
+    BRIDGE = "bridge"
+    OUTRO = "outro"
+    BUILD = "build"
+    DROP = "drop"
+    BREAK = "break"
+    FINAL = "final"
+
+
+SECTION_ENERGY: dict[SectionType, float] = {
+    SectionType.INTRO: 0.3,
+    SectionType.VERSE: 0.5,
+    SectionType.PRE_CHORUS: 0.65,
+    SectionType.CHORUS: 0.85,
+    SectionType.BRIDGE: 0.6,
+    SectionType.OUTRO: 0.35,
+    SectionType.BUILD: 0.7,
+    SectionType.DROP: 1.0,
+    SectionType.BREAK: 0.2,
+    SectionType.FINAL: 0.9,
+}
+
 
 from melodica.types_pkg._notes import (
     Note,
@@ -76,6 +108,8 @@ __all__ = [
     "TICKS_PER_BEAT",
     "VELOCITY_DEFAULT",
     "VELOCITY_MAX",
+    "SectionType",
+    "SECTION_ENERGY",
     "Note",
     "NoteInfo",
     "HarmonicFunction",

@@ -27,15 +27,21 @@ def apply_phrase_arch(
     notes: list,
     duration_beats: float,
     phrase_position: float = 0.0,
+    section_type=None,
 ) -> list:
     """Apply a sinusoidal velocity arch over the phrase duration.
 
     arch_height grows with phrase_position (0.0→1.0), producing a
     crescendo-shaped velocity contour peaking mid-phrase.
+    When section_type is provided, uses section energy for arch height.
     """
     if not notes or duration_beats <= 0:
         return notes
-    arch_height = 0.3 + 0.2 * phrase_position
+    if section_type is not None:
+        from melodica.types import SECTION_ENERGY
+        arch_height = SECTION_ENERGY.get(section_type, 0.5) * 0.5
+    else:
+        arch_height = 0.3 + 0.2 * phrase_position
     for note in notes:
         progress = note.start / duration_beats
         arch = 1.0 - arch_height + arch_height * math.sin(progress * math.pi * 0.7)

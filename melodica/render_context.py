@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from melodica.types import BarGrid, ChordLabel, Scale
+from melodica.types import BarGrid, ChordLabel, Scale, SectionType
 
 
 @dataclass
@@ -41,6 +41,7 @@ class RenderContext:
     bass_pitch: int | None = None  # lowest sounding pitch for counterpoint
     prev_bass_pitch: int | None = None  # previous bass pitch for voice leading
     bar_grid: BarGrid | None = None  # time signature grid for bar-aware rendering
+    section_type: SectionType | None = None  # current section type for generator adaptation
 
     def with_end_state(
         self,
@@ -52,6 +53,7 @@ class RenderContext:
         duration_beats: float = 0.0,
         total_duration: float = 0.0,
         last_bass_pitch: int | None = None,
+        section_type: SectionType | None = None,
     ) -> RenderContext:
         """Return a new context with updated state for the next phrase."""
         # Update phrase position based on duration
@@ -68,4 +70,5 @@ class RenderContext:
             bass_pitch=last_bass_pitch if last_bass_pitch is not None else self.bass_pitch,
             prev_bass_pitch=self.bass_pitch,
             bar_grid=self.bar_grid,
+            section_type=section_type if section_type is not None else self.section_type,
         )

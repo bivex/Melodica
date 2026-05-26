@@ -41,6 +41,8 @@ from melodica.types import (
     Scale,
     Mode,
     Quality,
+    SectionType,
+    SECTION_ENERGY,
     Track,
     MusicTimeline,
     KeyLabel,
@@ -276,6 +278,8 @@ class IdeaPart:
     track_velocity_scale: dict[str, float] | None = None  # {"TrackName": 0.5}
     # Per-track phrase schedule overrides (None = use track default)
     track_phrase_schedules: dict[str, PhraseSchedule] | None = None
+    # Section type for arrangement-aware rendering (optional)
+    section_type: SectionType | None = None
 
 
 @dataclass
@@ -380,6 +384,7 @@ class IdeaTool:
                 parts.append(
                     IdeaPart(
                         name=p.name or f"Part {i + 1}",
+                        section_type=p.section_type,
                         bars=p.bars if p.bars is not None else self.config.bars,
                         scale=p.scale if p.scale is not None else self.config.scale,
                         tempo=p.tempo if p.tempo is not None else self.config.tempo,
@@ -444,10 +449,16 @@ class IdeaTool:
         # Tension curve (shared across workflows)
         tension_curve = None
         if self.config.use_tension_curve:
-            tension_curve = TensionCurve(
-                total_beats=total_beats,
-                curve_type=self._style.tension_curve,
-            )
+            has_section_types = any(p.section_type is not None for p in parts)
+            if has_section_types:
+                tension_curve = TensionCurve.from_parts(
+                    parts, curve_type=self._style.tension_curve
+                )
+            else:
+                tension_curve = TensionCurve(
+                    total_beats=total_beats,
+                    curve_type=self._style.tension_curve,
+                )
 
         # ---- Workflow branching ----
         if self.config.workflow == "harmonize_melody":
@@ -624,11 +635,24 @@ class IdeaTool:
         if self.config.use_mixing:
             from melodica.shorts_mixing import MixingDesk
 
-            # Part-aware section segmentation mapped to mixing roles
-            # First part → Hook (intro energy), last part → Loop (outro fade), middle → Dynamics
+            # Part-aware section segmentation mapped to mixing roles via section_type
+            _SECTION_ROLE_MAP = {
+                SectionType.INTRO: "Dynamics",
+                SectionType.VERSE: "Loop",
+                SectionType.PRE_CHORUS: "Dynamics",
+                SectionType.CHORUS: "Hook",
+                SectionType.BRIDGE: "Dynamics",
+                SectionType.OUTRO: "Loop",
+                SectionType.BUILD: "Dynamics",
+                SectionType.DROP: "Hook",
+                SectionType.BREAK: "Dynamics",
+                SectionType.FINAL: "Hook",
+            }
             sections = []
             for i, part in enumerate(parts):
-                if len(parts) == 1:
+                if part.section_type is not None:
+                    role = _SECTION_ROLE_MAP.get(part.section_type, "Dynamics")
+                elif len(parts) == 1:
                     role = "Dynamics"
                 elif i == 0:
                     role = "Hook"
@@ -641,13 +665,21 @@ class IdeaTool:
             desk = MixingDesk(niche_cfg={})
             result = desk.apply_mixing(result, sections, self.config.tempo)
 
-            # Apply fade-out on the last part
+            # Apply fade-out on the last part (skip for crescendo sections)
             total_beats_all = sum(p.bars * p.time_signature[0] for p in parts)
-            last_part_beats = parts[-1].bars * parts[-1].time_signature[0]
-            fade_start = total_beats_all - min(4.0, last_part_beats * 0.25)
-            result = desk.apply_fade_loop_end(
-                result, fade_start, fade_beats=min(2.0, last_part_beats * 0.15)
+            last_part = parts[-1]
+            _crescendo_types = {SectionType.BUILD, SectionType.DROP, SectionType.FINAL}
+            should_fade = (
+                last_part.section_type is None
+                or last_part.section_type == SectionType.OUTRO
+                or last_part.section_type not in _crescendo_types
             )
+            if should_fade:
+                last_part_beats = last_part.bars * last_part.time_signature[0]
+                fade_start = total_beats_all - min(4.0, last_part_beats * 0.25)
+                result = desk.apply_fade_loop_end(
+                    result, fade_start, fade_beats=min(2.0, last_part_beats * 0.15)
+                )
 
         # ---- Artistic Post-processing (Tension-based swell) ----
         # Apply this AFTER all verifiers so the swells are preserved
@@ -1093,6 +1125,7 @@ class IdeaTool:
 
         all_notes: list[NoteInfo] = []
         offset_beats = 0.0
+        total_arrangement_beats = sum(p.bars * p.time_signature[0] for p in parts)
 
         for part in parts:
             scale = part.scale
@@ -1138,7 +1171,8 @@ class IdeaTool:
                 for i, section in enumerate(pattern):
                     section_length = section_bar_counts[i] * bpb
                     section_start = offset_beats + section_offset_beats
-                    phrase_pos = i / max(1, n_sections - 1) if n_sections > 1 else 0.0
+                    # Global phrase position across entire arrangement
+                    phrase_pos = section_start / total_arrangement_beats if total_arrangement_beats > 0 else 0.0
 
                     # Rebuild context preserving continuity but updating phrase_position
                     ctx = RenderContext(
@@ -1147,6 +1181,7 @@ class IdeaTool:
                         prev_chord=ctx.prev_chord,
                         prev_pitches=list(ctx.prev_pitches),
                         phrase_position=phrase_pos,
+                        section_type=part.section_type,
                     )
                     section_end = section_start + section_length
 
@@ -1449,6 +1484,7 @@ class IdeaTool:
         part_notes: list[NoteInfo] = []
         ctx = self._track_contexts.get(cfg.name, RenderContext())
         slot_offset_beats = 0.0
+        total_arrangement_beats = sum(p.bars * p.time_signature[0] for p in self._get_resolved_parts())
 
         for slot_idx, slot in enumerate(expanded):
             slot_beats = slot.bars * bpb
@@ -1466,7 +1502,8 @@ class IdeaTool:
 
             section_start = offset_beats + slot_offset_beats
             section_end = section_start + slot_beats
-            phrase_pos = slot_offset_beats / part_beats if part_beats > 0 else 0.0
+            # Global phrase position across entire arrangement
+            phrase_pos = section_start / total_arrangement_beats if total_arrangement_beats > 0 else 0.0
 
             ctx = RenderContext(
                 prev_pitch=ctx.prev_pitch,
@@ -1474,6 +1511,7 @@ class IdeaTool:
                 prev_chord=ctx.prev_chord,
                 prev_pitches=list(ctx.prev_pitches),
                 phrase_position=phrase_pos,
+                section_type=part.section_type,
             )
 
             # Find chords for this section

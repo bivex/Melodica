@@ -27,6 +27,8 @@ from dataclasses import dataclass
 from enum import Enum
 import math
 
+from melodica.types import SectionType, SECTION_ENERGY
+
 
 class TensionPhase(Enum):
     REST = "rest"  # calm, stable
@@ -91,6 +93,69 @@ class TensionCurve:
 
         self._cached_points = points
         return points
+
+    @classmethod
+    def from_parts(
+        cls,
+        parts: list,
+        curve_type: str = "classical",
+    ) -> "TensionCurve":
+        """Build a composite tension curve from parts with section_type energy levels.
+
+        Each part should have: bars, time_signature, section_type (optional).
+        """
+        total_beats = sum(p.bars * p.time_signature[0] for p in parts)
+        if total_beats <= 0:
+            return cls(total_beats=32.0, curve_type=curve_type)
+
+        # Collect (start_beat, end_beat, target_energy) per part
+        segments: list[tuple[float, float, float]] = []
+        offset = 0.0
+        for p in parts:
+            part_beats = p.bars * p.time_signature[0]
+            energy = SECTION_ENERGY.get(p.section_type, 0.5) if p.section_type else 0.5
+            segments.append((offset, offset + part_beats, energy))
+            offset += part_beats
+
+        # Generate tension points interpolated between section energy targets
+        points: list[TensionPoint] = []
+        steps = max(8, int(total_beats / 2.0))
+        for i in range(steps + 1):
+            t = i / steps
+            beat = t * total_beats
+
+            # Find which segment this beat falls in and interpolate
+            tension = 0.5
+            for seg_idx, (seg_start, seg_end, seg_energy) in enumerate(segments):
+                if beat <= seg_end or seg_idx == len(segments) - 1:
+                    # Interpolate within segment toward target energy
+                    if seg_end > seg_start:
+                        local_t = (beat - seg_start) / (seg_end - seg_start)
+                        # Smooth approach to target: ease-in
+                        tension = seg_energy * (0.5 + 0.5 * local_t)
+                    else:
+                        tension = seg_energy
+                    break
+
+            phase = cls._classify_phase_static(tension, t, 0.7)
+            points.append(TensionPoint(beat=round(beat, 6), tension=round(tension, 4), phase=phase))
+
+        curve = cls(total_beats=total_beats, curve_type=curve_type)
+        curve._cached_points = points
+        return curve
+
+    @staticmethod
+    def _classify_phase_static(tension: float, t: float, peak_position: float) -> TensionPhase:
+        if tension < 0.3:
+            return TensionPhase.REST
+        elif t < peak_position - 0.1:
+            return TensionPhase.BUILD
+        elif tension > 0.7:
+            return TensionPhase.CLIMAX
+        elif t > peak_position + 0.1:
+            return TensionPhase.RESOLUTION
+        else:
+            return TensionPhase.SUSTAIN
 
     def tension_at(self, beat: float) -> float:
         """Get tension value at a specific beat."""
