@@ -98,11 +98,11 @@ def main():
         )],
         tracks=[
             TrackConfig(name="Piano", generator=MelodyGenerator(mode="chord_tones",
-                rhythm=get_rhythm("markov:ballad")), instrument="piano", density=0.5, octave_shift=2),
+                rhythm=get_rhythm("markov:ballad")), instrument="piano", density=0.5, octave_shift=1),
             TrackConfig(name="Cello", generator=MelodyGenerator(mode="downbeat_chord",
-                rhythm=get_rhythm("markov:slow")), instrument="cello", density=0.3, octave_shift=-2),
+                rhythm=get_rhythm("markov:slow")), instrument="cello", density=0.4, octave_shift=-2),
             TrackConfig(name="Pad", generator=DroneGenerator(variant="tonic"),
-                instrument="dark_pad", density=0.2, octave_shift=-2),
+                instrument="dark_pad", density=0.3, octave_shift=-2),
         ],
         out_dir=out_dir, bpm=48)
 
@@ -147,11 +147,11 @@ def main():
         )],
         tracks=[
             TrackConfig(name="MusicBox", generator=MelodyGenerator(mode="scale_walk",
-                rhythm=get_rhythm("ds_frozen_city_swing")), instrument="music_box", density=0.5, octave_shift=1),
+                rhythm=get_rhythm("ds_frozen_city_swing")), instrument="music_box", density=0.3, octave_shift=1),
             TrackConfig(name="Celesta", generator=MelodyGenerator(mode="chord_tones",
-                rhythm=get_rhythm("half_note")), instrument="celesta", density=0.3, octave_shift=1),
+                rhythm=get_rhythm("half_note")), instrument="celesta", density=0.2, octave_shift=1),
             TrackConfig(name="Pad", generator=DroneGenerator(variant="tonic"),
-                instrument="pad", density=0.3, octave_shift=-2),
+                instrument="pad", density=0.4, octave_shift=-2),
         ],
         out_dir=out_dir, bpm=66)
 
@@ -220,7 +220,7 @@ def main():
             TrackConfig(name="Timpani", generator=MelodyGenerator(mode="chord_tones",
                 rhythm=get_rhythm("ds_steady_16th_charge")), instrument="timpani", density=0.8, octave_shift=-2),
             TrackConfig(name="Choir", generator=ChordGenerator(voicing="closed",
-                rhythm=get_rhythm("whole_note")), instrument="choir", density=0.5, octave_shift=2),
+                rhythm=get_rhythm("whole_note")), instrument="choir", density=0.5, octave_shift=1),
         ],
         out_dir=out_dir, bpm=92)
 
@@ -289,13 +289,13 @@ def main():
         )],
         tracks=[
             TrackConfig(name="Organ", generator=MelodyGenerator(mode="chord_tones",
-                rhythm=get_rhythm("half_note")), instrument="organ", density=0.7),
+                rhythm=get_rhythm("half_note")), instrument="organ", density=0.5, octave_shift=1),
             TrackConfig(name="Choir", generator=ChordGenerator(voicing="closed",
-                rhythm=get_rhythm("whole_note")), instrument="choir_pad", density=0.6, octave_shift=1),
+                rhythm=get_rhythm("whole_note")), instrument="choir_pad", density=0.4, octave_shift=1),
             TrackConfig(name="Bells", generator=MelodyGenerator(mode="chord_tones",
                 rhythm=get_rhythm("whole_note")), instrument="tubular_bells", density=0.2, octave_shift=2),
             TrackConfig(name="Cello", generator=MelodyGenerator(mode="downbeat_chord",
-                rhythm=get_rhythm("markov:slow")), instrument="cello", density=0.4, octave_shift=-2),
+                rhythm=get_rhythm("markov:slow")), instrument="cello", density=0.5, octave_shift=-2),
         ],
         out_dir=out_dir, bpm=52)
 
