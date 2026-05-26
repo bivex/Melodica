@@ -336,6 +336,9 @@ class IdeaToolConfig:
     # For "harmonize_melody" workflow: caller-supplied melody to harmonize
     seed_melody: list[NoteInfo] | None = None
 
+    # Deterministic seed for harmonizer RNG (None = non-deterministic)
+    seed: int | None = None
+
 
 # ---------------------------------------------------------------------------
 # Idea Tool Engine
@@ -895,6 +898,7 @@ class IdeaTool:
                 harmonizer = FunctionalHMMHarmonizer(
                     chord_change=self.config.hmm3_chord_change,
                     bar_grid=bar_grid,
+                    seed=self.config.seed,
                 )
                 contour = self._build_melody_contour(scale, bars, beats_per_bar)
                 part_chords = harmonizer.harmonize(
