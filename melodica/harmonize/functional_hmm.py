@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import lru_cache
 
 import numpy as np
 
@@ -96,11 +97,18 @@ def _build_functional_degrees(scale: Scale) -> dict[HarmonicFunction, list[int]]
 _COF_ORDER = [5, 0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10]
 _COF_POS = {pc: i for i, pc in enumerate(_COF_ORDER)}
 
+# Precomputed CoF distance matrix (12×12) for O(1) lookup
+_COF_DIST_MATRIX = [[0] * 12 for _ in range(12)]
+for _a in range(12):
+    for _b in range(12):
+        _d = abs(_COF_POS[_a] - _COF_POS[_b])
+        _COF_DIST_MATRIX[_a][_b] = min(_d, 12 - _d)
 
+
+@lru_cache(maxsize=144)
 def _cof_distance(pc_a: int, pc_b: int) -> int:
     """Distance in the circle of fifths between two pitch classes (0-6)."""
-    d = abs(_COF_POS[pc_a % 12] - _COF_POS[pc_b % 12])
-    return min(d, 12 - d)
+    return _COF_DIST_MATRIX[pc_a % 12][pc_b % 12]
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +185,17 @@ class FunctionalHMMHarmonizer:
     best one using a quality scoring function inspired by FHARM's HarmTrace
     parsing approach. Instead of counting CFG parse errors, we score on
     functional diversity, cadence quality, root variety, and CoF fit.
+
+    Args:
+        beam_width: Number of beams in chord search
+        chord_change: Chord change granularity ("bars", "half", "beats")
+        bar_grid: Optional bar grid for rhythm
+        embellish_rate: Base rate for secondary dominants / borrowed chords
+        n_candidates: Number of function plans to try
+        dissonance_rate: Probability of considering non-plan chords
+        flavor: Tension mapping style (None = cycle through all per plan)
+                Options: "classical", "tonic_heavy", "dramatic", "wanderer"
+        seed: Random seed for deterministic output (None = non-deterministic)
     """
 
     beam_width: int = 8
@@ -185,6 +204,59 @@ class FunctionalHMMHarmonizer:
     embellish_rate: float = 0.30
     n_candidates: int = 8           # number of function plans to try
     dissonance_rate: float = 0.15   # prob of considering non-plan chords
+    flavor: str | None = None       # tension mapping style
+    seed: int | None = None         # deterministic seed
+
+    # Tension mapping flavors
+    _TENSION_MAPPINGS: dict = field(default=None, repr=False)
+
+    def __post_init__(self):
+        """Initialize tension mappings and RNG."""
+        _FN = [HarmonicFunction.TONIC, HarmonicFunction.SUBDOMINANT, HarmonicFunction.DOMINANT]
+        self._TENSION_MAPPINGS = {
+            "classical": {
+                TensionPhase.REST:       [0.85, 0.10, 0.05],
+                TensionPhase.BUILD:      [0.15, 0.60, 0.25],
+                TensionPhase.CLIMAX:     [0.05, 0.25, 0.70],
+                TensionPhase.RESOLUTION: [0.90, 0.05, 0.05],
+                TensionPhase.SUSTAIN:    [0.20, 0.40, 0.40],
+            },
+            "tonic_heavy": {
+                TensionPhase.REST:       [0.92, 0.06, 0.02],
+                TensionPhase.BUILD:      [0.45, 0.40, 0.15],
+                TensionPhase.CLIMAX:     [0.20, 0.40, 0.40],
+                TensionPhase.RESOLUTION: [0.95, 0.03, 0.02],
+                TensionPhase.SUSTAIN:    [0.55, 0.30, 0.15],
+            },
+            "dramatic": {
+                TensionPhase.REST:       [0.55, 0.25, 0.20],
+                TensionPhase.BUILD:      [0.05, 0.35, 0.60],
+                TensionPhase.CLIMAX:     [0.02, 0.13, 0.85],
+                TensionPhase.RESOLUTION: [0.75, 0.15, 0.10],
+                TensionPhase.SUSTAIN:    [0.10, 0.25, 0.65],
+            },
+            "wanderer": {
+                TensionPhase.REST:       [0.50, 0.40, 0.10],
+                TensionPhase.BUILD:      [0.10, 0.70, 0.20],
+                TensionPhase.CLIMAX:     [0.15, 0.50, 0.35],
+                TensionPhase.RESOLUTION: [0.65, 0.30, 0.05],
+                TensionPhase.SUSTAIN:    [0.15, 0.55, 0.30],
+            },
+        }
+        self._fn_list = _FN
+        self._rng = random.Random(self.seed)
+
+    def _get_flavor_mapping(self, plan_idx: int) -> dict:
+        """Get tension mapping for current plan.
+
+        If flavor is set, always use that flavor.
+        If flavor is None, cycle through flavors by plan index.
+        """
+        if self.flavor:
+            return self._TENSION_MAPPINGS[self.flavor]
+        # Cycle through flavors: classical → tonic_heavy → dramatic → wanderer
+        flavor_names = list(self._TENSION_MAPPINGS.keys())
+        return self._TENSION_MAPPINGS[flavor_names[plan_idx % len(flavor_names)]]
 
     def harmonize(
         self,
@@ -210,8 +282,8 @@ class FunctionalHMMHarmonizer:
         n_plans = max(2, self.n_candidates // max(self.beam_width, 1))
         all_candidates: list[list[ChordLabel]] = []
 
-        for _ in range(n_plans):
-            func_plan = self._plan_functions(T, change_points, tension_curve)
+        for plan_idx in range(n_plans):
+            func_plan = self._plan_functions(T, change_points, tension_curve, plan_idx)
             beams = self._beam_search_chords(
                 func_plan, scale, diatonic, func_degrees,
                 observations, gravity, T, change_points,
@@ -244,10 +316,11 @@ class FunctionalHMMHarmonizer:
         n_bars: int,
         change_points: list[float],
         tension: TensionCurve | None,
+        plan_idx: int = 0,
     ) -> list[HarmonicFunction]:
         """Generate T/S/D function sequence."""
         if tension:
-            plan = self._tension_based_plan(n_bars, change_points, tension)
+            plan = self._tension_based_plan(n_bars, change_points, tension, plan_idx)
         else:
             plan = self._phrase_based_plan(n_bars)
 
@@ -263,49 +336,21 @@ class FunctionalHMMHarmonizer:
         n_bars: int,
         change_points: list[float],
         tension: TensionCurve,
+        plan_idx: int = 0,
     ) -> list[HarmonicFunction]:
         """Map tension curve phases to functional categories.
 
-        Each call picks a random mapping flavor so different tracks (and
-        different beam-search function plans within the same track) get
-        distinct functional profiles.
+        Uses deterministic flavor selection:
+        - If self.flavor is set, always use that flavor
+        - If self.flavor is None, cycle through flavors by plan_idx
         """
-        # Probabilistic phase → [P(T), P(S), P(D)] mappings
-        _FN = [HarmonicFunction.TONIC, HarmonicFunction.SUBDOMINANT, HarmonicFunction.DOMINANT]
-        _MAPPINGS = [
-            # Classical — standard T→S→D→T arc
-            {TensionPhase.REST:       [0.85, 0.10, 0.05],
-             TensionPhase.BUILD:      [0.15, 0.60, 0.25],
-             TensionPhase.CLIMAX:     [0.05, 0.25, 0.70],
-             TensionPhase.RESOLUTION: [0.90, 0.05, 0.05],
-             TensionPhase.SUSTAIN:    [0.20, 0.40, 0.40]},
-            # Tonic-heavy — ambient / meditative
-            {TensionPhase.REST:       [0.92, 0.06, 0.02],
-             TensionPhase.BUILD:      [0.45, 0.40, 0.15],
-             TensionPhase.CLIMAX:     [0.20, 0.40, 0.40],
-             TensionPhase.RESOLUTION: [0.95, 0.03, 0.02],
-             TensionPhase.SUSTAIN:    [0.55, 0.30, 0.15]},
-            # Dramatic — dominant-heavy, less rest
-            {TensionPhase.REST:       [0.55, 0.25, 0.20],
-             TensionPhase.BUILD:      [0.05, 0.35, 0.60],
-             TensionPhase.CLIMAX:     [0.02, 0.13, 0.85],
-             TensionPhase.RESOLUTION: [0.75, 0.15, 0.10],
-             TensionPhase.SUSTAIN:    [0.10, 0.25, 0.65]},
-            # Wanderer — subdominant-rich, modal feel
-            {TensionPhase.REST:       [0.50, 0.40, 0.10],
-             TensionPhase.BUILD:      [0.10, 0.70, 0.20],
-             TensionPhase.CLIMAX:     [0.15, 0.50, 0.35],
-             TensionPhase.RESOLUTION: [0.65, 0.30, 0.05],
-             TensionPhase.SUSTAIN:    [0.15, 0.55, 0.30]},
-        ]
-
-        probs = random.choice(_MAPPINGS)
+        probs = self._get_flavor_mapping(plan_idx)
         plan: list[HarmonicFunction] = []
         for i in range(n_bars):
             beat = change_points[i]
             phase = tension.phase_at(beat)
             p = probs.get(phase, [0.85, 0.10, 0.05])
-            plan.append(random.choices(_FN, weights=p, k=1)[0])
+            plan.append(self._rng.choices(self._fn_list, weights=p, k=1)[0])
         return plan
 
     def _phrase_based_plan(self, n_bars: int) -> list[HarmonicFunction]:
@@ -338,7 +383,7 @@ class FunctionalHMMHarmonizer:
             elif is_last:
                 pattern = [HarmonicFunction.TONIC]
             else:
-                pattern = random.choice(_PHRASE_PATTERNS_4)
+                pattern = self._rng.choice(_PHRASE_PATTERNS_4)
 
             plan.extend(pattern[:phrase_len])
             remaining -= phrase_len
@@ -402,15 +447,23 @@ class FunctionalHMMHarmonizer:
                     )
                     expansions.append((seq + [(root_pc, deg, fn)], cum_score + step_score))
 
-            # Top-k with diversity: avoid all beams converging on same last chord
+            # Top-k with path-level diversity
             expansions.sort(key=lambda x: x[1], reverse=True)
             selected: list[tuple[list[tuple[int, int, HarmonicFunction]], float]] = []
-            seen: set[tuple[int, int]] = set()
+            seen_last: set[tuple[int, int]] = set()
+            seen_paths: set[tuple[tuple[int, int, int], ...]] = set()
+            min_diverse = max(1, self.beam_width // 3)
+
             for seq, score in expansions:
-                key = (seq[-1][0], seq[-1][1])
-                if key not in seen or len(selected) < max(1, self.beam_width // 3):
+                last_key = (seq[-1][0], seq[-1][1])
+                path_key = tuple((r, d, f.value) for r, d, f in seq)
+                is_path_novel = path_key not in seen_paths
+                is_last_novel = last_key not in seen_last
+
+                if is_last_novel or is_path_novel or len(selected) < min_diverse:
                     selected.append((seq, score))
-                    seen.add(key)
+                    seen_last.add(last_key)
+                    seen_paths.add(path_key)
                 if len(selected) >= self.beam_width:
                     break
 
@@ -534,13 +587,13 @@ class FunctionalHMMHarmonizer:
             if not candidates:
                 candidates = [1]
 
-            if random.random() < self.dissonance_rate:
+            if self._rng.random() < self.dissonance_rate:
                 other_fns = [
                     f for f in (HarmonicFunction.TONIC, HarmonicFunction.SUBDOMINANT, HarmonicFunction.DOMINANT)
                     if f != fn
                 ]
                 if other_fns:
-                    alt_degs = func_degrees.get(random.choice(other_fns), [])
+                    alt_degs = func_degrees.get(self._rng.choice(other_fns), [])
                     candidates.extend(alt_degs)
 
             # Dominant melody pitch class for CoF scoring
@@ -646,36 +699,50 @@ class FunctionalHMMHarmonizer:
         change_points: list[float] | None = None,
         tension_curve: TensionCurve | None = None,
     ) -> list[tuple[int, int, HarmonicFunction]]:
-        """Apply secondary dominants and borrowed chords probabilistically.
+        """Apply secondary dominants and borrowed chords deterministically.
 
-        Embellishment density scales with local tension: higher tension
-        allows more embellishments (secondary dominants, borrowed chords).
+        Embellishment scoring:
+        - Secondary dominant: +score if target chord is diatonic
+        - Borrowed chord: +score if creates chromatic voice leading
+        - Tension-dependent: higher tension = more embellishments
         """
         result = list(chords)
         degs = scale.degrees()
 
         for i in range(len(result)):
-            # Tension-dependent rate: 0.5x–1.5x base rate
+            root_pc, deg, fn = result[i]
+
+            # Calculate embellishment score
+            embellish_score = 0.0
+
+            # Tension bonus: higher tension → more likely to embellish
             if tension_curve and change_points and i < len(change_points):
                 tau = tension_curve.tension_at(change_points[i])
-                rate = self.embellish_rate * (0.5 + tau)
-            else:
-                rate = self.embellish_rate
-
-            if random.random() > rate:
-                continue
-
-            root_pc, deg, fn = result[i]
+                embellish_score += tau * 2.0  # 0.0–2.0 bonus
 
             # Secondary dominant: V7/x targeting next chord
             if i + 1 < len(result) and fn == HarmonicFunction.DOMINANT:
                 next_root = result[i + 1][0]
                 sec_dom_root = (next_root + 7) % 12
+
                 if sec_dom_root != root_pc:
-                    result[i] = (sec_dom_root, deg, HarmonicFunction.SECONDARY)
+                    # Score: how well does V7/x lead to next chord?
+                    # Stronger if next chord is tonic function
+                    next_fn = result[i + 1][2]
+                    target_bonus = 2.0 if next_fn == HarmonicFunction.TONIC else 1.0
+
+                    # Voice leading: stepwise motion is preferred
+                    interval = abs(sec_dom_root - root_pc) % 12
+                    voice_bonus = 1.5 if interval in (1, 2, 5, 7) else 0.5
+
+                    sec_dom_score = target_bonus + voice_bonus + embellish_score
+
+                    if sec_dom_score >= self.embellish_rate * 4.0:  # Threshold
+                        result[i] = (sec_dom_root, deg, HarmonicFunction.SECONDARY)
+                        continue
 
             # Borrowed chord: from parallel mode
-            elif fn == HarmonicFunction.SUBDOMINANT and random.random() < 0.3:
+            if fn == HarmonicFunction.SUBDOMINANT:
                 if scale.mode in (Mode.HARMONIC_MINOR, Mode.MELODIC_MINOR, Mode.NATURAL_MINOR,
                                   Mode.AEOLIAN, Mode.DORIAN, Mode.PHRYGIAN):
                     parallel = Mode.MAJOR
@@ -687,8 +754,20 @@ class FunctionalHMMHarmonizer:
                     parallel_degs = parallel_scale.degrees()
                     if deg <= len(parallel_degs):
                         borrowed_root = int(round(parallel_degs[(deg - 1) % len(parallel_degs)]))
+
                         if borrowed_root != root_pc:
-                            result[i] = (borrowed_root, deg, fn)
+                            # Score: chromatic voice leading creates interest
+                            # Prefer if borrowed root is semitone away from original
+                            chromatic_dist = min(abs(borrowed_root - root_pc), 12 - abs(borrowed_root - root_pc))
+                            chromatic_bonus = 2.0 if chromatic_dist == 1 else 0.5
+
+                            # Context: borrowed chords work best before dominant
+                            context_bonus = 1.5 if i + 1 < len(result) and result[i + 1][2] == HarmonicFunction.DOMINANT else 0.0
+
+                            borrowed_score = chromatic_bonus + context_bonus + embellish_score
+
+                            if borrowed_score >= self.embellish_rate * 3.5:  # Threshold
+                                result[i] = (borrowed_root, deg, fn)
                 except (ValueError, IndexError):
                     pass
 
@@ -742,7 +821,7 @@ class FunctionalHMMHarmonizer:
                 return Quality.MAJOR
         # Tonic: basic triad or Maj7
         if deg == 1:
-            return Quality.MAJOR if random.random() < 0.6 else Quality.MAJOR7
+            return Quality.MAJOR if self._rng.random() < 0.6 else Quality.MAJOR7
         if deg in (3, 6):
             return Quality.MINOR
         return Quality.MAJOR
