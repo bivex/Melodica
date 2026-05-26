@@ -264,23 +264,48 @@ class FunctionalHMMHarmonizer:
         change_points: list[float],
         tension: TensionCurve,
     ) -> list[HarmonicFunction]:
-        """Map tension curve phases to functional categories."""
+        """Map tension curve phases to functional categories.
+
+        Each call picks a random mapping flavor so different tracks (and
+        different beam-search function plans within the same track) get
+        distinct functional profiles.
+        """
+        # Probabilistic phase → [P(T), P(S), P(D)] mappings
+        _FN = [HarmonicFunction.TONIC, HarmonicFunction.SUBDOMINANT, HarmonicFunction.DOMINANT]
+        _MAPPINGS = [
+            # Classical — standard T→S→D→T arc
+            {TensionPhase.REST:       [0.85, 0.10, 0.05],
+             TensionPhase.BUILD:      [0.15, 0.60, 0.25],
+             TensionPhase.CLIMAX:     [0.05, 0.25, 0.70],
+             TensionPhase.RESOLUTION: [0.90, 0.05, 0.05],
+             TensionPhase.SUSTAIN:    [0.20, 0.40, 0.40]},
+            # Tonic-heavy — ambient / meditative
+            {TensionPhase.REST:       [0.92, 0.06, 0.02],
+             TensionPhase.BUILD:      [0.45, 0.40, 0.15],
+             TensionPhase.CLIMAX:     [0.20, 0.40, 0.40],
+             TensionPhase.RESOLUTION: [0.95, 0.03, 0.02],
+             TensionPhase.SUSTAIN:    [0.55, 0.30, 0.15]},
+            # Dramatic — dominant-heavy, less rest
+            {TensionPhase.REST:       [0.55, 0.25, 0.20],
+             TensionPhase.BUILD:      [0.05, 0.35, 0.60],
+             TensionPhase.CLIMAX:     [0.02, 0.13, 0.85],
+             TensionPhase.RESOLUTION: [0.75, 0.15, 0.10],
+             TensionPhase.SUSTAIN:    [0.10, 0.25, 0.65]},
+            # Wanderer — subdominant-rich, modal feel
+            {TensionPhase.REST:       [0.50, 0.40, 0.10],
+             TensionPhase.BUILD:      [0.10, 0.70, 0.20],
+             TensionPhase.CLIMAX:     [0.15, 0.50, 0.35],
+             TensionPhase.RESOLUTION: [0.65, 0.30, 0.05],
+             TensionPhase.SUSTAIN:    [0.15, 0.55, 0.30]},
+        ]
+
+        probs = random.choice(_MAPPINGS)
         plan: list[HarmonicFunction] = []
         for i in range(n_bars):
             beat = change_points[i]
             phase = tension.phase_at(beat)
-            if phase == TensionPhase.REST:
-                plan.append(HarmonicFunction.TONIC)
-            elif phase == TensionPhase.BUILD:
-                plan.append(HarmonicFunction.SUBDOMINANT)
-            elif phase == TensionPhase.CLIMAX:
-                plan.append(HarmonicFunction.DOMINANT)
-            elif phase == TensionPhase.RESOLUTION:
-                plan.append(HarmonicFunction.TONIC)
-            elif phase == TensionPhase.SUSTAIN:
-                plan.append(random.choice([HarmonicFunction.SUBDOMINANT, HarmonicFunction.DOMINANT]))
-            else:
-                plan.append(HarmonicFunction.TONIC)
+            p = probs.get(phase, [0.85, 0.10, 0.05])
+            plan.append(random.choices(_FN, weights=p, k=1)[0])
         return plan
 
     def _phrase_based_plan(self, n_bars: int) -> list[HarmonicFunction]:
