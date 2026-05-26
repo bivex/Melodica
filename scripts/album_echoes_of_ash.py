@@ -23,10 +23,7 @@ Tracks:
 Powered by Functional HMM, FluidR3, and 10 dark modes.
 """
 
-import random
 from pathlib import Path
-
-random.seed(2026)  # Deterministic output for consistent register balance
 
 from melodica.idea_tool import (
     IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart,
@@ -45,20 +42,13 @@ from melodica.types import Scale, Mode
 from melodica.midi import export_multitrack_midi
 
 
-_track_counter = 0
-
-def generate_track(name, parts, tracks, out_dir, bpm, seed=None):
-    global _track_counter
-    _track_counter += 1
-    track_seed = seed if seed is not None else 2026 + _track_counter
-    random.seed(track_seed)
+def generate_track(name, parts, tracks, out_dir, bpm):
     print(f"  > {name}")
     config = IdeaToolConfig(
         style="cinematic",
         parts=parts,
         tracks=tracks,
         use_voice_leading=True,
-        seed=track_seed,
     )
     notes_dict = IdeaTool(config).generate()
     tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
