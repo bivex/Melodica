@@ -327,6 +327,7 @@ class IdeaToolConfig:
     run_doctor: bool = False
     doctor_psycho: bool = True
     doctor_harmonic: bool = True
+    doctor_register: bool = True  # check LOW/MID/HIGH register balance
 
     # Mixing & Mastering
     use_mixing: bool = True
@@ -765,9 +766,16 @@ class IdeaTool:
 
             psycho_total = sum(len(v) for v in psycho_checks.values())
             total_issues = psycho_total + len(harmonic_clashes)
+
+            # Register balance analysis
+            register_report = {}
+            if self.config.doctor_register:
+                register_report = self._check_register_balance(track_data)
+
             result["_doctor_report"] = {
                 "psycho_checks": psycho_checks,
                 "harmonic_clashes": harmonic_clashes,
+                "register_balance": register_report,
                 "total_issues": total_issues,
             }
             if total_issues > 0:
@@ -1715,6 +1723,105 @@ class IdeaTool:
             offset_beats += part_beats
 
         return cc_events
+
+    # ---- Register Balance Check ----
+
+    _REGISTER_BANDS = [
+        (0, 24, "sub"),
+        (24, 36, "sub-bass"),
+        (36, 48, "low"),
+        (48, 60, "mid-low"),
+        (60, 72, "mid"),
+        (72, 84, "mid-high"),
+        (84, 96, "high"),
+        (96, 108, "very high"),
+        (108, 128, "top"),
+    ]
+    _LOW_BANDS = {"sub", "sub-bass", "low"}
+    _MID_BANDS = {"mid-low", "mid", "mid-high"}
+    _HIGH_BANDS = {"high", "very high", "top"}
+    _BALANCE_TARGETS = {
+        "LOW": (15.0, 35.0),
+        "MID": (35.0, 60.0),
+        "HIGH": (15.0, 35.0),
+    }
+
+    @staticmethod
+    def _band_for_pitch(pitch: int) -> str:
+        for lo, hi, name in IdeaTool._REGISTER_BANDS:
+            if lo <= pitch < hi:
+                return name
+        return "top"
+
+    def _check_register_balance(self, track_data: dict[str, list]) -> dict:
+        """Analyze register distribution and return balance report."""
+        from collections import Counter
+
+        band_counts: Counter = Counter()
+        total_notes = 0
+        for notes in track_data.values():
+            for n in notes:
+                if hasattr(n, "pitch"):
+                    band_counts[self._band_for_pitch(n.pitch)] += 1
+                    total_notes += 1
+
+        if total_notes == 0:
+            return {"status": "empty", "total_notes": 0}
+
+        total = max(total_notes, 1)
+        low_n = sum(band_counts.get(b, 0) for b in self._LOW_BANDS)
+        mid_n = sum(band_counts.get(b, 0) for b in self._MID_BANDS)
+        high_n = sum(band_counts.get(b, 0) for b in self._HIGH_BANDS)
+
+        low_pct = low_n / total * 100
+        mid_pct = mid_n / total * 100
+        high_pct = high_n / total * 100
+
+        def _score(pct, lo, hi):
+            if pct < lo * 0.5:
+                return "critical_low"
+            if pct < lo:
+                return "low"
+            if pct > hi * 1.5:
+                return "critical_high"
+            if pct > hi:
+                return "high"
+            return "ok"
+
+        zones = {
+            "LOW": {"pct": round(low_pct, 1), "target": self._BALANCE_TARGETS["LOW"],
+                    "status": _score(low_pct, *self._BALANCE_TARGETS["LOW"])},
+            "MID": {"pct": round(mid_pct, 1), "target": self._BALANCE_TARGETS["MID"],
+                    "status": _score(mid_pct, *self._BALANCE_TARGETS["MID"])},
+            "HIGH": {"pct": round(high_pct, 1), "target": self._BALANCE_TARGETS["HIGH"],
+                     "status": _score(high_pct, *self._BALANCE_TARGETS["HIGH"])},
+        }
+
+        all_ok = all(z["status"] == "ok" for z in zones.values())
+        score = sum(2 if z["status"] == "ok" else (1 if "critical" not in z["status"] else 0) for z in zones.values())
+        rating_map = {6: "EXCELLENT", 5: "GOOD", 4: "ACCEPTABLE", 3: "NEEDS_WORK",
+                      2: "POOR", 1: "BAD", 0: "CRITICAL"}
+        rating = rating_map.get(score, "CRITICAL")
+
+        if not all_ok:
+            advice = []
+            for zone_name, z in zones.items():
+                if z["status"] != "ok":
+                    lo, hi = z["target"]
+                    if z["pct"] < lo:
+                        advice.append(f"Add more {zone_name} content ({z['pct']}% vs target {lo}-{hi}%)")
+                    else:
+                        advice.append(f"Reduce {zone_name} density ({z['pct']}% vs target {lo}-{hi}%)")
+            logger.info("Register balance: %s — %s", rating, "; ".join(advice))
+        else:
+            logger.info("Register balance: %s — all zones in target range", rating)
+
+        return {
+            "total_notes": total_notes,
+            "zones": zones,
+            "rating": rating,
+            "balanced": all_ok,
+        }
 
 
 # ---------------------------------------------------------------------------
