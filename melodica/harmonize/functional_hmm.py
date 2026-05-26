@@ -26,12 +26,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from melodica.harmonize.coupled_hmm import LOG_PNOTE, N_TONES, TYPE_TO_QUALITY
+from melodica.harmonize.coupled_hmm import LOG_PNOTE, LOG_PCHANGE, PCHANGE, N_TONES, TYPE_TO_QUALITY
 from melodica.harmonize._hmm_helpers import (
     MODAL_CADENCES,
     MODAL_GRAVITY,
     _build_diatonic_chords,
     _voice_leading_cost,
+)
+from melodica.harmonize.tension_tiv import (
+    compute_tension, tension_curve_for_progression,
+    tension_similarity, surprise_contour,
 )
 from melodica.composer.tension_curve import TensionCurve, TensionPhase
 from melodica.types import (
@@ -146,6 +150,20 @@ _CADENCE_TEMPLATES = {
 # Quality → type index for HMM emission scoring
 _QUALITY_TO_TYPE_IDX = {q: i for i, q in enumerate(TYPE_TO_QUALITY)}
 
+# Quality enum → string name (for tension_tiv functions)
+_QUALITY_TO_NAME = {
+    Quality.MAJOR: "major", Quality.MINOR: "minor",
+    Quality.DIMINISHED: "diminished", Quality.AUGMENTED: "augmented",
+    Quality.SUS2: "sus2", Quality.SUS4: "sus4",
+    Quality.MAJOR7: "major7", Quality.MINOR7: "minor7",
+    Quality.DOMINANT7: "dominant7", Quality.MAJOR9: "major9",
+    Quality.MINOR9: "minor9", Quality.ADD9: "add9",
+}
+_TYPE_NAME_TO_IDX = {name: i for i, name in enumerate(
+    ["major", "minor", "diminished", "augmented", "sus2", "sus4",
+     "major7", "minor7", "dominant7", "major9", "minor9", "add9"]
+)}
+
 
 # ---------------------------------------------------------------------------
 # FunctionalHMMHarmonizer
@@ -165,7 +183,7 @@ class FunctionalHMMHarmonizer:
     chord_change: str = "bars"
     bar_grid: BarGrid | None = None
     embellish_rate: float = 0.30
-    n_candidates: int = 8           # how many candidates to generate
+    n_candidates: int = 8           # number of function plans to try
     dissonance_rate: float = 0.15   # prob of considering non-plan chords
 
     def harmonize(
@@ -188,24 +206,34 @@ class FunctionalHMMHarmonizer:
         observations = self._extract_observations(melody, change_points)
         gravity = MODAL_GRAVITY.get(scale.mode, [0])
 
-        # FHARM §4: generate multiple candidates, select best
-        best_result: list[ChordLabel] = []
-        best_score = -1e9
+        # Generate multiple function plans, beam-search each
+        n_plans = max(2, self.n_candidates // max(self.beam_width, 1))
+        all_candidates: list[list[ChordLabel]] = []
 
-        for _ in range(self.n_candidates):
+        for _ in range(n_plans):
             func_plan = self._plan_functions(T, change_points, tension_curve)
-            chords = self._select_chords(
-                func_plan, scale, diatonic, func_degrees, observations, gravity, T, change_points
+            beams = self._beam_search_chords(
+                func_plan, scale, diatonic, func_degrees,
+                observations, gravity, T, change_points,
             )
-            if self.embellish_rate > 0:
-                chords = self._apply_embellishments(chords, scale, T)
-            labels = self._build_labels(chords, change_points, duration_beats)
-            score = self._score_progression(labels, observations, gravity, scale)
-            if score > best_score:
-                best_score = score
-                best_result = labels
+            for chords in beams:
+                if self.embellish_rate > 0:
+                    chords = self._apply_embellishments(
+                        chords, scale, T, change_points, tension_curve,
+                    )
+                labels = self._build_labels(chords, change_points, duration_beats)
+                all_candidates.append(labels)
 
-        return best_result
+        if not all_candidates:
+            return []
+
+        # Bar-level re-ranking with TIV tension + surprise
+        return max(
+            all_candidates,
+            key=lambda c: self._score_progression(
+                c, observations, gravity, scale, tension_curve, change_points,
+            ),
+        )
 
     # ------------------------------------------------------------------
     # Phase 1: Functional Plan
@@ -293,7 +321,143 @@ class FunctionalHMMHarmonizer:
         return plan
 
     # ------------------------------------------------------------------
-    # Phase 2: Chord Selection
+    # Phase 2a: Beam Search (token-level)
+    # ------------------------------------------------------------------
+
+    def _beam_search_chords(
+        self,
+        func_plan: list[HarmonicFunction],
+        scale: Scale,
+        diatonic: list[tuple[int, Quality]],
+        func_degrees: dict[HarmonicFunction, list[int]],
+        observations: list[list[tuple[int, float]]],
+        gravity: list[int],
+        n_bars: int,
+        change_points: list[float],
+    ) -> list[list[tuple[int, int, HarmonicFunction]]]:
+        """Token-level beam search over chord degree selections."""
+        degs = scale.degrees()
+
+        cadence_positions = set()
+        for i in range(2, n_bars):
+            if func_plan[i] == HarmonicFunction.TONIC and func_plan[i - 1] == HarmonicFunction.DOMINANT:
+                if (i + 1) % 4 == 0 or i == n_bars - 1:
+                    cadence_positions.add(i - 1)
+                    cadence_positions.add(i)
+
+        beams: list[tuple[list[tuple[int, int, HarmonicFunction]], float]] = [([], 0.0)]
+
+        for i in range(n_bars):
+            fn = func_plan[i]
+            expansions: list[tuple[list[tuple[int, int, HarmonicFunction]], float]] = []
+
+            # Cadence override: forced degree
+            if i in cadence_positions:
+                deg = 5 if fn == HarmonicFunction.DOMINANT else 1
+                root_pc = int(round(degs[(deg - 1) % len(degs)]))
+                for seq, score in beams:
+                    expansions.append((seq + [(root_pc, deg, fn)], score))
+                beams = expansions
+                continue
+
+            candidates_degs = list(func_degrees.get(fn, [1]))
+            if not candidates_degs:
+                candidates_degs = [1]
+
+            melody_pc = self._dominant_melody_pc(observations[i]) if i < len(observations) else None
+            obs = observations[i] if i < len(observations) else []
+
+            for seq, cum_score in beams:
+                for deg in candidates_degs:
+                    root_pc = int(round(degs[(deg - 1) % len(degs)]))
+                    quality = diatonic[(deg - 1) % len(diatonic)][1]
+
+                    step_score = self._score_chord_choice(
+                        root_pc, deg, quality, fn, seq, obs, melody_pc, gravity, diatonic,
+                    )
+                    expansions.append((seq + [(root_pc, deg, fn)], cum_score + step_score))
+
+            # Top-k with diversity: avoid all beams converging on same last chord
+            expansions.sort(key=lambda x: x[1], reverse=True)
+            selected: list[tuple[list[tuple[int, int, HarmonicFunction]], float]] = []
+            seen: set[tuple[int, int]] = set()
+            for seq, score in expansions:
+                key = (seq[-1][0], seq[-1][1])
+                if key not in seen or len(selected) < max(1, self.beam_width // 3):
+                    selected.append((seq, score))
+                    seen.add(key)
+                if len(selected) >= self.beam_width:
+                    break
+
+            beams = selected if selected else expansions[:self.beam_width]
+
+        return [seq for seq, _ in beams]
+
+    def _score_chord_choice(
+        self,
+        root_pc: int,
+        deg: int,
+        quality: Quality,
+        fn: HarmonicFunction,
+        seq: list[tuple[int, int, HarmonicFunction]],
+        obs: list[tuple[int, float]],
+        melody_pc: int | None,
+        gravity: list[int],
+        diatonic: list[tuple[int, Quality]],
+    ) -> float:
+        """Deterministic chord-choice scoring — no random noise.
+
+        Replaces the random.gauss exploration noise in _select_chords with
+        a transition-probability term derived from the trained HMM.
+        """
+        # HMM emission
+        emit_score = self._score_emission(root_pc, quality, obs) * 0.3
+
+        # Circle of fifths distance to melody (FHARM §4.2.3)
+        cof_score = -_cof_distance(root_pc, melody_pc) * 0.5 if melody_pc is not None else 0.0
+
+        # Gravity bonus
+        grav_bonus = 3.0 if (deg - 1) in gravity else 0.0
+
+        # Function match
+        chord_fn = _degree_to_function(deg)
+        fn_match = 2.0 if chord_fn == fn else -1.0
+
+        # Anti-repetition
+        deg_penalty = -6.0 if seq and seq[-1][1] == deg else 0.0
+        root_penalty = -5.0 if seq and seq[-1][0] == root_pc else 0.0
+
+        # Quality repeat penalty
+        prev_quality = diatonic[(seq[-1][1] - 1) % len(diatonic)][1] if seq else None
+        quality_penalty = -8.0 if prev_quality == quality else 0.0
+
+        # Interval diversity
+        interval_penalty = 0.0
+        if len(seq) >= 2:
+            prev_iv = (seq[-1][0] - seq[-2][0]) % 12
+            this_iv = (root_pc - seq[-1][0]) % 12
+            if prev_iv == this_iv and prev_iv != 0:
+                interval_penalty = -4.0
+
+        aba_penalty = -3.0 if len(seq) >= 2 and seq[-2][0] == root_pc else 0.0
+
+        # Transition probability (surprise-based, replaces random.gauss noise)
+        trans_score = 0.0
+        if seq:
+            prev_root, prev_deg, _ = seq[-1]
+            prev_q = diatonic[(prev_deg - 1) % len(diatonic)][1]
+            prev_type = _QUALITY_TO_TYPE_IDX.get(prev_q, 0)
+            cur_type = _QUALITY_TO_TYPE_IDX.get(quality, 0)
+            iv = (root_pc - prev_root) % 12
+            if prev_type < LOG_PCHANGE.shape[0] and cur_type < LOG_PCHANGE.shape[2]:
+                trans_score = LOG_PCHANGE[prev_type, iv, cur_type] * 0.5
+
+        return (emit_score + cof_score + grav_bonus + fn_match
+                + deg_penalty + root_penalty + quality_penalty
+                + interval_penalty + aba_penalty + trans_score)
+
+    # ------------------------------------------------------------------
+    # Phase 2b: Greedy Chord Selection (fallback, kept for compatibility)
     # ------------------------------------------------------------------
 
     def _select_chords(
@@ -398,12 +562,20 @@ class FunctionalHMMHarmonizer:
 
                 aba_penalty = -3.0 if len(result) >= 2 and result[-2][0] == root_pc else 0.0
 
-                # Random exploration noise so candidates differ
-                noise = random.gauss(0, 1.5)
+                # Transition probability (surprise-based, replaces random noise)
+                trans_score = 0.0
+                if result:
+                    prev_root_pc, prev_deg, _ = result[-1]
+                    prev_q = diatonic[(prev_deg - 1) % len(diatonic)][1]
+                    prev_type = _QUALITY_TO_TYPE_IDX.get(prev_q, 0)
+                    cur_type = _QUALITY_TO_TYPE_IDX.get(quality, 0)
+                    iv = (root_pc - prev_root_pc) % 12
+                    if prev_type < LOG_PCHANGE.shape[0] and cur_type < LOG_PCHANGE.shape[2]:
+                        trans_score = LOG_PCHANGE[prev_type, iv, cur_type] * 0.5
 
                 score = (emit_score + cof_score + grav_bonus + fn_match
                          + deg_penalty + root_penalty + quality_penalty
-                         + interval_penalty + aba_penalty + noise)
+                         + interval_penalty + aba_penalty + trans_score)
                 if score > best_score:
                     best_score = score
                     best_deg = deg
@@ -446,13 +618,26 @@ class FunctionalHMMHarmonizer:
         chords: list[tuple[int, int, HarmonicFunction]],
         scale: Scale,
         n_bars: int,
+        change_points: list[float] | None = None,
+        tension_curve: TensionCurve | None = None,
     ) -> list[tuple[int, int, HarmonicFunction]]:
-        """Apply secondary dominants and borrowed chords probabilistically."""
+        """Apply secondary dominants and borrowed chords probabilistically.
+
+        Embellishment density scales with local tension: higher tension
+        allows more embellishments (secondary dominants, borrowed chords).
+        """
         result = list(chords)
         degs = scale.degrees()
 
         for i in range(len(result)):
-            if random.random() > self.embellish_rate:
+            # Tension-dependent rate: 0.5x–1.5x base rate
+            if tension_curve and change_points and i < len(change_points):
+                tau = tension_curve.tension_at(change_points[i])
+                rate = self.embellish_rate * (0.5 + tau)
+            else:
+                rate = self.embellish_rate
+
+            if random.random() > rate:
                 continue
 
             root_pc, deg, fn = result[i]
@@ -552,8 +737,15 @@ class FunctionalHMMHarmonizer:
         observations: list[list[tuple[int, float]]],
         gravity: list[int],
         scale: Scale,
+        tension_curve: TensionCurve | None = None,
+        change_points: list[float] | None = None,
     ) -> float:
-        """Score a complete progression. Higher = better."""
+        """Score a complete progression with TIV tension alignment.
+
+        Replaces random.gauss tie-breaking noise with:
+        - TIV tension curve similarity (Pearson correlation with target)
+        - Surprise contour quality (moderate surprise preferred)
+        """
         if len(chords) < 2:
             return 0.0
 
@@ -598,8 +790,7 @@ class FunctionalHMMHarmonizer:
                     and chords[i].function == HarmonicFunction.SUBDOMINANT):
                 score -= 10.0
 
-        # Phrase-level functional completeness (each 4-bar phrase should
-        # have all three functions — reflects hierarchical structure)
+        # Phrase-level functional completeness
         for start in range(0, n - 3, 4):
             phrase_funcs = set(c.function for c in chords[start:start + 4] if c.function)
             if HarmonicFunction.TONIC in phrase_funcs:
@@ -624,8 +815,30 @@ class FunctionalHMMHarmonizer:
         if n >= 2 and chords[-1].function == HarmonicFunction.TONIC and chords[-2].function == HarmonicFunction.DOMINANT:
             score += 4.0
 
-        # Random noise so that equally-good candidates don't collapse to one
-        score += random.gauss(0, 2.0)
+        # --- TIV tension alignment (replaces random.gauss noise) ---
+        progression = [(c.root, _QUALITY_TO_NAME.get(c.quality, "major")) for c in chords]
+
+        # TIV tension curve similarity with target tension curve
+        if tension_curve and change_points:
+            target_tensions = [
+                tension_curve.tension_at(cp) for cp in change_points[:n]
+            ]
+            key_root = scale.root if scale.root is not None else 0
+            is_major = scale.mode in (
+                Mode.MAJOR, Mode.IONIAN, Mode.LYDIAN, Mode.MIXOLYDIAN,
+            )
+            candidate_tensions = tension_curve_for_progression(
+                progression, key_root=key_root, key_major=is_major,
+            )
+            t_sim = tension_similarity(candidate_tensions, target_tensions)
+            score += t_sim * 8.0
+
+        # Surprise contour: prefer moderate surprise (not too boring, not chaotic)
+        surprises = surprise_contour(progression, PCHANGE, _TYPE_NAME_TO_IDX)
+        if surprises:
+            mean_surprise = sum(surprises) / len(surprises)
+            # Optimal mean surprise ~2.5 on the -log scale
+            score -= abs(mean_surprise - 2.5) * 1.0
 
         return score
 
