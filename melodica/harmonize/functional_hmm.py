@@ -738,7 +738,11 @@ class FunctionalHMMHarmonizer:
                     sec_dom_score = target_bonus + voice_bonus + embellish_score
 
                     if sec_dom_score >= self.embellish_rate * 4.0:  # Threshold
-                        result[i] = (sec_dom_root, deg, HarmonicFunction.SECONDARY)
+                        # Find degree that best matches the secondary dominant root
+                        sec_deg = min(range(1, len(degs) + 1),
+                                      key=lambda d: min((int(round(degs[(d - 1) % len(degs)])) - sec_dom_root) % 12,
+                                                        (sec_dom_root - int(round(degs[(d - 1) % len(degs)]))) % 12))
+                        result[i] = (sec_dom_root, sec_deg, HarmonicFunction.SECONDARY)
                         continue
 
             # Borrowed chord: from parallel mode
