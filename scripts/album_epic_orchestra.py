@@ -17,6 +17,7 @@ from melodica.generators import (
     MelodyGenerator, BassGenerator, StringsEnsembleGenerator, 
     AmbientPadGenerator, ArpeggiatorGenerator, FluteGenerator
 )
+from melodica.generators.choir_ahhs import ChoirAahsGenerator
 from melodica.modifiers import (
     ModifierPipeline, ModifierContext, HumanizeModifier,
     VelocityCurveModifier, MetricAccentModifier
@@ -61,6 +62,11 @@ def main():
             generator=FluteGenerator(),
             instrument="flute", density=0.4, octave_shift=2,
         ),
+        TrackConfig(
+            name="Epic_Choir",
+            generator=ChoirAahsGenerator(voice_count=4),
+            instrument="choir_aahs", density=0.7, octave_shift=0,
+        ),
     ]
 
     # 2. Structure & Schedule
@@ -75,6 +81,7 @@ def main():
                 "Sub_Bass":             structure_to_schedule("A", 8),
                 "Tension_Arp":          structure_to_schedule("R", 8),
                 "Solo_Flute_Melody":    structure_to_schedule("A", 8),
+                "Epic_Choir":           structure_to_schedule("R", 8),
             },
         ),
 
@@ -88,6 +95,7 @@ def main():
                 "Sub_Bass":             structure_to_schedule("B", 8),
                 "Tension_Arp":          structure_to_schedule("B", 8),
                 "Solo_Flute_Melody":    structure_to_schedule("R", 8),
+                "Epic_Choir":           structure_to_schedule("B:var", 8),
             },
         ),
 
@@ -101,6 +109,7 @@ def main():
                 "Sub_Bass":             structure_to_schedule("C", 16),
                 "Tension_Arp":          structure_to_schedule("C", 16),
                 "Solo_Flute_Melody":    structure_to_schedule("C:var", 16),
+                "Epic_Choir":           structure_to_schedule("C", 16),
             },
         ),
 
@@ -114,6 +123,7 @@ def main():
                 "Sub_Bass":             structure_to_schedule("A:retro", 8),
                 "Tension_Arp":          structure_to_schedule("R", 8),
                 "Solo_Flute_Melody":    structure_to_schedule("A R", 4, loop=False),
+                "Epic_Choir":           structure_to_schedule("R", 8),
             },
         ),
     ]
@@ -165,6 +175,12 @@ def main():
             VelocityCurveModifier(start_vel=60, end_vel=80, curve="swell"),
             MetricAccentModifier(strength=0.15)
         ], "Humanize + Swell + Accent"),
+        
+        "Epic_Choir": ([
+            HumanizeModifier(timing_std=0.03, velocity_std=4.0),
+            VelocityCurveModifier(start_vel=50, end_vel=110, curve="exponential"),
+            MetricAccentModifier(strength=0.1)
+        ], "Humanize + Epic Crescendo"),
     }
 
     print("\n  Applying Expression Pipeline...")
