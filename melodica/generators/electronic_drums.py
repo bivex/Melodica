@@ -36,7 +36,7 @@ from melodica.generators import GeneratorParams, PhraseGenerator
 from melodica.generators._postprocess import post_process_808
 from melodica.rhythm import RhythmGenerator
 from melodica.render_context import RenderContext
-from melodica.types import ChordLabel, NoteInfo, Scale
+from melodica.types import ChordLabel, NoteInfo, Scale, SectionRole
 from melodica.utils import nearest_pitch, chord_at
 
 
@@ -239,7 +239,7 @@ PATTERN_DEFS: dict[str, list[tuple[int, float, int, float]]] = {
 }
 
 
-def _get_section_multiplier(s_type: str, onset: float, total_beats: float) -> float:
+def _get_section_multiplier(s_type: SectionRole | str, onset: float, total_beats: float) -> float:
     if s_type == "intro":
         return 0.75
     elif s_type == "verse":
@@ -287,7 +287,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     choke_hats: bool = True
     ghost_snare_prob: float = 0.0
     ghost_ride_prob: float = 0.0
-    section_type: str = "verse"
+    section_type: SectionRole | str = SectionRole.VERSE
     auto_fills: bool = True
     groove_template: any = None
     # 808 / transient upgrades
@@ -322,7 +322,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         choke_hats: bool = True,
         ghost_snare_prob: float = 0.0,
         ghost_ride_prob: float = 0.0,
-        section_type: str = "verse",
+        section_type: SectionRole | str = SectionRole.VERSE,
         auto_fills: bool = True,
         groove_template: any = None,
         transient_ducking: bool = False,
@@ -373,7 +373,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             return []
 
         # Resolve section_type and auto_fills from context if available, otherwise use instance defaults
-        s_type = getattr(context, "section_type", self.section_type)
+        s_type = context.section_role if context else self.section_type
         fills_enabled = getattr(context, "auto_fills", self.auto_fills)
 
         notes: list[NoteInfo] = []
