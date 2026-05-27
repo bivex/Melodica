@@ -82,8 +82,9 @@ PNOTE, PCHANGE = _load_weights()
 
 # Pre-compute log versions for Viterbi (add small epsilon to avoid log(0))
 _EPS = 1e-8
-LOG_PNOTE = np.log(np.clip(PNOTE, _EPS, 1.0))       # [12, 6]
-LOG_PCHANGE = np.log(np.clip(PCHANGE, _EPS, 1.0))    # [6, 12, 6]
+LOG_PNOTE = np.log(np.clip(PNOTE, _EPS, 1.0))
+LOG_NOT_PNOTE = np.log(np.clip(1.0 - PNOTE, _EPS, 1.0))
+LOG_PCHANGE = np.log(np.clip(PCHANGE, _EPS, 1.0))
 
 # ---------------------------------------------------------------------------
 # Universal Modal Priors (Layer 2)
@@ -221,18 +222,25 @@ class CoupledHMMHarmonizer:
         NEG_INF = -1e12
 
         # Pre-compute emissions via vectorized _log_emit_chord
-        emit = np.full((T, N_TONES, N_TYPES), -20.0)
+        emit = np.zeros((T, N_TONES, N_TYPES))
+        base_not_pnote = LOG_NOT_PNOTE.sum(axis=0)  # [N_TYPES]
+
         for t_step in range(T):
             wpcs = obs[t_step]
             if not wpcs:
+                emit[t_step] = -20.0
                 continue
+            
+            step_emit = np.tile(base_not_pnote, (N_TONES, 1))
+            total_w = 0.0
+
             for wn in wpcs:
                 off = np.arange(N_TONES, dtype=np.intp)
                 off = (wn.pitch_class - off) % N_TONES
-                emit[t_step] += wn.weight * LOG_PNOTE[off]
+                step_emit += wn.weight * (LOG_PNOTE[off] - LOG_NOT_PNOTE[off])
+                total_w += wn.weight
 
-            total_w = sum(wn.weight for wn in wpcs)
-            emit[t_step] /= (total_w + 1e-6)
+            emit[t_step] = step_emit / (total_w + 1e-6)
 
         # Map Quality to index for constraints
         quality_to_idx = {q: i for i, q in enumerate(TYPE_TO_QUALITY)}

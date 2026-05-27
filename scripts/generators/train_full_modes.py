@@ -142,7 +142,7 @@ def finetune_pchange_only(pchange, frozen_pnote, songs_batched, mask,
         alpha[:, 0] /= norm + eps
 
         for t in range(1, max_t):
-            prev_expanded = alpha[:, t - 1][:, :, r_prev_indices]
+            prev_expanded = alpha[:, t - 1][:, r_prev_indices]
             combined_prev = torch.einsum("nrik,kio->nro", prev_expanded, pchange)
             alpha[:, t] = combined_prev * psets[:, t]
             norm = alpha[:, t].sum(dim=(1, 2), keepdim=True)
