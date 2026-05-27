@@ -18,6 +18,7 @@ from melodica.generators import (
     AmbientPadGenerator, ArpeggiatorGenerator, FluteGenerator
 )
 from melodica.generators.choir_ahhs import ChoirAahsGenerator
+from melodica.generators.sfx_percussion import SFXPercussionGenerator
 from melodica.modifiers import (
     ModifierPipeline, ModifierContext, HumanizeModifier,
     VelocityCurveModifier, MetricAccentModifier
@@ -67,6 +68,16 @@ def main():
             generator=ChoirAahsGenerator(voice_count=4),
             instrument="choir_aahs", density=0.7, octave_shift=0,
         ),
+        TrackConfig(
+            name="Cinematic_Percussion",
+            generator=SFXPercussionGenerator(instrument="taiko_drum"),
+            instrument="taiko_drum", density=0.4, octave_shift=0,
+        ),
+        TrackConfig(
+            name="High_Percussion",
+            generator=SFXPercussionGenerator(instrument="reverse_cymbal"),
+            instrument="reverse_cymbal", density=0.3, octave_shift=1,
+        ),
     ]
 
     # 2. Structure & Schedule
@@ -82,6 +93,8 @@ def main():
                 "Tension_Arp":          structure_to_schedule("R", 8),
                 "Solo_Flute_Melody":    structure_to_schedule("A", 8),
                 "Epic_Choir":           structure_to_schedule("R", 8),
+                "Cinematic_Percussion": structure_to_schedule("A", 8),
+                "High_Percussion":      structure_to_schedule("R", 8),
             },
         ),
 
@@ -96,6 +109,8 @@ def main():
                 "Tension_Arp":          structure_to_schedule("B", 8),
                 "Solo_Flute_Melody":    structure_to_schedule("R", 8),
                 "Epic_Choir":           structure_to_schedule("B:var", 8),
+                "Cinematic_Percussion": structure_to_schedule("B", 8),
+                "High_Percussion":      structure_to_schedule("B", 8),
             },
         ),
 
@@ -110,6 +125,8 @@ def main():
                 "Tension_Arp":          structure_to_schedule("C", 16),
                 "Solo_Flute_Melody":    structure_to_schedule("C:var", 16),
                 "Epic_Choir":           structure_to_schedule("C", 16),
+                "Cinematic_Percussion": structure_to_schedule("C:var", 16),
+                "High_Percussion":      structure_to_schedule("C:var", 16),
             },
         ),
 
@@ -124,6 +141,8 @@ def main():
                 "Tension_Arp":          structure_to_schedule("R", 8),
                 "Solo_Flute_Melody":    structure_to_schedule("A R", 4, loop=False),
                 "Epic_Choir":           structure_to_schedule("R", 8),
+                "Cinematic_Percussion": structure_to_schedule("R", 8),
+                "High_Percussion":      structure_to_schedule("R", 8),
             },
         ),
     ]
@@ -181,6 +200,16 @@ def main():
             VelocityCurveModifier(start_vel=50, end_vel=110, curve="exponential"),
             MetricAccentModifier(strength=0.1)
         ], "Humanize + Epic Crescendo"),
+        
+        "Cinematic_Percussion": ([
+            HumanizeModifier(timing_std=0.01, velocity_std=12.0),
+            MetricAccentModifier(strength=0.5)
+        ], "Humanize + Punchy Accent"),
+        
+        "High_Percussion": ([
+            HumanizeModifier(timing_std=0.02, velocity_std=5.0),
+            VelocityCurveModifier(start_vel=60, end_vel=100, curve="swell")
+        ], "Humanize + Swell"),
     }
 
     print("\n  Applying Expression Pipeline...")
