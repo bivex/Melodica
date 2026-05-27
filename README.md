@@ -21,6 +21,7 @@ Melodica implements a three-engine harmonization architecture with an extensive 
    5.2. [Script Examples](#52-script-examples)
    5.3. [Chord Detection](#53-chord-detection)
    5.4. [Generators & Idea Tool](#54-generators--idea-tool)
+   5.5. [Advanced Arrangement & Expression Pipeline](#55-advanced-arrangement--expression-pipeline)
 6. [Diagnostic Tools (MIDI Analyzer)](#6-diagnostic-tools-midi-analyzer)
    6.1. [Reporting Metrics](#61-reporting-metrics)
    6.2. [Register Balancing Workflow](#62-register-balancing-workflow)
@@ -166,6 +167,39 @@ track = IdeaTrack(seed_phrases=[seed], generator=gen, phrase_order="AABA")
 slots = generate_idea(track, chords, key, beats_per_slot=4.0)
 notes = slots_to_notes(slots)
 notes_to_midi(notes, "idea.mid", bpm=120)
+```
+
+### 5.5. Advanced Arrangement & Expression Pipeline
+
+To compose structured tracks (Intro → Verse → Climax), use the 3-stage `IdeaTool` pipeline:
+
+1. **Track Config & Generator Assignment**: Map instruments to generators and assign frequency bands (`octave_shift`).
+2. **Structure & Schedule**: Slice the track into `IdeaPart` objects. Use `structure_to_schedule` to define repeating themes (`A`, `B`, `C`), variations (`A:var`), or silence (`R`).
+3. **Modifier Pipeline**: Post-process generated notes using `ModifierPipeline` to inject "humanization" and dynamics (`HumanizeModifier`, `VelocityCurveModifier`, `MetricAccentModifier`).
+
+```python
+from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart, structure_to_schedule
+from melodica.modifiers import ModifierPipeline, HumanizeModifier, MetricAccentModifier
+
+# 1. Parts & Scheduling
+part = IdeaPart(
+    name="Intro", bars=8, scale=Scale(2, Mode.MINOR),
+    progression_type="coupled_hmm",
+    track_phrase_schedules={
+        "Sub_Bass":    structure_to_schedule("A", 8),
+        "Epic_Strings": structure_to_schedule("R", 8), # Strings rest during Intro
+    }
+)
+
+# 2. Generation
+config = IdeaToolConfig(style="cinematic", parts=[part], tracks=tracks)
+notes_dict = IdeaTool(config).generate()
+
+# 3. Humanization & Modifiers
+pipeline = ModifierPipeline(base_notes=notes_dict["Sub_Bass"])
+pipeline.add_modifier(HumanizeModifier(timing_std=0.02, velocity_std=5.0))
+pipeline.add_modifier(MetricAccentModifier(strength=0.2))
+notes_dict["Sub_Bass"] = pipeline.process(mod_context)
 ```
 
 ## 6. Diagnostic Tools (MIDI Analyzer)
