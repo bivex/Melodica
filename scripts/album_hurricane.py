@@ -164,43 +164,100 @@ def main():
         chorus_bars=16, break_bars=8, final_bars=8,
     ):
         return [
+            # ── Intro: guitar motif + pad atmosphere ──
             IdeaPart(
                 "Intro", bars=intro_bars,
                 section_type=SectionRole.INTRO,
                 section_function=SectionFunction.SUSTAIN,
                 track_mute=["Drums", "808 Bass", "Counter"],
                 track_density={"Guitar": 0.3, "Vocal": 0.0, "Pad": 0.5, "Chords": 0.2, "Arp": 0.15},
+                track_phrase_schedules={
+                    "Guitar":   structure_to_schedule("A", intro_bars),
+                    "Pad":      structure_to_schedule("A", intro_bars),
+                    "Chords":   structure_to_schedule("R A", intro_bars // 2),
+                    "Arp":      structure_to_schedule("A", intro_bars),
+                },
             ),
+            # ── Verse: groove locks in, vocal enters ──
             IdeaPart(
                 "Verse", bars=verse_bars,
                 section_type=SectionRole.VERSE,
                 section_function=SectionFunction.SUSTAIN,
                 track_density={"Guitar": 0.5, "Vocal": 0.4, "Drums": 0.6, "808 Bass": 0.5, "Pad": 0.25, "Chords": 0.3, "Arp": 0.2},
+                track_phrase_schedules={
+                    "Guitar":   structure_to_schedule("A B", verse_bars // 2),
+                    "808 Bass": structure_to_schedule("A B", verse_bars // 2),
+                    "Drums":    structure_to_schedule("A B", verse_bars // 2),
+                    "Vocal":    structure_to_schedule("R A R A", verse_bars // 4),
+                    "Pad":      structure_to_schedule("A", verse_bars),
+                    "Chords":   structure_to_schedule("A B", verse_bars // 2),
+                    "Arp":      structure_to_schedule("A", verse_bars),
+                },
             ),
+            # ── Pre-Chorus: build energy, layers stack ──
             IdeaPart(
                 "Pre-Chorus", bars=prechorus_bars,
                 section_type=SectionRole.PRE_CHORUS,
                 section_function=SectionFunction.BUILD,
                 track_density={"Guitar": 0.65, "Vocal": 0.5, "Drums": 0.75, "808 Bass": 0.6, "Pad": 0.35, "Chords": 0.45, "Counter": 0.3, "Arp": 0.3},
+                track_phrase_schedules={
+                    "Guitar":   structure_to_schedule("A A:var", prechorus_bars // 2),
+                    "808 Bass": structure_to_schedule("A A:var", prechorus_bars // 2),
+                    "Drums":    structure_to_schedule("A A:var", prechorus_bars // 2),
+                    "Vocal":    structure_to_schedule("R A", prechorus_bars // 2),
+                    "Pad":      structure_to_schedule("A", prechorus_bars),
+                    "Chords":   structure_to_schedule("A A:var", prechorus_bars // 2),
+                    "Counter":  structure_to_schedule("R A", prechorus_bars // 2),
+                    "Arp":      structure_to_schedule("A", prechorus_bars),
+                },
             ),
+            # ── Chorus: full arrangement, hook hits ──
             IdeaPart(
                 "Chorus", bars=chorus_bars,
                 section_type=SectionRole.CHORUS,
                 section_function=SectionFunction.RELEASE,
                 track_density={"Guitar": 0.85, "Vocal": 0.7, "Drums": 0.9, "808 Bass": 0.8, "Pad": 0.45, "Chords": 0.6, "Counter": 0.5, "Arp": 0.4},
+                track_phrase_schedules={
+                    "Guitar":   structure_to_schedule("A B A:var B", chorus_bars // 4),
+                    "808 Bass": structure_to_schedule("A B", chorus_bars // 2),
+                    "Drums":    structure_to_schedule("A B", chorus_bars // 2),
+                    "Vocal":    structure_to_schedule("A B A:var B", chorus_bars // 4),
+                    "Pad":      structure_to_schedule("A", chorus_bars),
+                    "Chords":   structure_to_schedule("A B", chorus_bars // 2),
+                    "Counter":  structure_to_schedule("A B", chorus_bars // 2),
+                    "Arp":      structure_to_schedule("A B", chorus_bars // 2),
+                },
             ),
+            # ── Break: strip to basics, breathe ──
             IdeaPart(
                 "Break", bars=break_bars,
                 section_type=SectionRole.BREAKDOWN,
                 section_function=SectionFunction.BREAK,
                 track_mute=["Drums", "808 Bass", "Counter"],
                 track_density={"Guitar": 0.3, "Vocal": 0.2, "Pad": 0.5, "Chords": 0.2, "Arp": 0.15},
+                track_phrase_schedules={
+                    "Guitar":   structure_to_schedule("A", break_bars),
+                    "Vocal":    structure_to_schedule("R A", break_bars // 2),
+                    "Pad":      structure_to_schedule("A", break_bars),
+                    "Chords":   structure_to_schedule("R A", break_bars // 2),
+                    "Arp":      structure_to_schedule("A", break_bars),
+                },
             ),
+            # ── Final: bring it home, fade out ──
             IdeaPart(
                 "Final", bars=final_bars,
                 section_type=SectionRole.CODA,
                 section_function=SectionFunction.FADE,
                 track_density={"Guitar": 0.4, "Vocal": 0.3, "Drums": 0.5, "808 Bass": 0.4, "Pad": 0.4, "Chords": 0.3, "Arp": 0.2},
+                track_phrase_schedules={
+                    "Guitar":   structure_to_schedule("A R", final_bars // 2),
+                    "808 Bass": structure_to_schedule("A R", final_bars // 2),
+                    "Drums":    structure_to_schedule("A R", final_bars // 2),
+                    "Vocal":    structure_to_schedule("A R", final_bars // 2),
+                    "Pad":      structure_to_schedule("A", final_bars),
+                    "Chords":   structure_to_schedule("A R", final_bars // 2),
+                    "Arp":      structure_to_schedule("A R", final_bars // 2),
+                },
             ),
         ]
 
