@@ -171,7 +171,7 @@ def harmonize(
     melody: list[Note],
     *,
     key: Scale | None = None,
-    engine: int | str = "hmm",
+    engine: int | str = "coupled_hmm",
     chord_rhythm: float = 4.0,
     **engine_kwargs: object,
 ) -> list[ChordLabel]:
