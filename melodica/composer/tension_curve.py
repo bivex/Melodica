@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from enum import Enum
 import math
 
-from melodica.types import SectionType, SECTION_ENERGY
+from melodica.types import SectionRole, SECTION_ROLE_ENERGY, SECTION_FUNCTION_ENERGY
 
 
 class TensionPhase(Enum):
@@ -95,43 +95,37 @@ class TensionCurve:
         return points
 
     @classmethod
-    def from_parts(
+    def from_energy_points(
         cls,
-        parts: list,
+        energy_points: list[tuple[float, float]],
+        total_beats: float,
         curve_type: str = "classical",
     ) -> "TensionCurve":
-        """Build a composite tension curve from parts with section_type energy levels.
+        """Build a tension curve from (beat_offset, energy) pairs.
 
-        Each part should have: bars, time_signature, section_type (optional).
+        TensionCurve owns interpolation; callers own the mapping from
+        arrangement structure to energy values (SRP).
         """
-        total_beats = sum(p.bars * p.time_signature[0] for p in parts)
-        if total_beats <= 0:
-            return cls(total_beats=32.0, curve_type=curve_type)
+        if total_beats <= 0 or not energy_points:
+            return cls(total_beats=max(total_beats, 32.0), curve_type=curve_type)
 
-        # Collect (start_beat, end_beat, target_energy) per part
+        # Build segments: (start_beat, end_beat, target_energy)
         segments: list[tuple[float, float, float]] = []
-        offset = 0.0
-        for p in parts:
-            part_beats = p.bars * p.time_signature[0]
-            energy = SECTION_ENERGY.get(p.section_type, 0.5) if p.section_type else 0.5
-            segments.append((offset, offset + part_beats, energy))
-            offset += part_beats
+        for idx, (start, energy) in enumerate(energy_points):
+            end = energy_points[idx + 1][0] if idx + 1 < len(energy_points) else total_beats
+            segments.append((start, end, energy))
 
-        # Generate tension points interpolated between section energy targets
         points: list[TensionPoint] = []
         steps = max(8, int(total_beats / 2.0))
         for i in range(steps + 1):
             t = i / steps
             beat = t * total_beats
 
-            # Find which segment this beat falls in and interpolate
             tension = 0.5
             for seg_idx, (seg_start, seg_end, seg_energy) in enumerate(segments):
                 if beat <= seg_end or seg_idx == len(segments) - 1:
-                    # Interpolate within segment toward target energy
                     if seg_end > seg_start:
                         local_t = (beat - seg_start) / (seg_end - seg_start)
-                        # Smooth approach to target: ease-in
                         tension = seg_energy * (0.5 + 0.5 * local_t)
                     else:
                         tension = seg_energy
@@ -143,6 +137,28 @@ class TensionCurve:
         curve = cls(total_beats=total_beats, curve_type=curve_type)
         curve._cached_points = points
         return curve
+
+    @classmethod
+    def from_parts(
+        cls,
+        parts: list,
+        curve_type: str = "classical",
+    ) -> "TensionCurve":
+        """Backward compat wrapper. Prefer from_energy_points() for new code."""
+        from melodica.types import SECTION_ROLE_ENERGY
+
+        total_beats = sum(p.bars * p.time_signature[0] for p in parts)
+        if total_beats <= 0:
+            return cls(total_beats=32.0, curve_type=curve_type)
+
+        energy_points: list[tuple[float, float]] = []
+        offset = 0.0
+        for p in parts:
+            energy = SECTION_ROLE_ENERGY.get(p.section_type, 0.5) if p.section_type else 0.5
+            energy_points.append((offset, energy))
+            offset += p.bars * p.time_signature[0]
+
+        return cls.from_energy_points(energy_points, total_beats, curve_type)
 
     @staticmethod
     def _classify_phase_static(tension: float, t: float, peak_position: float) -> TensionPhase:

@@ -27,8 +27,8 @@ VELOCITY_DEFAULT: int = 64
 VELOCITY_MAX: int = 127
 
 
-class SectionType(StrEnum):
-    """Unified section type vocabulary for arrangement structure."""
+class SectionRole(StrEnum):
+    """What a section IS in the arrangement structure (structural role)."""
 
     INTRO = "intro"
     VERSE = "verse"
@@ -36,24 +36,63 @@ class SectionType(StrEnum):
     CHORUS = "chorus"
     BRIDGE = "bridge"
     OUTRO = "outro"
-    BUILD = "build"
+    HOOK = "hook"
+    REFRAIN = "refrain"
+    SOLO = "solo"
+    BREAKDOWN = "breakdown"
+    CODA = "coda"
+    INTERLUDE = "interlude"
     DROP = "drop"
+    CLIMAX = "climax"
+    TAG = "tag"
+
+
+class SectionFunction(StrEnum):
+    """What a section DOES in the arrangement (functional behavior)."""
+
+    BUILD = "build"
+    RELEASE = "release"
+    SUSTAIN = "sustain"
     BREAK = "break"
-    FINAL = "final"
+    FADE = "fade"
+    HOLD = "hold"
 
 
-SECTION_ENERGY: dict[SectionType, float] = {
-    SectionType.INTRO: 0.3,
-    SectionType.VERSE: 0.5,
-    SectionType.PRE_CHORUS: 0.65,
-    SectionType.CHORUS: 0.85,
-    SectionType.BRIDGE: 0.6,
-    SectionType.OUTRO: 0.35,
-    SectionType.BUILD: 0.7,
-    SectionType.DROP: 1.0,
-    SectionType.BREAK: 0.2,
-    SectionType.FINAL: 0.9,
+# Backward compat alias
+SectionType = SectionRole
+
+
+# Default energy baselines by role (can be overridden by function/context)
+SECTION_ROLE_ENERGY: dict[SectionRole, float] = {
+    SectionRole.INTRO: 0.3,
+    SectionRole.VERSE: 0.5,
+    SectionRole.PRE_CHORUS: 0.65,
+    SectionRole.CHORUS: 0.85,
+    SectionRole.BRIDGE: 0.6,
+    SectionRole.OUTRO: 0.35,
+    SectionRole.HOOK: 0.85,
+    SectionRole.REFRAIN: 0.8,
+    SectionRole.SOLO: 0.75,
+    SectionRole.BREAKDOWN: 0.25,
+    SectionRole.CODA: 0.4,
+    SectionRole.INTERLUDE: 0.35,
+    SectionRole.DROP: 1.0,
+    SectionRole.CLIMAX: 0.95,
+    SectionRole.TAG: 0.3,
 }
+
+# Energy modifiers applied by function (additive)
+SECTION_FUNCTION_ENERGY: dict[SectionFunction, float] = {
+    SectionFunction.BUILD: 0.15,
+    SectionFunction.RELEASE: -0.1,
+    SectionFunction.SUSTAIN: 0.0,
+    SectionFunction.BREAK: -0.2,
+    SectionFunction.FADE: -0.15,
+    SectionFunction.HOLD: 0.0,
+}
+
+# Backward compat
+SECTION_ENERGY = SECTION_ROLE_ENERGY
 
 
 from melodica.types_pkg._notes import (
@@ -108,7 +147,11 @@ __all__ = [
     "TICKS_PER_BEAT",
     "VELOCITY_DEFAULT",
     "VELOCITY_MAX",
+    "SectionRole",
+    "SectionFunction",
     "SectionType",
+    "SECTION_ROLE_ENERGY",
+    "SECTION_FUNCTION_ENERGY",
     "SECTION_ENERGY",
     "Note",
     "NoteInfo",

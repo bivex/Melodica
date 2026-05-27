@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from melodica.types import BarGrid, ChordLabel, Scale, SectionType
+from melodica.types import BarGrid, ChordLabel, Scale, SectionRole, SectionFunction
 
 
 @dataclass
@@ -41,7 +41,14 @@ class RenderContext:
     bass_pitch: int | None = None  # lowest sounding pitch for counterpoint
     prev_bass_pitch: int | None = None  # previous bass pitch for voice leading
     bar_grid: BarGrid | None = None  # time signature grid for bar-aware rendering
-    section_type: SectionType | None = None  # current section type for generator adaptation
+    section_type: SectionRole | None = None  # structural role (backward compat name)
+    section_function: SectionFunction | None = None  # functional behavior
+    section_index: float = 0.0  # 0.0 to 1.0, structural position (current / total sections)
+
+    @property
+    def section_role(self) -> SectionRole | None:
+        """Alias for section_type (structural role)."""
+        return self.section_type
 
     def with_end_state(
         self,
@@ -53,7 +60,9 @@ class RenderContext:
         duration_beats: float = 0.0,
         total_duration: float = 0.0,
         last_bass_pitch: int | None = None,
-        section_type: SectionType | None = None,
+        section_type: SectionRole | None = None,
+        section_function: SectionFunction | None = None,
+        section_index: float | None = None,
     ) -> RenderContext:
         """Return a new context with updated state for the next phrase."""
         # Update phrase position based on duration
@@ -71,4 +80,6 @@ class RenderContext:
             prev_bass_pitch=self.bass_pitch,
             bar_grid=self.bar_grid,
             section_type=section_type if section_type is not None else self.section_type,
+            section_function=section_function if section_function is not None else self.section_function,
+            section_index=section_index if section_index is not None else self.section_index,
         )

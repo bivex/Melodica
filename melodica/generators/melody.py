@@ -512,7 +512,7 @@ class MelodyGenerator(PhraseGenerator):
 
             notes = apply_phrase_arch(
                 notes, duration_beats, context.phrase_position if context else 0.0,
-                section_type=getattr(context, "section_type", None),
+                section_type=context.section_role if context else None,
             )
 
         # Context

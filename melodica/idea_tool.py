@@ -41,8 +41,10 @@ from melodica.types import (
     Scale,
     Mode,
     Quality,
-    SectionType,
-    SECTION_ENERGY,
+    SectionRole,
+    SectionFunction,
+    SECTION_ROLE_ENERGY,
+    SECTION_FUNCTION_ENERGY,
     Track,
     MusicTimeline,
     KeyLabel,
@@ -278,8 +280,15 @@ class IdeaPart:
     track_velocity_scale: dict[str, float] | None = None  # {"TrackName": 0.5}
     # Per-track phrase schedule overrides (None = use track default)
     track_phrase_schedules: dict[str, PhraseSchedule] | None = None
-    # Section type for arrangement-aware rendering (optional)
-    section_type: SectionType | None = None
+    # Section type for arrangement-aware rendering (optional, backward compat name)
+    section_type: SectionRole | None = None
+    # Section function: what this section DOES (build, release, sustain, break, fade, hold)
+    section_function: SectionFunction | None = None
+
+    @property
+    def section_role(self) -> SectionRole | None:
+        """Alias for section_type (structural role)."""
+        return self.section_type
 
 
 @dataclass
@@ -385,6 +394,7 @@ class IdeaTool:
                     IdeaPart(
                         name=p.name or f"Part {i + 1}",
                         section_type=p.section_type,
+                        section_function=p.section_function,
                         bars=p.bars if p.bars is not None else self.config.bars,
                         scale=p.scale if p.scale is not None else self.config.scale,
                         tempo=p.tempo if p.tempo is not None else self.config.tempo,
@@ -419,6 +429,29 @@ class IdeaTool:
                 )
             ]
 
+    @staticmethod
+    def _build_energy_points(parts: list[IdeaPart]) -> list[tuple[float, float]]:
+        """Build (beat_offset, energy) pairs from parts' role + function.
+
+        Energy is blended: 70% absolute baseline + 30% relative to previous section.
+        This ensures a chorus after a quiet verse has high relative energy,
+        while a chorus after a massive drop has lower relative energy.
+        """
+        points: list[tuple[float, float]] = []
+        offset = 0.0
+        prev_energy = 0.3  # assume quiet start
+        for p in parts:
+            part_beats = p.bars * p.time_signature[0]
+            base = SECTION_ROLE_ENERGY.get(p.section_type, 0.5) if p.section_type else 0.5
+            mod = SECTION_FUNCTION_ENERGY.get(p.section_function, 0.0) if p.section_function else 0.0
+            absolute = max(0.05, min(1.0, base + mod))
+            # Blend: 70% absolute target, 30% relative (smooth from previous)
+            energy = max(0.05, min(1.0, 0.7 * absolute + 0.3 * (prev_energy + (absolute - prev_energy) * 0.8)))
+            points.append((offset, energy))
+            prev_energy = energy
+            offset += part_beats
+        return points
+
     def generate(self) -> dict[str, Any]:
         """
         Generate full composition. Returns dict of track_name → notes.
@@ -451,8 +484,10 @@ class IdeaTool:
         if self.config.use_tension_curve:
             has_section_types = any(p.section_type is not None for p in parts)
             if has_section_types:
-                tension_curve = TensionCurve.from_parts(
-                    parts, curve_type=self._style.tension_curve
+                # Build energy points from parts' role + function
+                energy_points = self._build_energy_points(parts)
+                tension_curve = TensionCurve.from_energy_points(
+                    energy_points, total_beats, curve_type=self._style.tension_curve
                 )
             else:
                 tension_curve = TensionCurve(
@@ -635,22 +670,35 @@ class IdeaTool:
         if self.config.use_mixing:
             from melodica.shorts_mixing import MixingDesk
 
-            # Part-aware section segmentation mapped to mixing roles via section_type
+            # Part-aware section segmentation mapped to mixing roles via section_role
             _SECTION_ROLE_MAP = {
-                SectionType.INTRO: "Dynamics",
-                SectionType.VERSE: "Loop",
-                SectionType.PRE_CHORUS: "Dynamics",
-                SectionType.CHORUS: "Hook",
-                SectionType.BRIDGE: "Dynamics",
-                SectionType.OUTRO: "Loop",
-                SectionType.BUILD: "Dynamics",
-                SectionType.DROP: "Hook",
-                SectionType.BREAK: "Dynamics",
-                SectionType.FINAL: "Hook",
+                SectionRole.INTRO: "Dynamics",
+                SectionRole.VERSE: "Loop",
+                SectionRole.PRE_CHORUS: "Dynamics",
+                SectionRole.CHORUS: "Hook",
+                SectionRole.BRIDGE: "Dynamics",
+                SectionRole.OUTRO: "Loop",
+                SectionRole.DROP: "Hook",
+                SectionRole.HOOK: "Hook",
+                SectionRole.REFRAIN: "Hook",
+                SectionRole.SOLO: "Dynamics",
+                SectionRole.BREAKDOWN: "Dynamics",
+                SectionRole.CODA: "Dynamics",
+                SectionRole.INTERLUDE: "Dynamics",
+                SectionRole.CLIMAX: "Hook",
+                SectionRole.TAG: "Dynamics",
+            }
+            # Function overrides: BUILD → Dynamics regardless of role
+            _FUNCTION_OVERRIDE = {
+                SectionFunction.BUILD: "Dynamics",
+                SectionFunction.BREAK: "Dynamics",
+                SectionFunction.RELEASE: "Loop",
             }
             sections = []
             for i, part in enumerate(parts):
-                if part.section_type is not None:
+                if part.section_function is not None and part.section_function in _FUNCTION_OVERRIDE:
+                    role = _FUNCTION_OVERRIDE[part.section_function]
+                elif part.section_type is not None:
                     role = _SECTION_ROLE_MAP.get(part.section_type, "Dynamics")
                 elif len(parts) == 1:
                     role = "Dynamics"
@@ -668,11 +716,15 @@ class IdeaTool:
             # Apply fade-out on the last part (skip for crescendo sections)
             total_beats_all = sum(p.bars * p.time_signature[0] for p in parts)
             last_part = parts[-1]
-            _crescendo_types = {SectionType.BUILD, SectionType.DROP, SectionType.FINAL}
+            _crescendo_roles = {SectionRole.DROP, SectionRole.CLIMAX}
+            _crescendo_functions = {SectionFunction.BUILD}
             should_fade = (
                 last_part.section_type is None
-                or last_part.section_type == SectionType.OUTRO
-                or last_part.section_type not in _crescendo_types
+                or last_part.section_type == SectionRole.OUTRO
+                or (
+                    last_part.section_type not in _crescendo_roles
+                    and last_part.section_function not in _crescendo_functions
+                )
             )
             if should_fade:
                 last_part_beats = last_part.bars * last_part.time_signature[0]
@@ -1126,8 +1178,9 @@ class IdeaTool:
         all_notes: list[NoteInfo] = []
         offset_beats = 0.0
         total_arrangement_beats = sum(p.bars * p.time_signature[0] for p in parts)
+        total_parts = len(parts)
 
-        for part in parts:
+        for part_idx, part in enumerate(parts):
             scale = part.scale
             part_beats = part.bars * part.time_signature[0]
 
@@ -1144,7 +1197,8 @@ class IdeaTool:
             if effective_schedule is not None:
                 # Phrase-schedule driven rendering
                 part_notes = self._render_phrase_schedule(
-                    cfg, chords, scale, part, offset_beats, gen
+                    cfg, chords, scale, part, offset_beats, gen,
+                    part_idx=part_idx, total_parts=total_parts,
                 )
             else:
                 # Apply arrangement pattern per part (existing logic)
@@ -1182,6 +1236,8 @@ class IdeaTool:
                         prev_pitches=list(ctx.prev_pitches),
                         phrase_position=phrase_pos,
                         section_type=part.section_type,
+                        section_function=part.section_function,
+                        section_index=part_idx / max(1, total_parts - 1),
                     )
                     section_end = section_start + section_length
 
@@ -1437,6 +1493,8 @@ class IdeaTool:
         part: IdeaPart,
         offset_beats: float,
         gen,
+        part_idx: int = 0,
+        total_parts: int = 1,
     ) -> list[NoteInfo]:
         """Render a track following a PhraseSchedule within a single part.
 
@@ -1512,6 +1570,8 @@ class IdeaTool:
                 prev_pitches=list(ctx.prev_pitches),
                 phrase_position=phrase_pos,
                 section_type=part.section_type,
+                section_function=part.section_function,
+                section_index=part_idx / max(1, total_parts - 1),
             )
 
             # Find chords for this section

@@ -38,8 +38,8 @@ def apply_phrase_arch(
     if not notes or duration_beats <= 0:
         return notes
     if section_type is not None:
-        from melodica.types import SECTION_ENERGY
-        arch_height = SECTION_ENERGY.get(section_type, 0.5) * 0.5
+        from melodica.types import SECTION_ROLE_ENERGY
+        arch_height = SECTION_ROLE_ENERGY.get(section_type, 0.5) * 0.5
     else:
         arch_height = 0.3 + 0.2 * phrase_position
     for note in notes:
