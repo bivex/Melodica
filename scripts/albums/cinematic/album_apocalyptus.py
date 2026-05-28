@@ -158,7 +158,7 @@ def produce_signal():
     # 6. Riser — final 30 seconds, tension to nowhere (cliffhanger)
     riser = FXRiserGenerator(
         GeneratorParams(density=0.2), riser_type="noise",
-        length_beats=30.0, pitch_curve="exponential", peak_velocity=100,
+        length_beats=16.0, pitch_curve="exponential", peak_velocity=100,
     ).render(_section(chords, dur - 30), key, 30.0)
     for n in riser:
         n.start += dur - 30
@@ -194,19 +194,19 @@ def produce_awakening():
     # 1. Choir — enters immediately. Latin syllables, ominous.
     choir_a = ChoirAahsGenerator(
         GeneratorParams(density=0.15), voice_count=4,
-        dynamics="pp", vibrato=0.2, syllable="ah",
+        dynamics="pp", vibrato=0.2, syllable="aah",
     ).render(_section(chords, 0, s1), key, s1)
 
     choir_b = ChoirAahsGenerator(
-        GeneratorParams(density=0.35), voice_count=8,
+        GeneratorParams(density=0.35), voice_count=4,
         dynamics="mf", vibrato=0.3, syllable="oh",
     ).render(_section(chords, s1, s2), key, s2 - s1)
     for n in choir_b:
         n.start += s1
 
     choir_d = ChoirAahsGenerator(
-        GeneratorParams(density=0.5), voice_count=12,
-        dynamics="ff", vibrato=0.4, syllable="ah",
+        GeneratorParams(density=0.5), voice_count=4,
+        dynamics="ff", vibrato=0.4, syllable="aah",
     ).render(_section(chords, s3), key, dur - s3)
     for n in choir_d:
         n.start += s3
@@ -235,7 +235,7 @@ def produce_awakening():
 
     # 5. Timpani — heartbeat pulse
     timpani = TimpaniGenerator(
-        GeneratorParams(density=0.2), stroke_pattern="pattern",
+        GeneratorParams(density=0.2), stroke_pattern="accented",
         drum_count=4, roll_speed=0.125,
     ).render(_section(chords, s1), key, dur - s1)
     for n in timpani:
@@ -311,27 +311,27 @@ def produce_chase():
 
     # 2. Riff — melodic metal lead on top
     riff = RiffGenerator(
-        GeneratorParams(density=0.3), scale_type="phrygian",
-        riff_pattern="ascending", palm_mute_prob=0.2, power_chord=False,
+        GeneratorParams(density=0.3), scale_type="minor_pent",
+        riff_pattern="gallop", palm_mute_prob=0.2, power_chord=False,
     ).render(_section(chords, s1, s3), key, s3 - s1)
     for n in riff:
         n.start += s1
 
     # 3. Electronic drums — 808 with sidechain pump
     drums_a = ElectronicDrumsGenerator(
-        GeneratorParams(density=0.5), kit="808", pattern="aggressive",
+        GeneratorParams(density=0.5), kit="808", pattern="breakbeat",
         sidechain=True, sidechain_depth=0.6,
     ).render(_section(chords, 0, s1), key, s1)
 
     drums_b = ElectronicDrumsGenerator(
-        GeneratorParams(density=0.65), kit="808", pattern="aggressive",
+        GeneratorParams(density=0.65), kit="808", pattern="breakbeat",
         sidechain=True, sidechain_depth=0.8,
     ).render(_section(chords, s1, s3), key, s3 - s1)
     for n in drums_b:
         n.start += s1
 
     drums_d = ElectronicDrumsGenerator(
-        GeneratorParams(density=0.75), kit="808", pattern="aggressive",
+        GeneratorParams(density=0.75), kit="808", pattern="breakbeat",
         sidechain=True, sidechain_depth=1.0,
     ).render(_section(chords, s3), key, dur - s3)
     for n in drums_d:
@@ -340,7 +340,7 @@ def produce_chase():
 
     # 4. Acoustic drums — double-kick underneath (rock kit)
     rock_drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.55), style="metal",
+        GeneratorParams(density=0.55), style="rock",
         hihat_pattern="sixteenth", fill_frequency=0.15,
         sidechain_depth=0.0, groove_swing=0.0,
     ).render(_section(chords, s1), key, dur - s1)
@@ -403,7 +403,7 @@ def produce_siege():
     # 1. Choir — 12 voices, fortissimo, chanting
     choir = ChoirAahsGenerator(
         GeneratorParams(density=0.45), voice_count=12,
-        dynamics="ff", vibrato=0.35, syllable="ah",
+        dynamics="ff", vibrato=0.35, syllable="aah",
     ).render(chords, key, dur)
 
     # 2. Brass — fanfare, marcato, full section
@@ -441,25 +441,25 @@ def produce_siege():
 
     # 5. Riff — melodic lead over the chaos
     riff = RiffGenerator(
-        GeneratorParams(density=0.35), scale_type="double_harmonic",
-        riff_pattern="descending", palm_mute_prob=0.1, power_chord=False,
+        GeneratorParams(density=0.35), scale_type="minor_pent",
+        riff_pattern="syncopated", palm_mute_prob=0.1, power_chord=False,
     ).render(_section(chords, s2), key, dur - s2)
 
     # 6. Electronic drums + acoustic drums — both at once
     e_drums = ElectronicDrumsGenerator(
-        GeneratorParams(density=0.6), kit="909", pattern="aggressive",
+        GeneratorParams(density=0.6), kit="909", pattern="breakbeat",
         sidechain=True, sidechain_depth=0.5,
     ).render(chords, key, dur)
 
     rock_drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.65), style="metal",
+        GeneratorParams(density=0.65), style="rock",
         hihat_pattern="sixteenth", fill_frequency=0.2,
         sidechain_depth=0.0, groove_swing=0.0,
     ).render(chords, key, dur)
 
     # 7. Timpani — constant thunder
     timpani = TimpaniGenerator(
-        GeneratorParams(density=0.3), stroke_pattern="pattern",
+        GeneratorParams(density=0.3), stroke_pattern="accented",
         drum_count=4, roll_speed=0.25,
     ).render(chords, key, dur)
 
@@ -524,7 +524,7 @@ def produce_loss():
     # 1. Voice — solo, wordless, enters alone
     voice_a = VocalOohsGenerator(
         GeneratorParams(density=0.12), syllable="ooh",
-        harmony_count=1, vibrato=0.4, breath_phasing=True,
+        harmony_count=2, vibrato=0.4, breath_phasing=True,
     ).render(_section(chords, 0, s1), key, s1)
 
     voice_b = VocalOohsGenerator(
@@ -669,14 +669,14 @@ def produce_ascension():
     ).render(_section(chords_fast, s2, s3), key_fast, s3 - s2)
 
     timpani = TimpaniGenerator(
-        GeneratorParams(density=0.25), stroke_pattern="pattern",
+        GeneratorParams(density=0.25), stroke_pattern="accented",
         drum_count=4, roll_speed=0.125,
     ).render(_section(chords_fast, s2), key_fast, dur - s2)
 
     # Phase 4: CHOIR CLIMAX
     choir = ChoirAahsGenerator(
-        GeneratorParams(density=0.5), voice_count=16,
-        dynamics="ff", vibrato=0.4, syllable="ah",
+        GeneratorParams(density=0.5), voice_count=4,
+        dynamics="ff", vibrato=0.4, syllable="aah",
     ).render(_section(chords_fast, s3), key_fast, dur - s3)
     for n in choir:
         n.start += s3
