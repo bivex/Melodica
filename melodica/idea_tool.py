@@ -710,7 +710,7 @@ class IdeaTool:
                     role = "Dynamics"
                 sections.append((role, part.bars, []))
 
-            desk = MixingDesk()
+            desk = MixingDesk(niche_cfg={})
             result = desk.apply_mixing(result, sections, self.config.tempo)
 
             # Apply fade-out on the last part (skip for crescendo sections)

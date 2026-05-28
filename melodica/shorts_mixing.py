@@ -24,6 +24,7 @@ from melodica.types import NoteInfo
 class MixingDesk:
     """Central mixing console — applies gain staging, automation, and balance."""
 
+    niche_cfg: dict = field(default_factory=dict)  # deprecated, ignored
     # Per-track gain multipliers (target velocity ranges)
     track_gains: Dict[str, float] = field(
         default_factory=lambda: {

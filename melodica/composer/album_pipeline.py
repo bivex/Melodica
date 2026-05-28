@@ -634,7 +634,7 @@ def _auto_mix(
                 gains[quieter] *= 0.75
 
     # [FIX 1] Single MixingDesk pass
-    desk = MixingDesk()
+    desk = MixingDesk(niche_cfg={})
     desk.track_gains.update(gains)
     mixed = desk.apply_mixing(tracks, [], 120)
 
