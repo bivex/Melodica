@@ -98,6 +98,8 @@ class EthnicWorldGenerator(_EthnicWorldBase):
         elif self.instrument == "shanai":
             self.params.key_range_low = max(58, self.params.key_range_low)  # Bb3
             self.params.key_range_high = min(82, self.params.key_range_high)  # Bb5
+        else:
+            raise ValueError(f"Unknown EthnicWorldGenerator instrument: {self.instrument!r}. Valid: banjo, shamisen, bagpipe, fiddle, shanai")
 
     def render(
         self,
@@ -237,5 +239,7 @@ class EthnicWorldGenerator(_EthnicWorldBase):
                 )
                 note.expression = expression
                 notes.append(note)
+            else:
+                raise ValueError(f"Unknown EthnicWorldGenerator instrument: {self.instrument!r}. Valid: banjo, shamisen, bagpipe, fiddle, shanai")
 
         return sorted(notes, key=lambda x: x.start)

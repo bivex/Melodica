@@ -249,6 +249,8 @@ class BendGenerator(PhraseGenerator):
                         pitch=target, start=round(t, 6), duration=onset + dur - t, velocity=vel
                     )
                 )
+        else:
+            raise ValueError(f"Unknown BendGenerator bend_type: {self.bend_type!r}. Valid: bend_up, bend_down, pre_bend, slide_up, slide_down")
 
         return notes
 

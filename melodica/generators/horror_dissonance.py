@@ -113,6 +113,8 @@ class HorrorDissonanceGenerator(PhraseGenerator):
                 self._render_ambient_dread(notes, bar_start, duration_beats, chord)
             elif self.variant == "creature":
                 self._render_creature(notes, bar_start, duration_beats, chord)
+            else:
+                raise ValueError(f"Unknown HorrorDissonanceGenerator variant: {self.variant!r}. Valid: psychological, jump_scare, ambient_dread, creature")
 
             bar_start += 4.0
 

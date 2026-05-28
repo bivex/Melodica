@@ -1,0 +1,7 @@
+{
+  "name": "ambient",
+  "events": [
+    {"onset": 0.0, "duration": 8.0, "velocity_factor": 0.5}
+  ],
+  "loop": true
+}

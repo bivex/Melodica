@@ -310,6 +310,8 @@ class BrassSectionGenerator(PhraseGenerator):
                     
                     note.expression = expr_copy
                     notes.append(note)
+            else:
+                raise ValueError(f"Unknown BrassSectionGenerator articulation: {self.articulation!r}. Valid: hit, swell, fanfare, sustained, falls, doits")
 
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(

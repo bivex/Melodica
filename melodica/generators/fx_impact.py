@@ -236,5 +236,7 @@ class FXImpactGenerator(PhraseGenerator):
                     velocity=min(127, vel),
                 )
             )
+        else:
+            raise ValueError(f"Unknown FXImpactGenerator impact_type: {self.impact_type!r}. Valid: boom, hit, reverse_cymbal, downlifter, riser_hit")
 
         return notes

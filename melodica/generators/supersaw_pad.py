@@ -108,6 +108,8 @@ class SupersawPadGenerator(PhraseGenerator):
             notes = self._stabs(chords, duration_beats, mid, key)
         elif self.variant == "plucks":
             notes = self._plucks(chords, duration_beats, mid, key)
+        else:
+            raise ValueError(f"Unknown SupersawPadGenerator variant: {self.variant!r}. Valid: trance, ambient, stabs, plucks")
 
         if chords:
             last_chord = chords[-1]

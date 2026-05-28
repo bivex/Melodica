@@ -1,0 +1,8 @@
+{
+  "name": "ds_shrine_silence",
+  "events": [
+    {"onset": 0.0, "duration": 4.0, "velocity_factor": 0.4},
+    {"onset": 6.0, "duration": 2.0, "velocity_factor": 0.3}
+  ],
+  "loop": true
+}

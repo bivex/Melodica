@@ -227,6 +227,8 @@ class FXRiserGenerator(PhraseGenerator):
                     )
                 )
                 t += step
+        else:
+            raise ValueError(f"Unknown FXRiserGenerator riser_type: {self.riser_type!r}. Valid: noise, synth, orchestra, arp, sub_drop")
 
         return notes
 

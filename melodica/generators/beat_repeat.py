@@ -220,6 +220,8 @@ class BeatRepeatGenerator(PhraseGenerator):
                 notes.append(
                     NoteInfo(pitch=pitch, start=round(t, 6), duration=end - t, velocity=vel)
                 )
+        else:
+            raise ValueError(f"Unknown BeatRepeatGenerator repeat_type: {self.repeat_type!r}. Valid: accelerate, decelerate, constant, gate, glitch, reverse")
 
         return notes
 

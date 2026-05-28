@@ -1,0 +1,7 @@
+{
+  "name": "drone",
+  "events": [
+    {"onset": 0.0, "duration": 4.0, "velocity_factor": 0.4}
+  ],
+  "loop": true
+}

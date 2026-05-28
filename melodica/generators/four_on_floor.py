@@ -195,6 +195,8 @@ class FourOnFloorGenerator(PhraseGenerator):
                                 velocity=max(1, vel),
                             )
                         )
+            else:
+                raise ValueError(f"Unknown FourOnFloorGenerator variant: {self.variant!r}. Valid: house, techno, disco, progressive")
 
             # Crash on first bar of phrase
             if bar % 16 == 0 and bar < duration_beats:

@@ -112,13 +112,41 @@ def _populate_library():
         for path in cwd_dir.rglob("*.json"):
             _load_file(path)
             
-    # 3. Hardcoded fallback in case both directories are missing or unreadable
+    # 3. Aliases for short names used in older album scripts
+    _ALIASES = {
+        "gavotte": "cls_gavotte_2_2",
+        "shamisen_jongara": "jp_shamisen_jongara_16th",
+        "jrpg_battle": "jp_jrpg_battle_16th",
+        "touhou_boss_theme": "jp_touhou_boss_16th",
+        "koto_sakura_sakura": "jp_koto_sakura_3_4",
+        "noh_taiko_mitsuji": "jp_noh_taiko_8th",
+        "bon_odori": "jp_bon_odori_2_4",
+        "shakuhachi_ma": "jp_shakuhachi_free",
+        "gagaku_kakko_pattern": "jp_gagaku_kakko_8th",
+        "yatai_bayashi": "jp_yatai_festival_8th",
+        "city_pop_groove": "jp_city_pop_groove_16th",
+        "jrock_gallop": "jp_jrock_gallop_8th",
+        "visual_kei_tremolo": "jp_vkei_tremolo_16th",
+        "alberti_bass": "cls_alberti_8th",
+        "bolero_ravel": "cls_bolero_ravel_3_4",
+        "hc_chip_8bit_loop": "hc_chip_loop_8th",
+        "hc_arcade_simple": "hc_arcade_simple_8th",
+        "hc_fever_mode": "hc_fever_16th",
+        "lofi_lazy_hats": "lofi_lazy_hats_8th",
+        "downtempo_piano_stabs": "downtempo_stabs_8th",
+    }
+    for alias, target in _ALIASES.items():
+        if alias not in RHYTHM_LIBRARY and target in RHYTHM_LIBRARY:
+            RHYTHM_LIBRARY[alias] = RHYTHM_LIBRARY[target]
+            _RHYTHM_LOOP_PREFERENCE[alias] = _RHYTHM_LOOP_PREFERENCE.get(target, True)
+
+    # 4. Hardcoded fallback in case both directories are missing or unreadable
     if "straight_quarters" not in RHYTHM_LIBRARY:
         fallback_events = [RhythmEvent(float(i), 1.0) for i in range(4)]
         RHYTHM_LIBRARY["straight_quarters"] = fallback_events
         _RHYTHM_LOOP_PREFERENCE["straight_quarters"] = True
 
-    # 4. Register standard dynamic rhythms
+    # 5. Register standard dynamic rhythms
     from melodica.rhythm.markov_rhythm import MarkovRhythmGenerator
     from melodica.rhythm.probabilistic import ProbabilisticRhythmGenerator
     
@@ -144,8 +172,20 @@ def _populate_library():
         lambda **kw: ProbabilisticRhythmGenerator(**{"grid_resolution": 0.25, "density": 0.55, "syncopation": 0.25, **kw})
     )
     register_dynamic_rhythm(
-        "probabilistic:sparse", 
+        "probabilistic:sparse",
         lambda **kw: ProbabilisticRhythmGenerator(**{"grid_resolution": 0.5, "density": 0.3, "syncopation": 0.1, **kw})
+    )
+    register_dynamic_rhythm(
+        "markov:slow",
+        lambda **kw: MarkovRhythmGenerator(**{"style": "ballad", "syncopation": 0.05, "phrase_length": 4, "downbeat_preference": 0.5, **kw})
+    )
+    register_dynamic_rhythm(
+        "markov:dirge",
+        lambda **kw: MarkovRhythmGenerator(**{"style": "ballad", "syncopation": 0.0, "phrase_length": 2, "downbeat_preference": 0.7, **kw})
+    )
+    register_dynamic_rhythm(
+        "arpeggio:slow",
+        lambda **kw: MarkovRhythmGenerator(**{"style": "straight", "syncopation": 0.0, "phrase_length": 8, "downbeat_preference": 0.4, **kw})
     )
 
 

@@ -114,6 +114,8 @@ class NebulaGenerator(PhraseGenerator):
             notes = self._granular(chords, key, duration_beats, mid)
         elif self.variant == "stasis":
             notes = self._stasis(chords, key, duration_beats, mid)
+        else:
+            raise ValueError(f"Unknown NebulaGenerator variant: {self.variant!r}. Valid: cloud, cascade, swell, granular, stasis")
 
         if chords:
             last_chord = chords[-1]
