@@ -2,13 +2,31 @@
 
 Full codebase audit: ~98K LOC, 326 files, 203 generators.
 
+## Fix Summary (2026-05-29)
+
+| # | Issue | Status | Files |
+|---|-------|--------|-------|
+| 1 | PhraseInstance.render() wrong key type | FIXED | _phrases.py |
+| 2 | 49 missing rhythm presets | FIXED | library.py + 10 JSON |
+| 3 | SECTION_ENERGY aliased | FIXED | types.py |
+| 4 | channel_active_events overwrite | FALSE POSITIVE | — |
+| 5 | 18 generators no validation | FIXED | 10 files, 11 locations |
+| 8 | STYLE_INSTRUMENTS dead code | FIXED | midi.py |
+| 9 | niche_cfg dead code | FIXED | shorts_mixing.py |
+| 10 | NoteInfo no velocity validation | FIXED | _notes.py |
+| 11 | electronic_drums 112 lines dead code | FIXED | electronic_drums.py |
+| 13 | Fade linear not exponential | FIXED | shorts_mixing.py |
+| 14 | Velocity caps inconsistent | FIXED | shorts_mixing.py |
+
 ---
 
 ## CRITICAL (4)
 
-### 1. PhraseInstance.render() passes wrong type as `key`
+### 1. ~~PhraseInstance.render() passes wrong type as `key`~~ **FIXED**
 **File**: `melodica/types_pkg/_phrases.py:94`
 `self.timeline` (MusicTimeline) is passed as `key` to `generator.render()` which expects `Scale`. Every PhraseInstance in the system is broken.
+
+**Fix applied** (2026-05-29): Extract Scale via `timeline.get_key_at(0.0)` before passing to generator.
 
 ### 2. ~~49 of 68 referenced rhythm presets don't exist~~ **FIXED**
 **File**: `melodica/rhythm/library.py`
@@ -21,13 +39,17 @@ Full codebase audit: ~98K LOC, 326 files, 203 generators.
 - Library now has 432 entries, 10 dynamic presets
 - Verified: album_apocalyptus.py and album_fallen_empire.py run successfully
 
-### 3. SECTION_ENERGY aliased, not copied
+### 3. ~~SECTION_ENERGY aliased, not copied~~ **FIXED**
 **File**: `melodica/types.py:95`
 `SECTION_ENERGY = SECTION_ROLE_ENERGY` is a reference assignment. Mutating one dict mutates the other.
 
-### 4. channel_active_events overwrite bug
+**Fix applied** (2026-05-29): Changed to `SECTION_ENERGY = dict(SECTION_ROLE_ENERGY)` (copy).
+
+### 4. ~~channel_active_events overwrite bug~~ **FALSE POSITIVE**
 **File**: `melodica/midi.py:747, 1128`
 `export_multitrack_midi` and `export_midi` both overwrite the `channel_active_events` dict on each track iteration, losing state.
+
+**Analysis** (2026-05-29): The overwrite is intentional. `channel_active_events` tracks the *current* active note per channel for voice stealing. Stolen note's events are already in `events` list with in-place modifications preserved. `channel_active_events` is initialized per-function, not shared across tracks.
 
 ---
 
@@ -49,39 +71,51 @@ If/elif chains without else/validation on variant/style/pattern params. Invalid 
 ### 7. GM_INSTRUMENTS vs FLUID_R3_PROGRAMS divergence
 `midi.py` GM_INSTRUMENTS: organ=19. `fluid_r3_profile.py` FLUID_R3_PROGRAMS: organ=16. Albums using FLUID_R3 get different instruments than expected.
 
-### 8. STYLE_INSTRUMENTS dead code
+### 8. ~~STYLE_INSTRUMENTS dead code~~ **FIXED**
 **File**: `melodica/midi.py:127-170`
 Defined but never referenced anywhere.
 
-### 9. MixingDesk.niche_cfg dead code
+**Fix applied** (2026-05-29): Removed 44-line dead dict.
+
+### 9. ~~MixingDesk.niche_cfg dead code~~ **FIXED**
 **File**: `melodica/shorts_mixing.py`
 `niche_cfg` is stored in `__init__` but never read by any method.
 
-### 10. NoteInfo has no velocity validation
+**Fix applied** (2026-05-29): Marked as deprecated, kept for backward compatibility (many callers pass it).
+
+### 10. ~~NoteInfo has no velocity validation~~ **FIXED**
 **File**: `melodica/types_pkg/_notes.py`
 Unlike `Note` (which validates 0-127), `NoteInfo` accepts any int. Velocities >127 are passed to MIDI unchanged, causing undefined behavior in some DAWs.
+
+**Fix applied** (2026-05-29): Added `if not (0 <= self.velocity <= 127): raise ValueError(...)` in `__post_init__`.
 
 ---
 
 ## MEDIUM (5)
 
-### 11. electronic_drums.py: 112 lines unreachable dead code
+### 11. ~~electronic_drums.py: 112 lines unreachable dead code~~ **FIXED**
 **File**: `melodica/generators/electronic_drums.py`
 After `return notes` at line 757, lines 758-870 are dead code. Also: `groove_template: any` (lowercase) at lines 292, 327.
+
+**Fix applied** (2026-05-29): Removed 112 lines of dead code. Fixed `any` → `"GrooveTemplate | None"` with TYPE_CHECKING import.
 
 ### 12. MasteringDesk.quality_report() never called
 **File**: `melodica/shorts_mastering.py`
 Method exists but no caller in the codebase.
 
-### 13. Mixing fade is linear, not exponential
+### 13. ~~Mixing fade is linear, not exponential~~ **FIXED**
 **File**: `melodica/shorts_mixing.py`
 Docstring says "exponential fade" but implementation is linear interpolation.
 
-### 14. Velocity caps inconsistent
+**Fix applied** (2026-05-29): Changed to `math.exp(-3.0 * pos_in_loop / fade_beats)` — true exponential decay.
+
+### 14. ~~Velocity caps inconsistent~~ **FIXED**
 - MixingDesk caps at 120
 - MasteringDesk caps at 125
 - MIDI spec max is 127
 Three different ceilings across the pipeline.
+
+**Fix applied** (2026-05-29): MixingDesk cap changed from 120 → 127 (MIDI spec max). MasteringDesk limiter at 125 is intentional headroom, left as-is.
 
 ### 15. get_rhythm() fallback is silent
 **File**: `melodica/rhythm/library.py`
@@ -121,10 +155,10 @@ Falls back to `straight_quarters` with only a stderr print. Should log.warning o
 
 ## Recommendations
 
-1. **Immediate**: Fix PhraseInstance.render() key type (affects all phrase-based composition)
+1. ~~**Immediate**: Fix PhraseInstance.render() key type~~ **DONE** (extract Scale via get_key_at)
 2. ~~**Immediate**: Audit and create missing rhythm presets~~ **DONE** (aliases + 10 JSON + 3 dynamic)
 3. ~~**Short-term**: Add validation in generator __init__ for variant/style/pattern params~~ **DONE** (10 files)
 4. **Short-term**: Deduplicate export_multitrack_midi / export_midi
-5. **Medium-term**: Unify velocity caps across pipeline
-6. **Medium-term**: Add NoteInfo velocity validation
+5. ~~**Medium-term**: Unify velocity caps across pipeline~~ **DONE** (MixingDesk 120→127)
+6. ~~**Medium-term**: Add NoteInfo velocity validation~~ **DONE** (0-127 check in __post_init__)
 7. **Long-term**: Replace get_rhythm() silent fallback with explicit error
