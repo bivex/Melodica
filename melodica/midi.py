@@ -120,54 +120,6 @@ GM_INSTRUMENTS: dict[str, int] = {
     "percussion": 0,
 }
 
-
-# ---------------------------------------------------------------------------
-# Default instrument maps per style
-# ---------------------------------------------------------------------------
-STYLE_INSTRUMENTS: dict[str, dict[str, int]] = {
-    "downtempo": {
-        "melody": 88,  # New Age Pad (soft)
-        "melody2": 54,  # Synth Voice
-        "counter": 89,  # Warm Pad
-        "walking_bass": 32,  # Acoustic Bass
-        "dark_bass": 38,  # Synth Bass 1
-        "chords": 88,  # New Age Pad
-        "dark_pad": 92,  # Halo Pad
-        "ambient": 89,  # Warm Pad
-        "arp": 46,  # Harp
-        "ostinato": 45,  # Pizzicato Strings
-        "dyads": 46,  # Harp
-        "fingerpicking": 25,  # Nylon Guitar
-        "percussion": 0,  # Drums
-        "groove": 45,  # Pizzicato Strings
-        "swing": 45,  # Pizzicato Strings
-        "call_response": 49,  # String Ensemble 1
-    },
-    "dark_fantasy": {
-        "melody": 49,  # String Ensemble 1
-        "melody2": 52,  # Synth Strings 2
-        "counter": 51,  # Synth Strings 1
-        "bass": 43,  # Contrabass
-        "chords": 48,  # String Ensemble 2
-        "dark_pad": 88,  # New Age Pad
-        "ambient": 91,  # Sweep Pad
-        "arp": 46,  # Harp
-        "harp_gliss": 46,  # Harp
-        "ostinato": 45,  # Pizzicato Strings
-        "dyads": 46,  # Harp
-        "riff": 30,  # Overdriven Guitar
-        "fingerpicking": 25,  # Nylon Guitar
-        "percussion": 0,  # Drums
-        "groove": 45,  # Pizzicato Strings
-        "call_response": 49,  # String Ensemble 1
-        "canon": 49,  # String Ensemble 1
-        "piano_sweep": 0,  # Acoustic Grand Piano
-        "choir": 52,  # Synth Choir
-        "tremolo": 44,  # Tremolo Strings
-        "staccato": 45,  # Pizzicato Strings
-        "strum": 25,  # Nylon Guitar
-    },
-}
 from melodica.theory import Mode
 from melodica.utils import chord_pitches_closed, chord_pitches_open, chord_pitches_spread
 

@@ -31,8 +31,12 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from melodica.generators import GeneratorParams, PhraseGenerator
+
+if TYPE_CHECKING:
+    from melodica.rhythm.groove_template import GrooveTemplate
 from melodica.generators._postprocess import post_process_808
 from melodica.rhythm import RhythmGenerator
 from melodica.render_context import RenderContext
@@ -289,7 +293,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
     ghost_ride_prob: float = 0.0
     section_type: SectionRole | str = SectionRole.VERSE
     auto_fills: bool = True
-    groove_template: any = None
+    groove_template: "GrooveTemplate | None" = None
     # 808 / transient upgrades
     transient_ducking: bool = False
     ducking_duration: float = 0.02
@@ -324,7 +328,7 @@ class ElectronicDrumsGenerator(PhraseGenerator):
         ghost_ride_prob: float = 0.0,
         section_type: SectionRole | str = SectionRole.VERSE,
         auto_fills: bool = True,
-        groove_template: any = None,
+        groove_template: "GrooveTemplate | None" = None,
         transient_ducking: bool = False,
         ducking_duration: float = 0.02,
         envelope_gating: bool = True,
@@ -751,118 +755,6 @@ class ElectronicDrumsGenerator(PhraseGenerator):
                 if n.pitch != KICK:
                     for kick_start in kick_onsets:
                         if abs(n.start - kick_start) < 0.20 or (n.start <= kick_start < n.start + n.duration):
-                            n.velocity = max(1, int(n.velocity * (1.0 - depth)))
-                            break
-
-        return notes
-        # 1. Swing / Groove Timing & Pocket Timing Offsets
-        for n in notes:
-            shift = 0.0
-
-            # Apply groove template if present
-            if self.groove_template is not None:
-                frac = n.start % 1.0
-                for slot in self.groove_template.slots:
-                    if abs(frac - slot.position) < 0.05:
-                        shift += slot.timing_offset * 0.01
-                        n.velocity = max(1, min(127, int(n.velocity * slot.velocity_factor)))
-                        break
-            elif self.groove_swing > 0.5 and self.swing_grid > 0:
-                # Apply standard swing delay
-                swing_delay = (self.groove_swing - 0.5) * 2.0 * (self.swing_grid / 2.0)
-                grid_pos = n.start % (2.0 * self.swing_grid)
-                is_offbeat = abs(grid_pos - self.swing_grid) < 0.01
-                if is_offbeat:
-                    shift += swing_delay
-
-            # Apply pocket delays
-            if n.pitch in (SNARE, CLAP, RIM):
-                shift += self.snare_delay
-            elif n.pitch in (HH_CLOSED, HH_OPEN):
-                shift += self.hihat_delay
-
-            n.start = round(max(0.0, n.start + shift), 6)
-
-        # 1.5. Physical Hand-to-Foot Coordination Limits Safeguard
-        hand_struck_pitches = {
-            SNARE,
-            CLAP,
-            HH_CLOSED,
-            HH_OPEN,
-            TOM_LOW,
-            TOM_MID,
-            TOM_HIGH,
-            CRASH,
-            RIM,
-            51,
-        }
-        notes.sort(key=lambda x: x.start)
-
-        groups: list[list[NoteInfo]] = []
-        for n in notes:
-            added = False
-            for group in groups:
-                if abs(n.start - group[0].start) < 0.01:
-                    group.append(n)
-                    added = True
-                    break
-            if not added:
-                groups.append([n])
-
-        priority_map = {
-            SNARE: 1,
-            CLAP: 1,
-            CRASH: 2,
-            TOM_HIGH: 3,
-            TOM_MID: 3,
-            TOM_LOW: 3,
-            RIM: 4,
-            HH_OPEN: 5,
-            HH_CLOSED: 5,
-        }
-
-        filtered_notes = []
-        for group in groups:
-            hand_struck = [n for n in group if n.pitch in hand_struck_pitches]
-            other = [n for n in group if n.pitch not in hand_struck_pitches]
-
-            if len(hand_struck) > 2:
-                # Sort by priority
-                hand_struck.sort(key=lambda n: priority_map.get(n.pitch, 99))
-                # Keep top 2, drop the rest
-                filtered_notes.extend(hand_struck[:2])
-                filtered_notes.extend(other)
-            else:
-                filtered_notes.extend(group)
-
-        notes = filtered_notes
-
-        # 2. Hi-Hat Auto-Choking
-        if self.choke_hats:
-            notes.sort(key=lambda x: x.start)
-            for i, n in enumerate(notes):
-                if n.pitch == HH_OPEN:
-                    for j in range(i + 1, len(notes)):
-                        next_n = notes[j]
-                        if next_n.start >= n.start + n.duration:
-                            break
-                        if next_n.pitch == HH_CLOSED:
-                            n.duration = round(max(0.01, next_n.start - n.start - 0.005), 6)
-                            break
-
-        # 3. Post-Process Sidechain Ducking Pass
-        depth = self.sidechain_depth
-        if self.sidechain and depth == 0.0:
-            depth = 0.5  # Backward compatible sidechain ducking depth
-
-        if depth > 0.0:
-            kick_onsets = [n.start for n in notes if n.pitch == KICK]
-            for n in notes:
-                if n.pitch != KICK:
-                    for kick_start in kick_onsets:
-                        if abs(n.start - kick_start) < 0.20 or (
-                            n.start <= kick_start < n.start + n.duration
-                        ):
                             n.velocity = max(1, int(n.velocity * (1.0 - depth)))
                             break
 

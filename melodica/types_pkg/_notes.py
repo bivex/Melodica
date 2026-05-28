@@ -71,6 +71,8 @@ class NoteInfo:
             raise ValueError(f"pitch must be 0–127, got {self.pitch}")
         if self.duration <= 0:
             raise ValueError(f"duration must be > 0, got {self.duration}")
+        if not (0 <= self.velocity <= 127):
+            raise ValueError(f"velocity must be 0–127, got {self.velocity}")
 
     def shift_time(self, offset: float) -> NoteInfo:
         self.start += offset

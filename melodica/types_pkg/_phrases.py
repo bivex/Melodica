@@ -91,7 +91,8 @@ class PhraseInstance:
             timeline = MusicTimeline(chords=chords, keys=[KeyLabel(scale=timeline, start=0, duration=total_beats)])
 
         if self.generator:
-            notes = self.generator.render(chords, timeline, total_beats, context)
+            key_scale = timeline.get_key_at(0.0) if hasattr(timeline, "get_key_at") else timeline
+            notes = self.generator.render(chords, key_scale, total_beats, context)
         else:
             notes = list(self.static.notes) if self.static else []
 

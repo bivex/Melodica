@@ -14,6 +14,7 @@ Usage:
     tracks = desk.apply_mixing(tracks, sections, bpm)
 """
 
+import math
 from typing import Dict, List, Tuple
 from dataclasses import dataclass, field
 from melodica.types import NoteInfo
@@ -23,7 +24,6 @@ from melodica.types import NoteInfo
 class MixingDesk:
     """Central mixing console — applies gain staging, automation, and balance."""
 
-    niche_cfg: dict
     # Per-track gain multipliers (target velocity ranges)
     track_gains: Dict[str, float] = field(
         default_factory=lambda: {
@@ -104,7 +104,7 @@ class MixingDesk:
                     self.section_faders.get(section, {}).get(track_name, 1.0) if section else 1.0
                 )
                 total_gain = gain * fader
-                new_vel = min(120, max(1, int(n.velocity * total_gain)))
+                new_vel = min(127, max(1, int(n.velocity * total_gain)))
                 new_notes.append(
                     NoteInfo(
                         pitch=n.pitch,
@@ -148,9 +148,9 @@ class MixingDesk:
             new_notes = []
             for n in notes:
                 if n.start >= loop_start_beat:
-                    # Calculate fade factor based on how far into loop
+                    # Exponential fade factor (matches docstring)
                     pos_in_loop = n.start - loop_start_beat
-                    factor = max(0.0, 1.0 - (pos_in_loop / fade_beats))
+                    factor = math.exp(-3.0 * pos_in_loop / fade_beats) if fade_beats > 0 else 0.0
                     if factor < 0.01:
                         continue  # drop silent notes
                     new_vel = max(1, int(n.velocity * factor))

@@ -91,8 +91,8 @@ SECTION_FUNCTION_ENERGY: dict[SectionFunction, float] = {
     SectionFunction.HOLD: 0.0,
 }
 
-# Backward compat
-SECTION_ENERGY = SECTION_ROLE_ENERGY
+# Backward compat (copy to avoid shared mutation)
+SECTION_ENERGY = dict(SECTION_ROLE_ENERGY)
 
 
 from melodica.types_pkg._notes import (
