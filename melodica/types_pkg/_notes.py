@@ -64,7 +64,7 @@ class NoteInfo:
     velocity: int = 64
     absolute: bool = False
     articulation: str | None = None  # 'sustain', 'staccato', 'pizzicato', etc.
-    expression: dict[int, int] = field(default_factory=dict)  # CC controller data {cc_num: value}
+    expression: dict[int | str, int | list[tuple[float, int]]] = field(default_factory=dict)  # CC data: {cc_num: value} or {"pitch_bend": val/[(t, val)]}
 
     def __post_init__(self) -> None:
         if not (0 <= self.pitch <= 127):

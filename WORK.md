@@ -162,3 +162,63 @@ Falls back to `straight_quarters` with only a stderr print. Should log.warning o
 5. ~~**Medium-term**: Unify velocity caps across pipeline~~ **DONE** (MixingDesk 120→127)
 6. ~~**Medium-term**: Add NoteInfo velocity validation~~ **DONE** (0-127 check in __post_init__)
 7. **Long-term**: Replace get_rhythm() silent fallback with explicit error
+
+---
+
+## MIDI Deep Audit (2026-05-29)
+
+| # | Issue | Status | Files |
+|---|-------|--------|-------|
+| M1 | export_midi expression validation | FIXED | midi.py |
+| M2 | NoteInfo.expression wrong type annotation | FIXED | _notes.py |
+| M3 | FLUID_R3_PROGRAMS dead code | FALSE POSITIVE | 11 scripts import it |
+| M4 | import random inside loop | FIXED | midi.py |
+| M5 | STYLE_INSTRUMENTS ImportError | FIXED | midi.py |
+| M6 | virtual_midi drops pitch_bend + crashes on list CC | FIXED | virtual_midi.py |
+| M7 | Voice stealing consecutive-steal bug | LATENT | midi.py (deferred) |
+| M8 | Double humanization | DESIGN | callers (deferred) |
+
+### M1. ~~export_midi expression validation~~ **FIXED**
+**File**: `melodica/midi.py:1040-1058`
+`export_midi` had no `isinstance(cc_num, int)` guard — if expression had a string key other than "pitch_bend", it would pass garbage to mido.
+
+**Fix**: Reordered to match `export_multitrack_midi` pattern: int CC check first, then pitch_bend elif.
+
+### M2. ~~NoteInfo.expression type annotation wrong~~ **FIXED**
+**File**: `melodica/types_pkg/_notes.py`
+Type was `dict[int, int]` but expression holds `{"pitch_bend": [(t, val)]}` (string key, list value).
+
+**Fix**: Changed to `dict[int | str, int | list[tuple[float, int]]]`.
+
+### M3. ~~FLUID_R3_PROGRAMS dead code~~ **FALSE POSITIVE**
+11 album scripts import it. Not dead code.
+
+### M4. ~~import random inside loop~~ **FIXED**
+**File**: `melodica/midi.py` (3 locations inside humanization loops)
+`import random` was inside loops, re-imported every iteration.
+
+**Fix**: Added `import random` at module level, removed 3 inner imports.
+
+### M5. ~~STYLE_INSTRUMENTS ImportError~~ **FIXED**
+**File**: `melodica/midi.py`
+`STYLE_INSTRUMENTS` was removed as "dead code" but `dark_fantasy_v3.py:85` and `df_downtempo.py:71` import it.
+
+**Fix**: Re-added STYLE_INSTRUMENTS dict with "downtempo" and "dark_fantasy" keys.
+
+### M6. ~~virtual_midi expression handling broken~~ **FIXED**
+**File**: `melodica/virtual_midi.py:294-304`
+- Silently dropped `"pitch_bend"` entries (not in int check)
+- Crashed on list-valued CC data (`cc_val` passed directly to mido which expects int)
+
+**Fix**: Added pitch_bend handling with `mido.Message("pitchwheel", ...)` and list value iteration.
+
+### M7. Voice stealing consecutive-steal bug (LATENT)
+**File**: `melodica/midi.py:582-612` and `989-1020`
+When two notes steal the same channel in quick succession, the first stolen note's note_off event uses the truncated duration, but the second steal may overwrite `channel_active_events` before the first note_off is emitted. Only manifests with very small channel pools and overlapping notes.
+
+**Deferred**: Requires careful redesign of the voice stealing state machine.
+
+### M8. Double humanization (DESIGN)
+Some callers apply `humanize()` on NoteInfo objects, then pass them through `export_midi(apply_humanize=True)` which applies a second pass. Timing/velocity noise compounds.
+
+**Deferred**: Caller-level issue, not a code bug.

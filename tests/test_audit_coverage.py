@@ -285,9 +285,11 @@ class TestGeneratorValidation:
 # ---------------------------------------------------------------------------
 
 class TestDeadCodeRemoved:
-    def test_style_instruments_not_in_midi(self):
+    def test_style_instruments_readded_for_scripts(self):
+        """STYLE_INSTRUMENTS was re-added because 2 scripts depend on it."""
         import melodica.midi as midi_mod
-        assert not hasattr(midi_mod, "STYLE_INSTRUMENTS"), "STYLE_INSTRUMENTS should be removed"
+        assert hasattr(midi_mod, "STYLE_INSTRUMENTS")
+        assert "downtempo" in midi_mod.STYLE_INSTRUMENTS
 
 
 # ---------------------------------------------------------------------------
@@ -385,3 +387,112 @@ class TestMixingDeskVelocityCap:
         from melodica.shorts_mixing import MixingDesk
         gain = MixingDesk._auto_gain([])
         assert gain == 1.0
+
+
+# ---------------------------------------------------------------------------
+# MIDI Deep Audit — STYLE_INSTRUMENTS re-added (#7)
+# ---------------------------------------------------------------------------
+
+class TestStyleInstruments:
+    def test_style_instruments_exists(self):
+        import melodica.midi as midi_mod
+        assert hasattr(midi_mod, "STYLE_INSTRUMENTS")
+
+    def test_style_instruments_has_downtempo(self):
+        from melodica.midi import STYLE_INSTRUMENTS
+        assert "downtempo" in STYLE_INSTRUMENTS
+        assert "melody" in STYLE_INSTRUMENTS["downtempo"]
+
+    def test_style_instruments_has_dark_fantasy(self):
+        from melodica.midi import STYLE_INSTRUMENTS
+        assert "dark_fantasy" in STYLE_INSTRUMENTS
+        assert "melody" in STYLE_INSTRUMENTS["dark_fantasy"]
+
+    def test_style_instruments_values_are_ints(self):
+        from melodica.midi import STYLE_INSTRUMENTS
+        for style, mapping in STYLE_INSTRUMENTS.items():
+            for track, program in mapping.items():
+                assert isinstance(program, int), f"{style}.{track} not int"
+                assert 0 <= program <= 127, f"{style}.{track}={program} out of GM range"
+
+
+# ---------------------------------------------------------------------------
+# MIDI Deep Audit — NoteInfo.expression type annotation (#2)
+# ---------------------------------------------------------------------------
+
+class TestNoteInfoExpressionType:
+    def test_expression_accepts_pitch_bend_string_key(self):
+        n = NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80,
+                     expression={"pitch_bend": 100})
+        assert n.expression["pitch_bend"] == 100
+
+    def test_expression_accepts_pitch_bend_list_value(self):
+        n = NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80,
+                     expression={"pitch_bend": [(0.0, 0), (0.5, 200)]})
+        assert len(n.expression["pitch_bend"]) == 2
+
+    def test_expression_accepts_cc_int_key(self):
+        n = NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80,
+                     expression={11: 80, 1: 64})
+        assert n.expression[11] == 80
+
+    def test_expression_accepts_cc_list_value(self):
+        n = NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80,
+                     expression={11: [(0.0, 0), (0.5, 127)]})
+        assert len(n.expression[11]) == 2
+
+
+# ---------------------------------------------------------------------------
+# MIDI Deep Audit — export_midi expression validation (#1)
+# ---------------------------------------------------------------------------
+
+class TestExportMidiExpressionValidation:
+    def test_export_midi_runs_with_pitch_bend_expression(self):
+        """export_midi should handle pitch_bend in expression without crashing."""
+        import tempfile, os
+        from melodica.midi import export_midi
+        from melodica.types import Track
+        notes = [NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80,
+                          expression={"pitch_bend": [(0.0, 0), (0.5, 500)]})]
+        tracks = [Track(name="test", notes=notes)]
+        with tempfile.NamedTemporaryFile(suffix=".mid", delete=False) as f:
+            path = f.name
+        try:
+            export_midi(tracks, path, bpm=120)
+            assert os.path.getsize(path) > 0
+        finally:
+            os.unlink(path)
+
+    def test_export_midi_runs_with_cc_list_expression(self):
+        """export_midi should handle list-valued CC data without crashing."""
+        import tempfile, os
+        from melodica.midi import export_midi
+        from melodica.types import Track
+        notes = [NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80,
+                          expression={11: [(0.0, 0), (0.5, 127)]})]
+        tracks = [Track(name="test", notes=notes)]
+        with tempfile.NamedTemporaryFile(suffix=".mid", delete=False) as f:
+            path = f.name
+        try:
+            export_midi(tracks, path, bpm=120)
+            assert os.path.getsize(path) > 0
+        finally:
+            os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# MIDI Deep Audit — import random at module level (#4)
+# ---------------------------------------------------------------------------
+
+class TestImportRandomModuleLevel:
+    def test_random_imported_at_module_level(self):
+        """random should be importable from midi module level, not inside loops."""
+        import ast, melodica.midi as midi_mod
+        # Parse the source and check for 'import random' at module level
+        with open(midi_mod.__file__) as f:
+            tree = ast.parse(f.read())
+        module_imports = [
+            node for node in ast.iter_child_nodes(tree)
+            if isinstance(node, ast.Import) and any(a.name == "random" for a in node.names)
+        ]
+        assert len(module_imports) >= 1, "random should be imported at module level"

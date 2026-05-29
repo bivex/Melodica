@@ -293,15 +293,49 @@ class VirtualMidiOut:
                 # Per-note expression CCs
                 for cc_num, cc_val in n.expression.items():
                     if isinstance(cc_num, int) and 0 <= cc_num <= 127:
-                        events.append((
-                            onset,
-                            mido.Message(
-                                "control_change",
-                                control=cc_num,
-                                value=max(0, min(127, cc_val)),
-                                channel=ch,
-                            ).bytes(),
-                        ))
+                        if isinstance(cc_val, list):
+                            for rel_time, val in cc_val:
+                                t = max(0.0, onset + rel_time)
+                                events.append((
+                                    t,
+                                    mido.Message(
+                                        "control_change",
+                                        control=cc_num,
+                                        value=max(0, min(127, int(val))),
+                                        channel=ch,
+                                    ).bytes(),
+                                ))
+                        else:
+                            events.append((
+                                onset,
+                                mido.Message(
+                                    "control_change",
+                                    control=cc_num,
+                                    value=max(0, min(127, int(cc_val))),
+                                    channel=ch,
+                                ).bytes(),
+                            ))
+                    elif cc_num == "pitch_bend":
+                        if isinstance(cc_val, list):
+                            for rel_time, val in cc_val:
+                                t = max(0.0, onset + rel_time)
+                                events.append((
+                                    t,
+                                    mido.Message(
+                                        "pitchwheel",
+                                        pitch=max(-8192, min(8191, int(val))),
+                                        channel=ch,
+                                    ).bytes(),
+                                ))
+                        else:
+                            events.append((
+                                onset,
+                                mido.Message(
+                                    "pitchwheel",
+                                    pitch=max(-8192, min(8191, int(cc_val))),
+                                    channel=ch,
+                                ).bytes(),
+                            ))
 
         # Sort: note_off before note_on at same timestamp
         events.sort(key=lambda e: (e[0], 1 if b"\x90" <= e[1][:1] <= b"\x9f" else 0))

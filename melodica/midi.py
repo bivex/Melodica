@@ -29,6 +29,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import math
+import random
+
 import mido  # type: ignore
 
 from melodica.types import ChordLabel, Note, NoteInfo, Track, Scale, MusicTimeline
@@ -118,6 +120,55 @@ GM_INSTRUMENTS: dict[str, int] = {
     "taiko": 116,
     "drums": 0,
     "percussion": 0,
+}
+
+
+# ---------------------------------------------------------------------------
+# Style Instrument Overrides — per-style GM program overrides
+# ---------------------------------------------------------------------------
+STYLE_INSTRUMENTS: dict[str, dict[str, int]] = {
+    "downtempo": {
+        "melody": 88,  # New Age Pad (soft)
+        "melody2": 54,  # Synth Voice
+        "counter": 89,  # Warm Pad
+        "walking_bass": 32,  # Acoustic Bass
+        "dark_bass": 38,  # Synth Bass 1
+        "chords": 88,  # New Age Pad
+        "dark_pad": 92,  # Halo Pad
+        "ambient": 89,  # Warm Pad
+        "arp": 46,  # Harp
+        "ostinato": 45,  # Pizzicato Strings
+        "dyads": 46,  # Harp
+        "fingerpicking": 25,  # Nylon Guitar
+        "percussion": 0,  # Drums
+        "groove": 45,  # Pizzicato Strings
+        "swing": 45,  # Pizzicato Strings
+        "call_response": 49,  # String Ensemble 1
+    },
+    "dark_fantasy": {
+        "melody": 49,  # String Ensemble 1
+        "melody2": 52,  # Synth Strings 2
+        "counter": 51,  # Synth Strings 1
+        "bass": 43,  # Contrabass
+        "chords": 48,  # String Ensemble 2
+        "dark_pad": 88,  # New Age Pad
+        "ambient": 91,  # Sweep Pad
+        "arp": 46,  # Harp
+        "harp_gliss": 46,  # Harp
+        "ostinato": 45,  # Pizzicato Strings
+        "dyads": 46,  # Harp
+        "riff": 30,  # Overdriven Guitar
+        "fingerpicking": 25,  # Nylon Guitar
+        "percussion": 0,  # Drums
+        "groove": 45,  # Pizzicato Strings
+        "call_response": 49,  # String Ensemble 1
+        "canon": 49,  # String Ensemble 1
+        "piano_sweep": 0,  # Acoustic Grand Piano
+        "choir": 52,  # Synth Choir
+        "tremolo": 44,  # Tremolo Strings
+        "staccato": 45,  # Pizzicato Strings
+        "strum": 25,  # Nylon Guitar
+    },
 }
 
 from melodica.theory import Mode
@@ -535,7 +586,6 @@ def export_multitrack_midi(
         for n in notes:
             onset = max(0.0, n.start)
             if humanize:
-                import random
                 jitter_beats = random.uniform(-0.015, 0.015) * (bpm / 60.0)
                 onset = max(0.0, onset + jitter_beats)
             jittered_notes.append({
@@ -667,7 +717,6 @@ def export_multitrack_midi(
                     for step in range(cc_steps + 1):
                         t_beat = onset + (step / cc_steps) * duration
                         phase = (t_beat - onset) * math.pi / 2.0
-                        import random
                         jitter = random.uniform(-4, 4)
                         val = 75 + int(math.sin(phase) * 30) + int(jitter)
                         note_events.append([round(t_beat * tpb), "control_change", 11, max(0, min(127, val)), assigned_ch])
@@ -942,7 +991,6 @@ def export_midi(
         for n in t.notes:
             onset = max(0.0, n.start)
             if humanize:
-                import random
                 jitter_beats = random.uniform(-0.015, 0.015) * (bpm / 60.0)
                 onset = max(0.0, onset + jitter_beats)
             jittered_notes.append({
@@ -1042,7 +1090,13 @@ def export_midi(
                 for cc_num, cc_val in n.expression.items():
                     if cc_num == 11:
                         has_cc11 = True
-                    if cc_num == "pitch_bend":
+                    if isinstance(cc_num, int) and 0 <= cc_num <= 127:
+                        if isinstance(cc_val, list):
+                            for rel_time, val in cc_val:
+                                note_events.append([round((onset + rel_time) * tpb), "control_change", cc_num, max(0, min(127, int(val))), assigned_ch])
+                        else:
+                            note_events.append([on_tick, "control_change", cc_num, max(0, min(127, int(cc_val))), assigned_ch])
+                    elif cc_num == "pitch_bend":
                         if isinstance(cc_val, list):
                             for rel_time, val in cc_val:
                                 t_bend = max(-8192, min(8191, bend_value + int(val)))
@@ -1051,12 +1105,6 @@ def export_midi(
                         else:
                             custom_bend = int(cc_val)
                             has_custom_bend = True
-                    else:
-                        if isinstance(cc_val, list):
-                            for rel_time, val in cc_val:
-                                note_events.append([round((onset + rel_time) * tpb), "control_change", cc_num, max(0, min(127, int(val))), assigned_ch])
-                        else:
-                            note_events.append([on_tick, "control_change", cc_num, max(0, min(127, int(cc_val))), assigned_ch])
 
             if not has_dynamic_bend:
                 total_bend = max(-8192, min(8191, bend_value + custom_bend))
