@@ -969,6 +969,11 @@ class IdeaTool:
                 constraints = []
                 if part.progression_list:
                     prog_str = " ".join(part.progression_list)
+                    # If progression_list items don't have explicit durations,
+                    # inject bar-aligned durations for non-4/4 time
+                    if beats_per_bar != 4.0 and not any(":" in t for t in part.progression_list):
+                        dur_str = str(beats_per_bar)
+                        prog_str = " - ".join(f"{t}:{dur_str}" for t in part.progression_list)
                     constraints = parse_progression(prog_str, scale)
 
                 harmonizer = CoupledHMMHarmonizer(

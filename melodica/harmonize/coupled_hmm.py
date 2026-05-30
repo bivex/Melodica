@@ -50,6 +50,31 @@ TYPE_TO_QUALITY = [
     Quality.ADD9,        # 11
 ]
 
+# Reverse map: Quality → type index (for constraints)
+_QUALITY_TO_TYPE = {q: i for i, q in enumerate(TYPE_TO_QUALITY)}
+
+# Fallback map for unsupported qualities → closest supported type
+_QUALITY_FALLBACK = {
+    Quality.HALF_DIM7: Quality.MINOR7,
+    Quality.FULL_DIM7: Quality.DIMINISHED,
+    Quality.POWER: Quality.MAJOR,
+    Quality.DOM7_FLAT9: Quality.DOMINANT7,
+    Quality.DOM7_SHARP9: Quality.DOMINANT7,
+    Quality.DOM7_SHARP11: Quality.DOMINANT7,
+    Quality.ALTERED_DOMINANT: Quality.DOMINANT7,
+    Quality.PHRYGIAN_MAJOR: Quality.MAJOR,
+    Quality.LYDIAN_AUG: Quality.AUGMENTED,
+}
+
+
+def _resolve_type_idx(quality: Quality) -> int:
+    """Map any Quality to a valid HMM type index, with fallback."""
+    idx = _QUALITY_TO_TYPE.get(quality)
+    if idx is not None:
+        return idx
+    fallback = _QUALITY_FALLBACK.get(quality, Quality.MAJOR)
+    return _QUALITY_TO_TYPE[fallback]
+
 # ---------------------------------------------------------------------------
 # Weight Loading
 # ---------------------------------------------------------------------------
@@ -187,6 +212,10 @@ class CoupledHMMHarmonizer:
         observations = self._extract_observations(melody, change_points)
         T = len(observations)
 
+        # 1b. Snap constraints to change points
+        if constraints and change_points:
+            constraints = self._snap_constraints(constraints, change_points)
+
         # 2. Layer 1: Notes -> Chords (108 states)
         chord_path = self._viterbi_chords(observations, initial_scale, change_points, constraints, tension_curve)
 
@@ -242,9 +271,6 @@ class CoupledHMMHarmonizer:
 
             emit[t_step] = step_emit / (total_w + 1e-6)
 
-        # Map Quality to index for constraints
-        quality_to_idx = {q: i for i, q in enumerate(TYPE_TO_QUALITY)}
-
         # Tension indices
         STABLE_INDICES = {0, 1, 11}
         UNSTABLE_INDICES = {2, 3, 8}
@@ -285,7 +311,7 @@ class CoupledHMMHarmonizer:
             cp = change_points[0]
             target = next((c for c in constraints if c.start <= cp < c.start + c.duration), None)
             if target:
-                t_idx = quality_to_idx.get(target.quality)
+                t_idx = _resolve_type_idx(target.quality)
                 for r in range(N_TONES):
                     for k in range(N_TYPES):
                         if r != target.root or k != t_idx:
@@ -337,7 +363,7 @@ class CoupledHMMHarmonizer:
             backtrack[t_step] = best_prev
 
             if target_chord:
-                t_idx = quality_to_idx.get(target_chord.quality)
+                t_idx = _resolve_type_idx(target_chord.quality)
                 for r in range(N_TONES):
                     for k in range(N_TYPES):
                         if r != target_chord.root or k != t_idx:
@@ -446,6 +472,33 @@ class CoupledHMMHarmonizer:
             pts.append(round(t, 6))
             t += step
         return pts
+
+    @staticmethod
+    def _snap_constraints(constraints: list[ChordLabel], change_points: list[float]) -> list[ChordLabel]:
+        """Snap constraint start/duration to the nearest change points."""
+        if not change_points:
+            return constraints
+        snapped = []
+        for c in constraints:
+            # Find nearest change point to constraint start
+            best_cp = min(change_points, key=lambda cp: abs(cp - c.start))
+            # Find the change point that covers the constraint end
+            c_end = c.start + c.duration
+            # Pick the first cp >= c_end, or last cp + step
+            end_cp = None
+            for i, cp in enumerate(change_points):
+                if cp >= c_end - 0.01:
+                    end_cp = cp
+                    break
+            if end_cp is None:
+                end_cp = c_end
+            new_dur = max(end_cp - best_cp, change_points[1] - change_points[0] if len(change_points) > 1 else 4.0)
+            snapped.append(ChordLabel(
+                root=c.root, quality=c.quality, extensions=c.extensions,
+                bass=c.bass, inversion=c.inversion,
+                start=round(best_cp, 6), duration=round(new_dur, 6),
+            ))
+        return snapped
 
     def _extract_observations(self, melody: list[NoteInfo], change_points: list[float]) -> list[list[WeightedNote]]:
         observations = []

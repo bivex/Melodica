@@ -831,3 +831,263 @@ class TestProgressionConstraints:
         result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
         total = sum(c.duration for c in result)
         assert abs(total - 16.0) < 0.01
+
+
+# ===========================================================================
+# 10. Constrained HMM: quality fallback
+# ===========================================================================
+
+class TestConstrainedQualityFallback:
+
+    def test_half_dim7_does_not_crash(self):
+        """HALF_DIM7 constraint should fall back to MINOR7, not kill all states."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=11, quality=Quality.HALF_DIM7, start=0.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=4.0, duration=4.0),
+            ChordLabel(root=7, quality=Quality.DOMINANT7, start=8.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=12.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert len(result) == 4
+        assert result[0].root == 11
+        assert result[0].quality == Quality.MINOR7
+
+    def test_full_dim7_does_not_crash(self):
+        """FULL_DIM7 should fall back to DIMINISHED."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=2, quality=Quality.FULL_DIM7, start=0.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=4.0, duration=12.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert result[0].root == 2
+        assert result[0].quality == Quality.DIMINISHED
+
+    def test_power_chord_fallback(self):
+        """POWER should fall back to MAJOR."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=0, quality=Quality.POWER, start=0.0, duration=4.0),
+            ChordLabel(root=5, quality=Quality.POWER, start=4.0, duration=4.0),
+            ChordLabel(root=7, quality=Quality.POWER, start=8.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.POWER, start=12.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert len(result) == 4
+        assert result[0].quality == Quality.MAJOR
+        assert result[1].quality == Quality.MAJOR
+
+    def test_dom7_flat9_fallback(self):
+        """DOM7_FLAT9 should fall back to DOMINANT7."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=7, quality=Quality.DOM7_FLAT9, start=0.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=4.0, duration=12.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert result[0].root == 7
+        assert result[0].quality == Quality.DOMINANT7
+
+    def test_exotic_quality_does_not_produce_garbage(self):
+        """Exotic quality should produce valid chords (roots 0-11, positive durations)."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=0, quality=Quality.SPECTRAL_CHORD, start=0.0, duration=4.0),
+            ChordLabel(root=7, quality=Quality.ALTERED_DOMINANT, start=4.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=8.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=12.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert len(result) == 4
+        for c in result:
+            assert 0 <= c.root < 12
+            assert c.duration > 0
+        total = sum(c.duration for c in result)
+        assert abs(total - 16.0) < 0.01
+
+
+# ===========================================================================
+# 11. Constrained HMM: alignment snapping
+# ===========================================================================
+
+class TestConstrainedAlignment:
+
+    def test_slightly_off_grid_snaps(self):
+        """Constraint with start=0.001 should snap to change_point=0.0."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=0, quality=Quality.MAJOR, start=0.001, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert result[0].root == 0
+
+    def test_non_matching_duration_still_constrains(self):
+        """Constraint with duration=3.0 should still snap to the bar grid."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=5, quality=Quality.MAJOR, start=0.0, duration=3.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert result[0].root == 5
+
+    def test_mid_bar_constraint_snaps(self):
+        """Constraint starting at beat 1.0 should snap to nearest change point."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=2, quality=Quality.MINOR, start=1.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        # Should snap to 0.0 (nearest cp to 1.0)
+        assert result[0].root == 2
+
+    def test_no_snap_needed_when_aligned(self):
+        """Already-aligned constraints should be unchanged."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=0, quality=Quality.MAJOR, start=0.0, duration=4.0),
+            ChordLabel(root=5, quality=Quality.MAJOR, start=4.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert result[0].root == 0
+        assert result[1].root == 5
+
+
+# ===========================================================================
+# 12. Constrained HMM: time signatures
+# ===========================================================================
+
+class TestConstrainedTimeSignatures:
+
+    def test_3_4_time_constraints(self):
+        """3/4 time: constraints should adapt to 3-beat bars."""
+        from melodica.types import BarGrid
+        grid = BarGrid(numerator=3, denominator=4)
+        h = CoupledHMMHarmonizer(chord_change="bars", bar_grid=grid)
+        melody = [N(60, i * 0.5, 0.5) for i in range(24)]
+        # In 3/4, each bar = 3 beats, 8 bars = 24 beats
+        constraints = [
+            ChordLabel(root=0, quality=Quality.MAJOR, start=0.0, duration=3.0),
+            ChordLabel(root=5, quality=Quality.MAJOR, start=3.0, duration=3.0),
+            ChordLabel(root=7, quality=Quality.DOMINANT7, start=6.0, duration=3.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=9.0, duration=3.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=12.0, constraints=constraints)
+        assert len(result) == 4
+        assert result[0].root == 0
+        assert result[1].root == 5
+        assert result[2].root == 7
+        assert result[3].root == 0
+        total = sum(c.duration for c in result)
+        assert abs(total - 12.0) < 0.01
+
+    def test_5_4_time_constraints(self):
+        """5/4 time: constraints should work with 5-beat bars."""
+        from melodica.types import BarGrid
+        grid = BarGrid(numerator=5, denominator=4)
+        h = CoupledHMMHarmonizer(chord_change="bars", bar_grid=grid)
+        melody = [N(60, i * 0.5, 0.5) for i in range(20)]
+        constraints = [
+            ChordLabel(root=0, quality=Quality.MAJOR, start=0.0, duration=5.0),
+            ChordLabel(root=7, quality=Quality.DOMINANT7, start=5.0, duration=5.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=10.0, constraints=constraints)
+        assert result[0].root == 0
+        assert result[1].root == 7
+        total = sum(c.duration for c in result)
+        assert abs(total - 10.0) < 0.01
+
+    def test_6_8_time_half_bar_changes(self):
+        """6/8 time with half-bar changes: change points every 1.5 beats."""
+        from melodica.types import BarGrid
+        grid = BarGrid(numerator=6, denominator=8)
+        h = CoupledHMMHarmonizer(chord_change="half", bar_grid=grid)
+        melody = [N(60, i * 0.5, 0.5) for i in range(24)]
+        # 6/8: beats_per_bar = 3.0, half = 1.5
+        result = h.harmonize(melody, C_MAJOR, duration_beats=12.0)
+        assert len(result) >= 4
+        total = sum(c.duration for c in result)
+        assert abs(total - 12.0) < 0.01
+
+
+# ===========================================================================
+# 13. Constrained HMM: edge cases
+# ===========================================================================
+
+class TestConstrainedEdgeCases:
+
+    def test_empty_constraints_same_as_unconstrained(self):
+        """Empty constraints should behave like unconstrained."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        r_free = h.harmonize(melody, C_MAJOR, duration_beats=16.0)
+        r_empty = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=[])
+        assert len(r_free) == len(r_empty)
+        for a, b in zip(r_free, r_empty):
+            assert a.root == b.root
+            assert a.quality == b.quality
+
+    def test_none_constraints_same_as_unconstrained(self):
+        """None constraints should behave like unconstrained."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        r_free = h.harmonize(melody, C_MAJOR, duration_beats=16.0)
+        r_none = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=None)
+        assert r_free == r_none
+
+    def test_all_steps_locked(self):
+        """Locking every bar should produce exactly the locked progression."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=0, quality=Quality.MAJOR, start=0.0, duration=4.0),
+            ChordLabel(root=5, quality=Quality.MAJOR, start=4.0, duration=4.0),
+            ChordLabel(root=7, quality=Quality.DOMINANT7, start=8.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=12.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert [c.root for c in result] == [0, 5, 7, 0]
+        assert [c.quality for c in result] == [
+            Quality.MAJOR, Quality.MAJOR, Quality.DOMINANT7, Quality.MAJOR
+        ]
+
+    def test_alternating_locked_free(self):
+        """Lock every other bar; free bars should still get valid chords."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(8)
+        constraints = [
+            ChordLabel(root=0, quality=Quality.MAJOR, start=0.0, duration=4.0),
+            ChordLabel(root=7, quality=Quality.DOMINANT7, start=8.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=16.0, duration=4.0),
+            ChordLabel(root=7, quality=Quality.DOMINANT7, start=24.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=32.0, constraints=constraints)
+        assert result[0].root == 0
+        assert result[2].root == 7
+        assert result[4].root == 0
+        assert result[6].root == 7
+        # Free bars should have valid roots
+        for c in result:
+            assert 0 <= c.root < 12
+
+    def test_single_constraint_in_middle(self):
+        """Single constraint at bar 2 shouldn't affect bars 0, 1, 3."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=2, quality=Quality.MINOR, start=4.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert result[1].root == 2
+        assert result[1].quality == Quality.MINOR
+        total = sum(c.duration for c in result)
+        assert abs(total - 16.0) < 0.01
