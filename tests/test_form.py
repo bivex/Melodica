@@ -64,3 +64,81 @@ def test_rondo_form():
 
     total_dur = sum(sec.duration_beats for sec in form.sections)
     assert abs(total_dur - 200.0) < 0.01
+
+
+G_MAJOR = Scale(root=7, mode=Mode.MAJOR)
+
+
+def test_form_section_key_default_none():
+    sec = FormSection(
+        name="intro",
+        start_beat=0.0,
+        duration_beats=16.0,
+        dynamics="pp",
+        tempo_multiplier=1.0,
+        active_families=["strings"],
+        mood="tense",
+    )
+    assert sec.key is None
+
+
+def test_form_section_key_set():
+    sec = FormSection(
+        name="bridge",
+        start_beat=16.0,
+        duration_beats=16.0,
+        dynamics="mf",
+        tempo_multiplier=1.0,
+        active_families=["strings"],
+        mood="lyrical",
+        key=G_MAJOR,
+    )
+    assert sec.key is G_MAJOR
+
+
+def test_key_at_returns_section_key():
+    sections = [
+        FormSection(
+            name="A", start_beat=0, duration_beats=16,
+            dynamics="mf", tempo_multiplier=1.0,
+            active_families=["strings"], mood="lyrical",
+            key=C_MAJOR,
+        ),
+        FormSection(
+            name="B", start_beat=16, duration_beats=16,
+            dynamics="f", tempo_multiplier=1.0,
+            active_families=["strings"], mood="tense",
+            key=G_MAJOR,
+        ),
+    ]
+    form = MusicalForm(sections=sections, tempo_map=[(0, 120)])
+    assert form.key_at(0.0, C_MAJOR) is C_MAJOR
+    assert form.key_at(8.0, C_MAJOR) is C_MAJOR
+    assert form.key_at(16.0, C_MAJOR) is G_MAJOR
+    assert form.key_at(24.0, C_MAJOR) is G_MAJOR
+
+
+def test_key_at_fallback_when_no_key():
+    sections = [
+        FormSection(
+            name="A", start_beat=0, duration_beats=16,
+            dynamics="mf", tempo_multiplier=1.0,
+            active_families=["strings"], mood="lyrical",
+        ),
+    ]
+    form = MusicalForm(sections=sections, tempo_map=[(0, 120)])
+    assert form.key_at(5.0, G_MAJOR) is G_MAJOR
+
+
+def test_key_at_after_last_section():
+    sections = [
+        FormSection(
+            name="A", start_beat=0, duration_beats=16,
+            dynamics="mf", tempo_multiplier=1.0,
+            active_families=["strings"], mood="lyrical",
+            key=C_MAJOR,
+        ),
+    ]
+    form = MusicalForm(sections=sections, tempo_map=[(0, 120)])
+    # Beat 20 is past the section, should return fallback
+    assert form.key_at(20.0, G_MAJOR) is G_MAJOR

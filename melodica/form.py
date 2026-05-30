@@ -24,6 +24,7 @@ class FormSection:
     active_families: list[str]  # ["strings", "brass", "woodwinds", "percussion", "choir"]
     mood: str                   # "tense", "lyrical", "triumphant", "mournful", "ethereal", etc.
     repeat_id: str | None = None  # For recurring sections, e.g. "A", "B"
+    key: Scale | None = None      # Per-section key override for modulation
 
     @property
     def end_beat(self) -> float:
@@ -34,6 +35,13 @@ class FormSection:
 class MusicalForm:
     sections: list[FormSection]
     tempo_map: list[tuple[float, float]]  # [(beat, bpm), ...] — tempo changes
+
+    def key_at(self, beat: float, fallback: Scale) -> Scale:
+        """Return the key active at *beat*, falling back to *fallback*."""
+        for sec in self.sections:
+            if sec.start_beat <= beat < sec.end_beat and sec.key is not None:
+                return sec.key
+        return fallback
 
     @classmethod
     def _create_with_tempo_map(

@@ -18,8 +18,10 @@ Movements:
     VI.  Blood Price             (what must be sacrificed)
     VII. Dawn or Dust            (the final choice — soul or family)
 
-Scales: AEOLIAN, PHRYGIAN, HARM_MINOR, LOCRIAN, DORIAN, LYDIAN, AEOLIC.
-        Predominantly dark with fleeting moments of warmth.
+Uses Motif, TempoMap, VelocityEnvelope for:
+  - A "Dawnwalker" leitmotif that transforms across all 7 movements
+  - Tempo rubato / ritardando / fermata within tracks
+  - Dynamic automation replacing manual velocity clamping
 """
 
 import random
@@ -36,6 +38,7 @@ from melodica.generators.rest import RestGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
+from melodica.composer import Motif, TempoMap, VelocityEnvelope
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +98,29 @@ STRINGS_ENS  = 48
 TREM_STR     = 44
 
 
+# ---------------------------------------------------------------------------
+# Leitmotif — "The Dawnwalker Theme"
+# ---------------------------------------------------------------------------
+# A 5-note motif: C5 → Bb4 → G4 → Eb4 → C4
+# Descent from light into darkness. Transformed across all 7 movements.
+#
+# Movement I:   original, warm — the last sunrise
+# Movement II:  inverted, fragmented — fever, transformation
+# Movement III: retrograde, diminished — lost between worlds
+# Movement IV:  transposed up, augmented — love remembered
+# Movement V:   transposed down, inverted — the curse's seduction
+# Movement VI:  fragmented, diminished — the price being weighed
+# Movement VII: retrograde, augmented, sequenced — the final choice
+
+DAWNWALKER_MOTIF = Motif.from_notes([
+    NoteInfo(pitch=72, start=0.0,  duration=3.0, velocity=55),
+    NoteInfo(pitch=70, start=3.0,  duration=2.0, velocity=50),
+    NoteInfo(pitch=67, start=5.0,  duration=3.0, velocity=55),
+    NoteInfo(pitch=63, start=8.0,  duration=2.5, velocity=50),
+    NoteInfo(pitch=60, start=10.5, duration=4.0, velocity=55),
+])
+
+
 random.seed(666)
 OUT = Path("output/album_blood_of_dawnwalker")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -114,7 +140,7 @@ def _master(raw: dict, bpm: float, lufs: float = -16.0):
         "bowl": 0.75, "pad": 0.4, "flute": 0.65, "cello": 0.5,
         "drone": 0.35, "harp": 0.6, "bass": 0.4, "piano": 0.65,
         "voice": 0.55, "choir": 0.5, "strings": 0.5, "arp": 0.45,
-        "organ": 0.4, "trem": 0.45, "oboe": 0.6,
+        "organ": 0.4, "trem": 0.45, "oboe": 0.6, "motif": 0.6,
     })
     mixed = desk.apply_mixing(raw, [], int(bpm))
     master = MasteringDesk(target_lufs=lufs)
@@ -122,10 +148,12 @@ def _master(raw: dict, bpm: float, lufs: float = -16.0):
 
 
 def _export(tracks: dict, path: Path, bpm: float, key: Scale,
-            instruments: dict, lufs: float = -16.0):
+            instruments: dict, lufs: float = -16.0,
+            tempo_events: list | None = None):
     final_notes, cc_events = _master(tracks, bpm, lufs)
     export_multitrack_midi(final_notes, str(path), bpm=bpm, key=key,
-                           instruments=instruments, cc_events=cc_events)
+                           instruments=instruments, cc_events=cc_events,
+                           tempo_events=tempo_events)
 
 
 # ===========================================================================
@@ -151,13 +179,13 @@ def track_01():
     ).render(chords, key, dur)
 
     # Solo cello — a human voice, unadorned
-    cello = MelodyGenerator(
+    raw_cello = MelodyGenerator(
         GeneratorParams(density=0.06, velocity_range=(40, 60)),
         phrase_length=20.0, harmony_note_probability=0.7,
         steps_probability=0.85, note_range_low=36, note_range_high=55,
         register_smoothness=0.9
     ).render(chords, key, dur - 60.0)
-    cello = _off(cello, 40.0)
+    cello = _off(raw_cello, 40.0)
 
     # Harp — light through window, dust motes
     harp = ArpeggiatorGenerator(
@@ -173,10 +201,30 @@ def track_01():
         NoteInfo(pitch=72, start=220.0, duration=18.0, velocity=45),
     ]
 
+    # MOTIF: the Dawnwalker theme in its original, warm form — the last sunrise
+    motif_notes = DAWNWALKER_MOTIF.render(offset=120.0)
+
+    # VELOCITY ENVELOPE: gentle swell — dawn builds, light fades toward evening
+    env = VelocityEnvelope(ref_velocity=50)
+    env.swell(
+        peak_beat=120.0, start_vel=20.0, peak_vel=55.0, end_vel=25.0,
+        start_beat=0.0, end_beat=240.0,
+    )
+    cello = env.apply(cello)
+    motif_notes = env.apply(motif_notes)
+
+    # TEMPO MAP: gentle rubato — the day breathes, slightly slowing toward dusk
+    tempo = (TempoMap(bpm)
+        .set_bpm(0.0, bpm)
+        .ritardando(bpm, 42.0, 180.0, 240.0, curve="sine")
+    ).build()
+
     _export(
-        {"pad": pad, "cello": cello, "harp": harp, "bowl": bowls},
+        {"pad": pad, "cello": cello, "harp": harp, "bowl": bowls, "motif": motif_notes},
         OUT / "01_The_Last_Sunrise.mid", bpm, key,
-        {"pad": PAD_WARM, "cello": CELLO, "harp": HARP, "bowl": TIBETAN_BOWL},
+        {"pad": PAD_WARM, "cello": CELLO, "harp": HARP, "bowl": TIBETAN_BOWL,
+         "motif": FLUTE},
+        tempo_events=tempo,
     )
 
 
@@ -210,13 +258,13 @@ def track_02():
     ).render(chords, key, dur)
 
     # Oboe — pain given voice
-    oboe = MelodyGenerator(
+    raw_oboe = MelodyGenerator(
         GeneratorParams(density=0.08, velocity_range=(35, 60)),
         phrase_length=12.0, harmony_note_probability=0.6,
         note_range_low=58, note_range_high=74,
         register_smoothness=0.8
     ).render(chords, key, dur - 50.0)
-    oboe = _off(oboe, 30.0)
+    oboe = _off(raw_oboe, 30.0)
 
     # Choir — something inhuman stirring
     choir = DroneGenerator(
@@ -224,10 +272,34 @@ def track_02():
         velocity=30
     ).render(chords, key, dur)
 
+    # MOTIF: inverted + fragmented — the transformation distorts the human theme
+    motif_notes = DAWNWALKER_MOTIF.invert().fragment(0.0, 8.0).transpose(-12).render(offset=60.0)
+
+    # VELOCITY ENVELOPE: feverish crescendo — heartbeat rising, panic building
+    env = VelocityEnvelope(ref_velocity=55)
+    (env
+        .crescendo(0.0, 80.0, 15.0, 55.0, curve="exponential")
+        .subito(80.0, 25.0)
+        .crescendo(80.0, 160.0, 25.0, 65.0, curve="linear")
+        .diminuendo(160.0, 200.0, 65.0, 20.0, curve="logarithmic")
+    )
+    oboe = env.apply(oboe)
+    motif_notes = env.apply(motif_notes)
+
+    # TEMPO MAP: accelerando — fever rising, then fermata — the transformation completes
+    tempo = (TempoMap(bpm)
+        .set_bpm(0.0, bpm)
+        .accelerando(bpm, 64.0, 30.0, 100.0, curve="sine")
+        .fermata(110.0, hold_bpm=22.0, duration_beats=6.0, resume_bpm=52.0)
+        .ritardando(52.0, 40.0, 150.0, 200.0, curve="sine")
+    ).build()
+
     _export(
-        {"drone": drone, "trem": trem, "oboe": oboe, "choir": choir},
+        {"drone": drone, "trem": trem, "oboe": oboe, "choir": choir, "motif": motif_notes},
         OUT / "02_Turning.mid", bpm, key,
-        {"drone": CONTRABASS, "trem": TREM_STR, "oboe": OBOE, "choir": CHOIR_AAH},
+        {"drone": CONTRABASS, "trem": TREM_STR, "oboe": OBOE,
+         "choir": CHOIR_AAH, "motif": CELLO},
+        tempo_events=tempo,
     )
 
 
@@ -254,13 +326,13 @@ def track_03():
     ).render(chords, key, dur)
 
     # Sparse piano — footsteps on the threshold
-    piano = MelodyGenerator(
+    raw_piano = MelodyGenerator(
         GeneratorParams(density=0.04, velocity_range=(35, 55)),
         phrase_length=24.0, harmony_note_probability=0.7,
         steps_probability=0.9, note_range_low=60, note_range_high=79,
         register_smoothness=0.95
     ).render(chords, key, dur - 80.0)
-    piano = _off(piano, 60.0)
+    piano = _off(raw_piano, 60.0)
 
     # Drone — the constant pull of two worlds
     drone = DroneGenerator(
@@ -276,10 +348,32 @@ def track_03():
         NoteInfo(pitch=60, start=250.0, duration=25.0, velocity=45),
     ]
 
+    # MOTIF: retrograde + diminished — time running backwards, identity dissolving
+    motif_notes = DAWNWALKER_MOTIF.retrograde().diminish(2.0).render(offset=140.0)
+
+    # VELOCITY ENVELOPE: flat, distant — detached from feeling, suspended
+    env = VelocityEnvelope(ref_velocity=45)
+    env.terrace([
+        (0.0, 20.0), (60.0, 30.0), (150.0, 40.0), (220.0, 30.0), (300.0, 15.0),
+    ])
+    piano = env.apply(piano)
+    motif_notes = env.apply(motif_notes)
+
+    # TEMPO MAP: rubato — time is unreliable, stretches and compresses
+    tempo = (TempoMap(bpm)
+        .rubato([
+            (0.0, bpm), (30.0, 40.0), (60.0, 48.0), (100.0, 38.0),
+            (140.0, bpm), (180.0, 42.0), (220.0, 46.0), (260.0, 40.0),
+            (300.0, 36.0),
+        ])
+    ).build()
+
     _export(
-        {"pad": pad, "piano": piano, "drone": drone, "bowl": bowls},
+        {"pad": pad, "piano": piano, "drone": drone, "bowl": bowls, "motif": motif_notes},
         OUT / "03_Between_Worlds.mid", bpm, key,
-        {"pad": PAD_SPACE, "piano": PIANO, "drone": PAD_WARM, "bowl": TIBETAN_BOWL},
+        {"pad": PAD_SPACE, "piano": PIANO, "drone": PAD_WARM,
+         "bowl": TIBETAN_BOWL, "motif": OBOE},
+        tempo_events=tempo,
     )
 
 
@@ -306,13 +400,13 @@ def track_04():
     ).render(chords, key, dur)
 
     # Cello — the human heart still beating
-    cello = MelodyGenerator(
+    raw_cello = MelodyGenerator(
         GeneratorParams(density=0.07, velocity_range=(40, 65)),
         phrase_length=16.0, harmony_note_probability=0.8,
         steps_probability=0.9, note_range_low=36, note_range_high=55,
         register_smoothness=0.9
     ).render(chords, key, dur - 40.0)
-    cello = _off(cello, 24.0)
+    cello = _off(raw_cello, 24.0)
 
     # Harp — children's laughter, once
     harp = ArpeggiatorGenerator(
@@ -321,17 +415,40 @@ def track_04():
     ).render(chords, key, dur)
 
     # Voice — a mother's song, half-remembered
-    voice = MelodyGenerator(
+    raw_voice = MelodyGenerator(
         GeneratorParams(density=0.05, velocity_range=(35, 50)),
         phrase_length=20.0, note_range_low=60, note_range_high=72,
         register_smoothness=0.95
     ).render(chords, key, dur - 60.0)
-    voice = _off(voice, 50.0)
+    voice = _off(raw_voice, 50.0)
+
+    # MOTIF: transposed up + augmented — love makes the theme soar, expands it
+    motif_notes = DAWNWALKER_MOTIF.transpose(7).augment(1.5).render(offset=60.0)
+
+    # VELOCITY ENVELOPE: warm swell — memory brightens then fades
+    env = VelocityEnvelope(ref_velocity=55)
+    env.swell(
+        peak_beat=110.0, start_vel=20.0, peak_vel=65.0, end_vel=18.0,
+        start_beat=0.0, end_beat=220.0,
+    )
+    cello = env.apply(cello)
+    voice = env.apply(voice)
+    motif_notes = env.apply(motif_notes)
+
+    # TEMPO MAP: gentle rubato — memory is not steady, it sways
+    tempo = (TempoMap(bpm)
+        .rubato([
+            (0.0, 46.0), (40.0, 50.0), (80.0, 54.0), (110.0, 52.0),
+            (150.0, 48.0), (190.0, 44.0), (220.0, 40.0),
+        ])
+    ).build()
 
     _export(
-        {"pad": pad, "cello": cello, "harp": harp, "voice": voice},
+        {"pad": pad, "cello": cello, "harp": harp, "voice": voice, "motif": motif_notes},
         OUT / "04_The_Family_Name.mid", bpm, key,
-        {"pad": PAD_WARM, "cello": CELLO, "harp": HARP, "voice": VOICE_OOH},
+        {"pad": PAD_WARM, "cello": CELLO, "harp": HARP,
+         "voice": VOICE_OOH, "motif": FLUTE},
+        tempo_events=tempo,
     )
 
 
@@ -371,12 +488,12 @@ def track_05():
     ).render(chords, key, dur)
 
     # Choir — voices of the turned, the lost
-    choir = MelodyGenerator(
+    raw_choir = MelodyGenerator(
         GeneratorParams(density=0.06, velocity_range=(35, 55)),
         phrase_length=16.0, note_range_low=48, note_range_high=64,
         register_smoothness=0.9
     ).render(chords, key, dur - 40.0)
-    choir = _off(choir, 24.0)
+    choir = _off(raw_choir, 24.0)
 
     # Sparse arpeggio — temptation's glitter
     arp = ArpeggiatorGenerator(
@@ -384,11 +501,34 @@ def track_05():
         pattern="random", note_duration=1.0
     ).render(chords, key, dur)
 
+    # MOTIF: transposed down + inverted — the theme corrupted, pulled into the dark
+    motif_notes = DAWNWALKER_MOTIF.transpose(-7).invert().render(offset=80.0)
+
+    # VELOCITY ENVELOPE: slow seductive crescendo — darkness pulls harder
+    env = VelocityEnvelope(ref_velocity=50)
+    (env
+        .crescendo(0.0, 140.0, 15.0, 60.0, curve="exponential")
+        .subito(140.0, 20.0)
+        .crescendo(140.0, 200.0, 20.0, 50.0, curve="linear")
+    )
+    choir = env.apply(choir)
+    motif_notes = env.apply(motif_notes)
+
+    # TEMPO MAP: accelerando — power accelerating, then fermata — the offer hangs
+    tempo = (TempoMap(bpm)
+        .set_bpm(0.0, bpm)
+        .accelerando(bpm, 68.0, 0.0, 120.0, curve="sine")
+        .fermata(130.0, hold_bpm=28.0, duration_beats=8.0, resume_bpm=56.0)
+        .ritardando(56.0, 44.0, 160.0, 200.0, curve="sine")
+    ).build()
+
     _export(
-        {"organ": organ, "pad": pad, "bass": bass, "choir": choir, "arp": arp},
+        {"organ": organ, "pad": pad, "bass": bass, "choir": choir,
+         "arp": arp, "motif": motif_notes},
         OUT / "05_Nights_Dominion.mid", bpm, key,
         {"organ": ORGAN, "pad": PAD_SPACE, "bass": CONTRABASS,
-         "choir": CHOIR_AAH, "arp": HARP},
+         "choir": CHOIR_AAH, "arp": HARP, "motif": CELLO},
+        tempo_events=tempo,
     )
 
 
@@ -410,13 +550,13 @@ def track_06():
     ]
 
     # Cello — the weight of decision
-    cello = MelodyGenerator(
+    raw_cello = MelodyGenerator(
         GeneratorParams(density=0.06, velocity_range=(35, 55)),
         phrase_length=18.0, harmony_note_probability=0.7,
         note_range_low=36, note_range_high=52,
         register_smoothness=0.9
     ).render(chords, key, dur - 60.0)
-    cello = _off(cello, 40.0)
+    cello = _off(raw_cello, 40.0)
 
     # Drone — the ticking clock, the draining hourglass
     drone = DroneGenerator(
@@ -431,12 +571,12 @@ def track_06():
     ).render(chords, key, dur)
 
     # Flute — the soul's fragile voice
-    flute = MelodyGenerator(
+    raw_flute = MelodyGenerator(
         GeneratorParams(density=0.05, velocity_range=(30, 50)),
         phrase_length=20.0, note_range_low=67, note_range_high=84,
         register_smoothness=0.95
     ).render(chords, key, dur - 80.0)
-    flute = _off(flute, 60.0)
+    flute = _off(raw_flute, 60.0)
 
     # Bowl — the moment of choice approaches
     bowls = [
@@ -446,11 +586,37 @@ def track_06():
         NoteInfo(pitch=60, start=230.0, duration=22.0, velocity=55),
     ]
 
+    # MOTIF: fragmented + diminished — the theme breaking apart under the weight
+    motif_notes = DAWNWALKER_MOTIF.fragment(0.0, 5.0).diminish(2.0).render(offset=130.0)
+
+    # VELOCITY ENVELOPE: two swells — two moments of doubt, each heavier
+    env = VelocityEnvelope(ref_velocity=50)
+    (env
+        .swell(peak_beat=65.0, start_vel=15.0, peak_vel=55.0, end_vel=20.0,
+               start_beat=0.0, end_beat=130.0)
+        .swell(peak_beat=195.0, start_vel=20.0, peak_vel=65.0, end_vel=12.0,
+               start_beat=130.0, end_beat=260.0)
+    )
+    cello = env.apply(cello)
+    flute = env.apply(flute)
+    motif_notes = env.apply(motif_notes)
+
+    # TEMPO MAP: rubato — weighing, hesitating, each decision point slower
+    tempo = (TempoMap(bpm)
+        .rubato([
+            (0.0, bpm), (40.0, 42.0), (65.0, 38.0), (90.0, 44.0),
+            (130.0, bpm), (170.0, 40.0), (195.0, 36.0), (230.0, 42.0),
+            (260.0, 32.0),
+        ])
+    ).build()
+
     _export(
-        {"cello": cello, "drone": drone, "trem": trem, "flute": flute, "bowl": bowls},
+        {"cello": cello, "drone": drone, "trem": trem,
+         "flute": flute, "bowl": bowls, "motif": motif_notes},
         OUT / "06_Blood_Price.mid", bpm, key,
         {"cello": CELLO, "drone": PAD_WARM, "trem": TREM_STR,
-         "flute": FLUTE, "bowl": TIBETAN_BOWL},
+         "flute": FLUTE, "bowl": TIBETAN_BOWL, "motif": OBOE},
+        tempo_events=tempo,
     )
 
 
@@ -473,13 +639,13 @@ def track_07():
     ]
 
     # Piano — the decision, note by note
-    piano = MelodyGenerator(
+    raw_piano = MelodyGenerator(
         GeneratorParams(density=0.05, velocity_range=(35, 60)),
         phrase_length=24.0, harmony_note_probability=0.7,
         steps_probability=0.9, note_range_low=60, note_range_high=79,
         register_smoothness=0.9
     ).render(chords, key, dur - 80.0)
-    piano = _off(piano, 50.0)
+    piano = _off(raw_piano, 50.0)
 
     # Warm pad — dawn breaking (or not)
     pad = AmbientPadGenerator(
@@ -493,11 +659,11 @@ def track_07():
     ).render(chords, key, dur)
 
     # Harp — the first light (or the final dark)
-    harp = ArpeggiatorGenerator(
+    raw_harp = ArpeggiatorGenerator(
         GeneratorParams(density=0.08, velocity_range=(20, 40)),
         pattern="up", note_duration=2.0
     ).render(chords, key, dur - 40.0)
-    harp = _off(harp, 30.0)
+    harp = _off(raw_harp, 30.0)
 
     # Choir — the world's verdict
     choir = DroneGenerator(
@@ -514,12 +680,48 @@ def track_07():
         NoteInfo(pitch=48, start=310.0, duration=10.0, velocity=35),
     ]
 
+    # MOTIF: retrograde + augmented + sequenced — the full theme, reversed,
+    # expanded, repeated at different heights — the whole journey in one gesture
+    motif_notes = DAWNWALKER_MOTIF.retrograde().augment(2.0).sequence(
+        intervals=[0, 5, -5, 12],
+        spacing=20.0,
+    ).render(offset=20.0)
+
+    # VELOCITY ENVELOPE: three arcs — doubt, resolve, surrender
+    env_main = VelocityEnvelope(ref_velocity=55)
+    (env_main
+        .swell(peak_beat=80.0, start_vel=15.0, peak_vel=60.0, end_vel=25.0,
+               start_beat=0.0, end_beat=160.0)
+        .swell(peak_beat=240.0, start_vel=25.0, peak_vel=70.0, end_vel=10.0,
+               start_beat=160.0, end_beat=320.0)
+    )
+    piano = env_main.apply(piano)
+    motif_notes = env_main.apply(motif_notes)
+
+    # Choir gets a steeper envelope — rises to the final verdict
+    env_choir = VelocityEnvelope(ref_velocity=35)
+    (env_choir
+        .crescendo(0.0, 280.0, 10.0, 50.0, curve="exponential")
+        .diminuendo(280.0, 320.0, 50.0, 8.0, curve="logarithmic")
+    )
+
+    # TEMPO MAP: the longest journey — from stillness, through urgency,
+    # a fermata at the moment of choice, then dissolving into silence
+    tempo = (TempoMap(bpm)
+        .set_bpm(0.0, bpm)
+        .accelerando(bpm, 54.0, 80.0, 200.0, curve="sine")
+        .fermata(240.0, hold_bpm=18.0, duration_beats=10.0, resume_bpm=40.0)
+        .ritardando(40.0, 28.0, 270.0, 320.0, curve="sine")
+    ).build()
+
     _export(
         {"piano": piano, "pad": pad, "strings": strings,
-         "harp": harp, "choir": choir, "bowl": final_bowls},
+         "harp": harp, "choir": choir, "bowl": final_bowls, "motif": motif_notes},
         OUT / "07_Dawn_or_Dust.mid", bpm, key,
         {"piano": PIANO, "pad": PAD_WARM, "strings": STRINGS_ENS,
-         "harp": HARP, "choir": CHOIR_AAH, "bowl": TIBETAN_BOWL},
+         "harp": HARP, "choir": CHOIR_AAH, "bowl": TIBETAN_BOWL,
+         "motif": FLUTE},
+        tempo_events=tempo,
     )
 
 

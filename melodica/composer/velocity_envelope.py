@@ -18,7 +18,7 @@ class VelocityEnvelope:
     """Control-point envelope for velocity automation."""
 
     _points: list[tuple[float, float]] = field(default_factory=list)
-    _ref_velocity: float = 80.0
+    ref_velocity: float = 80.0
 
     # ------------------------------------------------------------------
     # Building
@@ -86,7 +86,7 @@ class VelocityEnvelope:
     def velocity_at(self, beat: float) -> float:
         """Linear interpolation between control points."""
         if not self._points:
-            return self._ref_velocity
+            return self.ref_velocity
         sorted_pts = sorted(self._points, key=lambda p: p[0])
         if beat <= sorted_pts[0][0]:
             return sorted_pts[0][1]
@@ -98,7 +98,7 @@ class VelocityEnvelope:
             if b0 <= beat <= b1:
                 t = (beat - b0) / (b1 - b0) if b1 != b0 else 0.0
                 return v0 + (v1 - v0) * t
-        return self._ref_velocity
+        return self.ref_velocity
 
     # ------------------------------------------------------------------
     # Apply
@@ -122,7 +122,7 @@ class VelocityEnvelope:
         result: list[NoteInfo] = []
         for n in notes:
             env_vel = self.velocity_at(n.start)
-            scale = env_vel / self._ref_velocity if self._ref_velocity > 0 else 1.0
+            scale = env_vel / self.ref_velocity if self.ref_velocity > 0 else 1.0
             new_vel = max(1, min(127, round(n.velocity * scale)))
             result.append(
                 NoteInfo(

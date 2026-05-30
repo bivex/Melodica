@@ -72,6 +72,7 @@ from melodica.composer.structure_parser import (
 from melodica.composer.motif import Motif
 from melodica.composer.tempo_map import TempoMap
 from melodica.composer.velocity_envelope import VelocityEnvelope
+from melodica.composer.leitmotif import Leitmotif, LeitmotifRegistry
 
 __all__ = [
     "TransitionCoordinator",
@@ -130,4 +131,6 @@ __all__ = [
     "Motif",
     "TempoMap",
     "VelocityEnvelope",
+    "Leitmotif",
+    "LeitmotifRegistry",
 ]

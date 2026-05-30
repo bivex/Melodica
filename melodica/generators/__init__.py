@@ -391,6 +391,14 @@ from melodica.generators.wind_brass_solo import (
 from melodica.generators.synth_effects import SynthEffectsGenerator
 from melodica.generators.ethnic_world import EthnicWorldGenerator
 from melodica.generators.sfx_percussion import SFXPercussionGenerator
+from melodica.generators.orchestral_unpitched_percussion import (
+    BassDrumGenerator,
+    TamTamGenerator,
+    GongGenerator,
+    TriangleGenerator,
+    CastanetsGenerator,
+    WhipSlapstickGenerator,
+)
 
 __all__ = [
     "PhraseGenerator",
@@ -614,4 +622,10 @@ __all__ = [
     "SynthEffectsGenerator",
     "EthnicWorldGenerator",
     "SFXPercussionGenerator",
+    "BassDrumGenerator",
+    "TamTamGenerator",
+    "GongGenerator",
+    "TriangleGenerator",
+    "CastanetsGenerator",
+    "WhipSlapstickGenerator",
 ]
