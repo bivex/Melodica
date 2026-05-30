@@ -38,7 +38,12 @@ from melodica.generators.rest import RestGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
-from melodica.composer import Motif, TempoMap, VelocityEnvelope
+from melodica.composer import Motif, TempoMap, VelocityEnvelope, LeitmotifRegistry
+from melodica.generators import (
+    BassDrumGenerator, TamTamGenerator, GongGenerator,
+    TriangleGenerator, CastanetsGenerator, WhipSlapstickGenerator,
+)
+from melodica.form import FormSection, MusicalForm
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +104,7 @@ TREM_STR     = 44
 
 
 # ---------------------------------------------------------------------------
-# Leitmotif — "The Dawnwalker Theme"
+# Leitmotif — "The Dawnwalker Theme" via LeitmotifRegistry
 # ---------------------------------------------------------------------------
 # A 5-note motif: C5 → Bb4 → G4 → Eb4 → C4
 # Descent from light into darkness. Transformed across all 7 movements.
@@ -112,13 +117,30 @@ TREM_STR     = 44
 # Movement VI:  fragmented, diminished — the price being weighed
 # Movement VII: retrograde, augmented, sequenced — the final choice
 
-DAWNWALKER_MOTIF = Motif.from_notes([
+_DAWNWALKER_MOTIF = Motif.from_notes([
     NoteInfo(pitch=72, start=0.0,  duration=3.0, velocity=55),
     NoteInfo(pitch=70, start=3.0,  duration=2.0, velocity=50),
     NoteInfo(pitch=67, start=5.0,  duration=3.0, velocity=55),
     NoteInfo(pitch=63, start=8.0,  duration=2.5, velocity=50),
     NoteInfo(pitch=60, start=10.5, duration=4.0, velocity=55),
 ])
+
+LEITMOTIF = LeitmotifRegistry()
+LEITMOTIF.register(
+    "dawnwalker", _DAWNWALKER_MOTIF,
+    tags=["protagonist", "dawnwalker", "main_theme"],
+    instrument=FLUTE, velocity=55, register=1,
+)
+LEITMOTIF.register(
+    "family", _DAWNWALKER_MOTIF,
+    tags=["family", "love", "memory"],
+    instrument=CELLO, velocity=50, register=0,
+)
+LEITMOTIF.register(
+    "curse", _DAWNWALKER_MOTIF,
+    tags=["curse", "darkness", "vampire"],
+    instrument=ORGAN, velocity=45, register=0,
+)
 
 
 random.seed(666)
@@ -141,6 +163,8 @@ def _master(raw: dict, bpm: float, lufs: float = -16.0):
         "drone": 0.35, "harp": 0.6, "bass": 0.4, "piano": 0.65,
         "voice": 0.55, "choir": 0.5, "strings": 0.5, "arp": 0.45,
         "organ": 0.4, "trem": 0.45, "oboe": 0.6, "motif": 0.6,
+        "bdrum": 0.35, "tamtam": 0.4, "gong": 0.35, "triangle": 0.3,
+        "castanets": 0.25, "whip": 0.3,
     })
     mixed = desk.apply_mixing(raw, [], int(bpm))
     master = MasteringDesk(target_lufs=lufs)
@@ -202,7 +226,7 @@ def track_01():
     ]
 
     # MOTIF: the Dawnwalker theme in its original, warm form — the last sunrise
-    motif_notes = DAWNWALKER_MOTIF.render(offset=120.0)
+    motif_notes = LEITMOTIF.render("dawnwalker", offset=120.0)
 
     # VELOCITY ENVELOPE: gentle swell — dawn builds, light fades toward evening
     env = VelocityEnvelope(ref_velocity=50)
@@ -272,8 +296,17 @@ def track_02():
         velocity=30
     ).render(chords, key, dur)
 
+    # Bass drum — heartbeat of the turning, deep and primal
+    bdrum = BassDrumGenerator(pattern_type="roll").render(chords, key, dur)
+
+    # Tam-tam — the moment of transformation
+    tamtam = TamTamGenerator(pattern_type="crescendo_strike").render(chords, key, dur)
+
     # MOTIF: inverted + fragmented — the transformation distorts the human theme
-    motif_notes = DAWNWALKER_MOTIF.invert().fragment(0.0, 8.0).transpose(-12).render(offset=60.0)
+    motif_notes = LEITMOTIF.render(
+        "curse", offset=60.0,
+        invert=True, fragment_start=0.0, fragment_end=8.0, transpose=-12,
+    )
 
     # VELOCITY ENVELOPE: feverish crescendo — heartbeat rising, panic building
     env = VelocityEnvelope(ref_velocity=55)
@@ -295,10 +328,11 @@ def track_02():
     ).build()
 
     _export(
-        {"drone": drone, "trem": trem, "oboe": oboe, "choir": choir, "motif": motif_notes},
+        {"drone": drone, "trem": trem, "oboe": oboe, "choir": choir,
+         "bdrum": bdrum, "tamtam": tamtam, "motif": motif_notes},
         OUT / "02_Turning.mid", bpm, key,
         {"drone": CONTRABASS, "trem": TREM_STR, "oboe": OBOE,
-         "choir": CHOIR_AAH, "motif": CELLO},
+         "choir": CHOIR_AAH, "bdrum": 0, "tamtam": 0, "motif": CELLO},
         tempo_events=tempo,
     )
 
@@ -349,7 +383,10 @@ def track_03():
     ]
 
     # MOTIF: retrograde + diminished — time running backwards, identity dissolving
-    motif_notes = DAWNWALKER_MOTIF.retrograde().diminish(2.0).render(offset=140.0)
+    motif_notes = LEITMOTIF.render(
+        "dawnwalker", offset=140.0,
+        retrograde=True, diminish_factor=2.0,
+    )
 
     # VELOCITY ENVELOPE: flat, distant — detached from feeling, suspended
     env = VelocityEnvelope(ref_velocity=45)
@@ -423,7 +460,10 @@ def track_04():
     voice = _off(raw_voice, 50.0)
 
     # MOTIF: transposed up + augmented — love makes the theme soar, expands it
-    motif_notes = DAWNWALKER_MOTIF.transpose(7).augment(1.5).render(offset=60.0)
+    motif_notes = LEITMOTIF.render(
+        "family", offset=60.0,
+        transpose=7, augment_factor=1.5,
+    )
 
     # VELOCITY ENVELOPE: warm swell — memory brightens then fades
     env = VelocityEnvelope(ref_velocity=55)
@@ -501,8 +541,33 @@ def track_05():
         pattern="random", note_duration=1.0
     ).render(chords, key, dur)
 
+    # Gong — the dark power's presence, deep resonance
+    gong = GongGenerator(pattern_type="crescendo").render(chords, key, dur)
+
+    # Triangle — the silver edge of temptation
+    triangle = TriangleGenerator(pattern_type="trill").render(chords, key, dur)
+
+    # MUSICAL FORM with key modulation — sections shift between A_HM and E_HM
+    form = MusicalForm(sections=[
+        FormSection(name="summons", start_beat=0, duration_beats=80,
+                    dynamics="mp", tempo_multiplier=1.0,
+                    active_families=["brass", "organ"], mood="seductive",
+                    key=A_HM),
+        FormSection(name="temptation", start_beat=80, duration_beats=80,
+                    dynamics="mf", tempo_multiplier=1.1,
+                    active_families=["strings", "choir"], mood="yearning",
+                    key=E_HM),
+        FormSection(name="surrender", start_beat=160, duration_beats=40,
+                    dynamics="f", tempo_multiplier=0.9,
+                    active_families=["full"], mood="overwhelming",
+                    key=A_HM),
+    ], tempo_map=[(0, bpm)])
+
     # MOTIF: transposed down + inverted — the theme corrupted, pulled into the dark
-    motif_notes = DAWNWALKER_MOTIF.transpose(-7).invert().render(offset=80.0)
+    motif_notes = LEITMOTIF.render(
+        "curse", offset=80.0,
+        transpose=-7, invert=True,
+    )
 
     # VELOCITY ENVELOPE: slow seductive crescendo — darkness pulls harder
     env = VelocityEnvelope(ref_velocity=50)
@@ -524,10 +589,11 @@ def track_05():
 
     _export(
         {"organ": organ, "pad": pad, "bass": bass, "choir": choir,
-         "arp": arp, "motif": motif_notes},
+         "arp": arp, "gong": gong, "triangle": triangle, "motif": motif_notes},
         OUT / "05_Nights_Dominion.mid", bpm, key,
         {"organ": ORGAN, "pad": PAD_SPACE, "bass": CONTRABASS,
-         "choir": CHOIR_AAH, "arp": HARP, "motif": CELLO},
+         "choir": CHOIR_AAH, "arp": HARP, "gong": 0, "triangle": 0,
+         "motif": CELLO},
         tempo_events=tempo,
     )
 
@@ -586,8 +652,14 @@ def track_06():
         NoteInfo(pitch=60, start=230.0, duration=22.0, velocity=55),
     ]
 
+    # Tam-tam — the weight of the price, deep ominous strikes
+    tamtam = TamTamGenerator(pattern_type="strike").render(chords, key, dur)
+
     # MOTIF: fragmented + diminished — the theme breaking apart under the weight
-    motif_notes = DAWNWALKER_MOTIF.fragment(0.0, 5.0).diminish(2.0).render(offset=130.0)
+    motif_notes = LEITMOTIF.render(
+        "dawnwalker", offset=130.0,
+        fragment_start=0.0, fragment_end=5.0, diminish_factor=2.0,
+    )
 
     # VELOCITY ENVELOPE: two swells — two moments of doubt, each heavier
     env = VelocityEnvelope(ref_velocity=50)
@@ -612,10 +684,10 @@ def track_06():
 
     _export(
         {"cello": cello, "drone": drone, "trem": trem,
-         "flute": flute, "bowl": bowls, "motif": motif_notes},
+         "flute": flute, "bowl": bowls, "tamtam": tamtam, "motif": motif_notes},
         OUT / "06_Blood_Price.mid", bpm, key,
         {"cello": CELLO, "drone": PAD_WARM, "trem": TREM_STR,
-         "flute": FLUTE, "bowl": TIBETAN_BOWL, "motif": OBOE},
+         "flute": FLUTE, "bowl": TIBETAN_BOWL, "tamtam": 0, "motif": OBOE},
         tempo_events=tempo,
     )
 
@@ -680,12 +752,35 @@ def track_07():
         NoteInfo(pitch=48, start=310.0, duration=10.0, velocity=35),
     ]
 
+    # Bass drum — the march toward destiny
+    bdrum = BassDrumGenerator(pattern_type="march").render(chords, key, dur)
+
+    # Whip/slapstick — the crack of the final decision
+    whip = WhipSlapstickGenerator(pattern_type="rapid").render(chords, key, dur)
+
+    # MUSICAL FORM with key modulation — the final journey through keys
+    form = MusicalForm(sections=[
+        FormSection(name="doubt", start_beat=0, duration_beats=100,
+                    dynamics="pp", tempo_multiplier=1.0,
+                    active_families=["piano", "strings"], mood="hesitation",
+                    key=A_DOR),
+        FormSection(name="resolve", start_beat=100, duration_beats=120,
+                    dynamics="mf", tempo_multiplier=1.15,
+                    active_families=["full"], mood="determination",
+                    key=D_DOR),
+        FormSection(name="judgment", start_beat=220, duration_beats=100,
+                    dynamics="ff", tempo_multiplier=0.85,
+                    active_families=["full", "percussion"], mood="transcendent",
+                    key=F_LYD),
+    ], tempo_map=[(0, bpm)])
+
     # MOTIF: retrograde + augmented + sequenced — the full theme, reversed,
     # expanded, repeated at different heights — the whole journey in one gesture
-    motif_notes = DAWNWALKER_MOTIF.retrograde().augment(2.0).sequence(
-        intervals=[0, 5, -5, 12],
-        spacing=20.0,
-    ).render(offset=20.0)
+    motif_notes = LEITMOTIF.render(
+        "dawnwalker", offset=20.0,
+        retrograde=True, augment_factor=2.0,
+        sequence_intervals=[0, 5, -5, 12], sequence_spacing=20.0,
+    )
 
     # VELOCITY ENVELOPE: three arcs — doubt, resolve, surrender
     env_main = VelocityEnvelope(ref_velocity=55)
@@ -716,11 +811,12 @@ def track_07():
 
     _export(
         {"piano": piano, "pad": pad, "strings": strings,
-         "harp": harp, "choir": choir, "bowl": final_bowls, "motif": motif_notes},
+         "harp": harp, "choir": choir, "bowl": final_bowls,
+         "bdrum": bdrum, "whip": whip, "motif": motif_notes},
         OUT / "07_Dawn_or_Dust.mid", bpm, key,
         {"piano": PIANO, "pad": PAD_WARM, "strings": STRINGS_ENS,
          "harp": HARP, "choir": CHOIR_AAH, "bowl": TIBETAN_BOWL,
-         "motif": FLUTE},
+         "bdrum": 0, "whip": 0, "motif": FLUTE},
         tempo_events=tempo,
     )
 
