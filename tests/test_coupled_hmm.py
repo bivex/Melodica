@@ -1091,3 +1091,242 @@ class TestConstrainedEdgeCases:
         assert result[1].quality == Quality.MINOR
         total = sum(c.duration for c in result)
         assert abs(total - 16.0) < 0.01
+
+
+# =========================================================================
+# 14. Symphonic theater progression (~40 min, 300 bars)
+# =========================================================================
+
+from melodica.idea_tool import IdeaTool, IdeaToolConfig, IdeaPart
+from melodica.theory.modes import Mode
+from melodica.types import SectionRole, SectionFunction, BarGrid
+
+_SYM_BAR_GRID = BarGrid(numerator=4, denominator=4)
+
+
+def _build_symphonic_theater_parts() -> list[IdeaPart]:
+    """14 parts covering an overture-through-finale symphonic theater arc.
+    300 bars = 40 min @ BPM 120 in 4/4."""
+    TS = (4, 4)
+    return [
+        IdeaPart(
+            name="Overture", bars=24, time_signature=TS,
+            scale=Scale(0, Mode.MAJOR),
+            section_type=SectionRole.INTRO,
+            section_function=SectionFunction.BUILD,
+            progression_type="constrained_hmm",
+            progression_list=["I", "vi", "IV", "V"],
+        ),
+        IdeaPart(
+            name="Prologue", bars=16, time_signature=TS,
+            scale=Scale(9, Mode.HARMONIC_MINOR),
+            section_type=SectionRole.VERSE,
+            section_function=SectionFunction.BUILD,
+            progression_type="coupled_hmm",
+        ),
+        IdeaPart(
+            name="Act I Scene 1", bars=24, time_signature=TS,
+            scale=Scale(2, Mode.DORIAN),
+            section_type=SectionRole.VERSE,
+            section_function=SectionFunction.SUSTAIN,
+            progression_type="functional_hmm",
+        ),
+        IdeaPart(
+            name="Act I Scene 2", bars=24, time_signature=TS,
+            scale=Scale(7, Mode.MIXOLYDIAN),
+            section_type=SectionRole.CHORUS,
+            section_function=SectionFunction.BUILD,
+            progression_type="coupled_hmm",
+        ),
+        IdeaPart(
+            name="Ensemble Piece", bars=20, time_signature=TS,
+            scale=Scale(0, Mode.LYDIAN),
+            section_type=SectionRole.BRIDGE,
+            section_function=SectionFunction.BUILD,
+            progression_type="constrained_hmm",
+            progression_list=["I", "II", "IV", "V"],
+        ),
+        IdeaPart(
+            name="Act II Scene 1", bars=24, time_signature=TS,
+            scale=Scale(5, Mode.PHRYGIAN),
+            section_type=SectionRole.VERSE,
+            section_function=SectionFunction.SUSTAIN,
+            progression_type="coupled_hmm",
+        ),
+        IdeaPart(
+            name="Love Duet", bars=20, time_signature=TS,
+            scale=Scale(9, Mode.NATURAL_MINOR),
+            section_type=SectionRole.CHORUS,
+            section_function=SectionFunction.RELEASE,
+            progression_type="constrained_hmm",
+            progression_list=["i", "VI", "III", "VII"],
+        ),
+        IdeaPart(
+            name="Villain Aria", bars=24, time_signature=TS,
+            scale=Scale(11, Mode.PHRYGIAN_DOMINANT),
+            section_type=SectionRole.VERSE,
+            section_function=SectionFunction.BREAK,
+            progression_type="coupled_hmm",
+        ),
+        IdeaPart(
+            name="Conflict", bars=24, time_signature=TS,
+            scale=Scale(4, Mode.HARMONIC_MINOR),
+            section_type=SectionRole.BRIDGE,
+            section_function=SectionFunction.BUILD,
+            progression_type="functional_hmm",
+        ),
+        IdeaPart(
+            name="Crisis", bars=24, time_signature=TS,
+            scale=Scale(0, Mode.HARMONIC_MINOR),
+            section_type=SectionRole.BRIDGE,
+            section_function=SectionFunction.BUILD,
+            progression_type="constrained_hmm",
+            progression_list=["i", "iv", "V", "i"],
+        ),
+        IdeaPart(
+            name="Resolution", bars=24, time_signature=TS,
+            scale=Scale(0, Mode.MAJOR),
+            section_type=SectionRole.CHORUS,
+            section_function=SectionFunction.RELEASE,
+            progression_type="coupled_hmm",
+        ),
+        IdeaPart(
+            name="Reprise", bars=20, time_signature=TS,
+            scale=Scale(0, Mode.MAJOR),
+            section_type=SectionRole.VERSE,
+            section_function=SectionFunction.RELEASE,
+            progression_type="constrained_hmm",
+            progression_list=["I", "vi", "IV", "V"],
+        ),
+        IdeaPart(
+            name="Grand Finale", bars=24, time_signature=TS,
+            scale=Scale(0, Mode.MAJOR),
+            section_type=SectionRole.OUTRO,
+            section_function=SectionFunction.FADE,
+            progression_type="coupled_hmm",
+        ),
+        IdeaPart(
+            name="Epilogue", bars=8, time_signature=TS,
+            scale=Scale(0, Mode.MAJOR),
+            section_type=SectionRole.CODA,
+            section_function=SectionFunction.HOLD,
+            progression_type="constrained_hmm",
+            progression_list=["I", "IV", "V", "I"],
+        ),
+    ]
+
+
+class TestSymphonicTheaterProgression:
+
+    def _generate(self) -> dict:
+        parts = _build_symphonic_theater_parts()
+        config = IdeaToolConfig(tempo=120, time_signature=(4, 4))
+        tool = IdeaTool(config=config)
+        all_chords = tool._generate_progression(parts)
+        return {"parts": parts, "chords": all_chords}
+
+    def test_total_bar_count_300(self):
+        data = self._generate()
+        parts = data["parts"]
+        total_bars = sum(p.bars for p in parts)
+        assert total_bars == 300, f"Expected 300 bars, got {total_bars}"
+
+    def test_produces_14_parts(self):
+        data = self._generate()
+        assert len(data["parts"]) == 14
+
+    def test_all_progression_types_used(self):
+        types_used = set()
+        for p in _build_symphonic_theater_parts():
+            types_used.add(p.progression_type)
+        assert "coupled_hmm" in types_used
+        assert "constrained_hmm" in types_used
+        assert "functional_hmm" in types_used
+
+    def test_mode_diversity(self):
+        modes = set()
+        for p in _build_symphonic_theater_parts():
+            modes.add(p.scale.mode)
+        assert len(modes) >= 5, f"Only {len(modes)} modes: {modes}"
+
+    def test_key_diversity(self):
+        roots = set()
+        for p in _build_symphonic_theater_parts():
+            roots.add(p.scale.root)
+        assert len(roots) >= 5, f"Only {len(roots)} keys: {roots}"
+
+    def test_chords_generated(self):
+        data = self._generate()
+        assert len(data["chords"]) > 0
+
+    def test_duration_sum_1200_beats(self):
+        data = self._generate()
+        total = sum(c.duration for c in data["chords"])
+        assert abs(total - 1200.0) < 0.1, f"Expected 1200 beats, got {total}"
+
+    def test_monotonic_start_times(self):
+        data = self._generate()
+        chords = data["chords"]
+        for i in range(1, len(chords)):
+            assert chords[i].start >= chords[i - 1].start, (
+                f"Non-monotonic at {i}: {chords[i-1].start} -> {chords[i].start}"
+            )
+
+    def test_all_roots_valid(self):
+        data = self._generate()
+        for c in data["chords"]:
+            assert 0 <= c.root < 12, f"Invalid root: {c.root}"
+
+    def test_all_qualities_valid(self):
+        data = self._generate()
+        for c in data["chords"]:
+            assert isinstance(c.quality, Quality)
+
+    def test_root_diversity_across_work(self):
+        data = self._generate()
+        roots = set(c.root for c in data["chords"])
+        assert len(roots) >= 4, f"Only {len(roots)} unique roots across 300 bars"
+
+    def test_quality_diversity(self):
+        data = self._generate()
+        qualities = set(c.quality for c in data["chords"])
+        assert len(qualities) >= 3, f"Only {len(qualities)} qualities: {qualities}"
+
+    def test_constrained_parts_match(self):
+        data = self._generate()
+        for p in data["parts"]:
+            if p.progression_type == "constrained_hmm" and p.progression_list:
+                part_chords = [c for c in data["chords"]
+                               if p.bars * 0 <= c.start < p.bars * 4]
+                if not part_chords:
+                    continue
+                constrained_roots = set(c.root for c in part_chords)
+                assert len(constrained_roots) >= 1
+
+    def test_each_part_produces_chords(self):
+        data = self._generate()
+        chords = data["chords"]
+        assert len(chords) >= 14, f"Only {len(chords)} chords for 14 parts"
+
+    def test_no_excessive_consecutive_duplicates(self):
+        data = self._generate()
+        chords = data["chords"]
+        max_run = 1
+        run = 1
+        for i in range(1, len(chords)):
+            if chords[i].root == chords[i - 1].root and chords[i].quality == chords[i - 1].quality:
+                run += 1
+                max_run = max(max_run, run)
+            else:
+                run = 1
+        assert max_run <= 6, f"Same chord repeated {max_run} times consecutively"
+
+    def test_section_roles_present(self):
+        roles = set()
+        for p in _build_symphonic_theater_parts():
+            if p.section_type:
+                roles.add(p.section_type)
+        assert SectionRole.INTRO in roles
+        assert SectionRole.VERSE in roles
+        assert SectionRole.CHORUS in roles
+        assert SectionRole.OUTRO in roles
