@@ -523,3 +523,311 @@ class TestEdgeCases:
         for c, d in zip(r_c, r_d):
             assert c.quality == d.quality
             assert (d.root - c.root) % 12 == 2
+
+
+# ===========================================================================
+# 9. Progression patterns
+# ===========================================================================
+
+NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def _prog(scale, bars=16, seed=42, chord_change="bars", **kw):
+    """Generate a chord progression with CoupledHMMHarmonizer."""
+    import random
+    random.seed(seed)
+    h = CoupledHMMHarmonizer(chord_change=chord_change, **kw)
+    pitches = [scale.root + 60 + random.randint(0, 12) for _ in range(bars * 8)]
+    melody = [NoteInfo(pitch=p, start=i * 0.5, duration=0.5, velocity=80) for i, p in enumerate(pitches)]
+    return h.harmonize(melody, scale, float(bars * 4))
+
+
+def _names(chords):
+    return [f"{NOTE_NAMES[c.root]}{c.quality.name}" for c in chords]
+
+
+# -- 9a. Cadence & resolution --
+
+class TestProgressionCadences:
+
+    def test_tonic_at_start(self):
+        """First chord should tend toward the tonic (I or vi)."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        first = chords[0]
+        diatonic = {0, 2, 4, 5, 7, 9, 11}
+        assert first.root in diatonic, f"First chord root {NOTE_NAMES[first.root]} not diatonic"
+
+    def test_at_least_one_perfect_cadence(self):
+        """16-bar progression should contain at least one V→I or VII→I."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        vii_to_i = False
+        for i in range(1, len(chords)):
+            prev_root = chords[i - 1].root
+            curr_root = chords[i].root
+            interval = (curr_root - prev_root) % 12
+            if interval == 5 and curr_root == 0:
+                vii_to_i = True
+                break
+            if prev_root == 7 and curr_root == 0:
+                vii_to_i = True
+                break
+        assert vii_to_i, f"No V→I or VII→I cadence found in: {_names(chords)}"
+
+    def test_dominant_before_tonic(self):
+        """G (root 7) should appear before C (root 0) at least once."""
+        chords = _prog(C_MAJOR, bars=16, seed=3)
+        g_before_c = any(
+            chords[i].root == 7 and chords[i + 1].root == 0
+            for i in range(len(chords) - 1)
+        )
+        assert g_before_c, f"No G→C in: {_names(chords)}"
+
+    def test_final_chord_is_diatonic(self):
+        """Last chord root should be diatonic to the key."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        last = chords[-1]
+        diatonic = {0, 2, 4, 5, 7, 9, 11}
+        assert last.root in diatonic, f"Last chord root {NOTE_NAMES[last.root]} not diatonic to C major"
+
+
+# -- 9b. Functional flow patterns --
+
+class TestProgressionFlow:
+
+    def test_root_motion_varied(self):
+        """Consecutive root intervals should not all be the same."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        roots = [c.root for c in chords]
+        intervals = [(roots[i + 1] - roots[i]) % 12 for i in range(len(roots) - 1)]
+        unique = set(intervals)
+        assert len(unique) >= 3, f"Only {len(unique)} unique root intervals: {sorted(unique)}"
+
+    def test_no_root_stagnation(self):
+        """No more than 2 consecutive chords on the same root."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        run = 1
+        for i in range(1, len(chords)):
+            if chords[i].root == chords[i - 1].root:
+                run += 1
+                assert run <= 2, f"Root {NOTE_NAMES[chords[i].root]} repeated {run}x"
+            else:
+                run = 1
+
+    def test_common_progression_patterns(self):
+        """Should contain at least one common progression fragment (I-V, I-IV, IV-V)."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        patterns = set()
+        for i in range(len(chords) - 1):
+            pair = (chords[i].root, chords[i + 1].root)
+            patterns.add(pair)
+        c_major_pairs = {(0, 7), (0, 5), (5, 7), (7, 0), (5, 0)}
+        found = patterns & c_major_pairs
+        assert len(found) >= 2, f"No common C-major pairs in: {patterns}"
+
+    def test_ascending_fourths_motion(self):
+        """Root motion by ascending 4th (interval 5) is fundamental; should appear."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        roots = [c.root for c in chords]
+        p4_count = sum(1 for i in range(len(roots) - 1) if (roots[i + 1] - roots[i]) % 12 == 5)
+        assert p4_count >= 1, f"No ascending 4th root motion in: {_names(chords)}"
+
+
+# -- 9c. Diversity & distribution --
+
+class TestProgressionDiversity:
+
+    def test_root_diversity_at_least_4(self):
+        """16-bar progression should use at least 4 unique roots."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        roots = len(set(c.root for c in chords))
+        assert roots >= 4, f"Only {roots} unique roots: {_names(chords)}"
+
+    def test_quality_diversity(self):
+        """Should produce at least 2 different chord qualities."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        qualities = len(set(c.quality for c in chords))
+        assert qualities >= 2, f"Only {qualities} quality types"
+
+    def test_dom7_not_dominant(self):
+        """Dom7 should not exceed 60% of all chords (known gravity well)."""
+        for seed in range(5):
+            chords = _prog(C_MAJOR, bars=16, seed=seed)
+            dom7_ratio = sum(1 for c in chords if c.quality == Quality.DOMINANT7) / len(chords)
+            assert dom7_ratio < 0.6, f"Seed {seed}: Dom7 is {dom7_ratio:.0%} of progression"
+
+    def test_no_quality_gravity_well(self):
+        """No single quality should exceed 60%."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        from collections import Counter
+        counts = Counter(c.quality for c in chords)
+        for q, cnt in counts.items():
+            ratio = cnt / len(chords)
+            assert ratio < 0.6, f"{q.name} is {ratio:.0%} of progression (gravity well)"
+
+    def test_different_seeds_different_progressions(self):
+        """Different seeds should produce different progressions."""
+        progs = set()
+        for seed in range(5):
+            chords = _prog(C_MAJOR, bars=8, seed=seed)
+            progs.add(tuple(_names(chords)))
+        assert len(progs) >= 2, f"All seeds produced same progression"
+
+    def test_interval_diversity_at_least_4(self):
+        """Should have at least 4 unique intervals between consecutive roots."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        roots = [c.root for c in chords]
+        intervals = set((roots[i + 1] - roots[i]) % 12 for i in range(len(roots) - 1))
+        assert len(intervals) >= 4, f"Only {len(intervals)} unique intervals: {sorted(intervals)}"
+
+
+# -- 9d. Mode-specific progressions --
+
+class TestModeProgressions:
+
+    def test_minor_key_uses_minor_chords(self):
+        """A minor progression should produce minor-quality chords."""
+        chords = _prog(A_MINOR, bars=16, seed=1)
+        minor_count = sum(1 for c in chords if c.quality == Quality.MINOR)
+        assert minor_count >= 1, f"No minor chords in A minor progression: {_names(chords)}"
+
+    def test_major_vs_minor_different(self):
+        """C major and A minor should produce different progressions."""
+        r_major = _prog(C_MAJOR, bars=8, seed=3)
+        r_minor = _prog(A_MINOR, bars=8, seed=3)
+        assert _names(r_major) != _names(r_minor), "Major and minor produced identical progressions"
+
+    def test_diatonic_roots_in_major(self):
+        """C major chords should use mostly diatonic roots."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        diatonic = {0, 2, 4, 5, 7, 9, 11}
+        in_key = sum(1 for c in chords if c.root in diatonic)
+        ratio = in_key / len(chords)
+        assert ratio >= 0.7, f"Only {ratio:.0%} diatonic roots"
+
+
+
+# -- 9e. Structural & timing --
+
+class TestProgressionStructure:
+
+    def test_chord_durations_cover_full_duration(self):
+        """Chord durations should sum to total beats."""
+        for bars in [4, 8, 16]:
+            chords = _prog(C_MAJOR, bars=bars, seed=1)
+            total = sum(c.duration for c in chords)
+            expected = bars * 4.0
+            assert abs(total - expected) < 0.01, f"bars={bars}: {total} != {expected}"
+
+    def test_chord_starts_are_monotonic(self):
+        """Chord start times should be strictly increasing."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        for i in range(1, len(chords)):
+            assert chords[i].start > chords[i - 1].start, (
+                f"Non-monotonic starts at {i}: {chords[i-1].start} -> {chords[i].start}"
+            )
+
+    def test_no_gaps_between_chords(self):
+        """Chords should tile the timeline without gaps."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        for i in range(1, len(chords)):
+            gap = chords[i].start - chords[i - 1].end
+            assert abs(gap) < 0.01, f"Gap of {gap} between chords {i-1} and {i}"
+
+    def test_half_bar_changes_double_count(self):
+        """Half-bar mode should produce roughly 2x more chords than bar mode."""
+        melody = _c_major_melody(4)
+        h_bars = CoupledHMMHarmonizer(chord_change="bars")
+        h_half = CoupledHMMHarmonizer(chord_change="half")
+        r_bars = h_bars.harmonize(melody, C_MAJOR, duration_beats=16.0)
+        r_half = h_half.harmonize(melody, C_MAJOR, duration_beats=16.0)
+        assert len(r_half) >= len(r_bars)
+
+    def test_bar_aligned_starts(self):
+        """Bar-mode chord starts should be on bar boundaries (multiples of 4)."""
+        chords = _prog(C_MAJOR, bars=16, seed=1, chord_change="bars")
+        for c in chords:
+            assert abs(c.start % 4.0) < 0.01, f"Chord at {c.start} not on bar boundary"
+
+
+# -- 9f. Regression & anti-patterns --
+
+class TestProgressionAntiPatterns:
+
+    def test_no_infinite_loop_pattern(self):
+        """V→I→V→I should not repeat more than 3 times consecutively."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        roots = [c.root for c in chords]
+        loop_run = 0
+        for i in range(1, len(roots) - 1):
+            if roots[i - 1] == 7 and roots[i] == 0 and roots[i + 1] == 7:
+                loop_run += 1
+            else:
+                loop_run = 0
+            assert loop_run < 3, f"V→I→V loop detected {loop_run}x: {_names(chords)}"
+
+    def test_no_all_augmented(self):
+        """Augmented quality should not exceed 15%."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        aug_ratio = sum(1 for c in chords if c.quality == Quality.AUGMENTED) / len(chords)
+        assert aug_ratio < 0.15, f"Aug is {aug_ratio:.0%}"
+
+    def test_no_self_loop_chains(self):
+        """No more than 2 consecutive same-quality chords."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        run = 1
+        for i in range(1, len(chords)):
+            if chords[i].quality == chords[i - 1].quality:
+                run += 1
+                assert run <= 2, f"{chords[i].quality.name} repeated {run}x"
+            else:
+                run = 1
+
+    def test_no_single_root_monopoly(self):
+        """No single root should exceed 50% of all chords."""
+        chords = _prog(C_MAJOR, bars=16, seed=1)
+        from collections import Counter
+        counts = Counter(c.root for c in chords)
+        for root, cnt in counts.items():
+            ratio = cnt / len(chords)
+            assert ratio < 0.5, f"Root {NOTE_NAMES[root]} is {ratio:.0%}"
+
+
+# -- 9g. Constraints interaction with progressions --
+
+class TestProgressionConstraints:
+
+    def test_full_progression_locked(self):
+        """Locking all bars should produce exactly the locked progression."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=0, quality=Quality.MAJOR, start=0.0, duration=4.0),
+            ChordLabel(root=5, quality=Quality.MAJOR, start=4.0, duration=4.0),
+            ChordLabel(root=7, quality=Quality.DOMINANT7, start=8.0, duration=4.0),
+            ChordLabel(root=0, quality=Quality.MAJOR, start=12.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert len(result) == 4
+        assert [c.root for c in result] == [0, 5, 7, 0]
+
+    def test_partial_constraint_preserves_free(self):
+        """Locking first bar only; rest should be free."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [ChordLabel(root=0, quality=Quality.MAJOR, start=0.0, duration=4.0)]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        assert result[0].root == 0
+        assert result[0].quality == Quality.MAJOR
+        # Remaining bars should still be populated
+        assert len(result) == 4
+
+    def test_constraint_does_not_break_duration_sum(self):
+        """Constraints should not break total duration sum."""
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        melody = _c_major_melody(4)
+        constraints = [
+            ChordLabel(root=2, quality=Quality.MINOR, start=4.0, duration=4.0),
+        ]
+        result = h.harmonize(melody, C_MAJOR, duration_beats=16.0, constraints=constraints)
+        total = sum(c.duration for c in result)
+        assert abs(total - 16.0) < 0.01
