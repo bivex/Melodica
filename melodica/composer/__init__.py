@@ -69,6 +69,9 @@ from melodica.composer.structure_parser import (
     apply_phrase_transform,
     structure_to_slots,
 )
+from melodica.composer.motif import Motif
+from melodica.composer.tempo_map import TempoMap
+from melodica.composer.velocity_envelope import VelocityEnvelope
 
 __all__ = [
     "TransitionCoordinator",
@@ -124,4 +127,7 @@ __all__ = [
     "parse_slot_label",
     "apply_phrase_transform",
     "structure_to_slots",
+    "Motif",
+    "TempoMap",
+    "VelocityEnvelope",
 ]
