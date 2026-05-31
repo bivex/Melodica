@@ -399,6 +399,8 @@ from melodica.generators.orchestral_unpitched_percussion import (
     CastanetsGenerator,
     WhipSlapstickGenerator,
 )
+from melodica.generators.microtonal_melody import MicrotonalMelodyGenerator
+from melodica.generators.aleatoric import AleatoricGenerator
 
 __all__ = [
     "PhraseGenerator",
@@ -628,4 +630,6 @@ __all__ = [
     "TriangleGenerator",
     "CastanetsGenerator",
     "WhipSlapstickGenerator",
+    "MicrotonalMelodyGenerator",
+    "AleatoricGenerator",
 ]

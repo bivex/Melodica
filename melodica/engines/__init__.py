@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from melodica.types import ChordLabel, HarmonizationRequest
+from melodica.engines.microtuning import MicrotuningEngine
 
 
 class HarmonizerPort(Protocol):
