@@ -35,6 +35,7 @@ from melodica.generators.strings_ensemble import StringsEnsembleGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
+from melodica.composer import Motif, LeitmotifRegistry
 
 # GM Programs
 PIANO = 0
@@ -54,6 +55,28 @@ ACOUSTIC_BASS = 32
 random.seed(2026)
 OUT = Path("output/welcome_to_home")
 OUT.mkdir(parents=True, exist_ok=True)
+
+# ── Leitmotif: "Home" theme ──────────────────────────────────────────
+# 5-note motif: C - E - G - A - C  (rising, open, warm — "welcome home")
+_home_motif = Motif.from_notes([
+    NoteInfo(pitch=60, start=0.0, duration=3.0, velocity=55),
+    NoteInfo(pitch=64, start=3.0, duration=2.5, velocity=50),
+    NoteInfo(pitch=67, start=5.5, duration=3.0, velocity=55),
+    NoteInfo(pitch=69, start=8.5, duration=2.0, velocity=50),
+    NoteInfo(pitch=72, start=10.5, duration=5.0, velocity=55),
+])
+
+LM = LeitmotifRegistry()
+LM.register("home", _home_motif,
+            tags=["comfort", "belonging", "safe"], instrument=PIANO, velocity=50)
+LM.register("home_choir", _home_motif,
+            tags=["comfort", "belonging"], instrument=CHOIR, velocity=40)
+LM.register("home_flute", _home_motif,
+            tags=["comfort", "joy"], instrument=FLUTE, velocity=48)
+LM.register("home_harp", _home_motif,
+            tags=["comfort", "light"], instrument=HARP, velocity=45)
+LM.register("home_bells", _home_motif,
+            tags=["comfort", "memory"], instrument=BOWL, velocity=42)
 
 
 def _off(notes, offset):
@@ -109,10 +132,13 @@ def produce_01_morning_light():
     bells = [NoteInfo(pitch=84, start=float(i * 25), duration=6.0, velocity=50)
              for i in range(8)]
 
+    # LEITMOTIF: home theme — plain, piano, opening statement
+    motif = LM.render("home", offset=160.0, augment_factor=1.5)
+
     _export(
-        {"pad": pad, "piano": piano, "bells": bells},
+        {"pad": pad, "piano": piano, "bells": bells, "motif": motif},
         OUT / "01_Morning_Light.mid", bpm, key,
-        {"pad": PAD_WARM, "piano": PIANO, "bells": BOWL},
+        {"pad": PAD_WARM, "piano": PIANO, "bells": BOWL, "motif": PIANO},
     )
 
 
@@ -143,10 +169,13 @@ def produce_02_open_door():
     ).render(chords, key, dur - 60.0)
     flute = _off(flute, 40.0)
 
+    # LEITMOTIF: home on flute — transposed to G Lydian, inverted
+    motif = LM.render("home_flute", offset=120.0, transpose=7, invert=True)
+
     _export(
-        {"harp": harp, "strings": strings, "flute": flute},
+        {"harp": harp, "strings": strings, "flute": flute, "motif": motif},
         OUT / "02_Open_Door.mid", bpm, key,
-        {"harp": HARP, "strings": 49, "flute": FLUTE},
+        {"harp": HARP, "strings": 49, "flute": FLUTE, "motif": FLUTE},
     )
 
 
@@ -181,10 +210,15 @@ def produce_03_kitchen_warmth():
     ).render(chords, key, dur - 40.0)
     glock = _off(glock, 24.0)
 
+    # LEITMOTIF: home on bells — bright fragment, transposed to F
+    motif = LM.render("home_bells", offset=100.0, transpose=5,
+                       fragment_start=0.0, fragment_end=5.5,
+                       sequence_intervals=[0, 4], sequence_spacing=12.0)
+
     _export(
-        {"guitar": guitar, "pad": pad, "glock": glock},
+        {"guitar": guitar, "pad": pad, "glock": glock, "motif": motif},
         OUT / "03_Kitchen_Warmth.mid", bpm, key,
-        {"guitar": NYLON_GUITAR, "pad": PAD_WARM, "glock": GLOCKENSPIEL},
+        {"guitar": NYLON_GUITAR, "pad": PAD_WARM, "glock": GLOCKENSPIEL, "motif": BOWL},
     )
 
 
@@ -222,10 +256,14 @@ def produce_04_garden_outside():
         velocity=40
     ).render(chords, key, dur)
 
+    # LEITMOTIF: home on harp — transposed to D, retrograde, diminished
+    motif = LM.render("home_harp", offset=140.0, transpose=2,
+                       retrograde=True, diminish_factor=1.5)
+
     _export(
-        {"flute": flute, "harp": harp, "bass": bass},
+        {"flute": flute, "harp": harp, "bass": bass, "motif": motif},
         OUT / "04_Garden_Outside.mid", bpm, key,
-        {"flute": FLUTE, "harp": HARP, "bass": ACOUSTIC_BASS},
+        {"flute": FLUTE, "harp": HARP, "bass": ACOUSTIC_BASS, "motif": HARP},
     )
 
 
@@ -265,10 +303,14 @@ def produce_05_living_room():
     ).render(chords, key, dur - 40.0)
     choir = _off(choir, 24.0)
 
+    # LEITMOTIF: home on choir — warm, augmented, transposed to A Dorian
+    motif = LM.render("home_choir", offset=160.0, transpose=9,
+                       augment_factor=2.0)
+
     _export(
-        {"pad": pad, "piano": piano, "cello": cello, "choir": choir},
+        {"pad": pad, "piano": piano, "cello": cello, "choir": choir, "motif": motif},
         OUT / "05_Living_Room.mid", bpm, key,
-        {"pad": PAD_WARM, "piano": PIANO, "cello": CELLO, "choir": CHOIR},
+        {"pad": PAD_WARM, "piano": PIANO, "cello": CELLO, "choir": CHOIR, "motif": CHOIR},
     )
 
 
@@ -303,10 +345,14 @@ def produce_06_rainy_window():
     ).render(chords, key, dur - 64.0)
     flute = _off(flute, 48.0)
 
+    # LEITMOTIF: home on choir — minor, inverted, diminished (rainy nostalgia)
+    motif = LM.render("home_choir", offset=170.0, transpose=4,
+                       invert=True, diminish_factor=1.5)
+
     _export(
-        {"pad": pad, "harp": harp, "flute": flute},
+        {"pad": pad, "harp": harp, "flute": flute, "motif": motif},
         OUT / "06_Rainy_Window.mid", bpm, key,
-        {"pad": PAD_SPACE, "harp": HARP, "flute": FLUTE},
+        {"pad": PAD_SPACE, "harp": HARP, "flute": FLUTE, "motif": CHOIR},
     )
 
 
@@ -346,10 +392,14 @@ def produce_07_sunroom():
         velocity=35
     ).render(chords, key, dur)
 
+    # LEITMOTIF: home on flute — bright, sequenced (golden light echoes)
+    motif = LM.render("home_flute", offset=130.0, transpose=7,
+                       sequence_intervals=[0, 5, -2], sequence_spacing=16.0)
+
     _export(
-        {"guitar": guitar, "vibes": vibes, "strings": strings, "bass": bass},
+        {"guitar": guitar, "vibes": vibes, "strings": strings, "bass": bass, "motif": motif},
         OUT / "07_Sunroom.mid", bpm, key,
-        {"guitar": NYLON_GUITAR, "vibes": VIBRAPHONE, "strings": 49, "bass": ACOUSTIC_BASS},
+        {"guitar": NYLON_GUITAR, "vibes": VIBRAPHONE, "strings": 49, "bass": ACOUSTIC_BASS, "motif": FLUTE},
     )
 
 
@@ -389,10 +439,13 @@ def produce_08_fireplace():
     ).render(chords, key, dur - 60.0)
     choir = _off(choir, 36.0)
 
+    # LEITMOTIF: home on piano — warm, augmented x2, like a slow memory
+    motif = LM.render("home", offset=180.0, augment_factor=2.5)
+
     _export(
-        {"pad": pad, "piano": piano, "cello": cello, "choir": choir},
+        {"pad": pad, "piano": piano, "cello": cello, "choir": choir, "motif": motif},
         OUT / "08_Fireplace.mid", bpm, key,
-        {"pad": PAD_WARM, "piano": PIANO, "cello": CELLO, "choir": CHOIR},
+        {"pad": PAD_WARM, "piano": PIANO, "cello": CELLO, "choir": CHOIR, "motif": PIANO},
     )
 
 
@@ -431,10 +484,16 @@ def produce_09_goodnight():
     bowl = [NoteInfo(pitch=72, start=float(i * 40), duration=12.0, velocity=45)
             for i in range(7)]
 
+    # LEITMOTIF: home — final statement, plain + augmented, on choir
+    # Full motif at the end, like a lullaby resolution
+    motif_a = LM.render("home_choir", offset=200.0, transpose=5, augment_factor=1.5)
+    motif_b = LM.render("home", offset=230.0, augment_factor=3.0)
+    motif = motif_a + motif_b
+
     _export(
-        {"pad": pad, "harp": harp, "choir": choir, "bowl": bowl},
+        {"pad": pad, "harp": harp, "choir": choir, "bowl": bowl, "motif": motif},
         OUT / "09_Goodnight.mid", bpm, key,
-        {"pad": PAD_SPACE, "harp": HARP, "choir": CHOIR, "bowl": BOWL},
+        {"pad": PAD_SPACE, "harp": HARP, "choir": CHOIR, "bowl": BOWL, "motif": CHOIR},
     )
 
 
