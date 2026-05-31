@@ -175,6 +175,35 @@ GeneratorParams(density=0.8, key_range_low=40, key_range_high=84)
 | `TimpaniGenerator(params, chords, scale, duration)` | Kettledrum rolls/hits |
 | `SnareDrumGenerator(params, chords, scale, duration)` | Military snare patterns |
 
+### Orchestral Unpitched Percussion (NEW)
+
+Six generators for cinematic/orchestral unpitched percussion. All use fixed GM drum-map pitches (scale-agnostic). Constructor: `(params=None, *, pattern_type="...")`.
+
+```python
+from melodica.generators import (
+    BassDrumGenerator, TamTamGenerator, GongGenerator,
+    TriangleGenerator, CastanetsGenerator, WhipSlapstickGenerator,
+)
+```
+
+| Generator | GM Pitch | Pattern Types | Use Case |
+|---|---|---|---|
+| `BassDrumGenerator` | 36, 35 | `"single"`, `"roll"`, `"march"` | Heartbeat, march, primal pulse |
+| `TamTamGenerator` | 55 | `"strike"`, `"crescendo_strike"`, `"tremolo"` | Doom, ritual, suspense |
+| `GongGenerator` | 55 | `"strike"`, `"roll"`, `"crescendo"` | Power, transformation |
+| `TriangleGenerator` | 80 | `"single"`, `"roll"`, `"trill"` | Delicacy, shimmer |
+| `CastanetsGenerator` | 85 | `"single"`, `"roll"`, `"rhythm"` | Urgency, Spanish flavor |
+| `WhipSlapstickGenerator` | 91 | `"single"`, `"rapid"` | Shock, violence, decision |
+
+Usage:
+```python
+bdrum = BassDrumGenerator(pattern_type="march").render(chords, key, dur)
+tamtam = TamTamGenerator(pattern_type="crescendo_strike").render(chords, key, dur)
+gong = GongGenerator(pattern_type="crescendo").render(chords, key, dur)
+```
+
+Percussion tracks use GM program `0` in the instruments dict.
+
 ### Keyboards
 
 | Generator | Key Params |
@@ -324,7 +353,81 @@ ContrabassGenerator + TimpaniGenerator + HarpArpeggioGenerator
 6. Add timpani + snare for drive
 7. Full tutti peak
 
-## 11. Common Pitfalls
+## 11. Leitmotif Registry
+
+`LeitmotifRegistry` binds named motifs to characters, places, emotions via tags. Replaces manual `Motif.invert().fragment(...)` chains.
+
+```python
+from melodica.composer import Motif, LeitmotifRegistry
+from melodica.types import NoteInfo
+
+hero_motif = Motif.from_notes([
+    NoteInfo(pitch=72, start=0.0, duration=3.0, velocity=55),
+    NoteInfo(pitch=70, start=3.0, duration=2.0, velocity=50),
+    NoteInfo(pitch=67, start=5.0, duration=3.0, velocity=55),
+])
+
+registry = LeitmotifRegistry()
+registry.register("hero", hero_motif,
+    tags=["protagonist", "brave"], instrument=73, velocity=55)
+registry.register("villain", hero_motif,
+    tags=["antagonist", "dark"], instrument=68, velocity=45)
+
+# Render with transforms
+notes = registry.render("hero", offset=120.0)                          # plain
+notes = registry.render("hero", offset=60.0, transpose=7)              # transposed
+notes = registry.render("villain", offset=80.0, invert=True, transpose=-7)
+notes = registry.render("hero", offset=140.0, retrograde=True, diminish_factor=2.0)
+notes = registry.render("hero", offset=60.0, augment_factor=1.5)
+notes = registry.render("hero", offset=130.0, fragment_start=0.0, fragment_end=5.0)
+notes = registry.render("hero", offset=20.0,
+    retrograde=True, augment_factor=2.0,
+    sequence_intervals=[0, 5, -5, 12], sequence_spacing=20.0)
+
+# Query by tag
+all_hero = registry.render_all(tag="protagonist")
+```
+
+| Parameter | Effect |
+|---|---|
+| `offset` | Time shift in beats |
+| `transpose` | Semitone transposition |
+| `invert` | Mirror intervals |
+| `retrograde` | Reverse note order |
+| `augment_factor` | Stretch durations |
+| `diminish_factor` | Compress durations |
+| `fragment_start`, `fragment_end` | Time window filter |
+| `sequence_intervals`, `sequence_spacing` | Repeat at pitch intervals |
+
+## 12. Key Modulation via MusicalForm
+
+Per-section key changes within a single track via `FormSection.key`:
+
+```python
+from melodica.form import FormSection, MusicalForm
+
+form = MusicalForm(sections=[
+    FormSection(name="exposition", start_beat=0, duration_beats=80,
+                dynamics="mf", tempo_multiplier=1.0,
+                active_families=["strings"], mood="lyrical",
+                key=C_MAJOR),
+    FormSection(name="development", start_beat=80, duration_beats=80,
+                dynamics="f", tempo_multiplier=1.1,
+                active_families=["full"], mood="dramatic",
+                key=A_MINOR),          # Modulates to minor
+    FormSection(name="recapitulation", start_beat=160, duration_beats=80,
+                dynamics="ff", tempo_multiplier=1.0,
+                active_families=["full"], mood="triumphant",
+                key=C_MAJOR),          # Returns to tonic
+], tempo_map=[(0, bpm)])
+
+# Query active key at any beat
+active_key = form.key_at(50.0, fallback_key)   # C_MAJOR
+active_key = form.key_at(120.0, fallback_key)  # A_MINOR
+active_key = form.key_at(200.0, fallback_key)  # C_MAJOR
+```
+
+## 13. Common Pitfalls
 
 | Pitfall | Fix |
 |---|---|
@@ -336,7 +439,7 @@ ContrabassGenerator + TimpaniGenerator + HarpArpeggioGenerator
 | Track has no dynamics | Use `_expr_swell()` for crescendo-diminuendo |
 | All tracks same density | Vary `GeneratorParams.density`: 0.2 sparse, 0.5 medium, 0.8 dense |
 
-## 12. Album Structure (20 Tracks)
+## 14. Album Structure (20 Tracks)
 
 Organize into 4-5 phases with emotional arc:
 
@@ -353,7 +456,7 @@ Each phase should:
 - Gradually increase then decrease BPM
 - Build orchestration from sparse to full and back
 
-## 13. Generating the Album
+## 15. Generating the Album
 
 After writing the script, run it:
 
@@ -366,7 +469,7 @@ Output MIDI files appear in `output/album_name/`. Verify with:
 ls -la output/album_name/*.mid | wc -l  # Should match track count
 ```
 
-## 14. Generator Signature Reference
+## 16. Generator Signature Reference
 
 For detailed generator signatures, see `!`cat docs/Generators.md | head -200``.
 

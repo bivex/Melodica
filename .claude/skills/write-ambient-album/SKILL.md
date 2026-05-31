@@ -31,6 +31,12 @@ from melodica.generators.drone import DroneGenerator
 from melodica.generators.ambient import AmbientPadGenerator
 from melodica.generators.rest import RestGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
+from melodica.generators import (
+    BassDrumGenerator, TamTamGenerator, GongGenerator,
+    TriangleGenerator, CastanetsGenerator, WhipSlapstickGenerator,
+)
+from melodica.composer import Motif, TempoMap, VelocityEnvelope, LeitmotifRegistry
+from melodica.form import FormSection, MusicalForm
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -174,7 +180,150 @@ cello = DroneGenerator(
 ).render(chords, key, dur)
 ```
 
-## 7. GM Program Assignments
+## 7. Leitmotif Registry
+
+`LeitmotifRegistry` binds named motifs to characters, places, emotions via tags. Replaces manual `Motif.invert().fragment(...)` chains with a semantic, reusable API.
+
+```python
+from melodica.composer import Motif, LeitmotifRegistry
+from melodica.types import NoteInfo
+
+# Create the base motif
+hero_motif = Motif.from_notes([
+    NoteInfo(pitch=72, start=0.0, duration=3.0, velocity=55),
+    NoteInfo(pitch=70, start=3.0, duration=2.0, velocity=50),
+    NoteInfo(pitch=67, start=5.0, duration=3.0, velocity=55),
+])
+
+# Register with semantic tags and instrument preferences
+registry = LeitmotifRegistry()
+registry.register("hero", hero_motif,
+    tags=["protagonist", "brave"], instrument=73, velocity=55)
+registry.register("villain", hero_motif,
+    tags=["antagonist", "dark"], instrument=68, velocity=45)
+
+# Render with transforms — replaces manual Motif chains
+notes = registry.render("hero", offset=120.0)                          # plain
+notes = registry.render("hero", offset=60.0, transpose=7)              # transposed up
+notes = registry.render("villain", offset=80.0, invert=True, transpose=-7)  # corrupted
+notes = registry.render("hero", offset=140.0, retrograde=True, diminish_factor=2.0)
+notes = registry.render("hero", offset=60.0, augment_factor=1.5)
+notes = registry.render("hero", offset=130.0, fragment_start=0.0, fragment_end=5.0)
+notes = registry.render("hero", offset=20.0,
+    retrograde=True, augment_factor=2.0,
+    sequence_intervals=[0, 5, -5, 12], sequence_spacing=20.0)
+
+# Query by tag — render all motifs tagged "protagonist"
+all_hero = registry.render_all(tag="protagonist")
+```
+
+### Transform Reference
+
+| Parameter | Effect |
+|---|---|
+| `offset` | Time shift in beats |
+| `transpose` | Semitone transposition (positive = up) |
+| `invert` | Mirror intervals around first note |
+| `retrograde` | Reverse note order |
+| `augment_factor` | Stretch durations (2.0 = twice as long) |
+| `diminish_factor` | Compress durations (2.0 = half as long) |
+| `fragment_start`, `fragment_end` | Keep only notes in time window |
+| `sequence_intervals`, `sequence_spacing` | Repeat at pitch intervals with spacing |
+
+## 8. Orchestral Unpitched Percussion
+
+Six generators for atmospheric/cinematic percussion. All use fixed GM drum-map pitches (scale-agnostic). Constructor: `(params=None, *, pattern_type="...")`.
+
+```python
+from melodica.generators import (
+    BassDrumGenerator, TamTamGenerator, GongGenerator,
+    TriangleGenerator, CastanetsGenerator, WhipSlapstickGenerator,
+)
+```
+
+### Generator Reference
+
+| Generator | GM Pitch | Pattern Types | Use Case |
+|---|---|---|---|
+| `BassDrumGenerator` | 36 (Gran Cassa), 35 (Acoustic) | `"single"`, `"roll"`, `"march"` | Heartbeat, tension, primal pulse |
+| `TamTamGenerator` | 55 | `"strike"`, `"crescendo_strike"`, `"tremolo"` | Doom, ritual, ominous presence |
+| `GongGenerator` | 55 | `"strike"`, `"roll"`, `"crescendo"` | Power, transformation, revelation |
+| `TriangleGenerator` | 80 | `"single"`, `"roll"`, `"trill"` | Delicacy, temptation, shimmer |
+| `CastanetsGenerator` | 85 | `"single"`, `"roll"`, `"rhythm"` | Urgency, agitation, Spanish flavor |
+| `WhipSlapstickGenerator` | 91 | `"single"`, `"rapid"` | Shock, decision, violence |
+
+### Usage Pattern
+
+```python
+# Bass drum march — a heartbeat or approaching doom
+bdrum = BassDrumGenerator(pattern_type="march").render(chords, key, dur)
+
+# Tam-tam crescendo — building tension toward a reveal
+tamtam = TamTamGenerator(pattern_type="crescendo_strike").render(chords, key, dur)
+
+# Gong crescendo — dark power manifesting
+gong = GongGenerator(pattern_type="crescendo").render(chords, key, dur)
+
+# Triangle trill — silver edge of temptation
+triangle = TriangleGenerator(pattern_type="trill").render(chords, key, dur)
+
+# Whip rapid — the crack of a final decision
+whip = WhipSlapstickGenerator(pattern_type="rapid").render(chords, key, dur)
+```
+
+### Mixing Gains for Percussion
+
+```python
+desk.track_gains.update({
+    "bdrum": 0.35, "tamtam": 0.4, "gong": 0.35, "triangle": 0.3,
+    "castanets": 0.25, "whip": 0.3,
+})
+```
+
+Percussion tracks use GM program `0` (channel 10 assignment handled upstream):
+```python
+_export({...},
+    instruments={..., "bdrum": 0, "tamtam": 0, "gong": 0},
+)
+```
+
+## 9. Key Modulation via MusicalForm
+
+`MusicalForm` with `FormSection.key` enables per-section key changes within a single track. Use for narrative albums where the tonal center shifts with the story.
+
+```python
+from melodica.form import FormSection, MusicalForm
+
+form = MusicalForm(sections=[
+    FormSection(name="doubt", start_beat=0, duration_beats=100,
+                dynamics="pp", tempo_multiplier=1.0,
+                active_families=["piano"], mood="hesitation",
+                key=A_DOR),           # Dorian — uncertain
+    FormSection(name="resolve", start_beat=100, duration_beats=120,
+                dynamics="mf", tempo_multiplier=1.15,
+                active_families=["full"], mood="determination",
+                key=D_DOR),           # D Dorian — warmer, resolved
+    FormSection(name="judgment", start_beat=220, duration_beats=100,
+                dynamics="ff", tempo_multiplier=0.85,
+                active_families=["full", "percussion"], mood="transcendent",
+                key=F_LYD),           # Lydian — transcendent, open
+], tempo_map=[(0, bpm)])
+
+# Query the active key at any beat position
+active_key = form.key_at(50.0, fallback_key)   # Returns A_DOR
+active_key = form.key_at(150.0, fallback_key)  # Returns D_DOR
+active_key = form.key_at(250.0, fallback_key)  # Returns F_LYD
+active_key = form.key_at(999.0, fallback_key)  # Returns fallback_key
+```
+
+### When to Use
+
+- **Narrative albums**: key shifts match story beats (doubt → resolve → transcend)
+- **Dark ambient**: modulation between Locrian, Phrygian, and Harmonic Minor
+- **Multi-movement tracks**: each section in a different tonal center
+- **Album finales**: progression from minor to Lydian for transcendence
+
+## 10. GM Program Assignments
 
 ```python
 TIBETAN_BOWL = 14   # Tubular Bells
@@ -193,7 +342,7 @@ NYLON_GUITAR = 24
 TABLE        = 116  # Taiko/Ethnic
 ```
 
-## 8. Track Function Pattern
+## 11. Track Function Pattern
 
 ```python
 def produce_track_01():
@@ -231,7 +380,7 @@ def produce_track_01():
     )
 ```
 
-## 9. Album Structure
+## 12. Album Structure
 
 ```python
 def main():
@@ -254,7 +403,7 @@ Track 6:   Return to stillness (44-52 BPM)
 Track 7:   Dissolution into silence (40 BPM)
 ```
 
-## 10. Ambient BPM Guide
+## 13. Ambient BPM Guide
 
 | Mood | BPM |
 |---|---|
@@ -266,7 +415,7 @@ Track 7:   Dissolution into silence (40 BPM)
 | Dark ambient march | 70-90 |
 | Energetic meditation | 100-120 |
 
-## 11. Mastering LUFS Targets
+## 14. Mastering LUFS Targets
 
 | Context | Target LUFS |
 |---|---|
@@ -274,7 +423,7 @@ Track 7:   Dissolution into silence (40 BPM)
 | Ambient listening | -16.0 to -14.0 |
 | Dark ambient / cinematic | -14.0 to -12.0 |
 
-## 12. Density Guide
+## 15. Density Guide
 
 | Role | Density |
 |---|---|
@@ -284,7 +433,7 @@ Track 7:   Dissolution into silence (40 BPM)
 | Arpeggio | 0.06–0.15 |
 | Percussion hint | 0.08–0.20 |
 
-## 13. Common Pitfalls
+## 16. Common Pitfalls
 
 | Issue | Fix |
 |---|---|
@@ -297,7 +446,7 @@ Track 7:   Dissolution into silence (40 BPM)
 | All tracks same key | Move through related keys (C → G → D → F → C) |
 | Drone disappears in mix | Set `track_gains["drone"]` to 0.35–0.40 |
 
-## 14. Running
+## 17. Running
 
 ```bash
 python scripts/albums/ambient/album_name.py
