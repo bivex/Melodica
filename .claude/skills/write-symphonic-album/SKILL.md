@@ -29,6 +29,10 @@ from melodica import (
 from melodica.midi import export_multitrack_midi
 from melodica.mixing import MixingDesk
 from melodica.mastering import MasteringDesk
+from melodica.composer.orchestration_rules import OrchestrationRules, INSTRUMENTS
+from melodica.engines.microtuning import MicrotuningEngine
+from melodica.generators.microtonal_melody import MicrotonalMelodyGenerator
+from melodica.generators.aleatoric import AleatoricGenerator
 ```
 
 ## 2. Album Boilerplate
@@ -427,7 +431,106 @@ active_key = form.key_at(120.0, fallback_key)  # A_MINOR
 active_key = form.key_at(200.0, fallback_key)  # C_MAJOR
 ```
 
-## 13. Common Pitfalls
+## 13. Orchestration Rules Engine
+
+`OrchestrationRules` validates notes against 30 orchestral instrument ranges. Use before export to catch unplayable pitches.
+
+```python
+from melodica.composer.orchestration_rules import OrchestrationRules, INSTRUMENTS
+
+rules = OrchestrationRules()
+
+# Validate — returns list of OrchestrationWarning
+warnings = rules.validate(trumpet_notes, "trumpet")
+for w in warnings:
+    print(f"{w.severity}: {w.message}")
+
+# Clamp — force notes into playable range
+safe_notes = rules.clamp_to_range(trumpet_notes, "trumpet")
+
+# Identify register
+reg = rules.register_at("french_horn", 60)  # "middle"
+
+# Suggest nearest comfortable octave
+pitch = rules.suggest_octave("oboe", 80)
+
+# Analyze blend between two instruments
+blend = rules.blend_with("violin", "flute")
+# {"overlap_semitones": 29, "blend_quality": "strong", ...}
+```
+
+Available instruments: violin, viola, cello, contrabass, flute, piccolo, oboe, english_horn, clarinet, bass_clarinet, bassoon, contrabassoon, french_horn, trumpet, trombone, bass_trombone, tuba, harp, piano, timpani, marimba, vibraphone, xylophone, glockenspiel, celesta, choir_soprano, choir_alto, choir_tenor, choir_bass, organ.
+
+## 14. Microtonality
+
+`MicrotuningEngine` converts fractional MIDI pitches into integer NoteInfo with pitch_bend expression data, enabling microtonal scales (quarter-tone, Arabic, etc.) within standard MIDI.
+
+```python
+from melodica.engines.microtuning import MicrotuningEngine
+
+tuning = MicrotuningEngine(bend_range=2)  # ±2 semitones (standard)
+
+# Snap float pitch to nearest scale degree
+snapped = tuning.snap_to_scale(61.5, key)
+
+# Quantize — returns (midi_int, expression_dict)
+midi_int, expr = tuning.quantize_pitch(61.5, key)
+
+# Render a single microtonal note
+note = tuning.render_microtonal_note(61.5, start=0.0, duration=2.0, velocity=70, scale=key)
+
+# Wrap existing notes with microtonal quantization
+wrapped = tuning.wrap_notes(melody_notes, key)
+```
+
+`MicrotonalMelodyGenerator` produces complete microtonal melodies:
+
+```python
+from melodica.generators.microtonal_melody import MicrotonalMelodyGenerator
+
+micro_melody = MicrotonalMelodyGenerator(
+    GeneratorParams(density=0.3, key_range_low=60, key_range_high=84),
+    phrase_length=8.0,
+    bend_range=2,
+    note_duration=1.5,
+    velocity_range=(50, 80),
+).render(chords, key, dur)
+```
+
+Use with microtonal modes: `Mode.QUARTER_TONE_MINOR`, `Mode.ARABIC_SIKAH`, etc.
+
+## 15. Aleatoric Generator
+
+`AleatoricGenerator` produces chance-based compositions with 6 modes. Useful for modern orchestral passages, tension builds, and avant-garde sections.
+
+```python
+from melodica.generators.aleatoric import AleatoricGenerator
+
+# Xenakis-inspired textural cloud — dense cluster for tension
+cloud = AleatoricGenerator(
+    GeneratorParams(density=0.4, key_range_low=36, key_range_high=84),
+    mode="textural_cloud",
+    density=0.6,
+).render(chords, key, dur)
+
+# Tone cluster — dramatic orchestral stab
+cluster = AleatoricGenerator(
+    GeneratorParams(density=0.8, key_range_low=48, key_range_high=72),
+    mode="tone_cluster",
+    density=1.0,
+).render(chords, key, 8.0)  # Short burst
+```
+
+| Mode | Description | Use Case |
+|---|---|---|
+| `"tone_cluster"` | Dense chromatic cluster, simultaneous onset | Dramatic stabs, horror |
+| `"chance_operations"` | Random pitch/rhythm placement (Cage) | Unpredictable textures |
+| `"repeat_ad_lib"` | Repeated figure with micro-variations | Minimalist ostinato |
+| `"graphic_score"` | Broad pitch regions with free rhythm | Open-form, Lutoslawski |
+| `"pointillist"` | Isolated, scattered short notes | Webern-esque fragility |
+| `"textural_cloud"` | Gaussian density cloud (Xenakis) | Dense masses, tension |
+
+## 16. Common Pitfalls
 
 | Pitfall | Fix |
 |---|---|
@@ -439,7 +542,7 @@ active_key = form.key_at(200.0, fallback_key)  # C_MAJOR
 | Track has no dynamics | Use `_expr_swell()` for crescendo-diminuendo |
 | All tracks same density | Vary `GeneratorParams.density`: 0.2 sparse, 0.5 medium, 0.8 dense |
 
-## 14. Album Structure (20 Tracks)
+## 17. Album Structure (20 Tracks)
 
 Organize into 4-5 phases with emotional arc:
 
@@ -456,7 +559,7 @@ Each phase should:
 - Gradually increase then decrease BPM
 - Build orchestration from sparse to full and back
 
-## 15. Generating the Album
+## 18. Generating the Album
 
 After writing the script, run it:
 
@@ -469,7 +572,7 @@ Output MIDI files appear in `output/album_name/`. Verify with:
 ls -la output/album_name/*.mid | wc -l  # Should match track count
 ```
 
-## 16. Generator Signature Reference
+## 19. Generator Signature Reference
 
 For detailed generator signatures, see `!`cat docs/Generators.md | head -200``.
 

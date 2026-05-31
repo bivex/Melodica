@@ -36,7 +36,11 @@ from melodica.generators import (
     TriangleGenerator, CastanetsGenerator, WhipSlapstickGenerator,
 )
 from melodica.composer import Motif, TempoMap, VelocityEnvelope, LeitmotifRegistry
+from melodica.composer.orchestration_rules import OrchestrationRules, INSTRUMENTS
 from melodica.form import FormSection, MusicalForm
+from melodica.engines.microtuning import MicrotuningEngine
+from melodica.generators.microtonal_melody import MicrotonalMelodyGenerator
+from melodica.generators.aleatoric import AleatoricGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -433,7 +437,107 @@ Track 7:   Dissolution into silence (40 BPM)
 | Arpeggio | 0.06–0.15 |
 | Percussion hint | 0.08–0.20 |
 
-## 16. Common Pitfalls
+## 16. Orchestration Rules Engine
+
+`OrchestrationRules` validates notes against 30 orchestral instrument ranges. Use before export to catch unplayable pitches.
+
+```python
+from melodica.composer.orchestration_rules import OrchestrationRules, INSTRUMENTS
+
+rules = OrchestrationRules()
+
+# Validate — returns list of OrchestrationWarning
+warnings = rules.validate(flute_notes, "flute")
+for w in warnings:
+    print(f"{w.severity}: {w.message}")
+
+# Clamp — force notes into playable range
+safe_notes = rules.clamp_to_range(flute_notes, "flute")
+
+# Identify register
+reg = rules.register_at("flute", 84)  # "high"
+
+# Suggest nearest comfortable octave
+pitch = rules.suggest_octave("cello", 72)
+
+# Analyze blend between two instruments
+blend = rules.blend_with("violin", "viola")
+# {"overlap_semitones": 33, "blend_quality": "strong", ...}
+```
+
+Available instruments: violin, viola, cello, contrabass, flute, piccolo, oboe, english_horn, clarinet, bass_clarinet, bassoon, contrabassoon, french_horn, trumpet, trombone, bass_trombone, tuba, harp, piano, timpani, marimba, vibraphone, xylophone, glockenspiel, celesta, choir_soprano, choir_alto, choir_tenor, choir_bass, organ.
+
+## 17. Microtonality
+
+`MicrotuningEngine` converts fractional MIDI pitches into integer NoteInfo with pitch_bend expression data, enabling microtonal scales (quarter-tone, Arabic, etc.) within standard MIDI.
+
+```python
+from melodica.engines.microtuning import MicrotuningEngine
+
+tuning = MicrotuningEngine(bend_range=2)  # ±2 semitones (standard)
+
+# Snap float pitch to nearest scale degree
+snapped = tuning.snap_to_scale(61.5, key)
+
+# Quantize — returns (midi_int, expression_dict)
+midi_int, expr = tuning.quantize_pitch(61.5, key)
+# midi_int=62, expr={} if on-scale, or {"pitch_bend": [(0.0, bend_val)]}
+
+# Render a single microtonal note
+note = tuning.render_microtonal_note(61.5, start=0.0, duration=4.0, velocity=55, scale=key)
+
+# Wrap existing notes with microtonal quantization
+wrapped = tuning.wrap_notes(melody_notes, key)
+```
+
+`MicrotonalMelodyGenerator` produces complete microtonal melodies:
+
+```python
+from melodica.generators.microtonal_melody import MicrotonalMelodyGenerator
+
+micro_melody = MicrotonalMelodyGenerator(
+    GeneratorParams(density=0.05, key_range_low=60, key_range_high=84),
+    phrase_length=16.0,
+    bend_range=2,
+    note_duration=3.0,
+    velocity_range=(35, 55),
+).render(chords, key, dur)
+```
+
+Use with microtonal modes: `Mode.QUARTER_TONE_MINOR`, `Mode.ARABIC_SIKAH`, etc.
+
+## 18. Aleatoric Generator
+
+`AleatoricGenerator` produces chance-based compositions with 6 modes. Ideal for ambient textures, experimental passages, and atmospheric soundscapes.
+
+```python
+from melodica.generators.aleatoric import AleatoricGenerator
+
+# Xenakis-inspired textural cloud
+cloud = AleatoricGenerator(
+    GeneratorParams(density=0.08, key_range_low=36, key_range_high=72),
+    mode="textural_cloud",
+    density=0.3,
+).render(chords, key, dur)
+
+# Webern-inspired pointillist
+points = AleatoricGenerator(
+    GeneratorParams(density=0.06, key_range_low=60, key_range_high=96),
+    mode="pointillist",
+    density=0.15,
+).render(chords, key, dur)
+```
+
+| Mode | Description | Use Case |
+|---|---|---|
+| `"tone_cluster"` | Dense chromatic cluster, simultaneous onset | Dissonant stabs, tension |
+| `"chance_operations"` | Random pitch/rhythm placement (Cage) | Unpredictable textures |
+| `"repeat_ad_lib"` | Repeated figure with micro-variations | Minimalist ostinato |
+| `"graphic_score"` | Broad pitch regions with free rhythm | Spatial, open-form |
+| `"pointillist"` | Isolated, scattered short notes | Webern-esque fragility |
+| `"textural_cloud"` | Gaussian density cloud (Xenakis) | Ambient masses, swarms |
+
+## 19. Common Pitfalls
 
 | Issue | Fix |
 |---|---|
@@ -446,7 +550,7 @@ Track 7:   Dissolution into silence (40 BPM)
 | All tracks same key | Move through related keys (C → G → D → F → C) |
 | Drone disappears in mix | Set `track_gains["drone"]` to 0.35–0.40 |
 
-## 17. Running
+## 20. Running
 
 ```bash
 python scripts/albums/ambient/album_name.py
