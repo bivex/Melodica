@@ -357,12 +357,92 @@ ContrabassGenerator + TimpaniGenerator + HarpArpeggioGenerator
 6. Add timpani + snare for drive
 7. Full tutti peak
 
-## 11. Leitmotif Registry
+## 11. Motif Transforms
 
-`LeitmotifRegistry` binds named motifs to characters, places, emotions via tags. Replaces manual `Motif.invert().fragment(...)` chains.
+`Motif` provides 19 transforms — each returns a NEW Motif (immutability preserved). Chain transforms via `develop()`.
 
 ```python
-from melodica.composer import Motif, LeitmotifRegistry
+from melodica.composer import Motif
+from melodica.types import NoteInfo, Scale, Mode
+
+m = Motif.from_notes([
+    NoteInfo(pitch=72, start=0.0, duration=3.0, velocity=55),
+    NoteInfo(pitch=70, start=3.0, duration=2.0, velocity=50),
+    NoteInfo(pitch=67, start=5.0, duration=3.0, velocity=55),
+])
+
+sc = Scale(0, Mode.MAJOR)
+```
+
+### Transform Reference
+
+| Method | Purpose |
+|---|---|
+| `transpose(semitones)` | Chromatic transposition |
+| `invert(center)` | Mirror pitches around center (default: average) |
+| `retrograde()` | Reverse note order with re-timed starts |
+| `augment(factor)` | Stretch durations and gaps (2.0 = twice as long) |
+| `diminish(factor)` | Compress durations and gaps |
+| `sequence(intervals, spacing)` | Repeat at pitch intervals |
+| `fragment(start_beat, end_beat)` | Extract notes in time window |
+| `transpose_diatonic(degrees, scale)` | Modal transpose by N scale degrees |
+| `invert_diatonic(scale, axis_degree)` | Scale-aware inversion (stays diatonic) |
+| `displace(beats)` | Rhythmic displacement — shift all start times |
+| `truncate_head(n)` | Remove first N notes |
+| `truncate_tail(n)` | Remove last N notes |
+| `expand(factor)` | Stretch gaps between notes, keep durations |
+| `apply_dynamics(envelope)` | Apply VelocityEnvelope |
+| `ornament(style, scale)` | Add grace/passing/neighbor/cambiata/spiceup |
+| `canon(voices, delay, intervals)` | Generate canon entries |
+| `with_pedal(pitch)` | Add sustained pedal note spanning motif |
+| `humanize(timing, velocity)` | Random timing/velocity variation |
+
+### Chaining via `develop()`
+
+```python
+# Chain multiple transforms in musical order
+developed = m.develop(
+    retrograde=True,
+    transpose=-3,
+    augment_factor=2.0,
+    humanize_timing=0.01,
+    pedal_pitch=36,
+)
+
+# Full develop() chain order:
+# fragment → truncate → retrograde → invert → invert_diatonic →
+# augment/diminish → expand → transpose → transpose_diatonic →
+# displace → ornament → apply_dynamics → humanize → canon →
+# with_pedal → sequence
+```
+
+### develop() kwargs
+
+| Kwarg | Effect |
+|---|---|
+| `fragment_start`, `fragment_end` | Keep only notes in time window |
+| `truncate_head_n`, `truncate_tail_n` | Remove first/last N notes |
+| `retrograde` (bool) | Reverse note order |
+| `invert` (bool), `invert_center` | Chromatic inversion |
+| `invert_diatonic` (bool), `invert_diatonic_scale`, `invert_diatonic_axis` | Scale-aware inversion |
+| `augment_factor`, `diminish_factor` | Time stretching |
+| `expand_factor` | Stretch gaps only |
+| `transpose` | Semitone transposition |
+| `transpose_diatonic_degrees`, `transpose_diatonic_scale` | Modal transposition |
+| `displace_beats` | Shift all starts |
+| `ornament_style`, `ornament_scale` | Add ornamentation |
+| `dynamics_envelope` | Apply VelocityEnvelope |
+| `humanize_timing`, `humanize_velocity` | Random variation |
+| `canon_voices`, `canon_delay`, `canon_intervals` | Canon generation |
+| `pedal_pitch` | Add sustained bass note |
+| `sequence_intervals`, `sequence_spacing` | Sequence repetition |
+
+## 12. Leitmotif Registry
+
+`LeitmotifRegistry` binds named motifs to characters, places, emotions via tags. Supports variants, evolution, mood-based rendering, layering, and counter-motif generation.
+
+```python
+from melodica.composer import Motif, LeitmotifRegistry, MOOD_PRESETS
 from melodica.types import NoteInfo
 
 hero_motif = Motif.from_notes([
@@ -377,24 +457,57 @@ registry.register("hero", hero_motif,
 registry.register("villain", hero_motif,
     tags=["antagonist", "dark"], instrument=68, velocity=45)
 
-# Render with transforms
-notes = registry.render("hero", offset=120.0)                          # plain
-notes = registry.render("hero", offset=60.0, transpose=7)              # transposed
+# Basic rendering with transforms
+notes = registry.render("hero", offset=120.0)
+notes = registry.render("hero", offset=60.0, transpose=7)
 notes = registry.render("villain", offset=80.0, invert=True, transpose=-7)
-notes = registry.render("hero", offset=140.0, retrograde=True, diminish_factor=2.0)
-notes = registry.render("hero", offset=60.0, augment_factor=1.5)
-notes = registry.render("hero", offset=130.0, fragment_start=0.0, fragment_end=5.0)
-notes = registry.render("hero", offset=20.0,
-    retrograde=True, augment_factor=2.0,
-    sequence_intervals=[0, 5, -5, 12], sequence_spacing=20.0)
+
+# Evolve — create named variants via transform chains
+registry.evolve("hero", "dark_version", transpose=-6, retrograde=True)
+registry.evolve("hero", "bright", transpose=12, augment_factor=1.5)
+
+# Render a specific variant
+notes = registry.render("hero", variant="dark_version", offset=40.0)
+
+# Mood-based rendering — 8 presets
+notes = registry.render_for("hero", "dark", offset=60.0)
+notes = registry.render_for("hero", "ethereal", offset=80.0, intensity=1.5)
+
+# Layer multiple motifs polyphonically
+notes = registry.layer(
+    ["hero", "villain"], [0.0, 20.0],
+    transpose=5, augment_factor=1.5
+)
+
+# Auto-generate contrasting counter-motif
+from melodica.types import Scale, Mode
+sc = Scale(0, Mode.MAJOR)
+counter = registry.counter_motif("hero", sc)
+counter_notes = counter.render(offset=50.0)
 
 # Query by tag
 all_hero = registry.render_all(tag="protagonist")
 ```
 
+### Mood Presets
+
+| Mood | Transforms |
+|---|---|
+| `"dark"` | invert + diminish x2 + transpose -6 |
+| `"triumphant"` | transpose +7 + augment x1.5 |
+| `"tender"` | augment x1.8 + fragment |
+| `"aggressive"` | diminish x2 + retrograde |
+| `"mysterious"` | invert + augment x2 + transpose +3 |
+| `"nostalgic"` | retrograde + augment x2 |
+| `"urgent"` | diminish x2.5 |
+| `"ethereal"` | augment x3 + transpose +12 |
+
+### render() Transform Parameters
+
 | Parameter | Effect |
 |---|---|
 | `offset` | Time shift in beats |
+| `variant` | Use a named variant instead of default |
 | `transpose` | Semitone transposition |
 | `invert` | Mirror intervals |
 | `retrograde` | Reverse note order |
@@ -403,7 +516,7 @@ all_hero = registry.render_all(tag="protagonist")
 | `fragment_start`, `fragment_end` | Time window filter |
 | `sequence_intervals`, `sequence_spacing` | Repeat at pitch intervals |
 
-## 12. Key Modulation via MusicalForm
+## 13. Key Modulation via MusicalForm
 
 Per-section key changes within a single track via `FormSection.key`:
 
@@ -431,7 +544,7 @@ active_key = form.key_at(120.0, fallback_key)  # A_MINOR
 active_key = form.key_at(200.0, fallback_key)  # C_MAJOR
 ```
 
-## 13. Orchestration Rules Engine
+## 14. Orchestration Rules Engine
 
 `OrchestrationRules` validates notes against 30 orchestral instrument ranges. Use before export to catch unplayable pitches.
 
@@ -461,7 +574,7 @@ blend = rules.blend_with("violin", "flute")
 
 Available instruments: violin, viola, cello, contrabass, flute, piccolo, oboe, english_horn, clarinet, bass_clarinet, bassoon, contrabassoon, french_horn, trumpet, trombone, bass_trombone, tuba, harp, piano, timpani, marimba, vibraphone, xylophone, glockenspiel, celesta, choir_soprano, choir_alto, choir_tenor, choir_bass, organ.
 
-## 14. Microtonality
+## 15. Microtonality
 
 `MicrotuningEngine` converts fractional MIDI pitches into integer NoteInfo with pitch_bend expression data, enabling microtonal scales (quarter-tone, Arabic, etc.) within standard MIDI.
 
@@ -499,7 +612,7 @@ micro_melody = MicrotonalMelodyGenerator(
 
 Use with microtonal modes: `Mode.QUARTER_TONE_MINOR`, `Mode.ARABIC_SIKAH`, etc.
 
-## 15. Aleatoric Generator
+## 16. Aleatoric Generator
 
 `AleatoricGenerator` produces chance-based compositions with 6 modes. Useful for modern orchestral passages, tension builds, and avant-garde sections.
 
@@ -530,7 +643,7 @@ cluster = AleatoricGenerator(
 | `"pointillist"` | Isolated, scattered short notes | Webern-esque fragility |
 | `"textural_cloud"` | Gaussian density cloud (Xenakis) | Dense masses, tension |
 
-## 16. Common Pitfalls
+## 17. Common Pitfalls
 
 | Pitfall | Fix |
 |---|---|
@@ -542,7 +655,7 @@ cluster = AleatoricGenerator(
 | Track has no dynamics | Use `_expr_swell()` for crescendo-diminuendo |
 | All tracks same density | Vary `GeneratorParams.density`: 0.2 sparse, 0.5 medium, 0.8 dense |
 
-## 17. Album Structure (20 Tracks)
+## 18. Album Structure (20 Tracks)
 
 Organize into 4-5 phases with emotional arc:
 
@@ -559,7 +672,7 @@ Each phase should:
 - Gradually increase then decrease BPM
 - Build orchestration from sparse to full and back
 
-## 18. Generating the Album
+## 19. Generating the Album
 
 After writing the script, run it:
 
@@ -572,7 +685,7 @@ Output MIDI files appear in `output/album_name/`. Verify with:
 ls -la output/album_name/*.mid | wc -l  # Should match track count
 ```
 
-## 19. Generator Signature Reference
+## 20. Generator Signature Reference
 
 For detailed generator signatures, see `!`cat docs/Generators.md | head -200``.
 
