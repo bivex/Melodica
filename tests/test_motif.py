@@ -177,3 +177,202 @@ class TestImmutability:
         original_pitches = [n.pitch for n in m.notes]
         m.retrograde()
         assert [n.pitch for n in m.notes] == original_pitches
+
+
+# ------------------------------------------------------------------
+# Tests for 11 new transforms
+# ------------------------------------------------------------------
+
+class TestTransposeDiatonic:
+    def test_shifts_by_degrees(self):
+        from melodica.types_pkg._theory import Scale, Mode
+        m = Motif.from_notes([NoteInfo(pitch=60, start=0, duration=1, velocity=60)])
+        sc = Scale(root=0, mode=Mode.MAJOR)
+        t = m.transpose_diatonic(2, sc)
+        # C major: C D E F G A B → 2 degrees up from C = E (64)
+        assert t.notes[0].pitch == 64
+
+    def test_negative_degrees(self):
+        from melodica.types_pkg._theory import Scale, Mode
+        m = Motif.from_notes([NoteInfo(pitch=64, start=0, duration=1, velocity=60)])
+        sc = Scale(root=0, mode=Mode.MAJOR)
+        t = m.transpose_diatonic(-1, sc)
+        # E down 1 degree in C major = D (62)
+        assert t.notes[0].pitch == 62
+
+
+class TestInvertDiatonic:
+    def test_mirror_within_scale(self):
+        from melodica.types_pkg._theory import Scale, Mode
+        m = Motif.from_notes([NoteInfo(pitch=60, start=0, duration=1, velocity=60)])
+        sc = Scale(root=0, mode=Mode.MAJOR)
+        inv = m.invert_diatonic(sc, axis_degree=0)
+        # C at degree 0, mirrored around degree 0 → still C
+        assert inv.notes[0].pitch == 60
+
+
+class TestDisplace:
+    def test_shifts_start_times(self):
+        m = Motif.from_notes(_make_notes())
+        d = m.displace(5.0)
+        assert d.notes[0].start == pytest.approx(5.0)
+        assert d.notes[2].start == pytest.approx(7.0)
+
+    def test_preserves_pitches(self):
+        m = Motif.from_notes(_make_notes())
+        d = m.displace(5.0)
+        assert [n.pitch for n in d.notes] == [60, 64, 67]
+
+
+class TestTruncateHead:
+    def test_removes_first_n(self):
+        m = Motif.from_notes(_make_notes())
+        t = m.truncate_head(1)
+        pitches = [n.pitch for n in t.notes]
+        assert 60 not in pitches
+        assert len(pitches) == 2
+
+    def test_removes_all(self):
+        m = Motif.from_notes(_make_notes())
+        t = m.truncate_head(5)
+        assert t.notes == []
+
+
+class TestTruncateTail:
+    def test_removes_last_n(self):
+        m = Motif.from_notes(_make_notes())
+        t = m.truncate_tail(1)
+        pitches = [n.pitch for n in t.notes]
+        assert 67 not in pitches
+        assert len(pitches) == 2
+
+    def test_zero_removes_nothing(self):
+        m = Motif.from_notes(_make_notes())
+        t = m.truncate_tail(0)
+        assert len(t.notes) == 3
+
+
+class TestExpand:
+    def test_stretches_gaps(self):
+        m = Motif.from_notes(_make_notes())
+        e = m.expand(2.0)
+        # Original: starts at 0, 1, 2 → doubled gaps: 0, 2, 4
+        assert e.notes[0].start == pytest.approx(0.0)
+        assert e.notes[1].start == pytest.approx(2.0)
+        assert e.notes[2].start == pytest.approx(4.0)
+
+    def test_preserves_durations(self):
+        m = Motif.from_notes(_make_notes())
+        e = m.expand(3.0)
+        assert e.notes[0].duration == pytest.approx(1.0)
+
+    def test_bad_factor(self):
+        m = Motif.from_notes(_make_notes())
+        with pytest.raises(ValueError):
+            m.expand(0)
+
+
+class TestOrnament:
+    def test_grace_note(self):
+        from melodica.types_pkg._theory import Scale, Mode
+        sc = Scale(root=0, mode=Mode.MAJOR)
+        m = Motif.from_notes([NoteInfo(pitch=60, start=0, duration=2.0, velocity=70)])
+        o = m.ornament("grace", sc)
+        # Should produce grace + main note
+        assert len(o.notes) == 2
+        assert o.notes[0].pitch == 61  # Upper neighbor
+        assert o.notes[0].duration < 2.0
+
+    def test_neighbor(self):
+        from melodica.types_pkg._theory import Scale, Mode
+        sc = Scale(root=0, mode=Mode.MAJOR)
+        m = Motif.from_notes([NoteInfo(pitch=60, start=0, duration=1.0, velocity=70)])
+        o = m.ornament("neighbor", sc)
+        assert len(o.notes) >= 1
+
+    def test_unknown_style_raises(self):
+        from melodica.types_pkg._theory import Scale, Mode
+        sc = Scale(root=0, mode=Mode.MAJOR)
+        m = Motif.from_notes(_make_notes())
+        with pytest.raises(ValueError, match="Unknown ornament style"):
+            m.ornament("nonexistent", sc)
+
+
+class TestCanon:
+    def test_two_voices(self):
+        m = Motif.from_notes(_make_notes())
+        c = m.canon(voices=2, delay=4.0, intervals=[0, 7])
+        assert len(c.notes) == 6
+
+    def test_single_voice(self):
+        m = Motif.from_notes(_make_notes())
+        c = m.canon(voices=1, delay=4.0, intervals=[0])
+        assert len(c.notes) == 3
+
+
+class TestWithPedal:
+    def test_adds_pedal(self):
+        m = Motif.from_notes(_make_notes())
+        p = m.with_pedal(36)
+        assert len(p.notes) == 4
+        pedal = p.notes[-1]
+        assert pedal.pitch == 36
+        assert pedal.velocity == 60
+
+    def test_pedal_spans_motif(self):
+        m = Motif.from_notes(_make_notes())
+        p = m.with_pedal(36)
+        pedal = p.notes[-1]
+        assert pedal.duration >= 3.0
+
+    def test_empty_motif(self):
+        m = Motif.from_notes([])
+        p = m.with_pedal(36)
+        assert p.notes == []
+
+
+class TestHumanize:
+    def test_preserves_note_count(self):
+        m = Motif.from_notes(_make_notes())
+        h = m.humanize()
+        assert len(h.notes) == 3
+
+    def test_preserves_pitches(self):
+        m = Motif.from_notes(_make_notes())
+        h = m.humanize(timing=0.0, velocity=0.0)
+        pitches = [n.pitch for n in h.notes]
+        assert pitches == [60, 64, 67]
+
+
+class TestDevelopNewKwargs:
+    def test_truncate_in_chain(self):
+        m = Motif.from_notes(_make_notes())
+        d = m.develop(truncate_head_n=1)
+        assert len(d.notes) == 2
+
+    def test_displace_in_chain(self):
+        m = Motif.from_notes(_make_notes())
+        d = m.develop(displace_beats=10.0)
+        assert d.notes[0].start == pytest.approx(10.0)
+
+    def test_expand_in_chain(self):
+        m = Motif.from_notes(_make_notes())
+        d = m.develop(expand_factor=2.0)
+        assert d.notes[1].start == pytest.approx(2.0)
+
+    def test_pedal_in_chain(self):
+        m = Motif.from_notes(_make_notes())
+        d = m.develop(pedal_pitch=36)
+        assert len(d.notes) == 4
+
+    def test_full_chain(self):
+        m = Motif.from_notes(_make_notes())
+        d = m.develop(
+            retrograde=True,
+            transpose=5,
+            augment_factor=2.0,
+            displace_beats=3.0,
+        )
+        assert len(d.notes) == 3
+        # retrograde reverses (last note first, start=2), augment*2 → start=4, displace+3 → 7
+        assert d.notes[0].start == pytest.approx(7.0)

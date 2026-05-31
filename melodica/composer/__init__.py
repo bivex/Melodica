@@ -72,7 +72,7 @@ from melodica.composer.structure_parser import (
 from melodica.composer.motif import Motif
 from melodica.composer.tempo_map import TempoMap
 from melodica.composer.velocity_envelope import VelocityEnvelope
-from melodica.composer.leitmotif import Leitmotif, LeitmotifRegistry
+from melodica.composer.leitmotif import Leitmotif, LeitmotifRegistry, MOOD_PRESETS
 from melodica.composer.orchestration_rules import InstrumentRange, OrchestrationRules, OrchestrationWarning, INSTRUMENTS
 
 __all__ = [
@@ -134,6 +134,7 @@ __all__ = [
     "VelocityEnvelope",
     "Leitmotif",
     "LeitmotifRegistry",
+    "MOOD_PRESETS",
     "InstrumentRange",
     "OrchestrationRules",
     "OrchestrationWarning",
