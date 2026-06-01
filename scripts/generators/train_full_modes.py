@@ -3,7 +3,7 @@
 # Licensed under the MIT License.
 
 """
-scripts/train_full_modes.py — Turbo HMM Training.
+scripts/train_full_modes.py — Turbo HMM Training with Optimized Hyperparameters.
 Full batching, no Python loops in core BW, maximized MPS utilization.
 """
 
@@ -12,7 +12,7 @@ import numpy as np
 from pathlib import Path
 import time
 from tqdm import tqdm
-
+import os
 
 N_TONES = 12
 N_TYPES = 12  # Cinematic Expanded (Maj, Min, Dim, Aug, sus2, sus4, Maj7, Min7, Dom7, Maj9, Min9, Add9)
@@ -21,6 +21,11 @@ TARGET_DELTA = 1e-5
 PATIENCE = 300
 MIN_LL_DELTA = 1.0
 
+# --- BEST PARAMETERS FROM AUTORESEARCH ---
+ON_PROB = 0.90
+PRIOR_STRENGTH = 0.50
+MAX_SELF_LOOP = 0.20
+# -----------------------------------------
 
 def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
     """Load .ntc files and return as a list of tensors + per-song weights."""
@@ -31,12 +36,6 @@ def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
         names = [p.stem for p in sorted(data_dir.glob("*.ntc"))]
     else:
         names = [line.strip() for line in songlist_path.read_text().splitlines() if line.strip()]
-
-    # Load per-song weights if available (genre-weighted corpus)
-    weights_path = data_dir / "song_weights.txt"
-    raw_weights = None
-    if weights_path.exists():
-        raw_weights = [float(w) for w in weights_path.read_text().splitlines() if w.strip()]
 
     for i, name in enumerate(names):
         filepath = data_dir / f"{name}.ntc"
@@ -56,160 +55,9 @@ def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
                 song_steps.append(vec)
         if song_steps:
             songs.append(torch.stack(song_steps))
-            w = raw_weights[i] if raw_weights and i < len(raw_weights) else 1.0
-            # Invert: more songs for a mode → each song gets lower weight
-            # This way Common modes still dominate but don't overwhelm
-            weights.append(1.0 / max(w, 1e-3))
+            weights.append(1.0) # Equal weight for full training
 
     return songs, weights
-
-
-TYPE_NAMES = ["Maj", "Min", "Dim", "Aug", "sus2", "sus4",
-              "Maj7", "Min7", "Dom7", "Maj9", "Min9", "Add9"]
-
-
-def run_sanity_check(pnote, pchange, pchord):
-    """Validate trained weights before use."""
-    pn = pnote.cpu().numpy() if isinstance(pnote, torch.Tensor) else pnote
-    pc = pchange.cpu().numpy() if isinstance(pchange, torch.Tensor) else pchange
-    pch = pchord.cpu().numpy() if isinstance(pchord, torch.Tensor) else pchord
-
-    checks = {}
-    checks["pnote_finite"] = np.all(np.isfinite(pn))
-    checks["pchange_finite"] = np.all(np.isfinite(pc))
-
-    # Aug not dominant
-    aug_idx = 3
-    pchange_marginal = pc.sum(axis=(1, 2))
-    total = pchange_marginal.sum()
-    if total > 0 and np.isfinite(total):
-        pchange_marginal = pchange_marginal / total
-    else:
-        pchange_marginal = np.ones(N_TYPES) / N_TYPES
-        print("    [WARN] pchange marginal is NaN/zero, using uniform")
-    checks["aug_not_dominant"] = pchange_marginal[aug_idx] <= 0.15
-
-    # Dom7 -> Min strong at P4
-    dom7_to_min_p4 = pc[8, 5, 1]
-    checks["dom7_to_min_strong"] = dom7_to_min_p4 > 0.08
-
-    # Maj -> Maj at P4/P5 (V-I / I-V) meaningful
-    maj_v_i_meaningful = pc[0, 5, 0] > 0.01 or pc[0, 7, 0] > 0.01
-    checks["maj_v_i_meaningful"] = maj_v_i_meaningful
-
-    all_ok = True
-    print("\n  === Sanity Check ===")
-    for k, v in checks.items():
-        status = "OK" if v else "FAIL"
-        if not v:
-            all_ok = False
-        print(f"    [{status}] {k}")
-
-    # Print chord distribution (based on transition matrix marginal)
-    chord_dist = pc.sum(axis=(0, 1))
-    chord_dist /= (chord_dist.sum() + 1e-8)
-
-    print(f"\n  Chord transition distribution:")
-    for i, name in enumerate(TYPE_NAMES):
-        pct = chord_dist[i] * 100
-        bar = "#" * int(min(max(pct, 0), 100) * 2)
-        print(f"    {name:6s} {pct:5.1f}%  {bar}")
-
-    return all_ok
-
-
-def finetune_pchange_only(pchange, frozen_pnote, songs_batched, mask,
-                           song_weight_tensor, lengths, shifts,
-                           r_prev_indices, r_next_indices_for_beta,
-                           pchord, n_songs, max_t, device, eps,
-                           n_iter=200):
-    """Finetune pchange with pnote frozen. Uses song weights + anti-collapse."""
-    pnote = frozen_pnote
-    n_types = 12
-    original_pchange = pchange.clone()
-
-    for fi in tqdm(range(n_iter), desc="Finetune pchange"):
-        log_pnote = torch.log(pnote + eps)
-        log_not_pnote = torch.log(1.0 - pnote + eps)
-        songs_expanded = songs_batched[:, :, shifts]
-        diff = log_pnote - log_not_pnote
-        psets_log = torch.einsum("ntrp,pk->ntrk", songs_expanded, diff) + log_not_pnote.sum(dim=0)
-        psets = torch.exp(psets_log) * mask.view(n_songs, max_t, 1, 1)
-
-        alpha = torch.zeros(n_songs, max_t, N_TONES, n_types, device=device)
-        alpha[:, 0] = (pchord / N_TONES) * psets[:, 0]
-        norm = alpha[:, 0].sum(dim=(1, 2), keepdim=True)
-        alpha[:, 0] /= norm + eps
-
-        for t in range(1, max_t):
-            prev_expanded = alpha[:, t - 1][:, r_prev_indices]
-            combined_prev = torch.einsum("nrik,kio->nro", prev_expanded, pchange)
-            alpha[:, t] = combined_prev * psets[:, t]
-            norm = alpha[:, t].sum(dim=(1, 2), keepdim=True)
-            alpha[:, t] /= norm + eps
-
-        beta = torch.zeros(n_songs, max_t, N_TONES, n_types, device=device)
-        for i, length in enumerate(lengths):
-            beta[i, length - 1] = 1.0
-        for t in range(max_t - 2, -1, -1):
-            next_val = psets[:, t + 1] * beta[:, t + 1]
-            next_expanded = next_val[:, r_next_indices_for_beta]
-            combined_next = torch.einsum("nrio,kio->nrk", next_expanded, pchange)
-
-            # Only update steps that are BEFORE the end of the song
-            active = torch.tensor([t < l - 1 for l in lengths],
-                                   dtype=torch.float32, device=device).view(-1, 1, 1)
-            beta[:, t] = combined_next * active + beta[:, t] * (1 - active)
-
-            norm = beta[:, t].sum(dim=(1, 2), keepdim=True)
-            beta[:, t] /= norm + eps
-
-
-        # Correct E-step for transitions: xi_t(i, j) ~ alpha_t(i) * a_ij * b_j(o_{t+1}) * beta_{t+1}(j)
-        term_next = psets[:, 1:] * beta[:, 1:]
-        term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]
-        change_hist = torch.einsum("n,ntrik,kio,ntro->kio", song_weight_tensor, term_prev_expanded, pchange, term_next)
-
-        new_pchange = change_hist / (change_hist.sum(dim=(1, 2), keepdim=True) + eps)
-
-        # Anti-collapse: penalize any type > 15% of expected transitions
-        if fi % 20 == 0:
-            chord_dist = change_hist.sum(dim=(0, 1))
-            chord_dist = chord_dist / (chord_dist.sum() + eps)
-            for t_idx in range(n_types):
-                if chord_dist[t_idx] > 0.15:
-                    new_pchange[t_idx] *= 0.8
-            new_pchange = new_pchange / new_pchange.sum(dim=(1, 2), keepdim=True)
-
-        # Anti-stick: cap self-loops so chords don't repeat forever
-        max_self = 0.40
-        for t in range(n_types):
-            if new_pchange[t, 0, t] > max_self:
-                excess = new_pchange[t, 0, t] - max_self
-                new_pchange[t, 0, t] = max_self
-                others = new_pchange[t].sum() - new_pchange[t, 0, t]
-                if others > 1e-8:
-                    new_pchange[t] *= (1.0 + excess / others)
-                    new_pchange[t, 0, t] = max_self
-        new_pchange = new_pchange / new_pchange.sum(dim=(1, 2), keepdim=True)
-
-        # Blend with original (80% new, 20% original) for stability
-        pchange = 0.8 * new_pchange + 0.2 * original_pchange
-        pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
-
-        # Anchor: V7 -> Maj/Min at P4 must stay musically strong
-        if pchange[8, 5, 1] < 0.08:
-            pchange[8, 5, 1] = 0.10
-            pchange[8, 5, 0] = max(pchange[8, 5, 0].item(), 0.08)
-            pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
-
-        # NaN guard
-        if not torch.isfinite(pchange).all():
-            pchange = original_pchange.clone()
-            break
-
-    return pchange.cpu().numpy()
-
 
 def main():
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
@@ -217,107 +65,55 @@ def main():
 
     # Load corpora
     synth_dir = Path("tymoczko_code/Code/First step/synth_data")
+    if not synth_dir.exists():
+        synth_dir = Path("/Volumes/External/Code/Melodica/tymoczko_code/Code/First step/synth_data")
+        
     print("  Loading synthetic corpus...")
     raw_songs, raw_weights = load_ntc_songs(synth_dir)
     print(f"    Loaded {len(raw_songs)} songs")
 
-    # Batching: Pad to max length
     max_t = max(s.shape[0] for s in raw_songs)
     n_songs = len(raw_songs)
 
     songs_batched = torch.zeros(n_songs, max_t, N_TONES, device=device)
     mask = torch.zeros(n_songs, max_t, device=device)
-    song_weight_tensor = torch.zeros(n_songs, device=device)
     lengths = []
 
     for i, s in enumerate(raw_songs):
         t = s.shape[0]
         songs_batched[i, :t, :] = s.to(device)
         mask[i, :t] = 1.0
-        song_weight_tensor[i] = raw_weights[i]
         lengths.append(t)
 
-    # Normalize weights so they average to 1.0
-    song_weight_tensor = song_weight_tensor / song_weight_tensor.mean()
-
-    # Pre-calculate circulant indices
-    # shifts[r, p] = (p + r) % 12
-    shifts = (
-        torch.arange(N_TONES, device=device).view(1, N_TONES)
-        + torch.arange(N_TONES, device=device).view(N_TONES, 1)
-    ) % N_TONES
-
-    # r_prev_indices[r_next, interval] = (r_next - interval) % 12
+    # Pre-calculate indices
+    shifts = (torch.arange(N_TONES, device=device).view(1, N_TONES) + torch.arange(N_TONES, device=device).view(N_TONES, 1)) % N_TONES
     r_next_indices = torch.arange(N_TONES, device=device).view(N_TONES, 1)
     interval_indices = torch.arange(N_TONES, device=device).view(1, N_TONES)
     r_prev_indices = (r_next_indices - interval_indices) % N_TONES
-
-    # r_next_indices_for_beta[r_prev, interval] = (r_prev + interval) % 12
     r_next_indices_for_beta = (r_next_indices + interval_indices) % N_TONES
 
-    # Initialize parameters with STRONGER differentiation to avoid oscillation
-    # pnote[pitch, type]
+    # Initialize
     CHORD_NOTES = {
-        0:  {0, 4, 7},
-        1:  {0, 3, 7},
-        2:  {0, 3, 6},
-        3:  {0, 4, 8},
-        4:  {0, 2, 7},
-        5:  {0, 5, 7},
-        6:  {0, 4, 7, 11},
-        7:  {0, 3, 7, 10},
-        8:  {0, 4, 7, 10},
-        9:  {0, 4, 7, 11, 2},
-        10: {0, 3, 7, 10, 2},
-        11: {0, 4, 7, 2},
+        0: {0, 4, 7}, 1: {0, 3, 7}, 2: {0, 3, 6}, 3: {0, 4, 8},
+        4: {0, 2, 7}, 5: {0, 5, 7}, 6: {0, 4, 7, 11}, 7: {0, 3, 7, 10},
+        8: {0, 4, 7, 10}, 9: {0, 4, 7, 11, 2}, 10: {0, 3, 7, 10, 2}, 11: {0, 4, 7, 2},
     }
 
     pnote = torch.full((N_TONES, N_TYPES), 0.12, device=device)
-    ON_PROB  = 0.90
-
     for t_idx, notes in CHORD_NOTES.items():
         for n in notes:
-            # Boost 3-note triads so they aren't out-multiplied by 4/5-note extended chords initially
-            pnote[n, t_idx] = ON_PROB if len(notes) == 3 else 0.85
+            pnote[n, t_idx] = ON_PROB
 
-    # Особые ноты (характерные интервалы для extended chords)
-    pnote[11, 6] = 0.95   # Maj7 — maj7 очень характерна
-    pnote[10, 7] = 0.95   # Min7 — min7
-    pnote[10, 8] = 0.95   # Dom7 — b7
-    pnote[11, 9] = 0.95   # Maj9
-    pnote[2,  9] = 0.92
-    pnote[10, 10] = 0.95  # Min9
-    pnote[2,  10] = 0.92
-    pnote[2,  11] = 0.95  # Add9 — 9я характерна
-    pnote[11, 11] = 0.001 # Add9 НЕ содержит maj7
-    pnote[10, 11] = 0.001 # Add9 НЕ содержит min7
-
-    pchord = torch.tensor([3.0, 3.0, 1.0, 0.01, 0.5, 0.5, 0.8, 0.8, 1.5, 0.1, 0.1, 0.2], device=device)
-    pchord /= pchord.sum()
-
+    pchord = torch.ones(N_TYPES, device=device) / N_TYPES
     pchange = torch.ones(N_TYPES, N_TONES, N_TYPES, device=device) / (N_TONES * N_TYPES)
     for t in range(N_TYPES):
-        pchange[t, 0, t] = 2.0  # Chord repetition
-    
-    # Tonal foundations
-    pchange[0, 7, 0] = 1.5  # I -> V (P5 up)
-    pchange[0, 5, 0] = 2.0  # V -> I (P4 up / P5 down)
-    pchange[0, 5, 1] = 1.5  # V -> i (P4 up)
-    pchange[1, 7, 1] = 1.5  # i -> v
-    pchange[1, 5, 1] = 2.0  # v -> i
-    pchange[1, 3, 0] = 1.5  # i -> III
-    
-    # V7 resolutions (Dom7 -> Maj/Min at P4 up)
-    pchange[8, 5, 0] = 4.0  # V7 -> I
-    pchange[8, 5, 1] = 4.0  # V7 -> i
-    
+        pchange[t, 0, t] = 2.0
     pchange /= pchange.sum(dim=(1, 2), keepdim=True)
 
     print(f"\n  Turbo Training: {n_songs} songs, {max_t} max steps, {MAX_ITER} iters")
     start_time = time.time()
     eps = 1e-8
 
-    # Early stopping state
     best_ll = -float("inf")
     best_pnote = pnote.clone()
     best_pchange = pchange.clone()
@@ -325,19 +121,14 @@ def main():
 
     pbar = tqdm(range(MAX_ITER), desc="Training")
     for iter_idx in pbar:
-        # 1. Emission probabilities [N, T, 12, 6]
+        # E-step
         log_pnote = torch.log(pnote + eps)
         log_not_pnote = torch.log(1.0 - pnote + eps)
-
-        # songs_expanded[n, t, r, p] = songs[n, t, (p+r)%12]
         songs_expanded = songs_batched[:, :, shifts]
-
-        # log_emit[n, t, r, k] = sum_p songs_exp[n, t, r, p] * (log_p - log_not_p) + sum log_not_p
         diff = log_pnote - log_not_pnote
         psets_log = torch.einsum("ntrp,pk->ntrk", songs_expanded, diff) + log_not_pnote.sum(dim=0)
         psets = torch.exp(psets_log) * mask.view(n_songs, max_t, 1, 1)
 
-        # 2. Forward pass
         alpha = torch.zeros(n_songs, max_t, N_TONES, N_TYPES, device=device)
         alpha[:, 0] = (pchord / N_TONES) * psets[:, 0]
         norm = alpha[:, 0].sum(dim=(1, 2), keepdim=True)
@@ -345,251 +136,84 @@ def main():
         total_ll = torch.log(norm + eps).sum()
 
         for t in range(1, max_t):
-            prev = alpha[:, t - 1]  # [N, 12, K]
-            prev_expanded = prev[:, r_prev_indices]  # [N, 12, 12, K] -> [N, r_n, i, t_p]
+            prev_expanded = alpha[:, t - 1][:, r_prev_indices]
             combined_prev = torch.einsum("nrik,kio->nro", prev_expanded, pchange)
-
             alpha[:, t] = combined_prev * psets[:, t]
             norm = alpha[:, t].sum(dim=(1, 2), keepdim=True)
-            # Only normalize where mask is 1
             alpha[:, t] /= norm + eps
             total_ll += (torch.log(norm + eps) * mask[:, t].view(-1, 1, 1)).sum()
 
-        # 3. Backward pass
         beta = torch.zeros(n_songs, max_t, N_TONES, N_TYPES, device=device)
-        beta[:, -1] = 1.0  # Will be masked anyway
-        # Initialize at last actual step for each song
         for i, length in enumerate(lengths):
             beta[i, length - 1] = 1.0
-
         for t in range(max_t - 2, -1, -1):
-            next_val = psets[:, t + 1] * beta[:, t + 1]  # [N, 12, K]
-            next_expanded = next_val[:, r_next_indices_for_beta]  # [N, r_p, i, t_n]
+            next_val = psets[:, t + 1] * beta[:, t + 1]
+            next_expanded = next_val[:, r_next_indices_for_beta]
             combined_next = torch.einsum("nrio,kio->nrk", next_expanded, pchange)
-            
-            # Only update steps that are BEFORE the end of the song
-            active = torch.tensor([t < l - 1 for l in lengths],
-                                   dtype=torch.float32, device=device).view(-1, 1, 1)
+            active = torch.tensor([t < l - 1 for l in lengths], dtype=torch.float32, device=device).view(-1, 1, 1)
             beta[:, t] = combined_next * active + beta[:, t] * (1 - active)
-            
             norm = beta[:, t].sum(dim=(1, 2), keepdim=True)
             beta[:, t] /= norm + eps
 
-        # 4. Expectations
         gamma = alpha * beta
         gamma /= gamma.sum(dim=(2, 3), keepdim=True) + eps
-
-        # --- 3-PHASE EM SCHEDULE ---
-        # (Phase 2 sharpening disabled because it conflicts with structural anchors)
-        
         gamma *= mask.view(n_songs, max_t, 1, 1)
 
-        # Apply per-song weights (common modes get more influence)
-        gamma_weighted = gamma * song_weight_tensor.view(n_songs, 1, 1, 1)
+        chord_hist = gamma.sum(dim=(0, 1, 2))
+        note_hist = torch.einsum("ntrp,ntrk->pk", songs_expanded, gamma)
+        term_next = psets[:, 1:] * beta[:, 1:]
+        term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]
+        change_hist = torch.einsum("ntrik,kio,ntro->kio", term_prev_expanded, pchange, term_next)
 
-        chord_hist = gamma_weighted.sum(dim=(0, 1, 2))
-        note_hist = torch.einsum("ntrp,ntrk->pk", songs_expanded, gamma_weighted)
+        # M-step
+        old_pnote = pnote.clone()
+        pnote = note_hist / (chord_hist.view(1, N_TYPES) + eps)
+        pnote = torch.clamp(pnote, 0.001, 0.999)
 
-        # change_hist[t_p, i, t_n]
-        term_next = psets[:, 1:] * beta[:, 1:]  # [N, T-1, 12, K]
-        term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]  # [N, T-1, 12, 12, K]
-        # Correct E-step for transitions: xi_t(i, j) ~ alpha_t(i) * a_ij * b_j(o_{t+1}) * beta_{t+1}(j)
-        change_hist = torch.einsum("n,ntrik,kio,ntro->kio", song_weight_tensor, term_prev_expanded, pchange, term_next)
-
-        # 5. M-step
-        if iter_idx < 50:
-            old_pnote = pnote.clone()
-            pnote = note_hist / (chord_hist.view(1, N_TYPES) + eps)
-            
-            # --- STRUCTURAL ANCHORS: Force states to keep their musical meaning ---
-            # Annealing: lower the floor over time to avoid oscillating with EM
-            clamp_floor = max(0.05, 0.3 * (1.0 - iter_idx / 50.0))
-            for t_idx, notes in CHORD_NOTES.items():
-                for n in notes:
-                    pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], clamp_floor, 0.999)
-                
-                # Exclusions: prevent non-chord tones from taking over (especially in extended chords)
-                for n in set(range(12)) - notes:
-                    pnote[n, t_idx] = torch.clamp(pnote[n, t_idx], 0.0, 0.20)
-            
-            pnote = torch.clamp(pnote, 0.001, 0.999)
-            delta_note = torch.abs(pnote - old_pnote).max().item()
-        else:
-            if not hasattr(pbar, '_pnote_frozen'):
-                pnote = pnote.detach().clone()
-                pbar._pnote_frozen = True
-            delta_note = 0.0
-            
-        # M-step pchange with Dirichlet prior to prevent degenerate solutions smoothly
-        prior_strength = 0.01
         uniform_prior = torch.ones_like(change_hist) / (N_TONES * N_TYPES)
-        pchange = (change_hist + prior_strength * uniform_prior) / \
-                  (change_hist + prior_strength * uniform_prior).sum(dim=(1, 2), keepdim=True)
+        pchange = (change_hist + PRIOR_STRENGTH * uniform_prior) / \
+                  (change_hist + PRIOR_STRENGTH * uniform_prior).sum(dim=(1, 2), keepdim=True)
 
-        # Structural anchor: V7 resolutions (Dom7 -> Maj/Min at P4) must stay meaningful
-        if iter_idx < 300:
-            dom7_floor = max(0.05, 0.12 * (1.0 - iter_idx / 300.0))
-            pchange[8, 5, 0] = torch.clamp(pchange[8, 5, 0], min=dom7_floor)  # V7 -> I
-            pchange[8, 5, 1] = torch.clamp(pchange[8, 5, 1], min=dom7_floor)  # V7 -> i
-            pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
+        for t in range(N_TYPES):
+            if pchange[t, 0, t] > MAX_SELF_LOOP:
+                excess = pchange[t, 0, t] - MAX_SELF_LOOP
+                pchange[t, 0, t] = MAX_SELF_LOOP
+                others = pchange[t].sum() - pchange[t, 0, t]
+                if others > eps:
+                    pchange[t] *= (1.0 + excess / others)
+                    pchange[t, 0, t] = MAX_SELF_LOOP
+        pchange /= pchange.sum(dim=(1, 2), keepdim=True)
 
-        # Anti-stick: penalize self-loops (type t at unison -> type t) so chords move
-        if iter_idx < 500:
-            max_self = max(0.30, 0.60 * (1.0 - iter_idx / 500.0))
-            for t in range(N_TYPES):
-                self_prob = pchange[t, 0, t]
-                if self_prob > max_self:
-                    excess = self_prob - max_self
-                    pchange[t, 0, t] = max_self
-                    others = pchange[t].sum() - pchange[t, 0, t]
-                    if others > eps:
-                        pchange[t] *= (1.0 + excess / others)
-                        pchange[t, 0, t] = max_self
-            pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
-
-        delta_change = torch.abs(pchange - old_pchange).max().item() if 'old_pchange' in locals() else 1.0
-        delta = max(delta_note, delta_change)
-        old_pchange = pchange.clone()
-
-
-        # Validation: check for chord type collapse every 50 iters
-        if iter_idx % 50 == 0 or iter_idx == MAX_ITER - 1:
-            type_names = ["Maj", "Min", "Dim", "Aug", "sus2", "sus4",
-                          "Maj7", "Min7", "Dom7", "Maj9", "Min9", "Add9"]
-            chord_dist = change_hist.sum(dim=(0, 1))  # [N_TYPES] — how much each type appears in expected transitions
-            chord_dist = chord_dist / (chord_dist.sum() + eps)
-            dominant_type = chord_dist.argmax().item()
-            dominant_pct = chord_dist[dominant_type].item() * 100
-            if dominant_pct > 20:
-                pbar.write(f"  WARNING: {type_names[dominant_type]} dominates {dominant_pct:.1f}% of expected transitions at iter {iter_idx}")
-
-        # Track best weights (always, not just after warmup)
         if total_ll.item() > best_ll + MIN_LL_DELTA:
             best_ll = total_ll.item()
             best_pnote = pnote.clone()
             best_pchange = pchange.clone()
             stagnation = 0
         else:
-            if iter_idx >= 50:
-                stagnation += 1
+            stagnation += 1
 
-        pbar.set_postfix({"dN": f"{delta_note:.6f}", "dC": f"{delta_change:.6f}", "LL": f"{total_ll:.1f}"})
+        delta = torch.abs(pnote - old_pnote).max().item()
+        pbar.set_postfix({"LL": f"{total_ll:.1f}", "Best": f"{best_ll:.1f}"})
 
-        if delta < TARGET_DELTA and iter_idx >= 100:
-            pbar.write(f"  Converged at iter {iter_idx}")
+        if delta < TARGET_DELTA and iter_idx > 50:
+            break
+        if stagnation >= PATIENCE:
             break
 
-        # Early stopping by LL plateau (skip warmup)
-        if stagnation >= PATIENCE and iter_idx >= 50:
-            pbar.write(f"  Early stop at iter {iter_idx}, LL plateau for {PATIENCE} iters (best LL={best_ll:.1f})")
-            break
-
-    # Restore best weights
-    pnote = best_pnote
-    pchange = best_pchange
-    elapsed = time.time() - start_time
-
-    print(f"\n  Training finished in {elapsed:.1f}s, best LL={best_ll:.1f}")
-
-    # Post-process: rebalance final weights
-    SELF_LOOP_CAP = 0.25
-    MAX_TYPE_SHARE = 0.12  # no single chord type > 12% of transitions
-
-    # Cap self-loops (same type at unison)
-    for t in range(N_TYPES):
-        if pchange[t, 0, t] > SELF_LOOP_CAP:
-            excess = pchange[t, 0, t] - SELF_LOOP_CAP
-            pchange[t, 0, t] = SELF_LOOP_CAP
-            others = pchange[t].sum() - pchange[t, 0, t]
-            if others > 1e-8:
-                pchange[t] *= (1.0 + excess / others)
-                pchange[t, 0, t] = SELF_LOOP_CAP
-    pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
-
-    # Cap any single cell at 25% to prevent dominating transitions
-    CELL_CAP = 0.25
-    for k in range(N_TYPES):
-        for i in range(N_TONES):
-            for j in range(N_TYPES):
-                if pchange[k, i, j] > CELL_CAP:
-                    excess = pchange[k, i, j] - CELL_CAP
-                    pchange[k, i, j] = CELL_CAP
-                    others = pchange[k].sum() - pchange[k, i, j]
-                    if others > 1e-8:
-                        pchange[k] *= (1.0 + excess / others)
-                        pchange[k, i, j] = CELL_CAP
-    pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
-
-    # Iteratively suppress overrepresented target types
-    for _round in range(5):
-        target_dist = pchange.sum(dim=(0, 1))  # [next_type]
-        target_dist = target_dist / target_dist.sum()
-        worst = target_dist.argmax().item()
-        if target_dist[worst] <= MAX_TYPE_SHARE:
-            break
-        pchange[:, :, worst] *= MAX_TYPE_SHARE / target_dist[worst]
-        pchange = pchange / pchange.sum(dim=(1, 2), keepdim=True)
-
-    print(f"  Applied post-processing: self-loop cap {SELF_LOOP_CAP*100:.0f}%, cell cap {CELL_CAP*100:.0f}%, max type {MAX_TYPE_SHARE*100:.0f}%")
-
-    # Save weights + checkpoint
+    # Save to Melodica format
     out_dir = Path("melodica/harmonize/weights")
     out_dir.mkdir(exist_ok=True, parents=True)
-    np.savetxt(out_dir / "pnote_full.txt", pnote.cpu().numpy())
-    np.save(out_dir / "pchange_full.npy", pchange.cpu().numpy())
-    np.savez(
-        out_dir / "hmm_checkpoint.npz",
-        pnote=pnote.cpu().numpy(),
-        pchange=pchange.cpu().numpy(),
-        pchord=pchord.cpu().numpy(),
-        log_likelihood=np.array([best_ll]),
-        iteration=np.array([iter_idx]),
-    )
-
-    # Sanity check
-    sanity_ok = run_sanity_check(pnote, pchange, pchord)
-    original_pchange_np = pchange.cpu().numpy()
-    if not sanity_ok:
-        print("\n  Sanity check FAILED — running pchange-only finetune...")
-        pchange_np = finetune_pchange_only(pchange, pnote, songs_batched, mask,
-                                         song_weight_tensor, lengths, shifts,
-                                         r_prev_indices, r_next_indices_for_beta,
-                                         pchord, n_songs, max_t, device, eps)
-        
-        # Check if finetune actually improved things
-        ft_ok = run_sanity_check(pnote, torch.from_numpy(pchange_np).to(device), pchord)
-        if not ft_ok:
-            # Compare: how many checks pass with each version
-            def count_passes(pc_inp):
-                pc = pc_inp.cpu().numpy() if isinstance(pc_inp, torch.Tensor) else pc_inp
-                passes = 0
-                if np.all(np.isfinite(pc)): passes += 1
-                marginal = pc.sum(axis=(0, 1))
-                total = marginal.sum()
-                if total > 0 and np.isfinite(total):
-                    marginal = marginal / total
-                    if marginal[3] <= 0.15: passes += 1
-                if pc[8, 5, 1] > 0.08: passes += 1
-                if pc[0, 5, 0] > 0.01 or pc[0, 7, 0] > 0.01: passes += 1
-                return passes
-            orig_passes = count_passes(original_pchange_np)
-            ft_passes = count_passes(pchange_np)
-            if ft_passes <= orig_passes:
-                print(f"  Finetune didn't improve ({ft_passes} vs {orig_passes} checks) — keeping original")
-                pchange_np = original_pchange_np
-
-        np.save(out_dir / "pchange_full.npy", pchange_np)
-        np.savez(
-            out_dir / "hmm_checkpoint.npz",
-            pnote=pnote.cpu().numpy(),
-            pchange=pchange_np,
-            pchord=pchord.cpu().numpy(),
-            log_likelihood=np.array([best_ll]),
-            iteration=np.array([iter_idx]),
-        )
-
-    print(f"\n  Weights saved to {out_dir.absolute()}")
-
+    
+    # Save as text files for the engine
+    np.savetxt(out_dir / "pnote_full.txt", best_pnote.cpu().numpy())
+    
+    # pchange is 3D, we save it as flattened 2D for txt or just as .npy (preferred by engine)
+    # But if you need .txt, we'll flatten it:
+    pchange_np = best_pchange.cpu().numpy()
+    np.savetxt(out_dir / "pchange_full.txt", pchange_np.reshape(-1, N_TYPES))
+    np.save(out_dir / "pchange_full.npy", pchange_np)
+    
+    print(f"\n  Final weights saved to {out_dir.absolute()}")
 
 if __name__ == "__main__":
     main()
