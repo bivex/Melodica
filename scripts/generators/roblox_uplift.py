@@ -53,7 +53,7 @@ from melodica.generators.transition import TransitionGenerator
 from melodica.generators.fx_riser import FXRiserGenerator
 from melodica.generators.fx_impact import FXImpactGenerator
 from melodica.generators.stinger import StingerGenerator
-from melodica.harmonize import HMM3Harmonizer
+from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
 from melodica.modifiers import (
     HumanizeModifier,
     VelocityScalingModifier,
@@ -102,14 +102,7 @@ SECTIONS = [
 
 
 def harmonize(bars, bpb=4):
-    harmonizer = HMM3Harmonizer(
-        beam_width=6,
-        melody_weight=0.30,
-        secondary_dom_weight=0.15,
-        extension_weight=0.10,
-        repetition_penalty=0.04,
-        cadence_weight=0.15,
-    )
+    harmonizer = CoupledHMMHarmonizer(beam_width=12, chord_change="bars")
     degs = SCALE.degrees()
     contour = []
     for b in range(bars):
@@ -123,7 +116,7 @@ def harmonize(bars, bpb=4):
         else:
             pc = int(degs[0]) if random.random() < 0.55 else int(degs[min(4, len(degs) - 1)])
         contour.append(NoteInfo(pitch=48 + pc, start=b * bpb, duration=bpb - 0.1, velocity=50))
-    chords = harmonizer.harmonize(contour, SCALE, bars * bpb)
+    chords = harmonizer.harmonize(melody=contour, initial_scale=SCALE, duration_beats=bars * bpb)
     while len(chords) < bars:
         chords.append(
             chords[-1]
