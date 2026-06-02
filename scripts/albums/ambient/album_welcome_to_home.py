@@ -155,19 +155,10 @@ def _render_mp3(
     if peak > 0:
         mix_buf = mix_buf / peak * 0.9
 
-    # WAV → MP3 via ffmpeg
-    wav_tmp = tempfile.mktemp(suffix=".wav")
+    path = Path(path).with_suffix(".wav")
     from pedalboard.io import AudioFile
-    with AudioFile(wav_tmp, "w", sr, mix_buf.shape[0]) as f:
+    with AudioFile(str(path), "w", sr, mix_buf.shape[0]) as f:
         f.write(mix_buf)
-
-    path = Path(path)
-    path = path.with_suffix(".mp3")
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", wav_tmp, "-codec:a", "libmp3lame", "-b:a", "320k", str(path)],
-        check=True, capture_output=True,
-    )
-    Path(wav_tmp).unlink(missing_ok=True)
     print(f"  → {path} ({mix_buf.shape[1] / sr:.1f}s)")
 
 
