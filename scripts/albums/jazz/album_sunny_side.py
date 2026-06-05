@@ -276,12 +276,12 @@ def produce_06_sunday_stroll():
     chords = _get_chords(key, dur)
 
     comp = PianoCompGenerator(
-        GeneratorParams(density=0.05, key_range_low=48, key_range_high=84),
+        GeneratorParams(density=0.05, key_range_low=60, key_range_high=84),
         comp_style="pop", voicing_type="close", accent_pattern="syncopated"
     ).render(chords, key, dur)
 
     bass = WalkingBassGenerator(
-        GeneratorParams(density=0.05, key_range_low=28, key_range_high=44),
+        GeneratorParams(density=0.05, key_range_low=24, key_range_high=40),
         approach_style="chromatic", swing_eighth_ratio=0.55
     ).render(chords, key, dur)
 
@@ -292,7 +292,7 @@ def produce_06_sunday_stroll():
     sax = _off(sax, 20.0)
 
     guitar = PianoCompGenerator(
-        GeneratorParams(density=0.04, key_range_low=48, key_range_high=72),
+        GeneratorParams(density=0.04, key_range_low=48, key_range_high=60),
         comp_style="bossa", voicing_type="rootless"
     ).render(chords, key, dur - 48.0)
     guitar = _off(guitar, 32.0)
@@ -312,12 +312,12 @@ def produce_07_jumping_beans():
     chords = _get_chords(key, dur)
 
     stride = StridePianoGenerator(
-        GeneratorParams(density=0.14, key_range_low=28, key_range_high=88),
+        GeneratorParams(density=0.14, key_range_low=40, key_range_high=88),
         pattern="tatum", chromatic_approach=True, ornaments=True
     ).render(chords, key, dur)
 
     bass = WalkingBassGenerator(
-        GeneratorParams(density=0.1, key_range_low=28, key_range_high=48),
+        GeneratorParams(density=0.1, key_range_low=24, key_range_high=38),
         approach_style="mixed", swing_eighth_ratio=0.67
     ).render(chords, key, dur)
 
