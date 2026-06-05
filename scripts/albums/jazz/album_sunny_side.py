@@ -24,6 +24,8 @@ from melodica.generators.montuno import MontunoGenerator
 from melodica.generators.blues_lick import BluesLickGenerator
 from melodica.generators.boogie_woogie import BoogieWoogieGenerator
 from melodica.generators.melody import MelodyGenerator
+from melodica.generators.drum_kit_pattern import DrumKitPatternGenerator
+from melodica.generators.ghost_notes import GhostNotesGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -116,9 +118,14 @@ def produce_01_sunny_side_up():
     ).render(chords, key, dur - 48.0)
     swing = _off(swing, 32.0)
 
-    _export({"stride": stride, "bass": bass, "sax": sax, "vibes": swing},
+    drums = DrumKitPatternGenerator(
+        GeneratorParams(density=0.08), style="jazz", groove_swing=0.67,
+        fill_frequency=0.15, auto_fills=True
+    ).render(chords, key, dur)
+
+    _export({"stride": stride, "bass": bass, "sax": sax, "vibes": swing, "drums": drums},
             OUT / "01_Sunny_Side_Up.mid", bpm, key,
-            {"stride": PIANO, "bass": ACOUSTIC_BASS, "sax": ALTO_SAX, "vibes": VIBRAPHONE})
+            {"stride": PIANO, "bass": ACOUSTIC_BASS, "sax": ALTO_SAX, "vibes": VIBRAPHONE, "drums": DRUMS})
 
 
 # =====================================================================
@@ -154,9 +161,19 @@ def produce_02_cafe():
     ).render(chords, key, dur - 40.0)
     guitar = _off(guitar, 24.0)
 
-    _export({"comp": comp, "bass": bass, "flute": flute, "guitar": guitar},
+    drums = DrumKitPatternGenerator(
+        GeneratorParams(density=0.04), style="jazz", groove_swing=0.55,
+        fill_frequency=0.1, auto_fills=True
+    ).render(chords, key, dur)
+
+    ghosts = GhostNotesGenerator(
+        GeneratorParams(density=0.03), pattern="jazz", target="snare",
+        ghost_velocity=30, ghost_density=0.4
+    ).render(chords, key, dur)
+
+    _export({"comp": comp, "bass": bass, "flute": flute, "guitar": guitar, "drums": drums, "ghosts": ghosts},
             OUT / "02_Cafe_on_the_Corner.mid", bpm, key,
-            {"comp": EPIANO, "bass": FRETLESS_BASS, "flute": FLUTE, "guitar": JAZZ_GUITAR})
+            {"comp": EPIANO, "bass": FRETLESS_BASS, "flute": FLUTE, "guitar": JAZZ_GUITAR, "drums": DRUMS, "ghosts": DRUMS})
 
 
 # =====================================================================
@@ -186,9 +203,19 @@ def produce_03_blues_breakfast():
     ).render(chords, key, dur - 48.0)
     sax = _off(sax, 32.0)
 
-    _export({"boogie": boogie, "blues": blues, "sax": sax},
+    drums = DrumKitPatternGenerator(
+        GeneratorParams(density=0.1), style="jazz", groove_swing=0.67,
+        fill_frequency=0.2, auto_fills=True
+    ).render(chords, key, dur)
+
+    ghosts = GhostNotesGenerator(
+        GeneratorParams(density=0.05), pattern="jazz", target="snare",
+        ghost_velocity=35, ghost_density=0.5
+    ).render(chords, key, dur)
+
+    _export({"boogie": boogie, "blues": blues, "sax": sax, "drums": drums, "ghosts": ghosts},
             OUT / "03_Blues_for_Breakfast.mid", bpm, key,
-            {"boogie": PIANO, "blues": TRUMPET, "sax": TENOR_SAX})
+            {"boogie": PIANO, "blues": TRUMPET, "sax": TENOR_SAX, "drums": DRUMS, "ghosts": DRUMS})
 
 
 # =====================================================================
@@ -225,9 +252,19 @@ def produce_04_park_bench():
     ).render(chords, key, dur - 64.0)
     sax = _off(sax, 48.0)
 
-    _export({"comp": comp, "bass": bass, "vibes": vibes, "sax": sax},
+    drums = DrumKitPatternGenerator(
+        GeneratorParams(density=0.06), style="jazz", groove_swing=0.67,
+        fill_frequency=0.12, auto_fills=True
+    ).render(chords, key, dur)
+
+    ghosts = GhostNotesGenerator(
+        GeneratorParams(density=0.03), pattern="jazz", target="snare",
+        ghost_velocity=28, ghost_density=0.35
+    ).render(chords, key, dur)
+
+    _export({"comp": comp, "bass": bass, "vibes": vibes, "sax": sax, "drums": drums, "ghosts": ghosts},
             OUT / "04_Park_Bench_Swing.mid", bpm, key,
-            {"comp": EPIANO, "bass": ACOUSTIC_BASS, "vibes": VIBRAPHONE, "sax": TENOR_SAX})
+            {"comp": EPIANO, "bass": ACOUSTIC_BASS, "vibes": VIBRAPHONE, "sax": TENOR_SAX, "drums": DRUMS, "ghosts": DRUMS})
 
 
 # =====================================================================
@@ -261,9 +298,14 @@ def produce_05_latin_lunch():
     ).render(chords, key, dur - 40.0)
     comp = _off(comp, 24.0)
 
-    _export({"montuno": montuno, "bass": bass, "trumpet": trumpet, "comp": comp},
+    drums = DrumKitPatternGenerator(
+        GeneratorParams(density=0.08), style="jazz", groove_swing=0.55,
+        fill_frequency=0.15, auto_fills=True
+    ).render(chords, key, dur)
+
+    _export({"montuno": montuno, "bass": bass, "trumpet": trumpet, "comp": comp, "drums": drums},
             OUT / "05_Latin_Lunch.mid", bpm, key,
-            {"montuno": EPIANO, "bass": ACOUSTIC_BASS, "trumpet": TRUMPET, "comp": JAZZ_GUITAR})
+            {"montuno": EPIANO, "bass": ACOUSTIC_BASS, "trumpet": TRUMPET, "comp": JAZZ_GUITAR, "drums": DRUMS})
 
 
 # =====================================================================
@@ -297,9 +339,19 @@ def produce_06_sunday_stroll():
     ).render(chords, key, dur - 48.0)
     guitar = _off(guitar, 32.0)
 
-    _export({"comp": comp, "bass": bass, "sax": sax, "guitar": guitar},
+    drums = DrumKitPatternGenerator(
+        GeneratorParams(density=0.03), style="jazz", groove_swing=0.55,
+        fill_frequency=0.08, auto_fills=True
+    ).render(chords, key, dur)
+
+    ghosts = GhostNotesGenerator(
+        GeneratorParams(density=0.02), pattern="jazz", target="snare",
+        ghost_velocity=25, ghost_density=0.3
+    ).render(chords, key, dur)
+
+    _export({"comp": comp, "bass": bass, "sax": sax, "guitar": guitar, "drums": drums, "ghosts": ghosts},
             OUT / "06_Sunday_Stroll.mid", bpm, key,
-            {"comp": EPIANO, "bass": FRETLESS_BASS, "sax": SOPRANO_SAX, "guitar": JAZZ_GUITAR})
+            {"comp": EPIANO, "bass": FRETLESS_BASS, "sax": SOPRANO_SAX, "guitar": JAZZ_GUITAR, "drums": DRUMS, "ghosts": DRUMS})
 
 
 # =====================================================================
@@ -333,9 +385,19 @@ def produce_07_jumping_beans():
     ).render(chords, key, dur - 48.0)
     trumpet = _off(trumpet, 32.0)
 
-    _export({"stride": stride, "bass": bass, "sax": sax, "trumpet": trumpet},
+    drums = DrumKitPatternGenerator(
+        GeneratorParams(density=0.12), style="jazz", groove_swing=0.67,
+        fill_frequency=0.2, auto_fills=True
+    ).render(chords, key, dur)
+
+    ghosts = GhostNotesGenerator(
+        GeneratorParams(density=0.06), pattern="jazz", target="snare",
+        ghost_velocity=35, ghost_density=0.55
+    ).render(chords, key, dur)
+
+    _export({"stride": stride, "bass": bass, "sax": sax, "trumpet": trumpet, "drums": drums, "ghosts": ghosts},
             OUT / "07_Jumping_Beans.mid", bpm, key,
-            {"stride": PIANO, "bass": ACOUSTIC_BASS, "sax": BARI_SAX, "trumpet": TRUMPET})
+            {"stride": PIANO, "bass": ACOUSTIC_BASS, "sax": BARI_SAX, "trumpet": TRUMPET, "drums": DRUMS, "ghosts": DRUMS})
 
 
 # =====================================================================
@@ -377,10 +439,20 @@ def produce_08_last_call():
     ).render(chords, key, dur - 48.0)
     vibes = _off(vibes, 32.0)
 
-    _export({"comp": comp, "bass": bass, "sax": sax, "trumpet": trumpet, "vibes": vibes},
+    drums = DrumKitPatternGenerator(
+        GeneratorParams(density=0.1), style="jazz", groove_swing=0.67,
+        fill_frequency=0.18, auto_fills=True
+    ).render(chords, key, dur)
+
+    ghosts = GhostNotesGenerator(
+        GeneratorParams(density=0.04), pattern="jazz", target="snare",
+        ghost_velocity=32, ghost_density=0.45
+    ).render(chords, key, dur)
+
+    _export({"comp": comp, "bass": bass, "sax": sax, "trumpet": trumpet, "vibes": vibes, "drums": drums, "ghosts": ghosts},
             OUT / "08_Last_Call.mid", bpm, key,
             {"comp": PIANO, "bass": ACOUSTIC_BASS, "sax": TENOR_SAX,
-             "trumpet": TRUMPET, "vibes": VIBRAPHONE})
+             "trumpet": TRUMPET, "vibes": VIBRAPHONE, "drums": DRUMS, "ghosts": DRUMS})
 
 
 def main():
