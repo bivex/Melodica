@@ -95,12 +95,12 @@ def produce_01_sunny_side_up():
     chords = _get_chords(key, dur)
 
     stride = StridePianoGenerator(
-        GeneratorParams(density=0.12, key_range_low=28, key_range_high=88),
+        GeneratorParams(density=0.12, key_range_low=40, key_range_high=88),
         pattern="standard", chromatic_approach=True, ornaments=True
     ).render(chords, key, dur)
 
     bass = WalkingBassGenerator(
-        GeneratorParams(density=0.08, key_range_low=28, key_range_high=48),
+        GeneratorParams(density=0.08, key_range_low=24, key_range_high=38),
         approach_style="mixed", swing_eighth_ratio=0.67
     ).render(chords, key, dur)
 
@@ -111,7 +111,7 @@ def produce_01_sunny_side_up():
     sax = _off(sax, 16.0)
 
     swing = SwingGenerator(
-        GeneratorParams(density=0.06, key_range_low=60, key_range_high=84),
+        GeneratorParams(density=0.06, key_range_low=72, key_range_high=88),
         swing_ratio=0.67, pitch_strategy="chord_tone", accent_pattern="backbeat"
     ).render(chords, key, dur - 48.0)
     swing = _off(swing, 32.0)
@@ -131,7 +131,7 @@ def produce_02_cafe():
     chords = _get_chords(key, dur)
 
     comp = PianoCompGenerator(
-        GeneratorParams(density=0.06, key_range_low=48, key_range_high=84),
+        GeneratorParams(density=0.06, key_range_low=60, key_range_high=84),
         comp_style="bossa", voicing_type="rootless", accent_pattern="syncopated"
     ).render(chords, key, dur)
 
@@ -142,14 +142,14 @@ def produce_02_cafe():
 
     flute = MelodyGenerator(
         GeneratorParams(density=0.06, velocity_range=(48, 72)),
-        phrase_length=8.0, note_range_low=60, note_range_high=84,
+        phrase_length=8.0, note_range_low=72, note_range_high=96,
         register_smoothness=0.85, harmony_note_probability=0.35,
         steps_probability=0.8
     ).render(chords, key, dur - 32.0)
     flute = _off(flute, 16.0)
 
     guitar = PianoCompGenerator(
-        GeneratorParams(density=0.04, key_range_low=48, key_range_high=72),
+        GeneratorParams(density=0.04, key_range_low=48, key_range_high=60),
         comp_style="bossa", voicing_type="shell"
     ).render(chords, key, dur - 40.0)
     guitar = _off(guitar, 24.0)
@@ -241,7 +241,7 @@ def produce_05_latin_lunch():
 
     montuno = MontunoGenerator(
         GeneratorParams(density=0.1, key_range_low=60, key_range_high=84),
-        pattern="salsa", clave_type="son_23", octave_doubling=True
+        pattern="salsa", clave_type="son_23", octave_doubling=False
     ).render(chords, key, dur)
 
     bass = WalkingBassGenerator(
