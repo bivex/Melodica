@@ -222,6 +222,7 @@ class TestTensionResponse:
 
     def test_high_tension_more_dominants(self):
         """High tension curve should produce more D than low tension."""
+        random.seed(42)
         h = FunctionalHMMHarmonizer(bar_grid=BAR_GRID)
         scale = D_HMIN
         melody = _melody(64, seed=42)
