@@ -126,7 +126,7 @@ def _export(tracks: dict, bpm: float, instruments: dict, path: str):
     )
 
 
-BASE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "output", "sagisu_crisis")
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "output", "sagisu_crisis"))
 os.makedirs(BASE_DIR, exist_ok=True)
 
 
