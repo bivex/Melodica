@@ -32,6 +32,7 @@ All generators live in `melodica/generators/`. Every class inherits `PhraseGener
 | `TrumpetGenerator` | `orchestral_brass.py` | `articulation="sustained"`, `dynamic_curve="flat"`, `con_sordino=False`, `register=2`, `fanfare_mode=False`, `note_density=1.0` |
 | `TromboneGenerator` | `orchestral_brass.py` | same + `bass_voice=False` |
 | `FrenchHornGenerator` | `orchestral_brass.py` | same as Trumpet |
+| `BrassSectionGenerator` | `brass_section.py` | `articulation="hit"`, `voicing="closed"`, `intensity=0.8`, `divisi_count=3`, `ensemble_mode="full"`, `breath_gap=0.25`, `mute=None`, `con_sordino=False` |
 
 ## Orchestral Woodwinds
 
@@ -48,6 +49,16 @@ All generators live in `melodica/generators/`. Every class inherits `PhraseGener
 |-------|------|------------|
 | `TimpaniGenerator` | `orchestral_percussion.py` | `stroke_pattern="single"`, `drum_count=4`, `tuning_follows=True`, `roll_speed=0.125` |
 | `MalletPercussionGenerator` | `orchestral_percussion.py` | `instrument="marimba"`, `pattern="arpeggio"`, `mallet_count=2` |
+
+## Orchestral Unpitched Percussion
+
+| Class | File | Key params |
+|-------|------|------------|
+| `BassDrumGenerator` | `orchestral_unpitched_percussion.py` | `pattern_type="single"` (`"single"`, `"roll"`, `"march"`) |
+| `TamTamGenerator` | `orchestral_unpitched_percussion.py` | `pattern_type="strike"` (`"strike"`, `"crescendo_strike"`, `"tremolo"`) |
+| `GongGenerator` | `orchestral_unpitched_percussion.py` | `pattern_type="strike"` (`"strike"`, `"roll"`, `"crescendo"`) |
+| `TriangleGenerator` | `orchestral_unpitched_percussion.py` | `pattern_type="single"` (`"single"`, `"roll"`, `"trill"`) |
+| `CastanetsGenerator` | `orchestral_unpitched_percussion.py` | `pattern_type="single"` (`"single"`, `"roll"`, `"rhythm"`) |
 
 ## Orchestral Score & Transitions
 
@@ -205,6 +216,7 @@ All generators live in `melodica/generators/`. Every class inherits `PhraseGener
 | `MelodyGenerator` | `melody.py` | `mode="downbeat_chord"`, `phrase_length=4.0`, `harmony_note_probability=0.64`, `random_movement=0.35`, `direction_bias=0.0`, `climax="auto"`, `after_leap="step_opposite"` |
 | `MarkovMelodyGenerator` | `markov.py` | `transitions=None`, `note_repetition_probability=0.14`, `harmony_note_probability=0.64` |
 | `NeuralMelodyGenerator` | `neural_melody.py` | `model_path=None`, `temperature=1.0`, `top_p=0.92`, `harmony_prob=0.55`, `device="cpu"` |
+| `MicrotonalMelodyGenerator` | `microtonal_melody.py` | `phrase_length=8.0`, `bend_range=2`, `note_duration=2.0`, `velocity_range=(50,80)` |
 | `SoloMelodyGenerator` | `solo_melody.py` | `style="blues_lick"`, `vibrato_depth=0.5`, `blues_notes=True`, `chromaticism=0.4` |
 | `CountermelodyGenerator` | `countermelody.py` | `primary_melody=None` |
 
@@ -360,6 +372,7 @@ All generators live in `melodica/generators/`. Every class inherits `PhraseGener
 
 | Class | File | Key params |
 |-------|------|------------|
+| `AleatoricGenerator` | `aleatoric.py` | `mode="tone_cluster"` (`"tone_cluster"`, `"chance_operations"`, `"repeat_ad_lib"`, `"graphic_score"`, `"pointillist"`, `"textural_cloud"`) |
 | `CanonGenerator` | `canon.py` | `canon_type="tonal"`, `delay_beats=DEFAULT`, `interval=7`, `num_followers=1`, `subject_length=4.0` |
 | `CallResponseGenerator` | `call_response.py` | `call_length=2.0`, `response_length=2.0`, `call_direction="up"`, `response_direction="down"` |
 | `HemiolaGenerator` | `hemiola.py` | (params present) |
