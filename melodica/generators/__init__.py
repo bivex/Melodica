@@ -407,6 +407,13 @@ from melodica.generators.compting_rhythm import ComptingRhythmGenerator
 from melodica.generators.turnaround import TurnaroundGenerator
 from melodica.generators.modal_jazz import ModalJazzGenerator
 from melodica.generators.two_feeling import TwoFeelingGenerator
+from melodica.generators.guide_tone import GuideToneGenerator
+from melodica.generators.enclosure import EnclosureGenerator
+from melodica.generators.side_slipping import SideSlippingGenerator
+from melodica.generators.trading_fours import TradingFoursGenerator
+from melodica.generators.stop_time import StopTimeGenerator
+from melodica.generators.walking_bass_line import WalkingBassLineGenerator
+from melodica.generators.shell_voicing import ShellVoicingGenerator
 
 __all__ = [
     "PhraseGenerator",
@@ -644,4 +651,11 @@ __all__ = [
     "TurnaroundGenerator",
     "ModalJazzGenerator",
     "TwoFeelingGenerator",
+    "GuideToneGenerator",
+    "EnclosureGenerator",
+    "SideSlippingGenerator",
+    "TradingFoursGenerator",
+    "StopTimeGenerator",
+    "WalkingBassLineGenerator",
+    "ShellVoicingGenerator",
 ]
