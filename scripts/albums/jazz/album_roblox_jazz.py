@@ -109,12 +109,12 @@ def produce_01_welcome():
     chords = _get_chords(key, dur)
 
     shell = ShellVoicingGenerator(
-        params=GeneratorParams(density=0.07, key_range_low=48, key_range_high=72),
+        params=GeneratorParams(density=0.07, key_range_low=54, key_range_high=72),
         voicing_type="root_shell", rhythm="charleston", voice_leading=True
     ).render(chords, key, dur)
 
     bass = WalkingBassLineGenerator(
-        params=GeneratorParams(density=0.08, key_range_low=36, key_range_high=48),
+        params=GeneratorParams(density=0.08, key_range_low=28, key_range_high=36),
         contour="ascending", target_note="root", passing_tones="mixed"
     ).render(chords, key, dur)
 
@@ -147,16 +147,16 @@ def produce_02_trading():
     trade = TradingFoursGenerator(
         params=GeneratorParams(density=0.1, velocity_range=(50, 90)),
         trade_length=4, style="call_response", density=1.2,
-        player_a_range=(60, 84), player_b_range=(48, 72)
+        player_a_range=(60, 84), player_b_range=(52, 72)
     ).render(chords, key, dur)
 
     shell = ShellVoicingGenerator(
-        params=GeneratorParams(density=0.06, key_range_low=48, key_range_high=72),
+        params=GeneratorParams(density=0.06, key_range_low=54, key_range_high=72),
         voicing_type="rootless", rhythm="half_note", voice_leading=True
     ).render(chords, key, dur)
 
     bass = WalkingBassGenerator(
-        GeneratorParams(density=0.07, key_range_low=28, key_range_high=44),
+        GeneratorParams(density=0.07, key_range_low=28, key_range_high=36),
         approach_style="mixed", swing_eighth_ratio=0.67
     ).render(chords, key, dur)
 
@@ -186,19 +186,19 @@ def produce_03_slip_slide():
     chords = _get_chords(key, dur)
 
     slip = SideSlippingGenerator(
-        params=GeneratorParams(density=0.09, velocity_range=(52, 88), key_range_low=54, key_range_high=78),
+        params=GeneratorParams(density=0.09, velocity_range=(52, 88), key_range_low=56, key_range_high=78),
         slip_direction="both", resolution_style="chromatic",
         pattern_source="mixed", phrase_length=5
     ).render(chords, key, dur - 20.0)
     slip = _off(slip, 12.0)
 
     guide = GuideToneGenerator(
-        params=GeneratorParams(density=0.05, key_range_low=48, key_range_high=60),
+        params=GeneratorParams(density=0.05, key_range_low=52, key_range_high=60),
         voice="both", connect=True, velocity_profile="legato"
     ).render(chords, key, dur)
 
     bass = WalkingBassLineGenerator(
-        params=GeneratorParams(density=0.07, key_range_low=28, key_range_high=44),
+        params=GeneratorParams(density=0.07, key_range_low=28, key_range_high=36),
         contour="scalar", target_note="root"
     ).render(chords, key, dur)
 
@@ -228,7 +228,7 @@ def produce_04_stop_go():
     chords = _get_chords(key, dur)
 
     stop = StopTimeGenerator(
-        params=GeneratorParams(density=0.08, key_range_low=48, key_range_high=72),
+        params=GeneratorParams(density=0.08, key_range_low=54, key_range_high=72),
         pattern="shuffle", accent_note="shell", fill_last_beat=True
     ).render(chords, key, dur)
 
@@ -239,7 +239,7 @@ def produce_04_stop_go():
     bebop = _off(bebop, 20.0)
 
     bass = WalkingBassGenerator(
-        GeneratorParams(density=0.08, key_range_low=28, key_range_high=44),
+        GeneratorParams(density=0.08, key_range_low=28, key_range_high=36),
         approach_style="chromatic", swing_eighth_ratio=0.67
     ).render(chords, key, dur)
 
@@ -275,13 +275,13 @@ def produce_05_crystal():
     enc = _off(enc, 16.0)
 
     shell = ShellVoicingGenerator(
-        params=GeneratorParams(density=0.04, key_range_low=48, key_range_high=72),
+        params=GeneratorParams(density=0.04, key_range_low=54, key_range_high=72),
         voicing_type="spread", rhythm="whole_note", voice_leading=True,
         include_extensions=True
     ).render(chords, key, dur)
 
     bass = WalkingBassLineGenerator(
-        params=GeneratorParams(density=0.05, key_range_low=24, key_range_high=40),
+        params=GeneratorParams(density=0.05, key_range_low=24, key_range_high=36),
         contour="mixed", target_note="guide_tones", passing_tones="diatonic"
     ).render(chords, key, dur)
 
@@ -306,12 +306,12 @@ def produce_06_pizza_blues():
     chords = _get_chords(key, dur)
 
     bass_line = WalkingBassLineGenerator(
-        params=GeneratorParams(density=0.1, key_range_low=28, key_range_high=44),
+        params=GeneratorParams(density=0.1, key_range_low=28, key_range_high=36),
         contour="mixed", target_note="root", passing_tones="chromatic"
     ).render(chords, key, dur)
 
     shell = ShellVoicingGenerator(
-        params=GeneratorParams(density=0.07, key_range_low=48, key_range_high=72),
+        params=GeneratorParams(density=0.07, key_range_low=54, key_range_high=72),
         voicing_type="root_shell", rhythm="freddie_green", voice_leading=True
     ).render(chords, key, dur)
 
@@ -322,7 +322,7 @@ def produce_06_pizza_blues():
     blues = _off(blues, 20.0)
 
     sax = SaxSoloGenerator(
-        GeneratorParams(density=0.07, velocity_range=(48, 82), key_range_low=54, key_range_high=78),
+        GeneratorParams(density=0.07, velocity_range=(48, 82), key_range_low=56, key_range_high=78),
         style="bebop", blues_notes=True, chromaticism=0.5
     ).render(chords, key, dur - 56.0)
     sax = _off(sax, 40.0)
@@ -355,11 +355,11 @@ def produce_07_escalation():
     trade = TradingFoursGenerator(
         params=GeneratorParams(density=0.12, velocity_range=(50, 95)),
         trade_length=4, style="escalating", density=1.4,
-        player_a_range=(58, 82), player_b_range=(42, 66)
+        player_a_range=(58, 82), player_b_range=(52, 66)
     ).render(chords, key, dur)
 
     stop = StopTimeGenerator(
-        params=GeneratorParams(density=0.06, key_range_low=36, key_range_high=60),
+        params=GeneratorParams(density=0.06, key_range_low=54, key_range_high=60),
         pattern="big_four", accent_note="root", fill_last_beat=True
     ).render(chords, key, dur)
 
@@ -370,7 +370,7 @@ def produce_07_escalation():
     enc = _off(enc, 16.0)
 
     bass = WalkingBassLineGenerator(
-        params=GeneratorParams(density=0.09, key_range_low=24, key_range_high=40),
+        params=GeneratorParams(density=0.09, key_range_low=24, key_range_high=36),
         contour="arpeggiated", target_note="root", passing_tones="chromatic"
     ).render(chords, key, dur)
 
@@ -402,18 +402,18 @@ def produce_08_starlight():
     slip = _off(slip, 20.0)
 
     guide = GuideToneGenerator(
-        params=GeneratorParams(density=0.04, key_range_low=48, key_range_high=60),
+        params=GeneratorParams(density=0.04, key_range_low=52, key_range_high=60),
         voice="both", connect=True, velocity_profile="legato"
     ).render(chords, key, dur)
 
     shell = ShellVoicingGenerator(
-        params=GeneratorParams(density=0.04, key_range_low=36, key_range_high=60),
+        params=GeneratorParams(density=0.04, key_range_low=54, key_range_high=60),
         voicing_type="B_form", rhythm="syncopated", voice_leading=True,
         drop_2=True, include_extensions=True
     ).render(chords, key, dur)
 
     bass = WalkingBassGenerator(
-        GeneratorParams(density=0.05, key_range_low=24, key_range_high=40),
+        GeneratorParams(density=0.05, key_range_low=24, key_range_high=36),
         approach_style="diatonic", swing_eighth_ratio=0.55
     ).render(chords, key, dur)
 
@@ -443,19 +443,19 @@ def produce_09_finale():
     chords = _get_chords(key, dur)
 
     shell = ShellVoicingGenerator(
-        params=GeneratorParams(density=0.08, key_range_low=48, key_range_high=72),
+        params=GeneratorParams(density=0.08, key_range_low=54, key_range_high=72),
         voicing_type="root_shell", rhythm="charleston", voice_leading=True
     ).render(chords, key, dur)
 
     guide = GuideToneGenerator(
-        params=GeneratorParams(density=0.04, key_range_low=36, key_range_high=48),
+        params=GeneratorParams(density=0.04, key_range_low=52, key_range_high=60),
         voice="alternate", connect=True
     ).render(chords, key, dur)
 
     trade = TradingFoursGenerator(
         params=GeneratorParams(density=0.1, velocity_range=(52, 92)),
         trade_length=4, style="escalating", density=1.2,
-        player_a_range=(60, 84), player_b_range=(48, 72)
+        player_a_range=(60, 84), player_b_range=(52, 72)
     ).render(chords, key, dur - 48.0)
     trade = _off(trade, 32.0)
 
@@ -466,7 +466,7 @@ def produce_09_finale():
     enc = _off(enc, 52.0)
 
     bass = WalkingBassLineGenerator(
-        params=GeneratorParams(density=0.09, key_range_low=28, key_range_high=44),
+        params=GeneratorParams(density=0.09, key_range_low=28, key_range_high=36),
         contour="mixed", target_note="root", passing_tones="mixed"
     ).render(chords, key, dur)
 
