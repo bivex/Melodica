@@ -422,6 +422,9 @@ All generators live in `melodica/generators/`. Every class inherits `PhraseGener
 | `PedalMelodyGenerator` | `pedal_melody.py` | (params present) |
 | `ProceduralExplorationGenerator` | `procedural_exploration.py` | `variant="nature"`, `mood="peaceful"`, `loop_length_bars=4`, `density=0.35` |
 | `PuzzleLoopGenerator` | `puzzle_loop.py` | `variant="bells"`, `complexity=0.3`, `loop_bars=4`, `register="mid"` |
+| `BebopScaleGenerator` | `bebop_scale.py` | `scale_type="dominant"`, `direction="mixed"`, `rhythm_value=0.5`, `accent_chord_tones=True`, `range_span=2` |
+| `AABA_FormGenerator` | `aaba_form.py` | `form_type="AABA"`, `a_template="standard_tonic"`, `b_template="standard_bridge"`, `turnaround_type="standard"`, `bars_per_section=8`, `vary_a2=False` |
+| `ComptingRhythmGenerator` | `compting_rhythm.py` | `pattern_family="charleston"`, `variation=0.3`, `density=0.6`, `accent_profile="2_and_4"`, `anticipate=0.2`, `stop_time=False` |
 | `BluesLickGenerator` | `blues_lick.py` | `lick_style="standard"`, `phrase_length=4` |
 | `BoogieWoogieGenerator` | `boogie_woogie.py` | `pattern="standard"`, `octave_bass=True`, `swing=0.67` |
 | `RagtimeGenerator` | `ragtime.py` | `pattern="classic"`, `melody_density=0.8` |

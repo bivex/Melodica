@@ -401,6 +401,9 @@ from melodica.generators.orchestral_unpitched_percussion import (
 )
 from melodica.generators.microtonal_melody import MicrotonalMelodyGenerator
 from melodica.generators.aleatoric import AleatoricGenerator
+from melodica.generators.bebop_scale import BebopScaleGenerator
+from melodica.generators.aaba_form import AABA_FormGenerator
+from melodica.generators.compting_rhythm import ComptingRhythmGenerator
 
 __all__ = [
     "PhraseGenerator",
@@ -632,4 +635,7 @@ __all__ = [
     "WhipSlapstickGenerator",
     "MicrotonalMelodyGenerator",
     "AleatoricGenerator",
+    "BebopScaleGenerator",
+    "AABA_FormGenerator",
+    "ComptingRhythmGenerator",
 ]
