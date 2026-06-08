@@ -404,6 +404,9 @@ from melodica.generators.aleatoric import AleatoricGenerator
 from melodica.generators.bebop_scale import BebopScaleGenerator
 from melodica.generators.aaba_form import AABA_FormGenerator
 from melodica.generators.compting_rhythm import ComptingRhythmGenerator
+from melodica.generators.turnaround import TurnaroundGenerator
+from melodica.generators.modal_jazz import ModalJazzGenerator
+from melodica.generators.two_feeling import TwoFeelingGenerator
 
 __all__ = [
     "PhraseGenerator",
@@ -638,4 +641,7 @@ __all__ = [
     "BebopScaleGenerator",
     "AABA_FormGenerator",
     "ComptingRhythmGenerator",
+    "TurnaroundGenerator",
+    "ModalJazzGenerator",
+    "TwoFeelingGenerator",
 ]

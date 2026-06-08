@@ -425,6 +425,13 @@ All generators live in `melodica/generators/`. Every class inherits `PhraseGener
 | `BebopScaleGenerator` | `bebop_scale.py` | `scale_type="dominant"`, `direction="mixed"`, `rhythm_value=0.5`, `accent_chord_tones=True`, `range_span=2` |
 | `AABA_FormGenerator` | `aaba_form.py` | `form_type="AABA"`, `a_template="standard_tonic"`, `b_template="standard_bridge"`, `turnaround_type="standard"`, `bars_per_section=8`, `vary_a2=False` |
 | `ComptingRhythmGenerator` | `compting_rhythm.py` | `pattern_family="charleston"`, `variation=0.3`, `density=0.6`, `accent_profile="2_and_4"`, `anticipate=0.2`, `stop_time=False` |
+| `TurnaroundGenerator` | `turnaround.py` | `turnaround_type="standard"`, `bars=2`, `render_mode="chords"`, `velocity_profile="crescendo"`, `connect_to_root=True` |
+| `ChordVoicingGenerator` | `chord_voicing.py` | `voicing="drop2"`, `rhythm_pattern="sustained"`, `octave=4`, `velocity_curve="flat"`, voicings: close, open, drop2, drop3, cluster, spread, shearing, rootless, rootless_a, rootless_b, quartal, so_what |
+| `ModalJazzGenerator` | `modal_jazz.py` | `mode="dorian"`, `line_style="scalar"`, `rhythm_density=1.0`, `accent_characteristic=True`, `pedal_tone=False`, `register_shift=0.1`, `phrase_length=8` |
+| `TwoFeelingGenerator` | `two_feeling.py` | `approach_style="chord_tone"`, `transition_to_walking=0.0`, `include_approach_tone=False`, `velocity_diff=10` |
+| `ReharmonizationGenerator` | `reharmonization.py` | `strategy="tritone"`, strategies: tritone, diatonic_swap, secondary_dom, chromatic_mediant, backdoor, ii_v_insertion, pedal_point, negative, mixed. `intensity=0.5`, `substitution_frequency=0.5` |
+| `PolyrhythmGenerator` | `polyrhythm.py` | `ratio="3x2"`, presets: clave, tresillo, cinquillo, hemiola. `accent_pattern="first"`, `variation=0.1` |
+| `MotifDevelopmentGenerator` | `motif_development.py` | transforms: original, inversion, retrograde, retrograde_inversion, augmentation, diminution, sequence_up, sequence_down, transposition, pitch_class_inversion. `development_style`: sequential, fragmented, continuous, stretto |
 | `BluesLickGenerator` | `blues_lick.py` | `lick_style="standard"`, `phrase_length=4` |
 | `BoogieWoogieGenerator` | `boogie_woogie.py` | `pattern="standard"`, `octave_bass=True`, `swing=0.67` |
 | `RagtimeGenerator` | `ragtime.py` | `pattern="classic"`, `melody_density=0.8` |

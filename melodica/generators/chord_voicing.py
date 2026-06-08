@@ -137,6 +137,17 @@ def _build_rootless_b(root: int, intervals: list[int]) -> list[int]:
     return sorted([note7, note9, note3, note5])
 
 
+def _build_quartal(root: int, intervals: list[int]) -> list[int]:
+    """Quartal voicing: stacks of perfect 4ths (McCoy Tyner style)."""
+    return [root + i * 5 for i in range(min(len(intervals), 4))]
+
+
+def _build_so_what(root: int, intervals: list[int]) -> list[int]:
+    """So What voicing: parallel 4th-based structure (Bill Evans / Miles Davis)."""
+    # Dm9 = D-F-A-C-E → intervals [0,5,10,15,17] from root
+    return [root, root + 5, root + 10, root + 15, root + 17]
+
+
 _BUILDERS = {
     "close": _build_close,
     "open": _build_open,
@@ -148,6 +159,8 @@ _BUILDERS = {
     "rootless": _build_rootless_a,
     "rootless_a": _build_rootless_a,
     "rootless_b": _build_rootless_b,
+    "quartal": _build_quartal,
+    "so_what": _build_so_what,
 }
 
 
@@ -254,6 +267,9 @@ class ChordVoicingGenerator(PhraseGenerator):
                 if hasattr(chord, "end")
                 else min(4.0, duration_beats - t)
             )
+            if chord_dur <= 0:
+                t += 0.5
+                continue
 
             if self.rhythm_pattern in ("arp_up", "arp_down"):
                 ordered = pitches if self.rhythm_pattern == "arp_up" else list(reversed(pitches))
