@@ -422,3 +422,22 @@ build/
 dist/
 *.egg-info/
 
+# Mutation testing
+.mutmut-cache
+
+# Coverage extras
+.coverage_bass
+
+# Root-level generated/scratch artefacts
+/scratch/output/
+/__pycache__/
+/*.mid
+/*.npy
+/*.txt.model
+
+# Rendered audio
+/rendered_mp3/
+
+# Profiling
+*.prof
+
