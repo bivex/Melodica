@@ -37,11 +37,15 @@ _Q = (
     r"|13|11|9|7|6"
     r"|5"          # power chord
 )
+# Compound extension suffixes allowed after the main quality token
+_EXT = r"(?:(sus4|sus2|sus|add13|add11|add9|[#b]11|[#b]9|[#b]5|[#b]13))?"
+
 _ROMAN_REGEX = re.compile(
     r"^([#b])?"                        # optional root accidental prefix
     r"([IViv]+)"                       # Roman numeral
     r"([#b])?"                        # optional root accidental suffix
-    rf"({_Q})?"                        # optional quality token
+    rf"({_Q})?"                        # optional primary quality token
+    + _EXT +                           # optional secondary extension modifier
     r"(?:/([#b]?[IViv\d]+))?$"         # optional slash bass (accidental/numeral/digit)
 )
 
@@ -129,9 +133,10 @@ class Scale:
         if not match:
             raise ValueError(f"Invalid Roman numeral: {roman!r}")
 
-        acc_pref, numeral, acc_suff, quality_str, inv_numeral = match.groups()
+        acc_pref, numeral, acc_suff, quality_str, ext_mod, inv_numeral = match.groups()
         accidental = acc_pref or acc_suff
         quality_str = quality_str or ""
+        ext_mod = ext_mod or ""
 
         mapping = {
             "I": 1, "II": 2, "III": 3, "IV": 4,
@@ -174,6 +179,11 @@ class Scale:
             or q in ROMAN_QUALITY_MAP
         )
 
+        # Compound: if primary quality is a sus/dominant and ext_mod adds a seventh flag
+        if ext_mod in ("sus4", "sus2", "sus") and q in ("7", "9", "11", "13"):
+            # e.g. V7sus4 → sus4 chord with dominant 7th coloring
+            wants_seventh = True
+
         # --- Get diatonic base chord ---
         chord = self.diatonic_chord(degree, seventh=wants_seventh)
 
@@ -184,17 +194,34 @@ class Scale:
             chord = dataclasses.replace(chord, root=(chord.root + 1) % 12)
 
         # --- Quality override ---
-        chord = dataclasses.replace(chord, quality=_resolve_quality(q, numeral.isupper()))
+        # When ext_mod overrides suspension: V7sus4 → sus4 quality with seventh
+        if ext_mod in ("sus4", "sus"):
+            q_for_quality = "sus4"
+        elif ext_mod == "sus2":
+            q_for_quality = "sus2"
+        else:
+            q_for_quality = q
+        chord = dataclasses.replace(chord, quality=_resolve_quality(q_for_quality, numeral.isupper()))
 
         # --- Extension annotations (stored in ChordLabel.extensions) ---
         exts: list[int] = []
         root = chord.root
-        if q in ("add9", "9", "maj9", "m9"):
+        if q in ("add9", "9", "maj9", "m9") or ext_mod == "add9":
             exts.append((root + 14) % 12)   # 9th
-        if q in ("add11", "11", "maj11", "m11"):
+        if q in ("add11", "11", "maj11", "m11") or ext_mod in ("add11", "#11"):
             exts.append((root + 17) % 12)   # 11th
-        if q in ("add13", "13", "maj13", "m13"):
+        if ext_mod == "b11":
+            exts.append((root + 16) % 12)   # flat 11th
+        if q in ("add13", "13", "maj13", "m13") or ext_mod == "add13":
             exts.append((root + 21) % 12)   # 13th
+        if ext_mod == "b9":
+            exts.append((root + 13) % 12)   # b9
+        if ext_mod == "#9":
+            exts.append((root + 15) % 12)   # #9 (Hendrix)
+        if ext_mod == "b5":
+            exts.append((root + 6) % 12)    # b5 / tritone sub
+        if ext_mod == "#5":
+            exts.append((root + 8) % 12)    # #5 / augmented fifth
         if q in ("6", "m6"):
             exts.append((root + 9) % 12)    # added 6th
         if exts:

@@ -245,7 +245,7 @@ def cue_01_village():
     print("  01 — The Village at Peace")
     bpm, dur = 72, 128.0
     key = C_IONIAN
-    prog = _chords("Imaj7 IVmaj7 Imaj7 V7 Imaj9 vim7 IVmaj7 V7 Imaj7 IVadd9 vim7 V7 Imaj9", dur, key)
+    prog = _chords("Imaj7 IVmaj7 Imaj7 V7 Imaj9 vim7 IVmaj7 V7 Imaj7 IVadd9 vim7 V7sus4 V7 Imaj9", dur, key)
 
     melody = MelodyGenerator(
         GeneratorParams(density=0.30, key_range_low=60, key_range_high=84),
@@ -319,7 +319,7 @@ def cue_02_into_the_wild():
     print("  02 — Into the Wild")
     bpm, dur = 96, 128.0
     key = G_MIXOLYD
-    prog = _chords("Imaj7 V7 IVmaj7 I7 bVII7 IVadd9 Vsus4 V7 IVmaj9 bVII7 Imaj7 V7 IVmaj7 Iadd9", dur, key)
+    prog = _chords("Imaj7 V7 IVmaj7 I7 bVII7 IVadd9 V7sus4 V7 IVmaj9 bVII7 Imaj7 V7 IVmaj7 Iadd9", dur, key)
 
     melody = MelodyGenerator(
         GeneratorParams(density=0.35, key_range_low=60, key_range_high=88),
@@ -559,7 +559,7 @@ def cue_05_heroes_return():
     print("  05 — The Hero's Return")
     bpm, dur = 80, 144.0
     key = A_DOR
-    prog = _chords("im9 IVmaj9 im7 V7 im7 IIImaj7 bVII7 ivm7 im9 IVmaj7 Vsus4 V7 Imaj9 bVII7 Imaj9", dur, key)
+    prog = _chords("im9 IVmaj9 im7 V7 im7 IIImaj7 bVII7 ivm7 im9 IVmaj7 V7sus4 V7 Imaj9 bVII7 Imaj9", dur, key)
 
     melody = MelodyGenerator(
         GeneratorParams(density=0.28, key_range_low=60, key_range_high=84),
