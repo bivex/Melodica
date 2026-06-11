@@ -338,7 +338,8 @@ class TestOstinatoGenerator:
             pattern="1-3-5-3",
             timing_jitter=0.05,
             velocity_jitter=10,
-            duration_jitter=0.05
+            duration_jitter=0.05,
+            seed=42
         )
         notes = gen.render(_simple_chords(), C_MAJOR, 2.0)
         assert len(notes) > 0

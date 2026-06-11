@@ -103,6 +103,7 @@ class OstinatoGenerator(PhraseGenerator):
     timing_jitter: float = 0.0
     velocity_jitter: int = 0
     duration_jitter: float = 0.0
+    seed: int | None = None
 
     # Phrase Generator
     phrase_length: float | None = None
@@ -133,6 +134,7 @@ class OstinatoGenerator(PhraseGenerator):
         timing_jitter: float = 0.0,
         velocity_jitter: int = 0,
         duration_jitter: float = 0.0,
+        seed: int | None = None,
         phrase_length: float | None = None,
         phrase_ending: str = "none",
         patterns: list[str | list[int]] | None = None,
@@ -164,6 +166,7 @@ class OstinatoGenerator(PhraseGenerator):
         self.timing_jitter = timing_jitter
         self.velocity_jitter = velocity_jitter
         self.duration_jitter = duration_jitter
+        self.seed = seed
         self.phrase_length = phrase_length
         self.phrase_ending = phrase_ending
         self.patterns = patterns
@@ -180,6 +183,9 @@ class OstinatoGenerator(PhraseGenerator):
         if not chords:
             return []
 
+        # Localized RNG to guarantee determinism
+        rng = random.Random(self.seed)
+
         events = self._build_events(duration_beats)
         notes: list[NoteInfo] = []
         prev_chord: ChordLabel | None = None
@@ -190,6 +196,7 @@ class OstinatoGenerator(PhraseGenerator):
         note_count = 0
         pattern_start_beat = 0.0
         skip_until = 0.0
+        last_pattern_idx = -1
 
         for event_idx, event in enumerate(events):
             if event.onset < skip_until:
@@ -208,9 +215,16 @@ class OstinatoGenerator(PhraseGenerator):
                 pattern_start_beat = event.onset
 
             # Get active pattern degrees for the current time (supports Pattern Morphing)
-            degrees = self._get_pattern_for_time(event.onset)
+            degrees = self._get_pattern_for_time(event.onset, rng)
             if not degrees:
                 continue
+
+            # Reset pattern index at morph boundaries for better phrasing
+            if self.change_pattern_every is not None:
+                current_pattern_idx = int(event.onset // self.change_pattern_every)
+                if current_pattern_idx != last_pattern_idx:
+                    pat_idx = 0
+                    last_pattern_idx = current_pattern_idx
 
             # Determine current degree from pattern
             deg = degrees[pat_idx % len(degrees)]
@@ -281,18 +295,18 @@ class OstinatoGenerator(PhraseGenerator):
             accent = self.accent_pattern[pat_idx % len(self.accent_pattern)]
             vel = int(base_vel * accent)
             if self.velocity_jitter > 0:
-                vel += random.randint(-self.velocity_jitter, self.velocity_jitter)
+                vel += rng.randint(-self.velocity_jitter, self.velocity_jitter)
             vel = max(1, min(127, vel))
 
             # Apply Humanization (timing and duration jitter)
             final_onset = event.onset
             if self.timing_jitter > 0.0:
-                final_onset += random.uniform(-self.timing_jitter, self.timing_jitter)
+                final_onset += rng.uniform(-self.timing_jitter, self.timing_jitter)
             final_onset = max(0.0, round(final_onset, 6))
 
             final_duration = note_duration
             if self.duration_jitter > 0.0 and self.phrase_ending != "hold":
-                final_duration += random.uniform(-self.duration_jitter, self.duration_jitter)
+                final_duration += rng.uniform(-self.duration_jitter, self.duration_jitter)
             final_duration = max(0.01, round(final_duration, 6))
 
             notes.append(
@@ -345,15 +359,14 @@ class OstinatoGenerator(PhraseGenerator):
                 return [d + 1 for d in pat]
         return [1, 3, 5, 3]
 
-    def _get_pattern_for_time(self, onset: float) -> list[int]:
+    def _get_pattern_for_time(self, onset: float, rng: random.Random) -> list[int]:
         """Supports pattern morphing by returning the active pattern at the given onset time."""
         if self.patterns and self.change_pattern_every:
             idx = int(onset // self.change_pattern_every)
             if self.pattern_transition_mode == "random":
-                random_state = random.getstate()
-                random.seed(idx + 12345)
-                pat = random.choice(self.patterns)
-                random.setstate(random_state)
+                # Seeding local Random block deterministically for this transition point
+                state_rng = random.Random((self.seed or 0) + idx + 12345)
+                pat = state_rng.choice(self.patterns)
             else:
                 pat = self.patterns[idx % len(self.patterns)]
             return self._resolve_pattern_value(pat)
