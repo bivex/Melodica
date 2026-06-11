@@ -87,17 +87,18 @@ class MasteringDesk:
         return int(round(64 + pan_norm * 63))
 
     def _apply_limiter(self, vel: int) -> int:
-        """Soft-knee limiter: 2:1 compression above 90% of ceiling, hard brickwall at ceiling."""
+        """Soft-knee limiter: smooth compression above 90% of ceiling, brickwall at ceiling."""
         ceiling = self.limiter_threshold
         knee_start = int(ceiling * 0.9)
         if vel <= knee_start:
             return vel
-        if vel >= ceiling:
+        # Transition range is 2 * (ceiling - knee_start)
+        knee_width = 2 * (ceiling - knee_start)
+        if vel >= knee_start + knee_width:
             return ceiling
-        # Quadratic curve: output < input in knee zone, reaches ceiling at boundary
-        range_ = ceiling - knee_start
-        t = (vel - knee_start) / range_
-        return int(round(knee_start + range_ * t * t))
+        # Smooth quadratic transition curve: f(x) = x - (x - x0)^2 / (2 * W)
+        compressed = vel - ((vel - knee_start) ** 2) / (2 * knee_width)
+        return int(round(compressed))
 
     def _compress(self, vel: int, band: str) -> int:
         """Downward compression: above threshold, reduce by ratio."""
