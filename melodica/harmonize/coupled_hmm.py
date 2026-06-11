@@ -3,11 +3,11 @@
 # Licensed under the MIT License.
 
 """
-coupled_hmm.py — Hierarchical HMM Harmonizer (6 chord types).
+coupled_hmm.py — Hierarchical HMM Harmonizer (12 chord types).
 Based on research by Dmitri Tymoczko and Mark Newman (2024).
 
-Layer 1: Notes -> Chords via Viterbi over 72 states (12 roots x 6 types).
-Layer 2: Chords -> Keys via Viterbi over 24 states (12 roots x 2 key types).
+Layer 1: Notes -> Chords via Viterbi over 144 states (12 roots x 12 types).
+Layer 2: Chords -> Keys via Viterbi over 12 roots x N key types.
 
 Weights loaded from melodica/harmonize/weights/ (trained by train_full_modes.py).
 """
@@ -216,13 +216,20 @@ class CoupledHMMHarmonizer:
         if constraints and change_points:
             constraints = self._snap_constraints(constraints, change_points)
 
-        # 2. Layer 1: Notes -> Chords (108 states)
-        chord_path = self._viterbi_chords(observations, initial_scale, change_points, constraints, tension_curve)
+        # 2. Pass 1: Get initial draft chord sequence (unbiased by key layer)
+        draft_chords = self._viterbi_chords(
+            observations, initial_scale, change_points, constraints, tension_curve, key_path=None
+        )
 
-        # 3. Layer 2: Chords -> Keys (24 states)
-        key_path = self._viterbi_keys(chord_path)
+        # 3. Pass 2: Estimate key center sequence (Layer 2) from initial chords
+        key_path = self._viterbi_keys(draft_chords)
 
-        # 4. Build result
+        # 4. Pass 3: Refined chord sequence, now coupled to estimated key centers
+        chord_path = self._viterbi_chords(
+            observations, initial_scale, change_points, constraints, tension_curve, key_path=key_path
+        )
+
+        # 5. Build result
         result = []
         for i, (root, t_idx) in enumerate(chord_path):
             quality = TYPE_TO_QUALITY[t_idx]
@@ -243,9 +250,10 @@ class CoupledHMMHarmonizer:
         scale: Scale,
         change_points: list[float],
         constraints: list[ChordLabel] | None = None,
-        tension_curve: Any | None = None
+        tension_curve: Any | None = None,
+        key_path: list[tuple[int, int]] | None = None
     ) -> list[tuple[int, int]]:
-        """Find most likely chord sequence with optional hard constraints and tension bias."""
+        """Find most likely chord sequence using Viterbi with optional constraints, tension, and key coupling."""
         n_s = N_TONES * N_TYPES  # 144
         T = len(obs)
         NEG_INF = -1e12
@@ -276,8 +284,6 @@ class CoupledHMMHarmonizer:
         UNSTABLE_INDICES = {2, 3, 8}
 
         # Pre-compute transition matrix [k_prev, interval, k_next] -> [n_s, n_s]
-        # s_prev = r_prev * N_TYPES + k_prev, s_next = r_next * N_TYPES + k_next
-        # interval = (r_next - r_prev) % 12
         trans = np.full((n_s, n_s), NEG_INF)
         for k_prev in range(N_TYPES):
             for k_next in range(N_TYPES):
@@ -307,6 +313,12 @@ class CoupledHMMHarmonizer:
                     if k in STABLE_INDICES:
                         init_scores[s] += (1.0 - tau) * 4.0
 
+        if key_path:
+            key_root, key_type = key_path[0]
+            for r in range(N_TONES):
+                bias = 0.5 * (KEY_OFFSET_LOG[key_type, (r - key_root) % 12] + LOG_KEY_TYPE_PRIOR[key_type])
+                init_scores[r * N_TYPES:(r + 1) * N_TYPES] += bias
+
         if constraints:
             cp = change_points[0]
             target = next((c for c in constraints if c.start <= cp < c.start + c.duration), None)
@@ -321,7 +333,7 @@ class CoupledHMMHarmonizer:
 
         # Forward pass
         for t_step in range(1, T):
-            cur_emit = emit[t_step].ravel()
+            cur_emit = emit[t_step].ravel().copy()
             cp = change_points[t_step]
             tau = tension_curve.tension_at(cp) if tension_curve else 0.5
 
@@ -337,13 +349,13 @@ class CoupledHMMHarmonizer:
 
             # Interval diversity: penalize repeating the same root interval
             if t_step >= 2:
-                # Get interval of previous transition from backtrack
-                prev_s = backtrack[t_step - 1, np.argmax(dp[t_step - 1])]
-                prevprev_s = backtrack[t_step - 2, prev_s] if t_step >= 2 else 0
+                # Correct index lag: get the transition from t-2 to t-1
+                curr_s = np.argmax(dp[t_step - 1])
+                prev_s = backtrack[t_step - 1, curr_s]
+                curr_root = curr_s // N_TYPES
                 prev_root = prev_s // N_TYPES
-                prevprev_root = prevprev_s // N_TYPES
-                last_interval = (prev_root - prevprev_root) % 12
-                # Penalize ALL transitions using that same interval
+                last_interval = (curr_root - prev_root) % 12
+                # Penalize transitions using that same interval
                 for r_from in range(N_TONES):
                     r_to = (r_from + last_interval) % 12
                     s_from = r_from * N_TYPES
@@ -358,6 +370,12 @@ class CoupledHMMHarmonizer:
                 t_bias[k::N_TYPES] = tau * 4.0
             for k in STABLE_INDICES:
                 t_bias[k::N_TYPES] = (1.0 - tau) * 4.0
+
+            if key_path:
+                key_root, key_type = key_path[t_step]
+                for r in range(N_TONES):
+                    bias = 0.5 * (KEY_OFFSET_LOG[key_type, (r - key_root) % 12] + LOG_KEY_TYPE_PRIOR[key_type])
+                    t_bias[r * N_TYPES:(r + 1) * N_TYPES] += bias
 
             dp[t_step] = cur_emit + t_bias + best_scores
             backtrack[t_step] = best_prev
