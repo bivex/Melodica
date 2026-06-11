@@ -286,9 +286,11 @@ class TestBuildEngineHMM:
 
     def test_build_engine_default_is_hmm(self):
         from melodica.engines import build_engine
+        from melodica.engines.coupled_hmm_engine import CoupledHMMEngine
 
+        # Default engine_id=4 → CoupledHMMEngine (upgraded default since HMMEngine id=3)
         engine = build_engine()
-        assert isinstance(engine, HMMEngine)
+        assert isinstance(engine, CoupledHMMEngine)
 
 
 # ===================================================================
