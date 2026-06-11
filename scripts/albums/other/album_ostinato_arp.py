@@ -24,6 +24,7 @@ from melodica.generators.drone import DroneGenerator
 from melodica.generators.ambient import AmbientPadGenerator
 from melodica.generators.piano_comp import PianoCompGenerator
 from melodica.generators.bass import BassGenerator
+from melodica.generators.melody import MelodyGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -38,9 +39,12 @@ SYNTH_LEAD = 80
 SYNTH_SAW = 81
 PAD_WARM = 89
 OVERDRIVEN_GUITAR = 29
+DISTORTION_GUITAR = 30
 ACOUSTIC_BASS = 32
 FRETLESS_BASS = 35
 SYNTH_BASS = 38
+FLUTE = 73
+CLARINET = 71
 DRUMS = 0 # General MIDI percussion channel 10 trigger
 
 random.seed(42)
@@ -63,9 +67,10 @@ def _master(raw: dict, bpm: float, lufs: float = -16.0):
     desk = MixingDesk(niche_cfg={})
     desk.track_gains.update({
         "piano": 0.75, "glock": 0.60, "bass": 0.70, "drums": 0.65,
-        "lead": 0.75, "synth_bass": 0.70, "pad": 0.55,
+        "lead": 0.75, "lead_arp": 0.65, "synth_bass": 0.70, "pad": 0.55,
         "harp": 0.70, "vibes": 0.60,
-        "guitar": 0.75, "saw": 0.65
+        "guitar": 0.75, "saw": 0.65,
+        "flute": 0.70, "clarinet": 0.70, "guitar_lead": 0.75
     })
     mixed = desk.apply_mixing(raw, [], int(bpm))
     master = MasteringDesk(target_lufs=lufs)
@@ -111,9 +116,16 @@ def produce_01_clockwork_dreams():
         fill_frequency=0.1, auto_fills=True
     ).render(chords, key, dur)
 
-    _export({"piano": piano, "glock": glock, "bass": bass, "drums": drums},
+    flute = MelodyGenerator(
+        GeneratorParams(density=0.15, key_range_low=72, key_range_high=88),
+        phrase_length=8.0, phrase_rest_probability=0.25,
+        phrase_contour="arch", syncopation=0.0
+    ).render(chords, key, dur - 16.0)
+    flute = _off(flute, 8.0)
+
+    _export({"piano": piano, "glock": glock, "bass": bass, "drums": drums, "flute": flute},
             OUT / "01_Clockwork_Dreams.mid", bpm, key,
-            {"piano": ACOUSTIC_GRAND_PIANO, "glock": GLOCKENSPIEL, "bass": ACOUSTIC_BASS, "drums": DRUMS})
+            {"piano": ACOUSTIC_GRAND_PIANO, "glock": GLOCKENSPIEL, "bass": ACOUSTIC_BASS, "drums": DRUMS, "flute": FLUTE})
 
 
 # =====================================================================
@@ -126,11 +138,11 @@ def produce_02_neon_horizons():
     key = Scale(2, Mode.NATURAL_MINOR)
     chords = _get_chords(key, dur)
 
-    lead = ArpeggiatorGenerator(
+    lead_arp = ArpeggiatorGenerator(
         GeneratorParams(density=0.1, key_range_low=60, key_range_high=84),
         pattern="octave_pump", note_duration=0.25, voicing="open", octaves=2
     ).render(chords, key, dur - 16.0)
-    lead = _off(lead, 8.0)
+    lead_arp = _off(lead_arp, 8.0)
 
     synth_bass = OstinatoGenerator(
         GeneratorParams(density=0.1, key_range_low=36, key_range_high=52),
@@ -150,9 +162,16 @@ def produce_02_neon_horizons():
         GeneratorParams(density=0.08), style="rock", fill_frequency=0.15, auto_fills=True
     ).render(chords, key, dur)
 
-    _export({"lead": lead, "synth_bass": synth_bass, "pad": pad, "drums": drums},
+    lead = MelodyGenerator(
+        GeneratorParams(density=0.2, key_range_low=60, key_range_high=84),
+        phrase_length=8.0, phrase_rest_probability=0.15,
+        phrase_contour="rise_fall", syncopation=0.25
+    ).render(chords, key, dur - 32.0)
+    lead = _off(lead, 16.0)
+
+    _export({"lead": lead, "lead_arp": lead_arp, "synth_bass": synth_bass, "pad": pad, "drums": drums},
             OUT / "02_Neon_Horizons.mid", bpm, key,
-            {"lead": SYNTH_LEAD, "synth_bass": SYNTH_BASS, "pad": PAD_WARM, "drums": DRUMS})
+            {"lead": SYNTH_LEAD, "lead_arp": SYNTH_SAW, "synth_bass": SYNTH_BASS, "pad": PAD_WARM, "drums": DRUMS})
 
 
 # =====================================================================
@@ -190,9 +209,16 @@ def produce_03_cascading_rain():
         fill_frequency=0.05, auto_fills=True
     ).render(chords, key, dur)
 
-    _export({"harp": harp, "vibes": vibes, "bass": bass, "drums": drums},
+    clarinet = MelodyGenerator(
+        GeneratorParams(density=0.12, key_range_low=60, key_range_high=80),
+        phrase_length=12.0, phrase_rest_probability=0.35,
+        phrase_contour="wave", syncopation=0.1
+    ).render(chords, key, dur - 32.0)
+    clarinet = _off(clarinet, 16.0)
+
+    _export({"harp": harp, "vibes": vibes, "bass": bass, "drums": drums, "clarinet": clarinet},
             OUT / "03_Cascading_Rain.mid", bpm, key,
-            {"harp": HARP, "vibes": VIBRAPHONE, "bass": FRETLESS_BASS, "drums": DRUMS})
+            {"harp": HARP, "vibes": VIBRAPHONE, "bass": FRETLESS_BASS, "drums": DRUMS, "clarinet": CLARINET})
 
 
 # =====================================================================
@@ -229,9 +255,16 @@ def produce_04_power_surge():
         GeneratorParams(density=0.1), style="rock", fill_frequency=0.2, auto_fills=True
     ).render(chords, key, dur)
 
-    _export({"guitar": guitar, "saw": saw, "bass": bass, "drums": drums},
+    guitar_lead = MelodyGenerator(
+        GeneratorParams(density=0.25, key_range_low=60, key_range_high=88),
+        phrase_length=8.0, phrase_rest_probability=0.1,
+        phrase_contour="rise", syncopation=0.3
+    ).render(chords, key, dur - 32.0)
+    guitar_lead = _off(guitar_lead, 16.0)
+
+    _export({"guitar": guitar, "saw": saw, "bass": bass, "drums": drums, "guitar_lead": guitar_lead},
             OUT / "04_Power_Surge.mid", bpm, key,
-            {"guitar": OVERDRIVEN_GUITAR, "saw": SYNTH_SAW, "bass": SYNTH_BASS, "drums": DRUMS})
+            {"guitar": OVERDRIVEN_GUITAR, "saw": SYNTH_SAW, "bass": SYNTH_BASS, "drums": DRUMS, "guitar_lead": DISTORTION_GUITAR})
 
 
 def main():
