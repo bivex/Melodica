@@ -104,6 +104,7 @@ class OstinatoGenerator(PhraseGenerator):
     velocity_jitter: int = 0
     duration_jitter: float = 0.0
     seed: int | None = None
+    random_seed: int | None = None
 
     # Phrase Generator
     phrase_length: float | None = None
@@ -113,6 +114,10 @@ class OstinatoGenerator(PhraseGenerator):
     patterns: list[str | list[int]] | None = None
     change_pattern_every: float | None = None
     pattern_transition_mode: str = "sequential"  # "sequential", "random"
+
+    # Variation Engine
+    variation_probability: float = 0.0
+    variation_types: list[str] = field(default_factory=lambda: ["repeat", "skip", "neighbor", "octave"])
 
     # Legacy support
     shape: list[int] | None = None
@@ -135,11 +140,14 @@ class OstinatoGenerator(PhraseGenerator):
         velocity_jitter: int = 0,
         duration_jitter: float = 0.0,
         seed: int | None = None,
+        random_seed: int | None = None,
         phrase_length: float | None = None,
         phrase_ending: str = "none",
         patterns: list[str | list[int]] | None = None,
         change_pattern_every: float | None = None,
         pattern_transition_mode: str = "sequential",
+        variation_probability: float = 0.0,
+        variation_types: list[str] | None = None,
     ) -> None:
         super().__init__(params)
 
@@ -166,12 +174,15 @@ class OstinatoGenerator(PhraseGenerator):
         self.timing_jitter = timing_jitter
         self.velocity_jitter = velocity_jitter
         self.duration_jitter = duration_jitter
-        self.seed = seed
+        self.seed = seed if seed is not None else random_seed
+        self.random_seed = self.seed
         self.phrase_length = phrase_length
         self.phrase_ending = phrase_ending
         self.patterns = patterns
         self.change_pattern_every = change_pattern_every
         self.pattern_transition_mode = pattern_transition_mode
+        self.variation_probability = variation_probability
+        self.variation_types = variation_types if variation_types is not None else ["repeat", "skip", "neighbor", "octave"]
 
     def render(
         self,
@@ -191,6 +202,7 @@ class OstinatoGenerator(PhraseGenerator):
         prev_chord: ChordLabel | None = None
         prev_pitch: int | None = None
         last_chord: ChordLabel | None = None
+        prev_deg: int | None = None
 
         pat_idx = 0
         note_count = 0
@@ -215,19 +227,35 @@ class OstinatoGenerator(PhraseGenerator):
                 pattern_start_beat = event.onset
 
             # Get active pattern degrees for the current time (supports Pattern Morphing)
-            degrees = self._get_pattern_for_time(event.onset, rng)
+            degrees, active_pat_idx = self._get_pattern_for_time(event.onset)
             if not degrees:
                 continue
 
             # Reset pattern index at morph boundaries for better phrasing
-            if self.change_pattern_every is not None:
-                current_pattern_idx = int(event.onset // self.change_pattern_every)
-                if current_pattern_idx != last_pattern_idx:
+            if self.change_pattern_every is not None and self.patterns and len(self.patterns) > 1:
+                if active_pat_idx != last_pattern_idx:
                     pat_idx = 0
-                    last_pattern_idx = current_pattern_idx
+                    last_pattern_idx = active_pat_idx
 
             # Determine current degree from pattern
             deg = degrees[pat_idx % len(degrees)]
+
+            # Apply Variation Engine
+            apply_octave_shift = 0
+            if self.variation_probability > 0.0 and rng.random() < self.variation_probability and self.variation_types:
+                v_type = rng.choice(self.variation_types)
+                if v_type == "skip":
+                    note_count += 1
+                    if note_count % self.repeat_notes == 0:
+                        pat_idx += 1
+                    continue
+                elif v_type == "repeat":
+                    if prev_deg is not None:
+                        deg = prev_deg
+                elif v_type == "neighbor":
+                    deg = max(1, deg + rng.choice([-1, 1]))
+                elif v_type == "octave":
+                    apply_octave_shift = rng.choice([12, -12])
 
             # Insert root every N notes
             if (
@@ -262,10 +290,11 @@ class OstinatoGenerator(PhraseGenerator):
                 elif self.phrase_ending == "fifth" and is_last_in_phrase:
                     deg = 5
                     note_duration = event.duration
-                elif self.phrase_ending == "hold" and self.phrase_length - phrase_beat <= 1.0:
+                elif self.phrase_ending == "hold" and (self.phrase_length - phrase_beat <= 1.0 or is_last_in_phrase):
                     # Hold note until phrase end and skip the rest of the phrase
-                    note_duration = max(0.1, self.phrase_length - phrase_beat)
-                    skip_until = event.onset + note_duration
+                    phrase_end = (current_phrase_idx + 1) * self.phrase_length
+                    note_duration = max(0.1, phrase_end - event.onset)
+                    skip_until = phrase_end
                 else:
                     note_duration = event.duration
             else:
@@ -285,6 +314,10 @@ class OstinatoGenerator(PhraseGenerator):
             else:
                 # Legacy mode: use chord tone indices directly
                 pitch = self._chord_index_to_pitch(deg - 1, chord)
+
+            # Apply octave shift from variation engine
+            if apply_octave_shift != 0:
+                pitch = max(0, min(127, pitch + apply_octave_shift))
 
             # Voice-lead on chord change
             if chord != prev_chord and prev_chord is not None and prev_pitch is not None:
@@ -321,6 +354,7 @@ class OstinatoGenerator(PhraseGenerator):
             prev_pitch = pitch
             prev_chord = chord
             last_chord = chord
+            prev_deg = deg
             note_count += 1
 
             # Advance pattern index every repeat_notes steps
@@ -359,18 +393,19 @@ class OstinatoGenerator(PhraseGenerator):
                 return [d + 1 for d in pat]
         return [1, 3, 5, 3]
 
-    def _get_pattern_for_time(self, onset: float, rng: random.Random) -> list[int]:
-        """Supports pattern morphing by returning the active pattern at the given onset time."""
+    def _get_pattern_for_time(self, onset: float) -> tuple[list[int], int]:
+        """Supports pattern morphing by returning (resolved_pattern, active_pattern_index)."""
         if self.patterns and self.change_pattern_every:
             idx = int(onset // self.change_pattern_every)
             if self.pattern_transition_mode == "random":
                 # Seeding local Random block deterministically for this transition point
                 state_rng = random.Random((self.seed or 0) + idx + 12345)
-                pat = state_rng.choice(self.patterns)
+                active_idx = state_rng.randint(0, len(self.patterns) - 1)
             else:
-                pat = self.patterns[idx % len(self.patterns)]
-            return self._resolve_pattern_value(pat)
-        return self._resolve_pattern_value(self.pattern)
+                active_idx = idx % len(self.patterns)
+            pat = self.patterns[active_idx]
+            return self._resolve_pattern_value(pat), active_idx
+        return self._resolve_pattern_value(self.pattern), -1
 
     def _resolve_pattern(self) -> list[int]:
         """Convert pattern param to a list of scale degrees (1-based)."""

@@ -93,7 +93,11 @@ def produce_01_clockwork_dreams():
 
     glock = OstinatoGenerator(
         GeneratorParams(density=0.06, key_range_low=72, key_range_high=96),
-        pattern="1-3-5-3", repeat_notes=1
+        pattern="1-3-5-3", repeat_notes=1,
+        timing_jitter=0.005, velocity_jitter=5, duration_jitter=0.01,
+        phrase_length=8.0, phrase_ending="silence",
+        patterns=["1-3-5-3", "1-3-1-5"], change_pattern_every=16.0,
+        seed=42
     ).render(chords, key, dur - 16.0)
     glock = _off(glock, 8.0)
 
@@ -130,7 +134,11 @@ def produce_02_neon_horizons():
 
     synth_bass = OstinatoGenerator(
         GeneratorParams(density=0.1, key_range_low=36, key_range_high=52),
-        pattern="5-1-5-1", repeat_notes=2
+        pattern="5-1-5-1", repeat_notes=2,
+        patterns=["5-1-5-1", "5-1-4-1"], change_pattern_every=16.0,
+        phrase_length=16.0, phrase_ending="hold",
+        variation_probability=0.15,
+        seed=101
     ).render(chords, key, dur)
 
     pad = AmbientPadGenerator(
@@ -164,7 +172,11 @@ def produce_03_cascading_rain():
 
     vibes = OstinatoGenerator(
         GeneratorParams(density=0.05, key_range_low=60, key_range_high=84),
-        pattern="1-3-1-5", repeat_notes=1
+        pattern="1-3-1-5", repeat_notes=1,
+        timing_jitter=0.01, velocity_jitter=8,
+        phrase_length=12.0, phrase_ending="silence",
+        variation_probability=0.1,
+        seed=202
     ).render(chords, key, dur - 32.0)
     vibes = _off(vibes, 16.0)
 
@@ -200,7 +212,11 @@ def produce_04_power_surge():
 
     saw = OstinatoGenerator(
         GeneratorParams(density=0.08, key_range_low=60, key_range_high=84),
-        pattern="1-3-5-6", repeat_notes=1
+        pattern="1-3-5-6", repeat_notes=1,
+        patterns=["1-3-5-6", "1-3-4-5-4-3"], change_pattern_every=8.0,
+        phrase_length=8.0, phrase_ending="root",
+        variation_probability=0.1,
+        seed=303
     ).render(chords, key, dur - 24.0)
     saw = _off(saw, 12.0)
 

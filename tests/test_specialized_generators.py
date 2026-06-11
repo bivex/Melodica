@@ -395,3 +395,77 @@ class TestOstinatoGenerator:
         # Under C Major, Pattern 2 "5-1-5-1" yields degree 5 (G=7) and degree 1 (C=0)
         phrase2_pcs = {n.pitch % 12 for n in phrase2_notes}
         assert phrase2_pcs.issubset({0, 7})
+
+    def test_random_seed_alias(self):
+        gen1 = OstinatoGenerator(pattern="1-3-5-3", seed=123, timing_jitter=0.02, velocity_jitter=5)
+        notes1 = gen1.render(_simple_chords(), C_MAJOR, 4.0)
+
+        gen2 = OstinatoGenerator(pattern="1-3-5-3", random_seed=123, timing_jitter=0.02, velocity_jitter=5)
+        notes2 = gen2.render(_simple_chords(), C_MAJOR, 4.0)
+
+        assert len(notes1) == len(notes2)
+        for n1, n2 in zip(notes1, notes2):
+            assert n1.pitch == n2.pitch
+            assert n1.start == n2.start
+            assert n1.velocity == n2.velocity
+            assert n1.duration == n2.duration
+
+    def test_single_pattern_no_morph_reset(self):
+        from melodica.generators import GeneratorParams
+        gen_3 = OstinatoGenerator(
+            params=GeneratorParams(key_range_low=24, key_range_high=108),
+            patterns=["1-3-5"],
+            change_pattern_every=1.0,
+            pattern_transition_mode="sequential"
+        )
+        notes_3 = gen_3.render(_simple_chords(), C_MAJOR, 2.0)
+        pcs = [n.pitch % 12 for n in notes_3]
+        assert pcs == [0, 4, 7, 0, 4, 7, 0, 4]
+
+
+    def test_variation_engine(self):
+        gen_skip = OstinatoGenerator(
+            pattern="1-3-5-3",
+            variation_probability=1.0,
+            variation_types=["skip"],
+            seed=42
+        )
+        notes_skip = gen_skip.render(_simple_chords(), C_MAJOR, 4.0)
+        assert len(notes_skip) == 0
+
+        gen_neigh = OstinatoGenerator(
+            pattern="1-3-5-3",
+            variation_probability=1.0,
+            variation_types=["neighbor"],
+            seed=42
+        )
+        notes_neigh = gen_neigh.render(_simple_chords(), C_MAJOR, 4.0)
+        pcs_neigh = {n.pitch % 12 for n in notes_neigh}
+        assert any(pc in {2, 5, 9} for pc in pcs_neigh)
+
+        gen_repeat = OstinatoGenerator(
+            pattern="1-3-5-3",
+            variation_probability=1.0,
+            variation_types=["repeat"],
+            seed=42
+        )
+        notes_repeat = gen_repeat.render(_simple_chords(), C_MAJOR, 4.0)
+        first_pc = notes_repeat[0].pitch % 12
+        for n in notes_repeat[1:]:
+            assert n.pitch % 12 == first_pc
+
+        gen_oct = OstinatoGenerator(
+            pattern="1-3-5-3",
+            variation_probability=1.0,
+            variation_types=["octave"],
+            seed=42
+        )
+        notes_oct = gen_oct.render(_simple_chords(), C_MAJOR, 4.0)
+        gen_base = OstinatoGenerator(pattern="1-3-5-3")
+        notes_base = gen_base.render(_simple_chords(), C_MAJOR, 4.0)
+        has_octave_shift = False
+        for n_oct, n_base in zip(notes_oct, notes_base):
+            diff = abs(n_oct.pitch - n_base.pitch)
+            if diff in (12, 24):
+                has_octave_shift = True
+        assert has_octave_shift
