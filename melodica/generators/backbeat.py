@@ -181,5 +181,5 @@ class BackbeatGenerator(PhraseGenerator):
         return nearest_pitch(random.choice(pcs), 60)
 
     def _vel(self, factor: float) -> int:
-        base = int(self.params.density * 100)
+        base = self.base_velocity()
         return max(1, min(127, int(base * factor)))

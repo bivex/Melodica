@@ -160,7 +160,7 @@ class SectionBuilderGenerator(PhraseGenerator):
                 pitch = nearest_pitch(pc, prev_pitch)
                 pitch += cfg["octave_shift"] * 12
                 pitch = max(0, min(127, pitch))
-                vel = int(self.params.density * 100 * cfg["velocity_factor"])
+                vel = int(self.base_velocity() * cfg["velocity_factor"])
                 notes.append(
                     NoteInfo(
                         pitch=pitch, start=round(t, 6), duration=dur, velocity=max(1, min(127, vel))
@@ -169,7 +169,7 @@ class SectionBuilderGenerator(PhraseGenerator):
                 prev_pitch = pitch
 
             elif self.pattern == "chord_pulse":
-                vel = int(self.params.density * 100 * cfg["velocity_factor"])
+                vel = int(self.base_velocity() * cfg["velocity_factor"])
                 for pc in pcs[:3]:
                     pitch = nearest_pitch(pc, 60 + cfg["octave_shift"] * 12)
                     pitch = max(0, min(127, pitch))
@@ -187,7 +187,7 @@ class SectionBuilderGenerator(PhraseGenerator):
                 for i, pc in enumerate(ordered):
                     pitch = nearest_pitch(pc, 60 + cfg["octave_shift"] * 12)
                     pitch = max(0, min(127, pitch))
-                    vel = int(self.params.density * 100 * cfg["velocity_factor"])
+                    vel = int(self.base_velocity() * cfg["velocity_factor"])
                     onset = t + i * (dur / len(ordered))
                     if onset < duration_beats:
                         notes.append(
@@ -202,7 +202,7 @@ class SectionBuilderGenerator(PhraseGenerator):
             elif self.pattern == "bass_walk":
                 pitch = nearest_pitch(pcs[0], 36 + cfg["octave_shift"] * 12)
                 pitch = max(0, min(127, pitch))
-                vel = int(self.params.density * 100 * cfg["velocity_factor"])
+                vel = int(self.base_velocity() * cfg["velocity_factor"])
                 notes.append(
                     NoteInfo(
                         pitch=pitch, start=round(t, 6), duration=dur, velocity=max(1, min(127, vel))

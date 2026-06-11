@@ -201,5 +201,5 @@ class SecondaryDominantGenerator(PhraseGenerator):
         return [base, base + 4, base + 7, base + 10]  # root position V7
 
     def _vel(self, t: float, dur: float) -> int:
-        base = int(self.params.density * 100)
+        base = self.base_velocity()
         return max(1, min(127, int(base * 0.9)))
