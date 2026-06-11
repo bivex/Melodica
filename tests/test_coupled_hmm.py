@@ -702,10 +702,20 @@ class TestProgressionDiversity:
 class TestModeProgressions:
 
     def test_minor_key_uses_minor_chords(self):
-        """A minor progression should produce minor-quality chords."""
+        """
+        A minor progression should produce minor-quality chords.
+        Extended minor chords (minor 7th and 9th) are musically appropriate and expected
+        in cinematic and modern jazz contexts as they add color and harmonic tension
+        without violating the minor key signature. However, they should not be overused
+        systematically over standard minor triads.
+        """
         chords = _prog(A_MINOR, bars=16, seed=1)
         minor_count = sum(1 for c in chords if c.quality in (Quality.MINOR, Quality.MINOR7, Quality.MINOR9))
         assert minor_count >= 1, f"No minor chords in A minor progression: {_names(chords)}"
+        
+        # Ensure model does not systematically overuse extended minor chords
+        minor_ext = sum(1 for c in chords if c.quality in (Quality.MINOR7, Quality.MINOR9))
+        assert minor_ext / len(chords) < 0.5, f"Overuse of extended minor chords ({minor_ext/len(chords):.2f})"
 
     def test_major_vs_minor_different(self):
         """C major and A minor should produce different progressions."""

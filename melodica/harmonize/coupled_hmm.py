@@ -142,10 +142,12 @@ def _init_modal_priors():
         intervals = get_mode_intervals(mode)
         scale_pcs = {round(iv) % 12 for iv in intervals}
         
-        # 1. Root offsets: high weight for notes in scale
-        # (Standardized divisor of 7.0 prevents pentatonic scale-size bias)
+        # 1. Root offsets: high weight for notes in scale, preferring the tonic (offset 0)
         for pc in scale_pcs:
-            offset_logs[m_idx, pc] = math.log(0.8 / 7.0)
+            if pc == 0:
+                offset_logs[m_idx, pc] = math.log(0.25)
+            else:
+                offset_logs[m_idx, pc] = math.log(0.55 / (len(scale_pcs) - 1))
             
         # 2. Chord types: check which types fit the scale notes best
         for t_idx, (third, fifth, seventh, ninth) in enumerate(type_intervals):
@@ -157,11 +159,16 @@ def _init_modal_priors():
             if ninth is not None and ninth in scale_pcs: fit_score += 1
             
             # Base probability based on fit
-            # Higher reward for 9ths in cinematic context
+            # Prefer basic triads, then 7ths, then 9ths/extensions
             if fit_score >= 3:
-                type_priors[m_idx, t_idx] = 0.35 if t_idx >= 9 else 0.25
+                if t_idx < 3:    # Major, Minor, Diminished
+                    type_priors[m_idx, t_idx] = 0.35
+                elif t_idx < 9:  # Augmented, sus, 7ths
+                    type_priors[m_idx, t_idx] = 0.25
+                else:            # 9ths, add9
+                    type_priors[m_idx, t_idx] = 0.15
             elif fit_score == 2:
-                type_priors[m_idx, t_idx] = 0.15
+                type_priors[m_idx, t_idx] = 0.10
             
             # Special case for Dominant 7 (often used even if not strictly diatonic)
             if t_idx == 8 and 4 in scale_pcs and 10 in scale_pcs:
@@ -208,15 +215,16 @@ MODE_PRIORS = _init_mode_priors()
 @dataclass
 class HMMConfig:
     """Configuration hyperparameters for CoupledHMMHarmonizer."""
-    anti_stagnation_penalty: float = 2.0
-    interval_diversity_penalty: float = 1.5
-    tension_weight: float = 4.0
-    key_coupling_weight: float = 0.5
-    tonic_bias: float = 2.0
-    epsilon: float = 1e-8
-    emission_weight: float = 1.0  # Hyperparameter to scale emissions
-    tonic_end_bias: float = 2.5
-    dominant_penultimate_bias: float = 1.5
+    anti_stagnation_penalty: float = 2.0      # Recommended range: [1.0, 4.0]. Penalty for repeating the same chord type consecutively.
+    interval_diversity_penalty: float = 1.5   # Recommended range: [0.5, 3.0]. Penalty for repeating the same root motion interval.
+    tension_weight: float = 4.0               # Recommended range: [2.0, 8.0]. Weight for the tension-curve stability bias.
+    key_coupling_weight: float = 0.5          # Recommended range: [0.1, 4.0]. Feedback strength from Layer 2 (Key) to Layer 1 (Chords).
+    tonic_bias: float = 2.0                   # Recommended range: [1.0, 4.0]. Starting bias favoring the initial scale root.
+    epsilon: float = 1e-8                     # Small constant to prevent log(0) errors.
+    emission_weight: float = 1.0              # Recommended range: [0.5, 3.0]. Scaling factor for the active note log emissions.
+    tonic_end_bias: float = 2.5               # Recommended range: [1.0, 5.0]. Cadential attraction to the key tonic on the final step.
+    dominant_penultimate_bias: float = 1.5    # Recommended range: [0.5, 3.0]. Cadential attraction to the dominant root on the penultimate step.
+    extended_chord_penalty: float = 1.0       # Recommended range: [0.0, 2.0]. Penalty for extended/9th chords to prevent their overuse.
 
 
 @dataclass
@@ -320,7 +328,6 @@ class CoupledHMMHarmonizer:
 
         # Pre-compute emissions via vectorized _log_emit_chord
         emit = np.zeros((T, N_TONES, N_TYPES))
-        base_not_pnote = LOG_NOT_PNOTE.sum(axis=0)  # [N_TYPES]
 
         for t_step in range(T):
             wpcs = obs[t_step]
@@ -328,16 +335,19 @@ class CoupledHMMHarmonizer:
                 emit[t_step] = -20.0
                 continue
             
-            step_emit = np.tile(base_not_pnote, (N_TONES, 1))
+            step_emit = np.zeros((N_TONES, N_TYPES))
             total_w = 0.0
 
             for wn in wpcs:
                 off = np.arange(N_TONES, dtype=np.intp)
                 off = (wn.pitch_class - off) % N_TONES
-                step_emit += wn.weight * (LOG_PNOTE[off] - LOG_NOT_PNOTE[off])
+                step_emit += wn.weight * LOG_PNOTE[off]
                 total_w += wn.weight
 
             emit[t_step] = (step_emit / (total_w + 1e-6)) * self.config.emission_weight
+            
+            # Apply extended chord penalty to 9th/add9 chords (indices 9, 10, 11) to prevent overuse
+            emit[t_step, :, 9:] -= self.config.extended_chord_penalty
 
         # Tension indices
         STABLE_INDICES = {0, 1, 11}
