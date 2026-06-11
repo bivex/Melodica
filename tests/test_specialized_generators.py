@@ -332,3 +332,65 @@ class TestOstinatoGenerator:
         gen = OstinatoGenerator(shape=[0, 1, 2, 1])
         notes = gen.render(_simple_chords(), C_MAJOR, 2.0)
         assert len(notes) > 0
+
+    def test_new_features_humanization(self):
+        gen = OstinatoGenerator(
+            pattern="1-3-5-3",
+            timing_jitter=0.05,
+            velocity_jitter=10,
+            duration_jitter=0.05
+        )
+        notes = gen.render(_simple_chords(), C_MAJOR, 2.0)
+        assert len(notes) > 0
+        # The start times shouldn't all be exact multiples of 0.25 due to jitter
+        start_mods = [n.start % 0.25 for n in notes]
+        assert any(mod > 0.0001 for mod in start_mods)
+
+    def test_new_features_phrase_endings(self):
+        # Silence mode
+        gen_silence = OstinatoGenerator(
+            pattern="1-3-5-3",
+            phrase_length=4.0,
+            phrase_ending="silence"
+        )
+        notes_silence = gen_silence.render(_simple_chords(), C_MAJOR, 8.0)
+        # Should have a gap near 4.0
+        onsets = [n.start for n in notes_silence]
+        assert not any(3.0 < o < 4.0 for o in onsets)
+
+        # Root mode
+        gen_root = OstinatoGenerator(
+            pattern="1-3-5-3",
+            phrase_length=4.0,
+            phrase_ending="root"
+        )
+        notes_root = gen_root.render(_simple_chords(), C_MAJOR, 8.0)
+        # The note right before 4.0 (the last note in the first phrase) should be root (pitch class 0)
+        notes_in_phrase_1 = [n for n in notes_root if n.start < 4.0]
+        if notes_in_phrase_1:
+            assert notes_in_phrase_1[-1].pitch % 12 == 0
+
+        # Hold mode
+        gen_hold = OstinatoGenerator(
+            pattern="1-3-5-3",
+            phrase_length=4.0,
+            phrase_ending="hold"
+        )
+        notes_hold = gen_hold.render(_simple_chords(), C_MAJOR, 8.0)
+        # The last note starting in the phrase should be stretched
+        notes_in_phrase_1_hold = [n for n in notes_hold if n.start < 4.0]
+        if notes_in_phrase_1_hold:
+            assert notes_in_phrase_1_hold[-1].duration >= 1.0
+
+    def test_new_features_pattern_morphing(self):
+        gen = OstinatoGenerator(
+            patterns=["1-3-5-3", "5-1-5-1"],
+            change_pattern_every=4.0,
+            pattern_transition_mode="sequential"
+        )
+        notes = gen.render(_simple_chords(), C_MAJOR, 8.0)
+        # First phrase (0-4) should use pattern 1, second phrase (4-8) should use pattern 2
+        phrase2_notes = [n for n in notes if 4.0 <= n.start < 8.0]
+        # Under C Major, Pattern 2 "5-1-5-1" yields degree 5 (G=7) and degree 1 (C=0)
+        phrase2_pcs = {n.pitch % 12 for n in phrase2_notes}
+        assert phrase2_pcs.issubset({0, 7})

@@ -99,6 +99,20 @@ class OstinatoGenerator(PhraseGenerator):
     accent_pattern: list[float] = field(default_factory=lambda: [1.2, 0.8, 1.0, 0.9])
     rhythm: RhythmGenerator | None = None
 
+    # Humanization
+    timing_jitter: float = 0.0
+    velocity_jitter: int = 0
+    duration_jitter: float = 0.0
+
+    # Phrase Generator
+    phrase_length: float | None = None
+    phrase_ending: str = "none"  # "none", "root", "fifth", "silence", "hold"
+
+    # Pattern Morphing
+    patterns: list[str | list[int]] | None = None
+    change_pattern_every: float | None = None
+    pattern_transition_mode: str = "sequential"  # "sequential", "random"
+
     # Legacy support
     shape: list[int] | None = None
 
@@ -116,6 +130,14 @@ class OstinatoGenerator(PhraseGenerator):
         possible_intervals: frozenset[int] | None = None,
         accent_pattern: list[float] | None = None,
         rhythm: RhythmGenerator | None = None,
+        timing_jitter: float = 0.0,
+        velocity_jitter: int = 0,
+        duration_jitter: float = 0.0,
+        phrase_length: float | None = None,
+        phrase_ending: str = "none",
+        patterns: list[str | list[int]] | None = None,
+        change_pattern_every: float | None = None,
+        pattern_transition_mode: str = "sequential",
     ) -> None:
         super().__init__(params)
 
@@ -139,6 +161,15 @@ class OstinatoGenerator(PhraseGenerator):
         self.accent_pattern = accent_pattern if accent_pattern is not None else [1.2, 0.8, 1.0, 0.9]
         self.rhythm = rhythm
 
+        self.timing_jitter = timing_jitter
+        self.velocity_jitter = velocity_jitter
+        self.duration_jitter = duration_jitter
+        self.phrase_length = phrase_length
+        self.phrase_ending = phrase_ending
+        self.patterns = patterns
+        self.change_pattern_every = change_pattern_every
+        self.pattern_transition_mode = pattern_transition_mode
+
     def render(
         self,
         chords: list[ChordLabel],
@@ -147,10 +178,6 @@ class OstinatoGenerator(PhraseGenerator):
         context: RenderContext | None = None,
     ) -> list[NoteInfo]:
         if not chords:
-            return []
-
-        degrees = self._resolve_pattern()
-        if not degrees:
             return []
 
         events = self._build_events(duration_beats)
@@ -162,8 +189,12 @@ class OstinatoGenerator(PhraseGenerator):
         pat_idx = 0
         note_count = 0
         pattern_start_beat = 0.0
+        skip_until = 0.0
 
-        for event in events:
+        for event_idx, event in enumerate(events):
+            if event.onset < skip_until:
+                continue
+
             chord = chord_at(chords, event.onset)
             if chord is None:
                 continue
@@ -176,6 +207,11 @@ class OstinatoGenerator(PhraseGenerator):
                 pat_idx = 0
                 pattern_start_beat = event.onset
 
+            # Get active pattern degrees for the current time (supports Pattern Morphing)
+            degrees = self._get_pattern_for_time(event.onset)
+            if not degrees:
+                continue
+
             # Determine current degree from pattern
             deg = degrees[pat_idx % len(degrees)]
 
@@ -186,6 +222,40 @@ class OstinatoGenerator(PhraseGenerator):
                 and note_count % self.insert_root_every == 0
             ):
                 deg = 1
+
+            # Phrase Generator logic
+            if self.phrase_length is not None:
+                phrase_beat = event.onset % self.phrase_length
+                
+                # Determine if this is the last event in the current phrase
+                is_last_in_phrase = False
+                current_phrase_idx = int(event.onset // self.phrase_length)
+                if event_idx + 1 == len(events):
+                    is_last_in_phrase = True
+                else:
+                    next_phrase_idx = int(events[event_idx + 1].onset // self.phrase_length)
+                    if next_phrase_idx > current_phrase_idx:
+                        is_last_in_phrase = True
+
+                if self.phrase_ending == "silence":
+                    # Silence the ending window
+                    if self.phrase_length - phrase_beat <= 1.0 or is_last_in_phrase:
+                        continue
+                    note_duration = event.duration
+                elif self.phrase_ending == "root" and is_last_in_phrase:
+                    deg = 1
+                    note_duration = event.duration
+                elif self.phrase_ending == "fifth" and is_last_in_phrase:
+                    deg = 5
+                    note_duration = event.duration
+                elif self.phrase_ending == "hold" and self.phrase_length - phrase_beat <= 1.0:
+                    # Hold note until phrase end and skip the rest of the phrase
+                    note_duration = max(0.1, self.phrase_length - phrase_beat)
+                    skip_until = event.onset + note_duration
+                else:
+                    note_duration = event.duration
+            else:
+                note_duration = event.duration
 
             if self.use_scale_degrees:
                 # Apply possible_intervals constraint (only in scale degree mode)
@@ -206,16 +276,31 @@ class OstinatoGenerator(PhraseGenerator):
             if chord != prev_chord and prev_chord is not None and prev_pitch is not None:
                 pitch = self._voice_lead_pitch(pitch, prev_pitch)
 
+            # Velocity calculations with accent and optional velocity jitter
             base_vel = self._velocity()
             accent = self.accent_pattern[pat_idx % len(self.accent_pattern)]
             vel = int(base_vel * accent)
+            if self.velocity_jitter > 0:
+                vel += random.randint(-self.velocity_jitter, self.velocity_jitter)
+            vel = max(1, min(127, vel))
+
+            # Apply Humanization (timing and duration jitter)
+            final_onset = event.onset
+            if self.timing_jitter > 0.0:
+                final_onset += random.uniform(-self.timing_jitter, self.timing_jitter)
+            final_onset = max(0.0, round(final_onset, 6))
+
+            final_duration = note_duration
+            if self.duration_jitter > 0.0 and self.phrase_ending != "hold":
+                final_duration += random.uniform(-self.duration_jitter, self.duration_jitter)
+            final_duration = max(0.01, round(final_duration, 6))
 
             notes.append(
                 NoteInfo(
                     pitch=pitch,
-                    start=round(event.onset, 6),
-                    duration=event.duration,
-                    velocity=max(0, min(127, vel)),
+                    start=final_onset,
+                    duration=final_duration,
+                    velocity=vel,
                 )
             )
 
@@ -227,6 +312,9 @@ class OstinatoGenerator(PhraseGenerator):
             # Advance pattern index every repeat_notes steps
             if note_count % self.repeat_notes == 0:
                 pat_idx += 1
+
+        # Make sure notes are strictly sorted by start time after timing humanization
+        notes.sort(key=lambda n: n.start)
 
         if notes:
             self._last_context = (context or RenderContext()).with_end_state(
@@ -241,24 +329,40 @@ class OstinatoGenerator(PhraseGenerator):
     # Pattern resolution
     # ------------------------------------------------------------------
 
-    def _resolve_pattern(self) -> list[int]:
-        """Convert pattern param to a list of scale degrees (1-based)."""
-        if isinstance(self.pattern, str):
-            if self.pattern in NAMED_PATTERNS:
-                return list(NAMED_PATTERNS[self.pattern])
-            # Try parsing custom "1-3-5-7" string
+    def _resolve_pattern_value(self, pat: str | list[int]) -> list[int]:
+        """Convert a pattern value to a list of scale degrees (1-based)."""
+        if isinstance(pat, str):
+            if pat in NAMED_PATTERNS:
+                return list(NAMED_PATTERNS[pat])
             try:
-                return [int(x) for x in self.pattern.split("-")]
+                return [int(x) for x in pat.split("-")]
             except ValueError:
                 return [1, 3, 5, 3]
-        elif isinstance(self.pattern, list):
+        elif isinstance(pat, list):
             if self.use_scale_degrees:
-                return list(self.pattern)
+                return list(pat)
             else:
-                # Legacy: chord tone indices → keep as 1-based for uniform handling
-                # (render() will call _chord_index_to_pitch with deg-1)
-                return [d + 1 for d in self.pattern]
+                return [d + 1 for d in pat]
         return [1, 3, 5, 3]
+
+    def _get_pattern_for_time(self, onset: float) -> list[int]:
+        """Supports pattern morphing by returning the active pattern at the given onset time."""
+        if self.patterns and self.change_pattern_every:
+            idx = int(onset // self.change_pattern_every)
+            if self.pattern_transition_mode == "random":
+                random_state = random.getstate()
+                random.seed(idx + 12345)
+                pat = random.choice(self.patterns)
+                random.setstate(random_state)
+            else:
+                pat = self.patterns[idx % len(self.patterns)]
+            return self._resolve_pattern_value(pat)
+        return self._resolve_pattern_value(self.pattern)
+
+    def _resolve_pattern(self) -> list[int]:
+        """Convert pattern param to a list of scale degrees (1-based)."""
+        return self._resolve_pattern_value(self.pattern)
+
 
     # ------------------------------------------------------------------
     # Pitch computation
@@ -284,20 +388,15 @@ class OstinatoGenerator(PhraseGenerator):
         # Octave shift for degrees outside 1-7
         octave_shift = (degree - 1) // len(degs)
 
-        # Base octave from anchor or range
-        anchor = (
-            prev_pitch
-            if prev_pitch is not None
-            else (self.params.key_range_low + self.params.key_range_high) // 2
-        )
-        # Snap anchor to root pitch class of the scale
-        root_pc = degs[0]
-        base_octave = anchor // 12
-        anchor_pc = anchor % 12
-        if anchor_pc > root_pc:
-            base_octave += 1
+        # Base octave from range center
+        range_center = (self.params.key_range_low + self.params.key_range_high) // 2
+        base_octave = range_center // 12
 
         pitch = (base_octave + octave_shift) * 12 + pc
+
+        # If we have a previous note, voice lead to it
+        if prev_pitch is not None:
+            pitch = self._voice_lead_pitch(pitch, prev_pitch)
 
         # Clamp to range
         pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
