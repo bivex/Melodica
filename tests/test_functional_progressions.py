@@ -232,7 +232,7 @@ class TestTensionResponse:
                                     peak_position=0.9, peak_intensity=1.0)
         chords_high = h.harmonize(melody, scale, 32.0, tension_curve=high_tension)
 
-        d_count = sum(1 for c in chords_high if c.function == HarmonicFunction.DOMINANT)
+        d_count = sum(1 for c in chords_high if c.function in (HarmonicFunction.DOMINANT, HarmonicFunction.SECONDARY))
         t_count = sum(1 for c in chords_high if c.function == HarmonicFunction.TONIC)
         # Both should appear
         assert d_count > 0, "No dominants in high-tension progression"

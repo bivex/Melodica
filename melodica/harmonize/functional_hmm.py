@@ -244,7 +244,10 @@ class FunctionalHMMHarmonizer:
             },
         }
         self._fn_list = _FN
-        self._rng = random.Random(self.seed)
+        if self.seed is not None:
+            self._rng = random.Random(self.seed)
+        else:
+            self._rng = random
 
     def _get_flavor_mapping(self, plan_idx: int) -> dict:
         """Get tension mapping for current plan.

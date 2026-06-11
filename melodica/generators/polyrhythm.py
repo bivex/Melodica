@@ -159,7 +159,7 @@ class PolyrhythmGenerator(PhraseGenerator):
                 vel = self._accent_vel(i, a, chord, onset)
                 notes.append(NoteInfo(
                     pitch=max(low, min(high, pitch_a)),
-                    start=round(onset + self._micro_time(), 6),
+                    start=max(0.0, round(onset + self._micro_time(), 6)),
                     duration=n_dur,
                     velocity=max(1, min(127, vel)),
                 ))
@@ -175,7 +175,7 @@ class PolyrhythmGenerator(PhraseGenerator):
                 vel = self._accent_vel(i, b, chord, onset) - 5
                 notes.append(NoteInfo(
                     pitch=pitch_b,
-                    start=round(onset + self._micro_time(), 6),
+                    start=max(0.0, round(onset + self._micro_time(), 6)),
                     duration=n_dur,
                     velocity=max(1, min(127, vel)),
                 ))
@@ -232,7 +232,7 @@ class PolyrhythmGenerator(PhraseGenerator):
                 gap = (onsets[i + 1] - offset) if i + 1 < len(onsets) else 1.0
                 notes.append(NoteInfo(
                     pitch=max(low, min(high, pitch)),
-                    start=round(onset + self._micro_time(), 6),
+                    start=max(0.0, round(onset + self._micro_time(), 6)),
                     duration=gap * 0.85,
                     velocity=max(1, min(127, vel)),
                 ))

@@ -305,7 +305,7 @@ class TestReharmonizationGenerator:
         notes = gen.render(_simple_chords(), C_MAJOR, 4.0)
         assert len(notes) > 0
 
-    @pytest.mark.parametrize("strategy", ["tritone", "modal", "chromatic", "secondary_dominant"])
+    @pytest.mark.parametrize("strategy", ["tritone", "diatonic_swap", "chromatic_mediant", "secondary_dom"])
     def test_strategies(self, strategy):
         gen = ReharmonizationGenerator(strategy=strategy)
         notes = gen.render(_single_chord(), C_MAJOR, 4.0)
