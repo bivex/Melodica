@@ -101,16 +101,8 @@ class MasteringDesk:
         return int(round(compressed))
 
     def _compress(self, vel: int, band: str) -> int:
-        """Downward compression: above threshold, reduce by ratio."""
-        cfg = self.band_compression.get(band)
-        if not cfg:
-            return vel
-        threshold = cfg["threshold"]
-        ratio = cfg["ratio"]
-        if vel <= threshold:
-            return vel
-        excess = vel - threshold
-        return int(round(threshold + excess / ratio))
+        """Downward compression: bypassed."""
+        return vel
 
     def _get_pan(self, track_name: str) -> float:
         """Get pan for track; auto-assign deterministic spread for unknown tracks."""
