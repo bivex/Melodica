@@ -38,7 +38,7 @@ class HarmonizerPort(Protocol):
     def harmonize(self, req: HarmonizationRequest) -> list[ChordLabel]: ...
 
 
-def build_engine(engine_id: int = 3, **kwargs: object) -> HarmonizerPort:
+def build_engine(engine_id: int = 4, **kwargs: object) -> HarmonizerPort:
     """
     Factory: construct the appropriate engine by ID.
 

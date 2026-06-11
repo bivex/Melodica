@@ -185,8 +185,8 @@ def harmonize(
     engine:       0 / "functional"  → FunctionalEngine  (18th-century)
                   1 / "rules"       → RuleBasedEngine   (Viterbi + rule graph)
                   2 / "adaptive"    → AdaptiveEngine    (heuristic search)
-                  3 / "hmm"         → HMMEngine         (Hidden Markov Model, DEFAULT)
-                  4 / "coupled"     → CoupledHMMEngine  (Hierarchical coupled HMM)
+                  3 / "hmm"         → HMMEngine         (Hidden Markov Model)
+                  4 / "coupled"     → CoupledHMMEngine  (Hierarchical coupled HMM, DEFAULT)
     chord_rhythm: Beats per chord event (default 4 = one bar at 4/4).
     **engine_kwargs: Forwarded to the engine constructor.
 

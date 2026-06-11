@@ -37,7 +37,7 @@ class StaticPhrase:
 class HarmonizationRequest:
     melody: list[Note]
     key: Scale
-    engine: int | str = 0                 # 0=functional, 1=rule_based, 2=adaptive, 3/4=hmm, 'fibril'
+    engine: int | str = 4                 # 0=functional, 1=rule_based, 2=adaptive, 3=hmm, 4=coupled_hmm (default)
     chord_rhythm: float = 4.0
     allow_secondary_dominants: bool = True
     allow_borrowed_chords: bool = False
