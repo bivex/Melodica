@@ -112,6 +112,10 @@ class MelodyGenerator(PhraseGenerator):
         groove_template=None,
         beats_per_bar: int = 4,
         denominator: int = 4,
+        # reproducibility
+        seed: int | None = None,
+        # note density gate
+        min_note_gap: float = 0.0,
     ) -> None:
         super().__init__(params)
         self.rhythm = rhythm
@@ -206,6 +210,12 @@ class MelodyGenerator(PhraseGenerator):
         self.beats_per_bar = beats_per_bar
         self.denominator = denominator
 
+        # Reproducibility seed
+        self.seed = seed
+
+        # Minimum gap between note onsets (beats) — prevents cluster mud
+        self.min_note_gap = max(0.0, min_note_gap)
+
     @classmethod
     def from_style(cls, style, **overrides):
         """Create a MelodyGenerator pre-configured from a UnifiedStyle."""
@@ -249,6 +259,10 @@ class MelodyGenerator(PhraseGenerator):
     ) -> list[types.NoteInfo]:
         if not chords:
             return []
+
+        # Deterministic render when seed is set
+        if self.seed is not None:
+            random.seed(self.seed)
 
         # Components
         groove = self._build_groove()
@@ -403,18 +417,18 @@ class MelodyGenerator(PhraseGenerator):
                 # Nudge toward more expressive (non-chord) tones at high tension
                 effective_harmony_prob *= (1.0 - tension * 0.4)
 
-            # Motif strategy from drama arc
+            # Motif strategy from drama arc — use clean API
             if self.drama_shape != "none":
                 motif_strategy = drama.motif_strategy(event.onset)
                 if motif_strategy == "full":
-                    motif_mgr._variation_idx = 0  # force original
+                    motif_mgr.set_variation("transpose")
                 elif motif_strategy == "fragment":
-                    motif_mgr._variation_idx = 4  # force fragment
+                    motif_mgr.set_variation("fragment")
                 elif motif_strategy == "invert":
-                    motif_mgr._variation_idx = 1  # force invert
+                    motif_mgr.set_variation("invert")
                 elif motif_strategy == "return":
-                    motif_mgr._variation_idx = 0  # force original
-                    motif_mgr._motif_probability_boost = 0.3  # more likely to use motif
+                    motif_mgr.set_variation("transpose")
+                    motif_mgr.boost_probability(0.3)
 
             # Cadence strength from drama
             cadence_str = drama.cadence_strength(event.onset)
@@ -503,7 +517,11 @@ class MelodyGenerator(PhraseGenerator):
         if self.harmony_note_probability < 1.0 and not hasattr(self.rhythm, "_coordinator"):
             notes = fill_proc.fill_leaps(notes, key)
 
-        if self.ornament_probability > 0 or (drama and drama.shape != "none"):
+        # Ornaments: explicit probability OR auto-enabled when drama_shape is active
+        eff_ornament_prob = self.ornament_probability
+        if drama and drama.shape != "none" and eff_ornament_prob == 0.0:
+            eff_ornament_prob = 0.08  # light auto-ornament in dramatic mode
+        if eff_ornament_prob > 0:
             notes = ornament_proc.add_ornaments(notes, key, low, high, drama=drama)
 
         # Phrase arch (only when velocity didn't already apply contour — flat phrase)
