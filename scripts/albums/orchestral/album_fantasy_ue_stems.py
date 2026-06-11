@@ -245,7 +245,7 @@ def cue_01_village():
     print("  01 — The Village at Peace")
     bpm, dur = 72, 128.0
     key = C_IONIAN
-    prog = _chords("I IV I V I vi IV V I IV vi V I", dur, key)
+    prog = _chords("Imaj7 IVmaj7 Imaj7 V7 Imaj9 vim7 IVmaj7 V7 Imaj7 IVadd9 vim7 V7 Imaj9", dur, key)
 
     melody = MelodyGenerator(
         GeneratorParams(density=0.30, key_range_low=60, key_range_high=84),
@@ -319,7 +319,7 @@ def cue_02_into_the_wild():
     print("  02 — Into the Wild")
     bpm, dur = 96, 128.0
     key = G_MIXOLYD
-    prog = _chords("I V IV I VII IV V I IV VII I V IV I", dur, key)
+    prog = _chords("Imaj7 V7 IVmaj7 I7 bVII7 IVadd9 Vsus4 V7 IVmaj9 bVII7 Imaj7 V7 IVmaj7 Iadd9", dur, key)
 
     melody = MelodyGenerator(
         GeneratorParams(density=0.35, key_range_low=60, key_range_high=88),
@@ -393,7 +393,7 @@ def cue_03_dungeon():
     print("  03 — The Ancient Dungeon")
     bpm, dur = 54, 160.0
     key = A_AEOLIAN
-    prog = _chords("i iv i bVI bVII i III iv v i bVI iv bVII i", dur, key)
+    prog = _chords("im7 ivm7 im7 bVImaj7 bVII7 im7 IIIdim7 ivm7 vm7b5 im7 bVImaj7 ivm7 bVII7 im9", dur, key)
 
     drone = DroneGenerator(
         GeneratorParams(density=0.02, key_range_low=20, key_range_high=33),
@@ -470,7 +470,7 @@ def cue_04_boss():
     print("  04 — The Boss Confrontation")
     bpm, dur = 138, 96.0
     key = D_PHRYG
-    prog = _chords("i bII V i bVI iv bII V i iv bVI V i bII i", dur, key)
+    prog = _chords("im7 bIIdim7 V7 im7 bVImaj7 ivm7 bIIdim7 V7 im9 ivm7 bVImaj7 Vdim7 im7 bII7 im7", dur, key)
 
     brass = BrassSectionGenerator(
         GeneratorParams(density=0.60, key_range_low=36, key_range_high=76),
@@ -559,7 +559,7 @@ def cue_05_heroes_return():
     print("  05 — The Hero's Return")
     bpm, dur = 80, 144.0
     key = A_DOR
-    prog = _chords("i IV i V i III VII iv i IV V I i VII I", dur, key)
+    prog = _chords("im9 IVmaj9 im7 V7 im7 IIImaj7 bVII7 ivm7 im9 IVmaj7 Vsus4 V7 Imaj9 bVII7 Imaj9", dur, key)
 
     melody = MelodyGenerator(
         GeneratorParams(density=0.28, key_range_low=60, key_range_high=84),
