@@ -143,8 +143,9 @@ def _init_modal_priors():
         scale_pcs = {round(iv) % 12 for iv in intervals}
         
         # 1. Root offsets: high weight for notes in scale
+        # (Standardized divisor of 7.0 prevents pentatonic scale-size bias)
         for pc in scale_pcs:
-            offset_logs[m_idx, pc] = math.log(0.8 / len(scale_pcs))
+            offset_logs[m_idx, pc] = math.log(0.8 / 7.0)
             
         # 2. Chord types: check which types fit the scale notes best
         for t_idx, (third, fifth, seventh, ninth) in enumerate(type_intervals):
@@ -166,13 +167,38 @@ def _init_modal_priors():
             if t_idx == 8 and 4 in scale_pcs and 10 in scale_pcs:
                 type_priors[m_idx, t_idx] = 0.20
             
-        # Normalize priors
-        type_priors[m_idx] /= type_priors[m_idx].sum()
+        # Normalize priors (DEPRECATED: Normalization per-mode causes pentatonic scale-size bias
+        # by boosting incompatible chords in smaller scales).
+        # type_priors[m_idx] /= type_priors[m_idx].sum()
         
     return type_priors, offset_logs
 
 KEY_TYPE_PRIOR, KEY_OFFSET_LOG = _init_modal_priors()
 LOG_KEY_TYPE_PRIOR = np.log(KEY_TYPE_PRIOR + _EPS)
+
+
+def _init_mode_priors() -> np.ndarray:
+    """Build prior log-probabilities for each mode based on its category."""
+    priors = np.zeros(N_KEY_TYPES)
+    for m_idx, mode in enumerate(MODES_LIST):
+        defn = MODE_DATABASE.get(mode)
+        if not defn:
+            category = "Exotic"
+        else:
+            category = defn.category
+            
+        if category == "Common":
+            priors[m_idx] = 0.0      # High priority (Major, Minor)
+        elif category in ("Jazz", "Blues", "Symmetric"):
+            priors[m_idx] = -3.0     # Medium priority
+        elif category in ("Atmospheric", "Verdi", "Classical", "Pentatonic"):
+            priors[m_idx] = -5.0     # Low priority
+        else:
+            priors[m_idx] = -10.0    # Very low priority (Ethnic/Exotic like Pelog, Slendro, Messiaen)
+            
+    return priors
+
+MODE_PRIORS = _init_mode_priors()
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +215,8 @@ class HMMConfig:
     tonic_bias: float = 2.0
     epsilon: float = 1e-8
     emission_weight: float = 1.0  # Hyperparameter to scale emissions
+    tonic_end_bias: float = 2.5
+    dominant_penultimate_bias: float = 1.5
 
 
 @dataclass
@@ -215,7 +243,9 @@ class CoupledHMMHarmonizer:
         initial_scale: Scale,
         duration_beats: float,
         constraints: list[ChordLabel] | None = None,
-        tension_curve: Any | None = None
+        tension_curve: Any | None = None,
+        force_key: Scale | tuple[int, Mode | str] | None = None,
+        debug: bool = False
     ) -> list[ChordLabel]:
         if not melody:
             return []
@@ -229,20 +259,35 @@ class CoupledHMMHarmonizer:
         if constraints and change_points:
             constraints = self._snap_constraints(constraints, change_points)
 
-        # 2. Pass 1: Get initial draft chord sequence (unbiased by key layer)
-        draft_chords = self._viterbi_chords(
-            observations, initial_scale, change_points, constraints, tension_curve, key_path=None
-        )
+        # 2. Key sequence resolution (forced or estimated via multi-pass)
+        if force_key:
+            if isinstance(force_key, Scale):
+                f_scale = force_key
+            else:
+                f_root, f_mode = force_key
+                if isinstance(f_mode, str):
+                    # Find matching mode enum
+                    f_mode = next((m for m in Mode if m.value == f_mode), Mode.MAJOR)
+                f_scale = Scale(root=f_root, mode=f_mode)
+            
+            # Map the forced scale to root and mode index
+            m_idx = MODES_LIST.index(f_scale.mode) if f_scale.mode in MODES_LIST else 0
+            key_path = [(f_scale.root, m_idx)] * T
+        else:
+            # Pass 1: Get initial draft chord sequence (unbiased by key layer)
+            draft_chords = self._viterbi_chords(
+                observations, initial_scale, change_points, constraints, tension_curve, key_path=None
+            )
 
-        # 3. Pass 2: Estimate key center sequence (Layer 2) from initial chords
-        key_path = self._viterbi_keys(draft_chords)
+            # Pass 2: Estimate key center sequence (Layer 2) from initial chords
+            key_path = self._viterbi_keys(draft_chords, debug=debug)
 
-        # 4. Pass 3: Refined chord sequence, now coupled to estimated key centers
+        # 3. Pass 3: Refined chord sequence, now coupled to key centers
         chord_path = self._viterbi_chords(
             observations, initial_scale, change_points, constraints, tension_curve, key_path=key_path
         )
 
-        # 5. Build result
+        # 4. Build result
         result = []
         for i, (root, t_idx) in enumerate(chord_path):
             quality = TYPE_TO_QUALITY[t_idx]
@@ -324,6 +369,8 @@ class CoupledHMMHarmonizer:
                     KEY_OFFSET_LOG[key_type, (r - key_root) % 12] 
                     + LOG_KEY_TYPE_PRIOR[key_type]
                 )
+                if T == 1 and r == key_root:
+                    bias += self.config.tonic_end_bias
                 init_scores[r, :] += bias
 
         if constraints:
@@ -407,6 +454,14 @@ class CoupledHMMHarmonizer:
                             + LOG_KEY_TYPE_PRIOR[key_type, k_curr]
                         )
                         
+                        # Cadential attraction
+                        if t_step == T - 1:
+                            if r_curr == key_root:
+                                coupling_bias += self.config.tonic_end_bias
+                        elif t_step == T - 2:
+                            if r_curr == (key_root + 7) % 12:
+                                coupling_bias += self.config.dominant_penultimate_bias
+                        
                     dp_new[r_curr, k_curr, :] += score_emit + t_bias + coupling_bias
 
             # Constraints filtering
@@ -440,15 +495,17 @@ class CoupledHMMHarmonizer:
     # Layer 2: Key Viterbi
     # ------------------------------------------------------------------
 
-    def _viterbi_keys(self, chords: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    def _viterbi_keys(self, chords: list[tuple[int, int]], debug: bool = False) -> list[tuple[int, int]]:
         """Find most likely key sequence given chord observations."""
         n_s = N_TONES * N_KEY_TYPES  # 24
         T = len(chords)
 
         STAY_LOG = math.log(0.98)
         SWITCH_LOG = math.log(0.02 / (n_s - 1))
+        log_key_priors = np.tile(MODE_PRIORS, N_TONES)
 
-        trans = np.full((n_s, n_s), SWITCH_LOG)
+        # Incorporate mode priors into transitions so modulating to exotic modes is penalized
+        trans = np.full((n_s, n_s), SWITCH_LOG) + log_key_priors[None, :]
         np.fill_diagonal(trans, STAY_LOG)
 
         roots = np.array([c[0] for c in chords])
@@ -468,11 +525,35 @@ class CoupledHMMHarmonizer:
         NEG_INF = -1e9
         backtrack = np.zeros((T, n_s), dtype=np.int32)
 
-        dp = emit_all[0].copy()
+        # Apply mode prior log probabilities to initial state
+        dp = emit_all[0] + log_key_priors
+
+        if debug:
+            print("\n[Layer 2 Debug: Top 3 Key Centers per Step]")
+            note_names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+            top_indices = np.argsort(dp)[-3:][::-1]
+            top_keys = []
+            for idx in top_indices:
+                kr = idx // N_KEY_TYPES
+                kt = idx % N_KEY_TYPES
+                mode_name = MODES_LIST[kt].value
+                top_keys.append(f"{note_names[kr]} {mode_name} (score: {dp[idx]:.2f})")
+            print(f"Step 1: {', '.join(top_keys)}")
+
         for t_step in range(1, T):
             scores = dp[:, None] + trans
             backtrack[t_step] = np.argmax(scores, axis=0)
             dp = emit_all[t_step] + np.max(scores, axis=0)
+
+            if debug:
+                top_indices = np.argsort(dp)[-3:][::-1]
+                top_keys = []
+                for idx in top_indices:
+                    kr = idx // N_KEY_TYPES
+                    kt = idx % N_KEY_TYPES
+                    mode_name = MODES_LIST[kt].value
+                    top_keys.append(f"{note_names[kr]} {mode_name} (score: {dp[idx]:.2f})")
+                print(f"Step {t_step + 1}: {', '.join(top_keys)}")
 
         best_last = int(np.argmax(dp))
         path = [best_last]
