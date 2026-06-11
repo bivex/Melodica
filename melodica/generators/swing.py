@@ -151,7 +151,7 @@ class SwingGenerator(PhraseGenerator):
         return nearest_pitch(random.choice(pcs), 60)
 
     def _vel(self, beat_in_bar: float) -> int:
-        base = int(self.params.density * 100)
+        base = self.base_velocity()
         is_strong = False
         if self.accent_pattern == "downbeat":
             is_strong = abs(beat_in_bar) < 0.01 or abs(beat_in_bar - 2.0) < 0.01

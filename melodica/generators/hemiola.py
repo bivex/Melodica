@@ -160,7 +160,7 @@ class HemiolaGenerator(PhraseGenerator):
         return nearest_pitch(base_pc, 60)
 
     def _velocity(self, idx: int, total: int) -> int:
-        base = int(self.params.density * 100)
+        base = self.base_velocity()
         if idx == 0:
             return min(127, int(base * self.velocity_accent))
         return max(20, int(base * 0.85))

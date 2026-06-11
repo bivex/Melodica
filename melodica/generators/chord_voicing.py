@@ -302,7 +302,7 @@ class ChordVoicingGenerator(PhraseGenerator):
         return notes
 
     def _vel(self, idx: int, total: int, t: float, dur: float) -> int:
-        base = int(self.params.density * 100)
+        base = self.base_velocity()
         if self.velocity_curve == "crescendo":
             factor = 0.6 + 0.4 * (t / max(0.1, dur))
         elif self.velocity_curve == "decrescendo":
