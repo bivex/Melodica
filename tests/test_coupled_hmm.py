@@ -1349,3 +1349,22 @@ class TestSymphonicTheaterProgression:
         assert SectionRole.VERSE in roles
         assert SectionRole.CHORUS in roles
         assert SectionRole.OUTRO in roles
+
+
+class TestCouplingRealEffect:
+    def test_coupling_bias_changes_output(self):
+        """Verify that changing key_coupling_weight in HMMConfig changes chord output."""
+        h1 = CoupledHMMHarmonizer(chord_change="bars")
+        h1.config.key_coupling_weight = 0.0  # No coupling
+        
+        h2 = CoupledHMMHarmonizer(chord_change="bars")
+        h2.config.key_coupling_weight = 3.0  # Strong coupling
+        
+        melody = _c_major_melody(4)
+        result1 = h1.harmonize(melody, Scale(root=0, mode=Mode.MAJOR), duration_beats=16.0)
+        result2 = h2.harmonize(melody, Scale(root=0, mode=Mode.MAJOR), duration_beats=16.0)
+        
+        names1 = [f"{c.root}_{c.quality.name}" for c in result1]
+        names2 = [f"{c.root}_{c.quality.name}" for c in result2]
+        
+        assert names1 != names2, "Coupling bias has no effect on chord selection!"

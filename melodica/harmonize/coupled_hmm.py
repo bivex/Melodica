@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -176,8 +176,20 @@ LOG_KEY_TYPE_PRIOR = np.log(KEY_TYPE_PRIOR + _EPS)
 
 
 # ---------------------------------------------------------------------------
-# Coupled HMM Harmonizer
+# Coupled HMM Configuration & Harmonizer
 # ---------------------------------------------------------------------------
+
+@dataclass
+class HMMConfig:
+    """Configuration hyperparameters for CoupledHMMHarmonizer."""
+    anti_stagnation_penalty: float = 2.0
+    interval_diversity_penalty: float = 1.5
+    tension_weight: float = 4.0
+    key_coupling_weight: float = 0.5
+    tonic_bias: float = 2.0
+    epsilon: float = 1e-8
+    emission_weight: float = 1.0  # Hyperparameter to scale emissions
+
 
 @dataclass
 class WeightedNote:
@@ -195,6 +207,7 @@ class CoupledHMMHarmonizer:
     beam_width: int = 12
     chord_change: str = "bars"
     bar_grid: BarGrid | None = None
+    config: HMMConfig = field(default_factory=HMMConfig)
 
     def harmonize(
         self,
@@ -253,9 +266,11 @@ class CoupledHMMHarmonizer:
         tension_curve: Any | None = None,
         key_path: list[tuple[int, int]] | None = None
     ) -> list[tuple[int, int]]:
-        """Find most likely chord sequence using Viterbi with optional constraints, tension, and key coupling."""
-        n_s = N_TONES * N_TYPES  # 144
+        """Find most likely chord sequence using 2nd-order state-expanded Viterbi (1728 states)."""
         T = len(obs)
+        if T == 0:
+            return []
+
         NEG_INF = -1e12
 
         # Pre-compute emissions via vectorized _log_emit_chord
@@ -277,47 +292,39 @@ class CoupledHMMHarmonizer:
                 step_emit += wn.weight * (LOG_PNOTE[off] - LOG_NOT_PNOTE[off])
                 total_w += wn.weight
 
-            emit[t_step] = step_emit / (total_w + 1e-6)
+            emit[t_step] = (step_emit / (total_w + 1e-6)) * self.config.emission_weight
 
         # Tension indices
         STABLE_INDICES = {0, 1, 11}
         UNSTABLE_INDICES = {2, 3, 8}
 
-        # Pre-compute transition matrix [k_prev, interval, k_next] -> [n_s, n_s]
-        trans = np.full((n_s, n_s), NEG_INF)
-        for k_prev in range(N_TYPES):
-            for k_next in range(N_TYPES):
-                for r_prev in range(N_TONES):
-                    s_prev = r_prev * N_TYPES + k_prev
-                    for r_next in range(N_TONES):
-                        interval = (r_next - r_prev) % N_TONES
-                        s_next = r_next * N_TYPES + k_next
-                        trans[s_prev, s_next] = LOG_PCHANGE[k_prev, interval, k_next]
+        # DP table of shape [T, 12, 12, 12] where dimensions are:
+        # dp[t, r_curr, k_curr, r_prev]
+        # backtrack stores predecessor state's (k_prev, r_prevprev) encoded as: k_prev * 12 + r_prevprev
+        dp = np.full((T, 12, 12, 12), NEG_INF)
+        backtrack = np.zeros((T, 12, 12, 12), dtype=np.int32)
 
-        dp = np.full((T, n_s), NEG_INF)
-        backtrack = np.zeros((T, n_s), dtype=np.int32)
-
-        # Init step
-        init_scores = emit[0].ravel().copy()
+        # Init step (t = 0)
+        init_scores = emit[0].copy()
         if scale.root is not None:
-            for k in range(N_TYPES):
-                init_scores[scale.root * N_TYPES + k] += 2.0
+            init_scores[scale.root, :] += self.config.tonic_bias
 
         if tension_curve:
             tau = tension_curve.tension_at(change_points[0])
             for k in range(N_TYPES):
-                for r in range(N_TONES):
-                    s = r * N_TYPES + k
-                    if k in UNSTABLE_INDICES:
-                        init_scores[s] += tau * 4.0
-                    if k in STABLE_INDICES:
-                        init_scores[s] += (1.0 - tau) * 4.0
+                if k in UNSTABLE_INDICES:
+                    init_scores[:, k] += tau * self.config.tension_weight
+                elif k in STABLE_INDICES:
+                    init_scores[:, k] += (1.0 - tau) * self.config.tension_weight
 
         if key_path:
             key_root, key_type = key_path[0]
             for r in range(N_TONES):
-                bias = 0.5 * (KEY_OFFSET_LOG[key_type, (r - key_root) % 12] + LOG_KEY_TYPE_PRIOR[key_type])
-                init_scores[r * N_TYPES:(r + 1) * N_TYPES] += bias
+                bias = self.config.key_coupling_weight * (
+                    KEY_OFFSET_LOG[key_type, (r - key_root) % 12] 
+                    + LOG_KEY_TYPE_PRIOR[key_type]
+                )
+                init_scores[r, :] += bias
 
         if constraints:
             cp = change_points[0]
@@ -327,13 +334,14 @@ class CoupledHMMHarmonizer:
                 for r in range(N_TONES):
                     for k in range(N_TYPES):
                         if r != target.root or k != t_idx:
-                            init_scores[r * N_TYPES + k] = NEG_INF
+                            init_scores[r, k] = NEG_INF
 
-        dp[0] = init_scores
+        # Initialize all possible predecessor roots with the same initial score
+        for r_prev in range(12):
+            dp[0, :, :, r_prev] = init_scores
 
         # Forward pass
         for t_step in range(1, T):
-            cur_emit = emit[t_step].ravel().copy()
             cp = change_points[t_step]
             tau = tension_curve.tension_at(cp) if tension_curve else 0.5
 
@@ -341,60 +349,92 @@ class CoupledHMMHarmonizer:
             if constraints:
                 target_chord = next((c for c in constraints if c.start <= cp < c.start + c.duration), None)
 
-            scores = dp[t_step - 1][:, None] + trans  # [n_s, n_s]
+            dp_prev_reshaped = dp[t_step - 1]
+            dp_new = np.full((12, 12, 12), NEG_INF)
 
-            # Anti-stagnation: penalize same chord type as previous step
-            for k in range(N_TYPES):
-                scores[k::N_TYPES, k::N_TYPES] -= 2.0
+            for r_prev in range(12):
+                for r_curr in range(12):
+                    interval = (r_curr - r_prev) % 12
+                    
+                    # Copy predecessor slice [k_prev, r_prevprev]
+                    dp_slice = dp_prev_reshaped[r_prev].copy()
+                    
+                    # Apply path-dependent interval diversity penalty
+                    if t_step >= 2:
+                        r_prevprev_penalized = (r_prev - interval) % 12
+                        dp_slice[:, r_prevprev_penalized] -= self.config.interval_diversity_penalty
+                    
+                    # Max over r_prevprev
+                    best_r_prevprev = np.argmax(dp_slice, axis=1)
+                    max_prevprev = dp_slice[np.arange(12), best_r_prevprev]
+                    
+                    # Base transition matrix lookup [k_prev, k_curr]
+                    trans_base = LOG_PCHANGE[:, interval, :].copy()
+                    np.fill_diagonal(trans_base, trans_base.diagonal() - self.config.anti_stagnation_penalty)
+                    
+                    # Combine path scores and transitions
+                    scores = max_prevprev[:, None] + trans_base
+                    
+                    # Max over k_prev for each k_curr
+                    best_k_prev = np.argmax(scores, axis=0)
+                    best_scores = scores[best_k_prev, np.arange(12)]
+                    
+                    dp_new[r_curr, :, r_prev] = best_scores
+                    
+                    # Backtrack encoding: k_prev * 12 + r_prevprev
+                    best_r_prevprev_for_best_k = best_r_prevprev[best_k_prev]
+                    backtrack[t_step, r_curr, :, r_prev] = best_k_prev * 12 + best_r_prevprev_for_best_k
 
-            # Interval diversity: penalize repeating the same root interval
-            if t_step >= 2:
-                # Correct index lag: get the transition from t-2 to t-1
-                curr_s = np.argmax(dp[t_step - 1])
-                prev_s = backtrack[t_step - 1, curr_s]
-                curr_root = curr_s // N_TYPES
-                prev_root = prev_s // N_TYPES
-                last_interval = (curr_root - prev_root) % 12
-                # Penalize transitions using that same interval
-                for r_from in range(N_TONES):
-                    r_to = (r_from + last_interval) % 12
-                    s_from = r_from * N_TYPES
-                    s_to = r_to * N_TYPES
-                    scores[s_from:s_from + N_TYPES, s_to:s_to + N_TYPES] -= 1.5
+            # Add emissions and step biases
+            for r_curr in range(12):
+                for k_curr in range(12):
+                    score_emit = emit[t_step, r_curr, k_curr]
+                    
+                    # Tension bias
+                    t_bias = 0.0
+                    if tension_curve:
+                        if k_curr in UNSTABLE_INDICES:
+                            t_bias = tau * self.config.tension_weight
+                        elif k_curr in STABLE_INDICES:
+                            t_bias = (1.0 - tau) * self.config.tension_weight
+                            
+                    # Key coupling bias
+                    coupling_bias = 0.0
+                    if key_path:
+                        key_root, key_type = key_path[t_step]
+                        coupling_bias = self.config.key_coupling_weight * (
+                            KEY_OFFSET_LOG[key_type, (r_curr - key_root) % 12] 
+                            + LOG_KEY_TYPE_PRIOR[key_type, k_curr]
+                        )
+                        
+                    dp_new[r_curr, k_curr, :] += score_emit + t_bias + coupling_bias
 
-            best_prev = np.argmax(scores, axis=0)
-            best_scores = scores[best_prev, np.arange(n_s)]
-
-            t_bias = np.zeros(n_s)
-            for k in UNSTABLE_INDICES:
-                t_bias[k::N_TYPES] = tau * 4.0
-            for k in STABLE_INDICES:
-                t_bias[k::N_TYPES] = (1.0 - tau) * 4.0
-
-            if key_path:
-                key_root, key_type = key_path[t_step]
-                for r in range(N_TONES):
-                    bias = 0.5 * (KEY_OFFSET_LOG[key_type, (r - key_root) % 12] + LOG_KEY_TYPE_PRIOR[key_type])
-                    t_bias[r * N_TYPES:(r + 1) * N_TYPES] += bias
-
-            dp[t_step] = cur_emit + t_bias + best_scores
-            backtrack[t_step] = best_prev
-
+            # Constraints filtering
             if target_chord:
                 t_idx = _resolve_type_idx(target_chord.quality)
                 for r in range(N_TONES):
                     for k in range(N_TYPES):
                         if r != target_chord.root or k != t_idx:
-                            dp[t_step, r * N_TYPES + k] = NEG_INF
+                            dp_new[r, k, :] = NEG_INF
+
+            dp[t_step] = dp_new
 
         # Backtrack
-        best_last = int(np.argmax(dp[T - 1]))
-        path = [best_last]
+        best_flat_idx = np.argmax(dp[T - 1])
+        r_curr, k_curr, r_prev = np.unravel_index(best_flat_idx, (12, 12, 12))
+        
+        path = [(r_curr, k_curr)]
+        
         for t_step in range(T - 1, 0, -1):
-            path.append(int(backtrack[t_step, path[-1]]))
+            back_val = backtrack[t_step, r_curr, k_curr, r_prev]
+            k_prev = back_val // 12
+            r_prevprev = back_val % 12
+            
+            r_curr, k_curr, r_prev = r_prev, k_prev, r_prevprev
+            path.append((r_curr, k_curr))
+            
         path.reverse()
-
-        return [(s // N_TYPES, s % N_TYPES) for s in path]
+        return path
 
     # ------------------------------------------------------------------
     # Layer 2: Key Viterbi
