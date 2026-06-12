@@ -1,75 +1,93 @@
 # Melodica — Feature Priorities
 
 Приоритет по соотношению: музыкальная ценность / сложность реализации.
+Последнее обновление: 2026-06-12
 
 ---
 
-## P1 — Высокий приоритет (быстрая отдача)
+## P4 — Новые задачи (из анализа музыкальных форм)
 
-### 1. Модуляция между секциями (IdeaPart → IdeaPart)
-ModulationEngine уже готов и работает. Не хватает:
-- Интеграция с `album_pipeline.py` — автоматический bridge на стыке частей с разными Scale
-- Опция `modulation_strategy: pivot | dominant | chromatic` в TrackConfig/IdeaPart
-- Pivot chord как последний аккорд предыдущей части (HMM constraint)
+### 11. FormTemplate — enum + генератор IdeaPart последовательностей
+Wikipedia: sonata, rondo, ternary, through-composed — стандартные формы.
+- `FormTemplate` enum: SONATA, RONDO, TERNARY, THROUGH_COMPOSED, VARIATIONS, BINARY
+- `form_plan(template, scale, n_bars)` → list[IdeaPart] с правильными SectionRole и Scale
+- Sonata: P(tonic)→T→S(dominant)→Development(unstable)→Recapitulation(tonic)
+- Rondo: ABACABA с тональной схемой I-V-I-VI-I-I-I
+- Through-composed: каждый IdeaPart с уникальным material, нет повторов
 
-### 2. Динамическая огибающая по форме (tension_curve → velocity)
-`tension_curve.py` и `velocity_envelope.py` уже есть, но не связаны с ARR-4 (LOW/MID/HIGH).
-- Привязать tension peak к плотности регистра: crescendo = больше MID/HIGH нот
-- Автоматический spill в intro/outro (ARR-7 variance уже есть)
+### 12. SonataFormPlan — конкретный план с P/T/S/C зонами
+Wikipedia: exposition зоны P, T, S, C с конкретными гармоническими функциями.
+- `SonataFormPlan(scale, n_bars)` → IdeaPart список
+- P-zone: tonic, main theme density high
+- T-zone: modulating, bridge к dominant
+- S-zone: dominant (major) / relative major (minor), lyrical
+- C-zone: cadential, reinforces new key
+- Development: нестабильная тональность, фрагментация тем через ModulationEngine
+- Recapitulation: всё в tonic, S-zone транспонируется назад
 
-### 3. Мотивное развитие (motif.py → развитие по форме)
-`motif.py` и `leitmotif.py` есть. Не хватает:
-- Трансформации: инверсия, ракоход, аугментация/диминуция ритма
-- Привязка мотива к конкретному персонажу/инструменту на весь альбом
-
----
-
-## P2 — Средний приоритет (значимо, но требует больше работы)
-
-### 4. Полиритмия как структурный элемент (не только генератор)
-`polyrhythm.py` существует, но изолирован.
-- Интеграция с section_builder: 3-against-2 в переходных секциях
-- Hemiola на стыке частей для метрической дестабилизации перед модуляцией
-
-### 5. Schenkerian-style голосоведение (Ursatz)
-На основе уже готового `voice_leading.py`:
-- Детектировать структурные уровни (foreground / middleground)
-- Генерировать passing tones и neighbour tones автоматически в мелодии
-
-### 6. Серийные техники (tone row) для атональных секций
-Базис — `types_pkg/_theory.py` уже знает о хроматической шкале.
-- `ToneRowGenerator` — 12-tone row с трансформациями (P/I/R/RI)
-- Полезно для horror/tension секций (horror_dissonance.py уже есть)
-
-### 7. Функциональная гармония с расширенными tensions (jazz → orchestral)
-`functional_hmm.py` + `reharmonization.py` уже есть.
-- Добавить maj7, add9, sus2/sus4 как дополнительные состояния HMM
-- Secondary dominant chains (ii-V-I в новой тональности)
+### 13. variation_of поле в IdeaPart + VariationPlan
+Wikipedia: variation form — melodic/rhythmic/harmonic/minor-mode.
+- `variation_of: str | None` в IdeaPart (ссылка на исходный IdeaPart по имени)
+- `VariationPlan` — генерирует серию вариаций из одного IdeaPart
+- Типы: melodic (SchenkerianElaborator), rhythmic (другой ритм-пресет), harmonic (реharmonization), modal (параллельный минор/мажор), reductive (_thin)
 
 ---
 
-## P3 — Низкий приоритет (интересно, но долго)
+## P1 — ВЫПОЛНЕНО ✓
 
-### 8. Микротональность в оркестровом контексте
-`microtonal_melody.py` и `microtuning.py` есть.
-- Quarter-tone inflections для струнных (expressive intonation)
-- Привязать к tension_curve: высокое tension = больше микротональных отклонений
+### 1. Модуляция между секциями ✓
+- `IdeaPart.modulation_strategy` добавлен (pivot | dominant | chromatic)
+- `modulation_bridge_notes()` и `apply_modulation_bridges()` в `theory/modulation.py`
 
-### 9. Круг квинт как навигатор модуляций
-Автоматический план модуляций для альбома:
-- Chain modulation по circle of fifths между треками
-- Enharmonic reinterpretation для dim7/augmented chords
+### 2. Динамическая огибающая по форме ✓
+- `tension_curve_to_envelope()` в `composer/velocity_envelope.py`
+- Role-based компрессия: lead/pad/bass/perc профили
 
-### 10. Ритмические пресеты → алгоритмическая генерация
-`rhythm/presets/` имеет bossa nova, mazurka, reggae и др.
-- Генерировать новые ритм-паттерны через Euclidean rhythm algorithm
-- Адаптировать плотность под tension_curve (разреженный ритм = низкое tension)
+### 3. Мотивное развитие ✓
+- `MotifDevelopmentPlan` в `composer/motif_plan.py`
+- Привязка leitmotif к инструментам по форме, `.render()` → dict
 
 ---
 
-## Уже реализовано (не трогать)
-- ModulationEngine (find_pivot_chords, generate_modulation_bridge) — работает
+## P2 — ВЫПОЛНЕНО ✓
+
+### 4. Полиритмия как структурный элемент ✓
+- `hemiola_layer()` и `polyrhythm_section()` в `generators/polyrhythm.py`
+
+### 5. Schenkerian-style голосоведение ✓
+- `passing_tones()`, `neighbour_tones()`, `elaborate()` в `composer/schenkerian.py`
+
+### 6. Серийные техники ✓
+- `ToneRow` + `ToneRowGenerator` в `generators/tone_row.py`
+- P/I/R/RI трансформации, hexachord split, matrix
+
+### 7. Расширенные tensions ✓
+- `FunctionalHMMHarmonizer._quality_for_context` расширен
+- I→MAJOR/MAJ7/ADD9, IV→MAJOR/ADD9/SUS2, V→DOM7/SUS4, vi→MINOR/MINOR7
+
+---
+
+## P3 — ВЫПОЛНЕНО ✓
+
+### 8. Микротональность для струнных ✓
+- `tension_scaled_inflections()` в `composer/microtonal_inflections.py`
+- Leading-tone sharpening, colour-tone colouring, sustained drift по TensionCurve
+
+### 9. Круг квинт навигатор ✓
+- `CoFNavigator` в `composer/cof_navigator.py`
+- `plan_album()`: cof_chain, cof_arch, enharmonic, dramatic
+- Dim7/augmented enharmonic pivots
+
+### 10. Euclidean rhythm generator ✓
+- `EuclideanGenerator`, `TensionEuclidean` в `rhythm/euclidean.py`
+- 16 named patterns (tresillo, bembé, aksak, etc.)
+- TensionEuclidean: sparse↔dense по threshold
+
+---
+
+## Постоянно готово (не трогать)
+- ModulationEngine (find_pivot_chords, generate_modulation_bridge)
 - ARR-1/4/7/8 rules — чистые, album_virtuoso exit 0
-- OstinatoGenerator beat-position accent — исправлено
-- voice_leading.py correct_parallels — работает
-- ContrabassGenerator LOW register tuning — ~48% LOW
+- OstinatoGenerator beat-position accent
+- voice_leading.py correct_parallels
+- ContrabassGenerator LOW register tuning ~48% LOW
