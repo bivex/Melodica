@@ -110,6 +110,22 @@ def _off(notes, offset):
             for n in notes]
 
 
+def _pedal_tone(chords: list[ChordLabel], scale: Scale, dur: float, *,
+                pitch: int, note_dur: float = 4.0, velocity: int = 55) -> list[NoteInfo]:
+    """ARR-8 fix: static pedal point — holds tonic/dominant pitch in long notes.
+
+    Unlike ContrabassGenerator, this voice does NOT follow chord roots, so it
+    creates oblique motion against the moving bass — eliminating parallel fifths/octaves.
+    """
+    notes = []
+    t = 0.0
+    while t < dur:
+        actual_dur = min(note_dur, dur - t)
+        notes.append(NoteInfo(pitch=pitch, start=t, duration=actual_dur, velocity=velocity))
+        t += note_dur
+    return notes
+
+
 def _thin(notes: list[NoteInfo], dur: float, *,
           intro_end: float | None = None,
           outro_start: float | None = None,
@@ -189,10 +205,8 @@ def track_01_aurora():
         GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
         articulation="legato").render(chords, key, dur), 45, 80)
 
-    # ARR-4: second contrabass layer anchored in deep LOW register
-    pedal = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.6, key_range_low=24, key_range_high=36),
-        articulation="legato").render(chords, key, dur), 38, 72)
+    # ARR-8 fix: pedal point on tonic C (MIDI 24) — oblique motion vs bass
+    pedal = _pedal_tone(chords, key, dur, pitch=24, note_dur=4.0, velocity=52)
 
     return {
         "Lead": _clamp(lead, 55, 95), "Violin1": violin, "Harp": harp,
@@ -241,10 +255,8 @@ def track_02_chase():
         GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
         articulation="pizzicato").render(chords, key, dur), 50, 88)
 
-    # ARR-4: deep low contrabass layer
-    pedal = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.6, key_range_low=24, key_range_high=36),
-        articulation="pizzicato").render(chords, key, dur), 45, 80)
+    # ARR-8 fix: pedal point on tonic D (MIDI 26) — oblique motion vs bass
+    pedal = _pedal_tone(chords, key, dur, pitch=26, note_dur=2.0, velocity=52)
 
     timp = _thin(_clamp(TimpaniGenerator(
         GeneratorParams(density=0.3, key_range_low=36, key_range_high=48),
@@ -303,10 +315,8 @@ def track_03_cathedral():
         GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
         articulation="legato").render(chords, key, dur), 45, 82)
 
-    # ARR-4: deep low contrabass layer
-    pedal = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.6, key_range_low=24, key_range_high=36),
-        articulation="legato").render(chords, key, dur), 42, 76)
+    # ARR-8 fix: pedal point on tonic F (MIDI 29) — oblique motion vs bass
+    pedal = _pedal_tone(chords, key, dur, pitch=29, note_dur=4.0, velocity=50)
 
     return {
         "Lead": _clamp(lead, 50, 88), "Choir": choir, "Brass": brass,
@@ -361,10 +371,8 @@ def track_04_embers():
         GeneratorParams(density=0.85, key_range_low=24, key_range_high=38),
         articulation="pizzicato").render(chords, key, dur), 50, 88)
 
-    # ARR-4: deep low contrabass layer
-    pedal = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.7, key_range_low=24, key_range_high=33),
-        articulation="pizzicato").render(chords, key, dur), 45, 80)
+    # ARR-8 fix: pedal point on tonic A (MIDI 33) — oblique motion vs bass
+    pedal = _pedal_tone(chords, key, dur, pitch=33, note_dur=2.0, velocity=50)
 
     return {
         "Lead": _clamp(lead, 58, 96), "Counter": counter, "Pizzicato": pizz,
@@ -422,10 +430,8 @@ def track_05_apotheosis():
         GeneratorParams(density=0.4, key_range_low=28, key_range_high=46)
     ).render(chords, key, dur), 50, 92), dur)
 
-    # ARR-4: deep low contrabass layers
-    pedal = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
-        articulation="legato").render(chords, key, dur), 48, 88)
+    # ARR-8 fix: pedal point on tonic D (MIDI 26) — oblique motion vs tuba/harp
+    pedal = _pedal_tone(chords, key, dur, pitch=26, note_dur=4.0, velocity=52)
 
     timp = _thin(_clamp(TimpaniGenerator(
         GeneratorParams(density=0.4, key_range_low=36, key_range_high=48),
