@@ -717,21 +717,86 @@ def _sidechain_duck(
 # ---------------------------------------------------------------------------
 
 
+
+# Per-instrument humanization profiles:
+#   (timing_beats, vel_jitter, dur_factor, groove)
+# timing_beats  — max onset offset in beats (at 120bpm: 0.02=10ms, 0.05=25ms)
+# vel_jitter    — max ±velocity randomisation
+# dur_factor    — duration scale jitter (0.0=none, 0.12=±12%)
+# groove        — "straight"|"lay_back"|"push"
+_HUMANIZE_PROFILES: Dict[str, tuple[float, int, float, str]] = {
+    # Solo / lead woodwinds — expressive, slight push
+    "flute":     (0.025, 6,  0.08, "push"),
+    "oboe":      (0.022, 5,  0.07, "push"),
+    "clarinet":  (0.025, 6,  0.08, "push"),
+    "bassoon":   (0.020, 5,  0.07, "lay_back"),
+    # Strings — warm lay-back, noticeable dur variation (bow length)
+    "violin":    (0.035, 8,  0.12, "lay_back"),
+    "viola":     (0.030, 7,  0.12, "lay_back"),
+    "cello":     (0.025, 6,  0.10, "lay_back"),
+    "strings":   (0.030, 7,  0.12, "lay_back"),
+    # Brass — slightly late, wide vel (breath support variation)
+    "horn":      (0.030, 8,  0.06, "lay_back"),
+    "brass":     (0.025, 9,  0.06, "lay_back"),
+    "trumpet":   (0.020, 7,  0.05, "straight"),
+    "trombone":  (0.030, 8,  0.07, "lay_back"),
+    # Keyboard / harp — tight timing, light vel, minimal dur jitter
+    "harp":      (0.015, 5,  0.04, "straight"),
+    "piano":     (0.018, 6,  0.04, "straight"),
+    "celesta":   (0.015, 4,  0.03, "straight"),
+    "glock":     (0.012, 4,  0.03, "straight"),
+    "glockenspiel": (0.012, 4, 0.03, "straight"),
+    # Bass — very tight, minimal timing, slight vel variation
+    "bass":      (0.012, 4,  0.03, "lay_back"),
+    "contrabass":(0.010, 3,  0.03, "lay_back"),
+    "pedal":     (0.008, 2,  0.02, "straight"),
+    # Choir — loose timing, wide vel, long dur
+    "choir":     (0.040, 10, 0.15, "lay_back"),
+    "voice":     (0.040, 10, 0.15, "lay_back"),
+    # Timpani / perc — tight timing, wide vel
+    "timp":      (0.010, 10, 0.02, "straight"),
+    "perc":      (0.010, 10, 0.02, "straight"),
+    # Generic lead
+    "lead":      (0.025, 6,  0.08, "straight"),
+    "canon":     (0.030, 7,  0.10, "lay_back"),
+}
+
+_HUMANIZE_ROLE_DEFAULTS: Dict[Role, tuple[float, int, float, str]] = {
+    Role.LEAD:    (0.025, 6,  0.08, "straight"),
+    Role.STRINGS: (0.030, 7,  0.12, "lay_back"),
+    Role.CHOIR:   (0.040, 10, 0.15, "lay_back"),
+    Role.BASS:    (0.012, 4,  0.03, "lay_back"),
+    Role.PAD:     (0.020, 5,  0.06, "straight"),
+    Role.PERC:    (0.010, 10, 0.02, "straight"),
+    Role.FX:      (0.015, 3,  0.02, "straight"),
+}
+
+
+def _humanize_profile(tname: str, role: Role) -> tuple[float, int, float, str]:
+    """Return (timing, vel_jitter, dur_factor, groove) for this track."""
+    name_lower = tname.lower()
+    for key, profile in _HUMANIZE_PROFILES.items():
+        if key in name_lower:
+            return profile
+    return _HUMANIZE_ROLE_DEFAULTS.get(role, (0.020, 5, 0.06, "straight"))
+
+
 def _apply_humanization(
     tracks: Dict[str, List[NoteInfo]],
     profiles: Dict[str, _TrackProfile],
-    swing_amount: float = 0.02,
-    vel_jitter: int = 4,
+    swing_amount: float = 0.02,   # kept for backward compat; overridden by per-instrument
+    vel_jitter: int = 4,          # kept for backward compat; overridden by per-instrument
 ) -> Dict[str, List[NoteInfo]]:
-    """Add density-adaptive timing and velocity variation to tracks.
+    """Add per-instrument humanization: micro-timing, velocity scatter, duration jitter.
 
-    [FIX 3] At high note density the timing jitter is scaled DOWN to prevent
-    notes from overtaking each other, while velocity jitter is scaled UP to
-    preserve groove expressiveness through dynamics instead of timing.
+    Each instrument family gets its own profile:
+      - timing_beats: onset jitter (strings lay_back ±0.035, harp tight ±0.015)
+      - vel_jitter:   velocity scatter (choir ±10, pedal ±2)
+      - dur_factor:   duration variation (strings ±12%, harp ±4%)
+      - groove:       push/lay_back/straight bias
 
-    density < 0.5  → full timing jitter, minimal velocity jitter
-    density 0.5–2  → linearly interpolated
-    density > 2    → minimal timing jitter (1/10th), maximum velocity jitter
+    Density-adaptive: at density ≥ 2.0 timing jitter drops to 10% to prevent
+    note ordering inversion in fast passages.
     """
     result = {}
     for tname, notes in tracks.items():
@@ -740,33 +805,48 @@ def _apply_humanization(
             continue
 
         prof = profiles.get(tname)
-        if not prof or prof.role in (Role.PAD, Role.FX):
+        if not prof:
             result[tname] = notes
             continue
 
-        # Only humanize tracks with density > 0.3 or role is LEAD/STRINGS
-        if prof.density < 0.3 and prof.role not in (Role.LEAD, Role.STRINGS):
+        # Skip FX tracks — no humanization needed
+        if prof.role == Role.FX:
             result[tname] = notes
             continue
 
-        # [FIX 3] Density-adaptive scaling
-        # At density >= 2.0 timing jitter drops to 10%; velocity jitter rises to 2.5×
-        density_factor = min(1.0, prof.density / 2.0)  # 0.0 at sparse, 1.0 at dense
-        t_scale = 1.0 - 0.9 * density_factor  # 1.0 → 0.10
-        v_scale = 1.0 + 1.5 * density_factor  # 1.0 → 2.50
-        effective_t = swing_amount * t_scale
-        effective_v = max(1, int(vel_jitter * v_scale))
+        t_base, v_base, dur_base, groove = _humanize_profile(tname, prof.role)
+
+        # Density-adaptive timing scale: fast passages get tighter timing
+        density_factor = min(1.0, prof.density / 2.0)
+        t_scale = 1.0 - 0.90 * density_factor   # 1.0 → 0.10
+        effective_t = t_base * t_scale
+
+        # Velocity jitter scales UP at high density (expression via dynamics)
+        v_scale = 1.0 + 1.0 * density_factor    # 1.0 → 2.0
+        effective_v = max(1, int(v_base * v_scale))
 
         rng = random.Random(hash(tname) & 0xFFFFFFFF)
         new_notes = []
         for n in notes:
-            t_jitter = rng.uniform(-effective_t, effective_t)
-            v_jit = rng.randint(-effective_v, effective_v)
+            # Timing offset with groove bias
+            t_jitter = rng.gauss(0.0, effective_t * 0.4)
+            if groove == "lay_back":
+                t_jitter += effective_t * 0.25
+            elif groove == "push":
+                t_jitter -= effective_t * 0.20
+
+            # Velocity scatter (gaussian, clamped)
+            v_jit = int(rng.gauss(0.0, effective_v * 0.5))
+
+            # Duration jitter (articulation humanization)
+            dur_jit = 1.0 + rng.gauss(0.0, dur_base * 0.4)
+            dur_jit = max(0.85, min(1.20, dur_jit))
+
             new_notes.append(
                 NoteInfo(
                     pitch=n.pitch,
                     start=max(0.0, n.start + t_jitter),
-                    duration=n.duration,
+                    duration=max(0.05, n.duration * dur_jit),
                     velocity=max(10, min(127, n.velocity + v_jit)),
                     articulation=n.articulation,
                     expression=n.expression,
@@ -1404,6 +1484,12 @@ def _stage_humanize(kw):
     return kw
 
 
+def _stage_phrase_dynamics(kw):
+    from melodica.composer.phrase_dynamics import apply_phrase_dynamics_to_pipeline
+    kw["tracks"] = apply_phrase_dynamics_to_pipeline(kw["tracks"])
+    return kw
+
+
 def _stage_sections(kw):
     if kw.get("sections"):
         kw["tracks"] = _apply_section_moods(kw["tracks"], kw["sections"], kw["_profiles"])
@@ -1564,6 +1650,7 @@ DEFAULT_PIPELINE: list[Stage] = [
     Stage("dynamics", _stage_dynamics),
     Stage("sidechain", _stage_sidechain),
     Stage("humanize", _stage_humanize),
+    Stage("phrase_dynamics", _stage_phrase_dynamics),
     Stage("sections", _stage_sections),
     Stage("tension", _stage_tension),
     Stage("polyphony", _stage_polyphony),
