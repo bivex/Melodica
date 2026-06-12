@@ -342,4 +342,137 @@ def apply_articulation(
         # --- CC74: brightness ---
         n.expression[74] = profile.brightness
 
+
+# ---------------------------------------------------------------------------
+# Bridge note generation — convert ChordLabel list → NoteInfo for a track
+# ---------------------------------------------------------------------------
+
+def modulation_bridge_notes(
+    scale_a: Scale,
+    scale_b: Scale,
+    bridge_start: float,
+    strategy: str = "pivot",
+    beats_per_chord: float = 2.0,
+    pitch: int = 60,
+    velocity: int = 55,
+    octave_offset: int = 0,
+) -> list[NoteInfo]:
+    """Generate sustained chord-tone notes for a modulation bridge.
+
+    Returns a flat list of NoteInfo that can be merged into any track.
+    Each chord in the bridge gets one sustained note at *pitch* snapped to the
+    chord root, voiced in the octave nearest to *pitch*.
+
+    Parameters
+    ----------
+    scale_a, scale_b : Scale
+        Source and target scales.
+    bridge_start : float
+        Beat position where the bridge begins.
+    strategy : str
+        "pivot" | "dominant" | "chromatic"
+    beats_per_chord : float
+        Duration of each bridge chord in beats.
+    pitch : int
+        Reference MIDI pitch for octave placement.
+    velocity : int
+        Note velocity for bridge notes.
+    octave_offset : int
+        Additional octave shift (+1 = one octave up).
+    """
+    chords = ModulationEngine.generate_modulation_bridge(
+        scale_a, scale_b, length_beats=beats_per_chord * 4, strategy=strategy
+    )
+    notes: list[NoteInfo] = []
+    for i, chord in enumerate(chords):
+        root_pc = chord.root % 12
+        # Snap to nearest octave relative to reference pitch
+        ref_oct = pitch // 12
+        candidate = root_pc + (ref_oct * 12) + (octave_offset * 12)
+        # Prefer same or lower octave to avoid conflicts with melody
+        if candidate > pitch + 6:
+            candidate -= 12
+        notes.append(NoteInfo(
+            pitch=max(0, min(127, candidate)),
+            start=bridge_start + i * beats_per_chord,
+            duration=beats_per_chord * 0.95,
+            velocity=velocity,
+        ))
+    return notes
+
+
+def apply_modulation_bridges(
+    parts: list,
+    tracks: dict[str, list[NoteInfo]],
+    part_offsets: list[float],
+    bridge_instruments: list[str] | None = None,
+    beats_per_chord: float = 2.0,
+    velocity: int = 50,
+) -> dict[str, list[NoteInfo]]:
+    """Insert modulation bridge notes into tracks at IdeaPart boundaries.
+
+    For each IdeaPart that has a ``modulation_strategy`` and a ``scale``,
+    bridge notes are generated in the 4-chord window *before* that part starts
+    and appended to every track in *bridge_instruments* (default: all tracks).
+
+    Parameters
+    ----------
+    parts : list[IdeaPart]
+        Ordered list of IdeaPart objects (from IdeaToolConfig.parts).
+    tracks : dict[str, list[NoteInfo]]
+        Track dict to augment. Modified in-place.
+    part_offsets : list[float]
+        Beat offset where each part starts (same order as parts).
+    bridge_instruments : list[str] | None
+        Track names to receive bridge notes. None = all tracks.
+    beats_per_chord : float
+        Duration of each bridge chord.
+    velocity : int
+        Velocity for bridge notes.
+
+    Returns
+    -------
+    tracks : dict[str, list[NoteInfo]]
+        Same dict, with bridge notes appended.
+    """
+    target_tracks = bridge_instruments if bridge_instruments else list(tracks.keys())
+    bridge_beats = beats_per_chord * 4  # 4 chords in bridge
+
+    for idx, part in enumerate(parts):
+        if idx == 0:
+            continue  # no bridge before first part
+        strategy = getattr(part, "modulation_strategy", None)
+        if not strategy:
+            continue
+        scale_b = getattr(part, "scale", None)
+        scale_a = getattr(parts[idx - 1], "scale", None)
+        if scale_a is None or scale_b is None:
+            continue
+        if scale_a.root == scale_b.root and scale_a.mode == scale_b.mode:
+            continue  # same key, no bridge needed
+
+        bridge_start = part_offsets[idx] - bridge_beats
+        if bridge_start < 0:
+            bridge_start = 0.0
+
+        for tname in target_tracks:
+            if tname not in tracks:
+                continue
+            existing = tracks[tname]
+            # Estimate reference pitch from track median
+            if existing:
+                ref_pitch = int(sorted(n.pitch for n in existing)[len(existing) // 2])
+            else:
+                ref_pitch = 60
+            bridge = modulation_bridge_notes(
+                scale_a, scale_b,
+                bridge_start=bridge_start,
+                strategy=strategy,
+                beats_per_chord=beats_per_chord,
+                pitch=ref_pitch,
+                velocity=velocity,
+            )
+            tracks[tname] = existing + bridge
+
+    return tracks
     return notes

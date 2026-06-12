@@ -284,6 +284,12 @@ class IdeaPart:
     section_type: SectionRole | None = None
     # Section function: what this section DOES (build, release, sustain, break, fade, hold)
     section_function: SectionFunction | None = None
+    # Modulation: how to transition INTO this part from the previous one.
+    # None = no modulation (phrase modulation — just switch scale).
+    # "pivot"    = common-chord pivot modulation (smoothest).
+    # "dominant" = V7 of new key approach.
+    # "chromatic" = chromatic approach chord.
+    modulation_strategy: str | None = None
 
     @property
     def section_role(self) -> SectionRole | None:

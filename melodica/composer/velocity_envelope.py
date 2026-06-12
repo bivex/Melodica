@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from melodica.types_pkg._notes import NoteInfo
+
+if TYPE_CHECKING:
+    from melodica.composer.tension_curve import TensionCurve
 
 
 @dataclass(slots=True)
@@ -152,3 +156,81 @@ class VelocityEnvelope:
         elif curve == "logarithmic":
             return start + (end - start) * (1 - (1 - t) ** 2)
         return start + (end - start) * t
+
+
+def tension_curve_to_envelope(
+    tension_curve: "TensionCurve",
+    *,
+    vel_min: float = 40.0,
+    vel_max: float = 110.0,
+    role: str = "lead",
+    curve: str = "exponential",
+) -> "VelocityEnvelope":
+    """Convert a TensionCurve into a VelocityEnvelope.
+
+    Maps tension 0.0→1.0 onto [vel_min, vel_max] with role-based shaping:
+
+    - lead/strings : full dynamic range (vel_min..vel_max)
+    - pad/choir    : compressed range (+10 floor, -15 ceiling) — pads swell
+                     but never overpower leads
+    - bass         : narrow range (vel_min+10..vel_min+35) — bass stays
+                     steady, only slight dynamic variation
+    - perc         : bypass — returns empty envelope (perc has its own dynamics)
+
+    The resulting envelope can be applied to any list[NoteInfo] via
+    ``envelope.apply(notes)``.
+
+    Parameters
+    ----------
+    tension_curve : TensionCurve
+        Source tension curve to convert.
+    vel_min : float
+        Minimum velocity at tension=0.
+    vel_max : float
+        Maximum velocity at tension=1.
+    role : str
+        Instrument role: "lead" | "pad" | "choir" | "bass" | "strings" | "perc"
+    curve : str
+        Interpolation shape: "linear" | "exponential" | "logarithmic"
+
+    Returns
+    -------
+    VelocityEnvelope
+        Ready to apply with envelope.apply(notes).
+    """
+    from melodica.composer.tension_curve import TensionCurve  # local import — avoid circular
+
+    if role == "perc":
+        return VelocityEnvelope(ref_velocity=80.0)
+
+    # Role-based range compression
+    if role in ("pad", "choir"):
+        lo = vel_min + 10
+        hi = vel_max - 15
+    elif role == "bass":
+        lo = vel_min + 10
+        hi = vel_min + 35
+    else:
+        lo = vel_min
+        hi = vel_max
+
+    lo = max(1.0, lo)
+    hi = min(127.0, hi)
+
+    points = tension_curve.generate()
+    env = VelocityEnvelope(ref_velocity=(lo + hi) / 2)
+
+    for pt in points:
+        t = pt.tension  # 0.0..1.0
+        if curve == "exponential":
+            t_shaped = t ** 1.5
+        elif curve == "logarithmic":
+            import math
+            t_shaped = math.log1p(t * (math.e - 1))
+        else:
+            t_shaped = t
+        vel = lo + (hi - lo) * t_shaped
+        env.add_point(pt.beat, round(vel, 1))
+
+    return env
+
