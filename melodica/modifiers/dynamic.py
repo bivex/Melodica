@@ -19,7 +19,7 @@ Layer: Application / Domain
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as _dc_replace
 
 from melodica.modifiers import ModifierContext, PhraseModifier
 from melodica.types import NoteInfo
@@ -40,13 +40,7 @@ class VelocityScalingModifier(PhraseModifier):
             new_vel = int(n.velocity * self.scale + self.add_val)
             new_vel = max(1, min(127, new_vel))
 
-            result.append(NoteInfo(
-                pitch=n.pitch,
-                start=n.start,
-                duration=n.duration,
-                velocity=new_vel,
-                absolute=n.absolute,
-            ))
+            result.append(_dc_replace(n, velocity=new_vel))
         return result
 
 
@@ -72,13 +66,7 @@ class CrescendoModifier(PhraseModifier):
             new_vel = int(self.start_vel + (self.end_vel - self.start_vel) * progress)
             new_vel = max(1, min(127, new_vel))
 
-            result.append(NoteInfo(
-                pitch=n.pitch,
-                start=n.start,
-                duration=n.duration,
-                velocity=new_vel,
-                absolute=n.absolute,
-            ))
+            result.append(_dc_replace(n, velocity=new_vel))
         return result
 
 
@@ -113,13 +101,7 @@ class SectionIntensityModifier(PhraseModifier):
             new_vel = int(self.velocity_scale * ratio * intensity)
             new_vel = max(1, min(127, new_vel))
 
-            result.append(NoteInfo(
-                pitch=n.pitch,
-                start=n.start,
-                duration=n.duration,
-                velocity=new_vel,
-                absolute=n.absolute,
-            ))
+            result.append(_dc_replace(n, velocity=new_vel))
         return result
 
     def _intensity_at(self, beat: float) -> float:
@@ -192,15 +174,7 @@ class VelocityCurveModifier(PhraseModifier):
             new_vel = int(self.start_vel + (self.end_vel - self.start_vel) * t)
             new_vel = max(1, min(127, new_vel))
 
-            result.append(
-                NoteInfo(
-                    pitch=n.pitch,
-                    start=n.start,
-                    duration=n.duration,
-                    velocity=new_vel,
-                    absolute=n.absolute,
-                )
-            )
+            result.append(_dc_replace(n, velocity=new_vel))
         return result
 
 
