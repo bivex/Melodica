@@ -30,11 +30,13 @@ def test_c_major_melody_snapshot():
     result = [f"{note_names[c.root]} {c.quality.name}" for c in chords]
 
     # Golden reference progression.
-    # Updated 2026-06: default emission_weight raised 1.0 -> 20.0 to fix a
-    # scale-imbalance bug, AND anti-stagnation penalty restricted to interval==0
-    # (literal chord repeats) so the I-IV-V backbone of major-triad progressions
-    # is no longer pushed off-tonic. Each chord contains both notes of its bar:
-    #   [C E]->Cmaj7  [F A]->Fmaj7  [G B]->Cmaj7  [C E]->Cmaj7
-    expected = ['C MAJOR7', 'F MAJOR7', 'C MAJOR7', 'C MAJOR7']
+    # Updated 2026-06: three coupled-HMM fixes landed —
+    #   1. emission_weight default 1.0 -> 20.0 (notes were drowned by structure)
+    #   2. anti-stagnation restricted to interval==0 (I-IV-V no longer pushed off-tonic)
+    #   3. modal type-priors use chord-tone fit RATIO not an absolute count, so
+    #      basic triads outrank 7ths (the old `fit_score>=3` was unreachable for
+    #      triads, forcing maj7 everywhere). Result now prefers clean triads:
+    #   [C E]->C major  [F A]->F major  [G B]->C major7  [C E]->C major
+    expected = ['C MAJOR', 'F MAJOR', 'C MAJOR7', 'C MAJOR']
 
     assert result == expected, f"Progression changed! Got {result}, expected {expected}"

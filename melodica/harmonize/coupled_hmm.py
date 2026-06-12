@@ -151,27 +151,35 @@ def _init_modal_priors():
             else:
                 offset_logs[m_idx, pc] = math.log(0.55 / (len(scale_pcs) - 1))
             
-        # 2. Chord types: check which types fit the scale notes best
+        # 2. Chord types: prior reflects how completely the chord's tones fit
+        #    the mode (built on the tonic, offset 0). The score is the RATIO of
+        #    matched chord tones to total chord tones — NOT an absolute count.
+        #    (Absolute counts were unreachable for triads: a triad has only a
+        #    3rd and 5th, max 2 matches, so the old `fit_score >= 3` threshold
+        #    could never fire for triads — they were stuck at 0.05-0.10 while
+        #    7ths/9ths got 0.25, inverting the intended "prefer basic triads
+        #    then 7ths then 9ths" preference and biasing the key layer toward
+        #    extended chords.)
         for t_idx, (third, fifth, seventh, ninth) in enumerate(type_intervals):
-            # A chord type is "diatonic" if its notes are generally found in the mode
-            fit_score = 0
-            if third in scale_pcs: fit_score += 1
-            if fifth in scale_pcs: fit_score += 1
-            if seventh is not None and seventh in scale_pcs: fit_score += 1
-            if ninth is not None and ninth in scale_pcs: fit_score += 1
-            
-            # Base probability based on fit
-            # Prefer basic triads, then 7ths, then 9ths/extensions
-            if fit_score >= 3:
-                if t_idx < 3:    # Major, Minor, Diminished
+            tones = [third, fifth]
+            if seventh is not None:
+                tones.append(seventh)
+            if ninth is not None:
+                tones.append(ninth)
+            matched = sum(1 for x in tones if x in scale_pcs)
+            total = len(tones)
+            ratio = matched / total
+
+            if ratio >= 0.999:  # fully diatonic on the tonic
+                if t_idx < 3:    # Major, Minor, Diminished triads
                     type_priors[m_idx, t_idx] = 0.35
                 elif t_idx < 9:  # Augmented, sus, 7ths
                     type_priors[m_idx, t_idx] = 0.25
                 else:            # 9ths, add9
                     type_priors[m_idx, t_idx] = 0.15
-            elif fit_score == 2:
+            elif ratio >= 0.66:
                 type_priors[m_idx, t_idx] = 0.10
-            
+
             # Special case for Dominant 7 (often used even if not strictly diatonic)
             if t_idx == 8 and 4 in scale_pcs and 10 in scale_pcs:
                 type_priors[m_idx, t_idx] = 0.20
