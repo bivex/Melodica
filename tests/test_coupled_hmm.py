@@ -156,6 +156,59 @@ class TestLogEmitKey:
 
 
 # ===========================================================================
+# 2b. Emission parity: vectorized hot path == reference scalar method
+# ===========================================================================
+
+class TestEmissionParity:
+    """Lock the invariant that the vectorized emission in _viterbi_chords
+    produces the same values as the reference _log_emit_chord scalar method.
+
+    These two implementations are independent (one is hand-vectorized in numpy
+    for speed, the other is the canonical definition tested above). If anyone
+    edits one without the other, harmonization silently drifts. This test is
+    the tripwire.
+    """
+
+    def _vectorized_emit(self, wpcs):
+        """Reproduce the hot-path emission block from _viterbi_chords
+        (emission_weight=1.0, before the extended-chord penalty)."""
+        if not wpcs:
+            return np.full((N_TONES, N_TYPES), -20.0)
+        step_emit = np.zeros((N_TONES, N_TYPES))
+        total_w = 0.0
+        for wn in wpcs:
+            off = np.arange(N_TONES, dtype=np.intp)
+            off = (wn.pitch_class - off) % N_TONES
+            step_emit += wn.weight * LOG_PNOTE[off]
+            total_w += wn.weight
+        return step_emit / (total_w + 1e-6)
+
+    def test_parity_single_note(self):
+        wpcs = [WeightedNote(0, 1.0)]
+        vec = self._vectorized_emit(wpcs)
+        for root in range(N_TONES):
+            for t in range(N_TYPES):
+                ref = CoupledHMMHarmonizer._log_emit_chord(wpcs, root, t)
+                assert abs(vec[root, t] - ref) < 1e-9, f"mismatch root={root} type={t}"
+
+    def test_parity_triad(self):
+        wpcs = [WeightedNote(pc, 1.0) for pc in (0, 4, 7)]
+        vec = self._vectorized_emit(wpcs)
+        for root in range(N_TONES):
+            for t in range(N_TYPES):
+                ref = CoupledHMMHarmonizer._log_emit_chord(wpcs, root, t)
+                assert abs(vec[root, t] - ref) < 1e-9
+
+    def test_parity_weighted_notes(self):
+        wpcs = [WeightedNote(0, 0.5), WeightedNote(4, 2.0), WeightedNote(7, 1.3)]
+        vec = self._vectorized_emit(wpcs)
+        for root in range(N_TONES):
+            for t in range(N_TYPES):
+                ref = CoupledHMMHarmonizer._log_emit_chord(wpcs, root, t)
+                assert abs(vec[root, t] - ref) < 1e-9
+
+
+# ===========================================================================
 # 3. _viterbi_chords
 # ===========================================================================
 
