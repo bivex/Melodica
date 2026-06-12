@@ -93,10 +93,12 @@ def _load_weights():
             "Run scripts/train_full_modes.py first."
         )
 
-    # pnote: shape [12, 6] — pnote[pitch_offset, chord_type]
+    # pnote: shape [12, 12] — pnote[pitch_offset, chord_type]
+    #   pitch_offset = (pitch_class - chord_root) % 12, chord_type in 0..11 (see TYPE_TO_QUALITY)
     pnote = np.loadtxt(pnote_path)
 
-    # pchange: shape [6, 12, 6] — pchange[type_prev, interval, type_next]
+    # pchange: shape [12, 12, 12] — pchange[type_prev, root_interval, type_next]
+    #   root_interval = (root_next - root_prev) % 12
     pchange = np.load(pchange_path)
 
     return pnote, pchange
@@ -326,7 +328,9 @@ class CoupledHMMHarmonizer:
 
         NEG_INF = -1e12
 
-        # Pre-compute emissions via vectorized _log_emit_chord
+        # Pre-compute emissions inline (vectorized). This mirrors the reference
+        # implementation in _log_emit_chord; the invariant that both agree is
+        # locked by tests/test_coupled_hmm.py::TestEmissionParity.
         emit = np.zeros((T, N_TONES, N_TYPES))
 
         for t_step in range(T):
@@ -579,7 +583,13 @@ class CoupledHMMHarmonizer:
 
     @staticmethod
     def _log_emit_chord(weighted_pcs: list[WeightedNote], root: int, type_idx: int) -> float:
-        """log P(weighted_pitch_classes | chord root, type) with normalization."""
+        """log P(weighted_pitch_classes | chord root, type) with normalization.
+
+        REFERENCE implementation. The hot path in _viterbi_chords computes the
+        same quantity vectorized over all (root, type) at once for speed; this
+        scalar form is the canonical definition and is the oracle that
+        TestEmissionParity checks the vectorized path against. Keep them in sync.
+        """
         if not weighted_pcs:
             return -1.0
 
