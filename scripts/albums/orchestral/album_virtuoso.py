@@ -183,9 +183,14 @@ def track_01_aurora():
         articulation="legato").render(chords, key, dur), 45, 92), dur)
 
     harp_raw = _clamp(HarpGenerator(
-        GeneratorParams(density=0.5, key_range_low=55, key_range_high=88),
+        GeneratorParams(density=0.25, key_range_low=55, key_range_high=88),
         pattern="arpeggio", direction="up_down", octave_span=4).render(chords, key, dur - 4.0), 35, 80)
     harp = _thin(_off(harp_raw, 4.0), dur)
+
+    # ARR-4: second contrabass for extra LOW mass (different articulation = independent voice)
+    bass2 = _clamp(ContrabassGenerator(
+        GeneratorParams(density=0.5, key_range_low=24, key_range_high=36),
+        articulation="pizzicato").render(chords, key, dur), 40, 70)
 
     glock_raw = _clamp(GlockenspielGenerator(
         GeneratorParams(density=0.5, key_range_low=84, key_range_high=104),
@@ -198,11 +203,11 @@ def track_01_aurora():
     strings = _thin(_off(strings_raw, 4.0), dur)
 
     cello = _clamp(CelloGenerator(
-        GeneratorParams(density=0.25, key_range_low=36, key_range_high=55),
+        GeneratorParams(density=0.4, key_range_low=36, key_range_high=48),
         articulation="legato").render(chords, key, dur), 35, 65)
 
     bass = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
+        GeneratorParams(density=0.95, key_range_low=24, key_range_high=40),
         articulation="legato").render(chords, key, dur), 45, 80)
 
     # ARR-8 fix: pedal point on tonic C (MIDI 24) — oblique motion vs bass
@@ -211,7 +216,7 @@ def track_01_aurora():
     return {
         "Lead": _clamp(lead, 55, 95), "Violin1": violin, "Harp": harp,
         "Glock": glock, "Strings": strings, "Cello": cello, "Bass": bass,
-        "Pedal": pedal,
+        "Bass2": bass2, "Pedal": pedal,
     }, bpm
 
 
@@ -451,7 +456,7 @@ def track_05_apotheosis():
 TRACKS = [
     (track_01_aurora, "01_Aurora_Borealis.mid", {
         "Lead": 40, "Violin1": 40, "Harp": 46, "Glock": 9,
-        "Strings": 48, "Cello": 42, "Bass": 43, "Pedal": 43,
+        "Strings": 48, "Cello": 42, "Bass": 43, "Bass2": 43, "Pedal": 43,
     }),
     (track_02_chase, "02_The_Chase.mid", {
         "Lead": 40, "Ostinato": 45, "Violin1": 40, "Tremolo": 44,

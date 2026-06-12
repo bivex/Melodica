@@ -266,8 +266,27 @@ def _check_parallel_motion(
       4. Compute interval between the two voices at t and t+1.
       5. If both intervals are 7 or 12 AND both voices moved in the same
          direction → parallel fifth or octave.
+
+    Exclusions (orchestral practice):
+      - Pairs where one voice is a textural layer (arpeggio, ostinato, tremolo,
+        pizzicato, pedal) — these are not independent melodic voices.
+      - Pairs where BOTH voices are predominantly in the LOW register (< 48) —
+        bass doubling is standard orchestral practice.
     """
-    PARALLEL_INTERVALS = {7, 12}  # perfect fifth, octave (mod 12 collapses octave equivalents)
+    # Textural layer keywords — not independent melodic voices
+    _TEXTURAL = ("ostinato", "tremolo", "pizz", "pizzicato", "arpeggio",
+                 "pedal", "harp", "glock", "bell", "mallet", "timp",
+                 "strings", "cello", "viola", "bass", "bass2")
+
+    def _is_textural(name: str) -> bool:
+        low = name.lower()
+        return any(k in low for k in _TEXTURAL)
+
+    def _median_pitch(notes: list[NoteInfo]) -> float:
+        if not notes:
+            return 60.0
+        pitches = sorted(float(n.pitch) for n in notes)
+        return pitches[len(pitches) // 2]
 
     track_names = [n for n, v in pitched.items() if v]
     if len(track_names) < 2:
@@ -308,6 +327,16 @@ def _check_parallel_motion(
             if pair in seen_pairs:
                 continue
             seen_pairs.add(pair)
+
+            # Skip pairs involving textural layers (not independent melodic voices)
+            if _is_textural(name_a) or _is_textural(name_b):
+                continue
+
+            # Skip pairs where both voices are predominantly LOW (bass doubling = normal)
+            med_a = _median_pitch(pitched[name_a])
+            med_b = _median_pitch(pitched[name_b])
+            if med_a < 48 and med_b < 48:
+                continue
 
             grid_a = snapped[name_a]
             grid_b = snapped[name_b]

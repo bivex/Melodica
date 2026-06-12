@@ -463,6 +463,10 @@ def export_multitrack_midi(
         last_tick = tick
 
 
+    # 1b. Voice-leading correction — resolve parallel fifths/octaves before MIDI write.
+    from melodica.voice_leading import correct_parallels as _correct_parallels
+    tracks_data = _correct_parallels(tracks_data, instruments=instruments)
+
     # 2. Dynamic voice channel pool allocation to prevent polyphonic pitch bend overlap.
     # Identify which tracks in tracks_data contain microtonal notes.
     mpe_set = mpe_tracks or set()
