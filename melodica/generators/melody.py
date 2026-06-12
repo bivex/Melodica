@@ -533,6 +533,19 @@ class MelodyGenerator(PhraseGenerator):
                 section_type=context.section_role if context else None,
             )
 
+        # Note-density gate: drop notes that onset closer than min_note_gap
+        # beats to the previously kept note. Prevents cluster mud. Operates on
+        # the final note list (after fills/ornaments may have added notes).
+        if self.min_note_gap > 0 and notes:
+            notes.sort(key=lambda n: n.start)
+            gated: list[types.NoteInfo] = [notes[0]]
+            last_onset = notes[0].start
+            for n in notes[1:]:
+                if n.start - last_onset >= self.min_note_gap - 1e-9:
+                    gated.append(n)
+                    last_onset = n.start
+            notes = gated
+
         # Context
         motif_memory = motif_mgr._stored_motif[-8:] if motif_mgr._stored_motif else []
         if notes:
