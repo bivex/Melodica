@@ -405,6 +405,7 @@ def main():
             bpm=bpm,
             cc_events=pan,
             instruments=instruments,
+            reaper_project=True,
         )
         nc = sum(len(n) for n in raw.values())
         total_notes += nc
