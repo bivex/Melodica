@@ -252,7 +252,7 @@ def track_02_chase():
 
     return {
         "Lead": _clamp(lead, 60, 100), "Ostinato": ostinato, "Violin1": violin,
-        "Tremolo": tremolo, "Flute": flute, "Bass": bass, "Pedal": pedal, "Timpani": timp,
+        "Tremolo": tremolo, "Flute": flute, "Glock": glock, "Bass": bass, "Pedal": pedal, "Timpani": timp,
     }, bpm
 
 
@@ -293,6 +293,12 @@ def track_03_cathedral():
         GeneratorParams(density=0.2, key_range_low=60, key_range_high=84)
     ).render(chords, key, dur), 45, 85), dur)
 
+    # ARR-4: glockenspiel for HIGH register
+    glock_raw = _clamp(GlockenspielGenerator(
+        GeneratorParams(density=0.35, key_range_low=84, key_range_high=104),
+        pattern="sparkling_run", note_density=0.9).render(chords, key, dur - 8.0), 35, 68)
+    glock = _thin(_off(glock_raw, 8.0), dur)
+
     bass = _clamp(ContrabassGenerator(
         GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
         articulation="legato").render(chords, key, dur), 45, 82)
@@ -304,8 +310,8 @@ def track_03_cathedral():
 
     return {
         "Lead": _clamp(lead, 50, 88), "Choir": choir, "Brass": brass,
-        "Horns": horns, "Strings": strings, "Bells": bells, "Bass": bass,
-        "Pedal": pedal,
+        "Horns": horns, "Strings": strings, "Bells": bells, "Glock": glock,
+        "Bass": bass, "Pedal": pedal,
     }, bpm
 
 
@@ -344,12 +350,12 @@ def track_04_embers():
         instrument="marimba", pattern="run").render(chords, key, dur), 45, 85), dur)
 
     bass = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
+        GeneratorParams(density=0.85, key_range_low=24, key_range_high=38),
         articulation="pizzicato").render(chords, key, dur), 50, 88)
 
     # ARR-4: deep low contrabass layer
     pedal = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.6, key_range_low=24, key_range_high=36),
+        GeneratorParams(density=0.7, key_range_low=24, key_range_high=33),
         articulation="pizzicato").render(chords, key, dur), 45, 80)
 
     return {
@@ -435,11 +441,11 @@ TRACKS = [
     }),
     (track_02_chase, "02_The_Chase.mid", {
         "Lead": 40, "Ostinato": 45, "Violin1": 40, "Tremolo": 44,
-        "Flute": 73, "Bass": 43, "Pedal": 43, "Timpani": 47,
+        "Flute": 73, "Glock": 9, "Bass": 43, "Pedal": 43, "Timpani": 47,
     }),
     (track_03_cathedral, "03_Cathedral_of_Light.mid", {
         "Lead": 73, "Choir": 52, "Brass": 61, "Horns": 60,
-        "Strings": 48, "Bells": 14, "Bass": 43, "Pedal": 43,
+        "Strings": 48, "Bells": 14, "Glock": 9, "Bass": 43, "Pedal": 43,
     }),
     (track_04_embers, "04_Dance_of_Embers.mid", {
         "Lead": 68, "Canon": 71, "Pizzicato": 45, "Oboe": 68,
