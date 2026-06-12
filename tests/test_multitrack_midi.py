@@ -139,12 +139,14 @@ class TestExportMultitrackBasic:
                 "lead": _make_notes(72),
                 "Chaos_Taiko": _make_notes(40),
                 "perc_loop": _make_notes(42),
+                "ghosts": _make_notes(38),
             },
             path,
         )
         chans = self._track_channels(path)
         assert chans["Chaos_Taiko"] == {9}
         assert chans["perc_loop"] == {9}
+        assert chans["ghosts"] == {9}
         assert 9 not in chans["lead"]
 
     def test_note_roundtrip(self, tmp_path):

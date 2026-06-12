@@ -468,7 +468,7 @@ def export_multitrack_midi(
     # name matches a drum/percussion keyword, or its explicit GM program is
     # the drum/percussion alias (0 via the "drums"/"percussion" GM entries).
     DRUM_CHANNEL = 9
-    _PERC_KEYWORDS = ("drum", "percussion", "perc", "kit", "taiko", "timpani")
+    _PERC_KEYWORDS = ("drum", "percussion", "perc", "kit", "taiko", "timpani", "ghost")
 
     def _is_percussion(name: str) -> bool:
         low = name.lower()
