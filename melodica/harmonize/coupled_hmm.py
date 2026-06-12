@@ -431,7 +431,18 @@ class CoupledHMMHarmonizer:
                     
                     # Base transition matrix lookup [k_prev, k_curr]
                     trans_base = LOG_PCHANGE[:, interval, :].copy()
-                    np.fill_diagonal(trans_base, trans_base.diagonal() - self.config.anti_stagnation_penalty)
+                    # Anti-stagnation: penalize a LITERALLY repeated chord
+                    # (same root AND same type). Only the root-static case
+                    # (interval == 0) is true stagnation; a type repeat across
+                    # a changed root (e.g. C major -> F major -> G major, the
+                    # I-IV-V backbone) is normal harmony and must NOT be
+                    # penalized, or diatonic progressions get pushed off their
+                    # own tonic.
+                    if interval == 0:
+                        np.fill_diagonal(
+                            trans_base,
+                            trans_base.diagonal() - self.config.anti_stagnation_penalty,
+                        )
                     
                     # Combine path scores and transitions
                     scores = max_prevprev[:, None] + trans_base

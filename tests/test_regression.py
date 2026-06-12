@@ -31,11 +31,10 @@ def test_c_major_melody_snapshot():
 
     # Golden reference progression.
     # Updated 2026-06: default emission_weight raised 1.0 -> 20.0 to fix a
-    # scale-imbalance bug where normalized emissions (~[-1,0]) were drowned out
-    # by structural biases (2-4), causing chords to ignore the melody. Each
-    # chord now contains both notes of its bar window:
-    #   [C E]->Cmaj7  [F A]->Fadd9  [G B]->Cmaj7  [C E]->Cmaj7
-    # (Previously bar2 gave C SUS4 — missing the A — and bar3 gave G7.)
-    expected = ['C MAJOR7', 'F ADD9', 'C MAJOR7', 'C MAJOR7']
+    # scale-imbalance bug, AND anti-stagnation penalty restricted to interval==0
+    # (literal chord repeats) so the I-IV-V backbone of major-triad progressions
+    # is no longer pushed off-tonic. Each chord contains both notes of its bar:
+    #   [C E]->Cmaj7  [F A]->Fmaj7  [G B]->Cmaj7  [C E]->Cmaj7
+    expected = ['C MAJOR7', 'F MAJOR7', 'C MAJOR7', 'C MAJOR7']
 
     assert result == expected, f"Progression changed! Got {result}, expected {expected}"
