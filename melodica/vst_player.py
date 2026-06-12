@@ -171,45 +171,56 @@ def _notes_to_mido_messages(
     channel: int = 0,
     program: int | None = None,
 ) -> list[mido.Message]:
-    """Convert NoteInfo list to timed mido Messages for pedalboard."""
+    """Convert NoteInfo list to absolute-timed mido Messages for pedalboard.
+
+    pedalboard expects ``time`` as absolute seconds from the start of the buffer.
+    Events are sorted so note_off precedes note_on at the same timestamp.
+    """
     beat_sec = 60.0 / bpm
-    msgs: list[mido.Message] = []
+
+    events: list[tuple[float, int, dict]] = []
 
     if program is not None:
-        msgs.append(mido.Message("program_change", program=program, channel=channel, time=0))
+        events.append((0.0, 0, dict(type="program_change", program=program, channel=channel)))
 
     for n in notes:
         onset = max(0.0, n.start) * beat_sec
         offset = (n.start + n.duration) * beat_sec
-        msgs.append(
-            mido.Message("note_on", note=n.pitch, velocity=n.velocity, channel=channel, time=onset)
-        )
-        msgs.append(
-            mido.Message("note_off", note=n.pitch, velocity=0, channel=channel, time=offset)
-        )
+        events.append((onset,  1, dict(type="note_on",  note=n.pitch, velocity=n.velocity, channel=channel)))
+        events.append((offset, 0, dict(type="note_off", note=n.pitch, velocity=0,          channel=channel)))
+
+    # sort by abs time; note_off (priority 0) before note_on (priority 1) at same time
+    events.sort(key=lambda e: (e[0], e[1]))
+
+    msgs: list[mido.Message] = []
+    for abs_time, _, kw in events:
+        msg_type = kw.pop("type")
+        msgs.append(mido.Message(msg_type, **kw, time=abs_time))
 
     return msgs
 
 
 def _tracks_to_mido_messages(tracks: list[Track], bpm: float) -> list[mido.Message]:
-    """Convert Track list to timed mido Messages for pedalboard."""
+    """Convert Track list to absolute-timed mido Messages for pedalboard."""
     beat_sec = 60.0 / bpm
-    msgs: list[mido.Message] = []
+
+    events: list[tuple[float, int, dict]] = []
 
     for t in tracks:
         ch = t.channel
-        msgs.append(
-            mido.Message("program_change", program=t.program, channel=ch, time=0)
-        )
+        events.append((0.0, 0, dict(type="program_change", program=t.program, channel=ch)))
         for n in t.notes:
             onset = max(0.0, n.start) * beat_sec
             offset = (n.start + n.duration) * beat_sec
-            msgs.append(
-                mido.Message("note_on", note=n.pitch, velocity=n.velocity, channel=ch, time=onset)
-            )
-            msgs.append(
-                mido.Message("note_off", note=n.pitch, velocity=0, channel=ch, time=offset)
-            )
+            events.append((onset,  1, dict(type="note_on",  note=n.pitch, velocity=n.velocity, channel=ch)))
+            events.append((offset, 0, dict(type="note_off", note=n.pitch, velocity=0,          channel=ch)))
+
+    events.sort(key=lambda e: (e[0], e[1]))
+
+    msgs: list[mido.Message] = []
+    for abs_time, _, kw in events:
+        msg_type = kw.pop("type")
+        msgs.append(mido.Message(msg_type, **kw, time=abs_time))
 
     return msgs
 
