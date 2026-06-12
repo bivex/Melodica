@@ -14,3 +14,4 @@
 from .modes import Mode, ScaleDefinition, MODE_DATABASE, get_mode_intervals, pick_modes
 from .chords import Quality, CHORD_TEMPLATES
 from .voicing import chord_to_notes, inversions, voice_motion_cost, voice_lead
+from .modulation import ModulationEngine, ArticulationProfile, ARTICULATION_PROFILES, apply_articulation
