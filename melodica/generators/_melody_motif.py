@@ -117,17 +117,31 @@ class MotifManager:
     # Variation implementations
     # ------------------------------------------------------------------
 
+    def _fit_anchor(self, anchor: int, span_lo: int, span_hi: int, low: int, high: int) -> int:
+        """Octave-fold the anchor so a motif spanning [span_lo, span_hi] above it
+        stays within [low, high]. Prevents the motif climbing to the register
+        ceiling each cycle (ascending motifs would otherwise stack upward)."""
+        # anchor + span_hi must be <= high, anchor + span_lo must be >= low
+        while anchor + span_hi > high and anchor - 12 >= low - span_lo:
+            anchor -= 12
+        while anchor + span_lo < low and anchor + 12 + span_hi <= high:
+            anchor += 12
+        return anchor
+
     def _apply_transpose(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
         """Transpose the stored motif so its first note lands on the anchor.
 
         The anchor is captured at the start of each motif cycle (i==0) from
         prev_pitch, then held for the rest of the cycle so the stored contour
         is reproduced verbatim instead of compounding off each emitted note.
+        The anchor is octave-folded to keep the motif body in range.
         """
         motif = self._stored_motif
         i = idx % len(motif)
         if i == 0 or self._motif_anchor is None:
-            self._motif_anchor = prev_pitch
+            # span of motif relative to its first note
+            rel = [m - motif[0] for m in motif]
+            self._motif_anchor = self._fit_anchor(prev_pitch, min(rel), max(rel), low, high)
         offset = self._motif_anchor - motif[0]
         pitch = motif[i] + offset
         return snap_to_scale(max(low, min(high, pitch)), key)

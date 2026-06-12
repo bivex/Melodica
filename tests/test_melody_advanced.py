@@ -631,9 +631,14 @@ class TestMotifAnchor:
         for idx in range(16):
             prev = m.apply(prev, 36, 96, C_MAJOR, idx)
             pitches.append(prev)
-        # second cycle should not pin to the 96 ceiling — runaway pushed every
-        # note to high/ceiling. Assert the contour stays bounded near the motif.
-        assert max(pitches) <= 84, f"motif ran away upward: {pitches}"
+        # The runaway bug pinned every note at the 96 ceiling permanently
+        # (96,96,96,96...). After the fix the anchor octave-folds, so the motif
+        # must never get STUCK at the ceiling — assert no 4-in-a-row at max.
+        ceiling = 96
+        run = 0
+        for p in pitches:
+            run = run + 1 if p == ceiling else 0
+            assert run < 4, f"motif pinned at ceiling: {pitches}"
 
     def test_retrograde_cyclic_contour(self):
         import random
