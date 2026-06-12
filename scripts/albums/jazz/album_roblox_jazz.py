@@ -67,16 +67,14 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 _harmonizer = CoupledHMMHarmonizer(beam_width=14, chord_change="half")
 
-# ── Surge XT VST3 preset mapping (track 01 instruments) ─────────────────
+# ── Surge XT VST3 render (track 01 instruments) ─────────────────────────
+# NOTE: Surge XT cannot load .fxp presets headless through pedalboard
+# (load_preset expects .vstpreset; XML param-mapping mutes the synth).
+# We render through Surge's default patch — one synth timbre for all parts.
 SURGE_VST = "/Library/Audio/Plug-Ins/VST3/Surge XT.vst3"
-SURGE_PRESETS = "/Library/Application Support/Surge XT"
 
-_TRACK01_PRESETS: dict[str, str] = {
-    "shell":     "/Library/Application Support/Surge XT/patches_3rdparty/Dan Maurer/Keys/FM Acoustic Piano 1.fxp",
-    "bass":      "/Library/Application Support/Surge XT/patches_3rdparty/Malfunction/Basses/Jazz Man.fxp",
-    "enclosure": "/Library/Application Support/Surge XT/patches_3rdparty/Malfunction/Brass/Clean Trumpet.fxp",
-    # drums skipped — no melodic VST preset
-}
+# Instruments of track 01 to route through the VST (drums excluded).
+_TRACK01_INSTRUMENTS: tuple[str, ...] = ("shell", "bass", "enclosure")
 
 _TRACK01_GAINS: dict[str, float] = {
     "shell": 0.75, "bass": 0.65, "enclosure": 0.70,
@@ -88,10 +86,10 @@ def _render_track01_mp3(
     path: Path,
     bpm: float,
 ) -> None:
-    """Render track 01 through Surge XT VST3 → WAV → MP3.
+    """Render track 01 through Surge XT VST3 (default patch) → WAV → MP3.
 
-    Each instrument gets a fresh VSTPlayer instance to avoid preset state bleed.
-    Drums are excluded (no melodic VST preset).
+    Each instrument gets a fresh VSTPlayer instance. Drums are excluded
+    (no melodic VST). Presets are not loaded — see module note above.
     """
     import subprocess
     import tempfile
@@ -100,16 +98,11 @@ def _render_track01_mp3(
     sr = 44100
     mix_buf: np.ndarray | None = None
 
-    for name, notes in tracks.items():
-        preset = _TRACK01_PRESETS.get(name)
-        if not preset or not notes:
+    for name in _TRACK01_INSTRUMENTS:
+        notes = tracks.get(name)
+        if not notes:
             continue
         with VSTPlayer(SURGE_VST, sample_rate=sr, normalize=False) as player:
-            try:
-                player.load_preset(preset)
-            except Exception as e:
-                print(f"  [VST] preset '{name}': {e}, skipping")
-                continue
             audio = player.render_notes(notes, bpm=bpm)
 
         audio = audio * _TRACK01_GAINS.get(name, 0.7)
