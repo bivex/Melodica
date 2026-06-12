@@ -72,9 +72,9 @@ SURGE_VST = "/Library/Audio/Plug-Ins/VST3/Surge XT.vst3"
 SURGE_PRESETS = "/Library/Application Support/Surge XT"
 
 _TRACK01_PRESETS: dict[str, str] = {
-    "shell":     f"{SURGE_PRESETS}/patches_3rdparty/Luna/Keys/Alias Glass Piano 1.fxp",
-    "bass":      f"{SURGE_PRESETS}/patches_3rdparty/LinnStrument MPE/Basses/String Bass.fxp",
-    "enclosure": f"{SURGE_PRESETS}/patches_3rdparty/Argitoth/Winds/Asian Flute.fxp",
+    "shell":     "/Library/Application Support/Surge XT/patches_3rdparty/Dan Maurer/Keys/FM Acoustic Piano 1.fxp",
+    "bass":      "/Library/Application Support/Surge XT/patches_3rdparty/Malfunction/Basses/Jazz Man.fxp",
+    "enclosure": "/Library/Application Support/Surge XT/patches_3rdparty/Malfunction/Brass/Clean Trumpet.fxp",
     # drums skipped — no melodic VST preset
 }
 
