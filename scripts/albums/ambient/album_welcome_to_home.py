@@ -106,60 +106,83 @@ def _render_mp3(
     bpm: float,
     track_presets: dict[str, str] | None = None,
 ):
-    """Render all tracks through Surge XT VST3 → mix → MP3."""
-    import subprocess, tempfile
+    """Render all tracks through Surge XT VST3 → mix → MP3.
+
+    Each track gets a fresh VSTPlayer instance so preset state never bleeds
+    between instruments.
+    """
+    import subprocess
+    import tempfile
+    from pedalboard.io import AudioFile
 
     sr = 44100
     presets = track_presets or VST_PRESETS
     mix_buf: np.ndarray | None = None
-    desk = MixingDesk(niche_cfg={})
-    desk.track_gains.update({
+    track_gains: dict[str, float] = {
         "piano": 0.8, "harp": 0.7, "flute": 0.75, "cello": 0.55,
         "pad": 0.45, "choir": 0.5, "drone": 0.4, "bowl": 0.55,
         "guitar": 0.65, "strings": 0.55, "arp": 0.5, "bass": 0.4,
         "bells": 0.45, "vibes": 0.5, "glock": 0.4, "motif": 0.6,
         "pad_space": 0.45,
-    })
+    }
 
-    with VSTPlayer(SURGE_VST, sample_rate=sr, normalize=False) as player:
-        for name, notes in tracks.items():
-            if not notes:
-                continue
-            preset = presets.get(name)
-            if not preset:
-                continue
+    for name, notes in tracks.items():
+        if not notes:
+            continue
+        preset = presets.get(name)
+        if not preset:
+            print(f"  [VST] no preset for '{name}', skipping")
+            continue
+        # Fresh player per track — avoids synth state bleed between presets
+        with VSTPlayer(SURGE_VST, sample_rate=sr, normalize=False) as player:
             try:
                 player.load_preset(preset)
             except Exception as e:
-                print(f"  [VST] preset {name}: {e}, skipping")
+                print(f"  [VST] preset '{name}': {e}, skipping")
                 continue
             audio = player.render_notes(notes, bpm=bpm)
-            # Apply gain
-            gain = desk.track_gains.get(name, 0.7)
-            audio = audio * gain
-            # Pad/trim to same length
-            if mix_buf is None:
-                mix_buf = np.zeros_like(audio)
-            if audio.shape[1] > mix_buf.shape[1]:
-                mix_buf = np.pad(mix_buf, ((0, 0), (0, audio.shape[1] - mix_buf.shape[1])))
-            elif audio.shape[1] < mix_buf.shape[1]:
-                audio = np.pad(audio, ((0, 0), (0, mix_buf.shape[1] - audio.shape[1])))
+
+        gain = track_gains.get(name, 0.7)
+        audio = audio * gain
+
+        # Align buffer lengths before summing
+        if mix_buf is None:
+            mix_buf = audio
+        else:
+            len_mix = mix_buf.shape[1]
+            len_trk = audio.shape[1]
+            if len_trk > len_mix:
+                mix_buf = np.pad(mix_buf, ((0, 0), (0, len_trk - len_mix)))
+            elif len_trk < len_mix:
+                audio = np.pad(audio, ((0, 0), (0, len_mix - len_trk)))
             mix_buf = mix_buf + audio
 
     if mix_buf is None:
         print(f"  [VST] no audio rendered for {path}")
         return
 
-    # Normalize mix
+    # Normalize mix to -1 dBFS
     peak = np.max(np.abs(mix_buf))
     if peak > 0:
         mix_buf = mix_buf / peak * 0.9
 
-    path = Path(path).with_suffix(".wav")
-    from pedalboard.io import AudioFile
-    with AudioFile(str(path), "w", sr, mix_buf.shape[0]) as f:
-        f.write(mix_buf)
-    print(f"  → {path} ({mix_buf.shape[1] / sr:.1f}s)")
+    # Write WAV then encode to MP3 via ffmpeg
+    assert mix_buf is not None
+    mp3_path = Path(path).with_suffix(".mp3")
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        wav_path = tmp.name
+    try:
+        with AudioFile(wav_path, "w", sr, mix_buf.shape[0]) as f:
+            f.write(mix_buf)
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", wav_path,
+             "-codec:a", "libmp3lame", "-b:a", "320k", str(mp3_path)],
+            check=True,
+            capture_output=True,
+        )
+        print(f"  → {mp3_path} ({mix_buf.shape[1] / sr:.1f}s)")
+    finally:
+        Path(wav_path).unlink(missing_ok=True)
 
 
 def _off(notes, offset):

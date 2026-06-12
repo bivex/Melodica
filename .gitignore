@@ -441,3 +441,4 @@ dist/
 # Profiling
 *.prof
 
+/.hypothesis
