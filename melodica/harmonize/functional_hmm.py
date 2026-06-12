@@ -814,24 +814,58 @@ class FunctionalHMMHarmonizer:
     def _quality_for_context(
         self, root: int, deg: int, fn: HarmonicFunction, idx: int, total: int
     ) -> Quality:
-        """Choose appropriate quality based on function and context."""
+        """Choose appropriate quality based on function and context.
+
+        Extended tensions (P2.7):
+          - TONIC deg 1: MAJOR, MAJOR7, or ADD9 — richer orchestral colour
+          - TONIC deg 6: MINOR7 (vi7 common in jazz/orchestral)
+          - SUBDOMINANT deg 2: MINOR7 or SUS4 approach
+          - SUBDOMINANT deg 4: MAJOR, ADD9, or SUS2
+          - DOMINANT: DOMINANT7, or SUS4 (suspended dominant — delayed resolution)
+          - SECONDARY: always DOMINANT7
+        """
+        r = self._rng.random()
+
         if fn == HarmonicFunction.DOMINANT:
             if idx + 1 < total:
+                # 15% chance of suspended dominant (sus4 delays resolution)
+                if r < 0.15:
+                    return Quality.SUS4
                 return Quality.DOMINANT7
             return Quality.MAJOR
+
         if fn == HarmonicFunction.SECONDARY:
             return Quality.DOMINANT7
+
         if fn == HarmonicFunction.SUBDOMINANT:
             if deg == 2:
-                return Quality.MINOR7
+                # ii: minor7 (standard) or sus2 for modal colour
+                return Quality.MINOR7 if r < 0.80 else Quality.SUS2
             if deg == 4:
-                return Quality.MAJOR
-        # Tonic: basic triad or Maj7
+                # IV: major (60%), add9 (25%), sus2 (15%)
+                if r < 0.60:
+                    return Quality.MAJOR
+                elif r < 0.85:
+                    return Quality.ADD9
+                else:
+                    return Quality.SUS2
+
+        # Tonic function
         if deg == 1:
-            return Quality.MAJOR if self._rng.random() < 0.6 else Quality.MAJOR7
-        if deg in (3, 6):
+            # I: major (50%), maj7 (30%), add9 (20%)
+            if r < 0.50:
+                return Quality.MAJOR
+            elif r < 0.80:
+                return Quality.MAJOR7
+            else:
+                return Quality.ADD9
+        if deg == 3:
             return Quality.MINOR
+        if deg == 6:
+            # vi: minor (65%), minor7 (35%)
+            return Quality.MINOR if r < 0.65 else Quality.MINOR7
         return Quality.MAJOR
+
 
     # ------------------------------------------------------------------
     # Candidate quality scoring (inspired by FHARM §4.3 parsing)

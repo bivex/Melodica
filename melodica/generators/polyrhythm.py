@@ -295,3 +295,155 @@ class PolyrhythmGenerator(PhraseGenerator):
         elif strategy == "fifth":
             return nearest_pitch((chord.root + 7) % 12, anchor)
         return nearest_pitch(chord.root, anchor)
+
+
+# ---------------------------------------------------------------------------
+# HemiolaLayer — metric destabilization before modulation / section boundary
+# ---------------------------------------------------------------------------
+
+def hemiola_layer(
+    chords: "list[ChordLabel]",
+    key: "Scale",
+    start_beat: float,
+    duration_beats: float,
+    *,
+    pitch: int = 60,
+    velocity: int = 62,
+    note_dur: float = 0.45,
+    beats_per_bar: int = 4,
+) -> "list[NoteInfo]":
+    """Generate a hemiola layer — 3-against-2 metric grouping.
+
+    Produces a stream of notes accented in groups of 3 across a region that
+    is metrically organised in groups of 2 (or 4).  The result creates the
+    characteristic 'pull' feeling used before cadences and modulation points.
+
+    Place it in the 2–4 bars before a section change for maximum effect.
+
+    Parameters
+    ----------
+    chords : list[ChordLabel]
+        Chord context (used for pitch selection).
+    key : Scale
+        Current scale (used for chord-tone snapping).
+    start_beat : float
+        Beat position where the hemiola begins.
+    duration_beats : float
+        How many beats the hemiola covers (typically 4–8).
+    pitch : int
+        Reference MIDI pitch for octave placement.
+    velocity : int
+        Base velocity. Notes on hemiola downbeats get +15.
+    note_dur : float
+        Duration of each hemiola note in beats.
+    beats_per_bar : int
+        Meter denominator (used to determine hemiola subdivision).
+
+    Returns
+    -------
+    list[NoteInfo]
+        Notes forming the hemiola layer, ready to merge into any track.
+    """
+    # Hemiola: 3 equal notes in the space of 2 beats
+    # subdivision = 2/3 of a beat
+    subdivision = (beats_per_bar * 2) / (beats_per_bar * 3)  # = 2/3
+    n_notes = max(1, int(duration_beats / subdivision))
+
+    # Snap pitch to chord tones
+    def _snap(beat: float) -> int:
+        if not chords:
+            return pitch
+        chord = chord_at(chords, beat)
+        if chord is None:
+            return pitch
+        pcs = chord.pitch_classes() if hasattr(chord, "pitch_classes") else [chord.root]
+        ref_oct = pitch // 12
+        best = pitch
+        best_dist = 127
+        for pc in pcs:
+            for oct_off in (-1, 0, 1):
+                cand = pc + (ref_oct + oct_off) * 12
+                dist = abs(cand - pitch)
+                if dist < best_dist:
+                    best_dist = dist
+                    best = cand
+        return max(0, min(127, best))
+
+    notes: list[NoteInfo] = []
+    for i in range(n_notes):
+        beat = start_beat + i * subdivision
+        # Accent every 3rd note (hemiola downbeat)
+        is_hemiola_beat = (i % 3 == 0)
+        vel = min(127, velocity + (15 if is_hemiola_beat else 0))
+        p = _snap(beat)
+        notes.append(NoteInfo(
+            pitch=p,
+            start=round(beat, 6),
+            duration=note_dur,
+            velocity=vel,
+        ))
+    return notes
+
+
+def polyrhythm_section(
+    chords: "list[ChordLabel]",
+    key: "Scale",
+    start_beat: float,
+    duration_beats: float,
+    ratio: str = "3x2",
+    *,
+    pitch_a: int = 60,
+    pitch_b: int = 67,
+    velocity: int = 58,
+    note_dur: float = 0.4,
+) -> "tuple[list[NoteInfo], list[NoteInfo]]":
+    """Generate two interlocking polyrhythm streams (A and B) as plain note lists.
+
+    Unlike PolyrhythmGenerator (which requires a full PhraseGenerator context),
+    this function works directly with beat offsets — useful in section_builder
+    and album scripts.
+
+    Parameters
+    ----------
+    ratio : str
+        \"AxB\" string — e.g. \"3x2\", \"5x4\".
+    pitch_a, pitch_b : int
+        Reference MIDI pitches for stream A and B.
+    velocity : int
+        Base velocity.
+    note_dur : float
+        Duration of each note.
+
+    Returns
+    -------
+    (stream_a, stream_b) : tuple[list[NoteInfo], list[NoteInfo]]
+    """
+    parts = ratio.lower().split("x")
+    a, b = (int(parts[0]), int(parts[1])) if len(parts) == 2 else (3, 2)
+
+    lcm_val = (a * b) // __import__("math").gcd(a, b)
+    cycle_beats = float(lcm_val)
+
+    n_cycles = max(1, int(duration_beats / cycle_beats))
+
+    stream_a: list[NoteInfo] = []
+    stream_b: list[NoteInfo] = []
+
+    for cycle in range(n_cycles):
+        base = start_beat + cycle * cycle_beats
+        step_a = cycle_beats / a
+        step_b = cycle_beats / b
+        for i in range(a):
+            beat = base + i * step_a
+            stream_a.append(NoteInfo(
+                pitch=pitch_a, start=round(beat, 6),
+                duration=note_dur, velocity=min(127, velocity + (10 if i == 0 else 0)),
+            ))
+        for i in range(b):
+            beat = base + i * step_b
+            stream_b.append(NoteInfo(
+                pitch=pitch_b, start=round(beat, 6),
+                duration=note_dur, velocity=min(127, velocity + (8 if i == 0 else 0)),
+            ))
+
+    return stream_a, stream_b
