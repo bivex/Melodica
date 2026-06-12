@@ -290,6 +290,12 @@ class IdeaPart:
     # "dominant" = V7 of new key approach.
     # "chromatic" = chromatic approach chord.
     modulation_strategy: str | None = None
+    # Variation reference: name of the IdeaPart this section is a variation of.
+    # None = original material. Set to e.g. "Theme" to mark as variation.
+    variation_of: str | None = None
+    # Variation type hint (used by VariationPlan):
+    # "melodic", "rhythmic", "harmonic", "modal", "reductive", "contrapuntal"
+    variation_type: str | None = None
 
     @property
     def section_role(self) -> SectionRole | None:
