@@ -35,6 +35,7 @@ Fixes:
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import dataclass, field
 
@@ -357,16 +358,9 @@ def apply_harmonic_shading(
             new_vel = int(n.velocity * factor)
             if new_vel != n.velocity:
                 if report: report.notes_shaded += 1
-                
+
             shaded_notes.append(
-                NoteInfo(
-                    pitch=n.pitch,
-                    start=n.start,
-                    duration=n.duration,
-                    velocity=max(1, min(127, new_vel)),
-                    articulation=n.articulation,
-                    expression=n.expression,
-                )
+                dataclasses.replace(n, velocity=max(1, min(127, new_vel)))
             )
         result[tname] = shaded_notes
     return result
@@ -384,9 +378,14 @@ def _get_consonant_pcs(current_pc: int, other_pc: int) -> list[int]:
         return _TRANSPOSE_LOOKUP[key]
     
     res = []
-    # Find all pitch classes that are consonant or mild dissonant with other_pc
+    # Find all pitch classes that are consonant or mild dissonant with other_pc.
+    # Exclude unison/octave with the other voice (iv == 0): transposing a clashing
+    # note ONTO the other note's pitch class just turns a m2/TT into a unison —
+    # a worse clash, not a resolution.
     for pc in range(12):
         iv = abs(pc - other_pc) % 12
+        if iv == 0:
+            continue
         if iv in _CONSONANT or iv in _MILD_DISSONANT:
             res.append(pc)
             
@@ -422,39 +421,21 @@ def _try_transpose(note: NoteInfo, other_pitch: int) -> NoteInfo:
             break
 
     if best_pitch != note.pitch:
-        return NoteInfo(
-            pitch=best_pitch,
-            start=note.start,
-            duration=note.duration,
-            velocity=note.velocity,
-            articulation=note.articulation,
-            expression=note.expression,
-        )
+        return dataclasses.replace(note, pitch=best_pitch)
     return note
 
 
 def _reduce_velocity(note: NoteInfo, factor: float = 0.5, min_velocity: int = 40) -> NoteInfo:
     """Reduce velocity to make clash less prominent, but stay above floor."""
-    return NoteInfo(
-        pitch=note.pitch,
-        start=note.start,
-        duration=note.duration,
+    return dataclasses.replace(
+        note,
         velocity=max(min_velocity, min(note.velocity, int(note.velocity * factor))),
-        articulation=note.articulation,
-        expression=note.expression,
     )
 
 
 def _shorten(note: NoteInfo, factor: float = 0.5) -> NoteInfo:
     """Shorten duration to reduce overlap."""
-    return NoteInfo(
-        pitch=note.pitch,
-        start=note.start,
-        duration=note.duration * factor,
-        velocity=note.velocity,
-        articulation=note.articulation,
-        expression=note.expression,
-    )
+    return dataclasses.replace(note, duration=note.duration * factor)
 
 
 # ---------------------------------------------------------------------------
@@ -671,15 +652,6 @@ def _reduce_polyphony(
                 report.polyphony_reduced += 1
             else:
                 vel = n.velocity
-            scaled.append(
-                NoteInfo(
-                    pitch=n.pitch,
-                    start=n.start,
-                    duration=n.duration,
-                    velocity=vel,
-                    articulation=n.articulation,
-                    expression=n.expression,
-                )
-            )
+            scaled.append(dataclasses.replace(n, velocity=vel))
         result[name] = scaled
     return result
