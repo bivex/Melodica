@@ -39,7 +39,7 @@ from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
-from melodica.dawdreamer_player import DawDreamerPlayer
+from melodica.reaper_player import ReaperPlayer
 
 # GM Programs
 PIANO = 0
@@ -68,12 +68,11 @@ OUT.mkdir(parents=True, exist_ok=True)
 _harmonizer = CoupledHMMHarmonizer(beam_width=14, chord_change="half")
 
 # ── Surge XT VST3 render (track 01 instruments) ─────────────────────────
-# Backend: DawDreamer (richer param surface than pedalboard, reliable state).
-# Surge XT cannot load .fxp headless (VST2 format). The robust path is saved
-# state: configure a patch once (GUI/params), snapshot via save_state() to a
-# .bin, then load it headless here. If no .bin exists for an instrument we
-# fall back to Surge's default patch.
-SURGE_VST = "/Library/Audio/Plug-Ins/VST3/Surge XT.vst3"
+# Backend: REAPER batch render. REAPER loads Surge XT .fxp presets natively
+# (it stores Surge's sub3 state chunk in the project), so we get real timbres
+# automatically — no GUI step. ReaperPlayer splices each .fxp into a reference
+# VST state block and renders headless via `REAPER -renderproject`.
+SURGE_PRESETS = "/Library/Application Support/Surge XT"
 
 # Instruments of track 01 to route through the VST (drums excluded).
 _TRACK01_INSTRUMENTS: tuple[str, ...] = ("shell", "bass", "enclosure")
@@ -82,9 +81,31 @@ _TRACK01_GAINS: dict[str, float] = {
     "shell": 0.75, "bass": 0.65, "enclosure": 0.70,
 }
 
-# Optional per-instrument saved-state presets (.bin from DawDreamerPlayer.save_state).
-# Place files under output/roblox_jazz/presets/<name>.bin to use distinct timbres.
-_PRESET_DIR = Path("output/roblox_jazz/presets")
+# Real Surge XT .fxp presets per instrument (loaded natively by REAPER).
+_TRACK01_FXP: dict[str, str] = {
+    "shell":     f"{SURGE_PRESETS}/patches_3rdparty/Dan Maurer/Keys/FM Acoustic Piano 1.fxp",
+    "bass":      f"{SURGE_PRESETS}/patches_3rdparty/Malfunction/Basses/Jazz Man.fxp",
+    "enclosure": f"{SURGE_PRESETS}/patches_3rdparty/Malfunction/Brass/Clean Trumpet.fxp",
+}
+
+
+def _load_wav(path: str) -> np.ndarray:
+    """Load a WAV (16/24/32-bit PCM) as float32 (channels, samples)."""
+    import wave
+
+    w = wave.open(path, "rb")
+    n, ch, sw = w.getnframes(), w.getnchannels(), w.getsampwidth()
+    raw = w.readframes(n)
+    w.close()
+    if sw == 2:
+        a = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    elif sw == 3:
+        b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
+        a = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
+        a = np.where(a & 0x800000, a - 0x1000000, a).astype(np.float32) / 8388608.0
+    else:
+        a = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2**31
+    return a.reshape(-1, ch).T  # (channels, samples)
 
 
 def _render_track01_mp3(
@@ -92,31 +113,32 @@ def _render_track01_mp3(
     path: Path,
     bpm: float,
 ) -> None:
-    """Render track 01 through Surge XT VST3 via DawDreamer → WAV → MP3.
+    """Render track 01 through Surge XT via REAPER (real .fxp presets) → MP3.
 
-    Each instrument gets a fresh DawDreamerPlayer. If a saved state
-    (presets/<name>.bin) exists it is loaded for a distinct timbre, else the
-    default patch is used. Drums are excluded (no melodic VST).
+    Each instrument is rendered separately with its own .fxp preset, then mixed
+    and encoded to MP3. Drums are excluded (no melodic VST).
     """
     import subprocess
     import tempfile
     import wave
 
     sr = 44100
+    player = ReaperPlayer(sample_rate=sr)
     mix_buf: np.ndarray | None = None
 
     for name in _TRACK01_INSTRUMENTS:
         notes = tracks.get(name)
         if not notes:
             continue
-        with DawDreamerPlayer(SURGE_VST, sample_rate=sr, normalize=False) as player:
-            preset_bin = _PRESET_DIR / f"{name}.bin"
-            if preset_bin.exists():
-                player.load_state(preset_bin)
-                print(f"  [VST] {name}: loaded preset {preset_bin.name}")
-            else:
-                print(f"  [VST] {name}: default patch (no preset)")
-            audio = player.render_notes(notes, bpm=bpm)
+        fxp = _TRACK01_FXP.get(name)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            stem_wav = tmp.name
+        try:
+            player.render_wav(notes, stem_wav, bpm=bpm, fxp=fxp)
+            audio = _load_wav(stem_wav)
+            print(f"  [VST] {name}: {'preset ' + Path(fxp).stem if fxp else 'default'}")
+        finally:
+            Path(stem_wav).unlink(missing_ok=True)
 
         audio = audio * _TRACK01_GAINS.get(name, 0.7)
 
