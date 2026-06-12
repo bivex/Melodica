@@ -28,8 +28,14 @@ def test_c_major_melody_snapshot():
     )
     
     result = [f"{note_names[c.root]} {c.quality.name}" for c in chords]
-    
-    # Golden reference progression
-    expected = ['C MAJOR7', 'C SUS4', 'G DOMINANT7', 'C MAJOR7']
-    
+
+    # Golden reference progression.
+    # Updated 2026-06: default emission_weight raised 1.0 -> 20.0 to fix a
+    # scale-imbalance bug where normalized emissions (~[-1,0]) were drowned out
+    # by structural biases (2-4), causing chords to ignore the melody. Each
+    # chord now contains both notes of its bar window:
+    #   [C E]->Cmaj7  [F A]->Fadd9  [G B]->Cmaj7  [C E]->Cmaj7
+    # (Previously bar2 gave C SUS4 — missing the A — and bar3 gave G7.)
+    expected = ['C MAJOR7', 'F ADD9', 'C MAJOR7', 'C MAJOR7']
+
     assert result == expected, f"Progression changed! Got {result}, expected {expected}"

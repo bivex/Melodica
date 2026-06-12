@@ -223,7 +223,7 @@ class HMMConfig:
     key_coupling_weight: float = 0.5          # Recommended range: [0.1, 4.0]. Feedback strength from Layer 2 (Key) to Layer 1 (Chords).
     tonic_bias: float = 2.0                   # Recommended range: [1.0, 4.0]. Starting bias favoring the initial scale root.
     epsilon: float = 1e-8                     # Small constant to prevent log(0) errors.
-    emission_weight: float = 1.0              # Recommended range: [0.5, 3.0]. Scaling factor for the active note log emissions.
+    emission_weight: float = 20.0             # Recommended range: [1.0, 24.0]. Scaling factor for the active note log emissions. NOTE: emissions are normalized to ~[-1,0] (divided by total note weight), so they must be scaled up to compete with the structural biases below (tension/anti-stagnation/coupling on a log scale of 2-4). Too low → chords ignore the melody; ~20 keeps harmonization tracking the notes while structure still breaks ties.
     tonic_end_bias: float = 2.5               # Recommended range: [1.0, 5.0]. Cadential attraction to the key tonic on the final step.
     dominant_penultimate_bias: float = 1.5    # Recommended range: [0.5, 3.0]. Cadential attraction to the dominant root on the penultimate step.
     extended_chord_penalty: float = 1.0       # Recommended range: [0.0, 2.0]. Penalty for extended/9th chords to prevent their overuse.
