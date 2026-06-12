@@ -14,6 +14,8 @@ MIDI output only.
 import random
 from pathlib import Path
 
+import numpy as np
+
 from melodica import types
 from melodica.types import Scale, Mode, NoteInfo
 from melodica.generators import GeneratorParams
@@ -37,6 +39,7 @@ from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
+from melodica.vst_player import VSTPlayer
 
 # GM Programs
 PIANO = 0
@@ -63,6 +66,88 @@ OUT = Path("output/roblox_jazz")
 OUT.mkdir(parents=True, exist_ok=True)
 
 _harmonizer = CoupledHMMHarmonizer(beam_width=14, chord_change="half")
+
+# ── Surge XT VST3 preset mapping (track 01 instruments) ─────────────────
+SURGE_VST = "/Library/Audio/Plug-Ins/VST3/Surge XT.vst3"
+SURGE_PRESETS = "/Library/Application Support/Surge XT"
+
+_TRACK01_PRESETS: dict[str, str] = {
+    "shell":     f"{SURGE_PRESETS}/patches_3rdparty/Luna/Keys/Alias Glass Piano 1.fxp",
+    "bass":      f"{SURGE_PRESETS}/patches_3rdparty/LinnStrument MPE/Basses/String Bass.fxp",
+    "enclosure": f"{SURGE_PRESETS}/patches_3rdparty/Argitoth/Winds/Asian Flute.fxp",
+    # drums skipped — no melodic VST preset
+}
+
+_TRACK01_GAINS: dict[str, float] = {
+    "shell": 0.75, "bass": 0.65, "enclosure": 0.70,
+}
+
+
+def _render_track01_mp3(
+    tracks: dict[str, list[NoteInfo]],
+    path: Path,
+    bpm: float,
+) -> None:
+    """Render track 01 through Surge XT VST3 → WAV → MP3.
+
+    Each instrument gets a fresh VSTPlayer instance to avoid preset state bleed.
+    Drums are excluded (no melodic VST preset).
+    """
+    import subprocess
+    import tempfile
+    from pedalboard.io import AudioFile
+
+    sr = 44100
+    mix_buf: np.ndarray | None = None
+
+    for name, notes in tracks.items():
+        preset = _TRACK01_PRESETS.get(name)
+        if not preset or not notes:
+            continue
+        with VSTPlayer(SURGE_VST, sample_rate=sr, normalize=False) as player:
+            try:
+                player.load_preset(preset)
+            except Exception as e:
+                print(f"  [VST] preset '{name}': {e}, skipping")
+                continue
+            audio = player.render_notes(notes, bpm=bpm)
+
+        audio = audio * _TRACK01_GAINS.get(name, 0.7)
+
+        if mix_buf is None:
+            mix_buf = audio
+        else:
+            len_mix, len_trk = mix_buf.shape[1], audio.shape[1]
+            if len_trk > len_mix:
+                mix_buf = np.pad(mix_buf, ((0, 0), (0, len_trk - len_mix)))
+            elif len_trk < len_mix:
+                audio = np.pad(audio, ((0, 0), (0, len_mix - len_trk)))
+            mix_buf = mix_buf + audio
+
+    if mix_buf is None:
+        print("  [VST] no audio rendered for track 01")
+        return
+
+    peak = np.max(np.abs(mix_buf))
+    if peak > 0:
+        mix_buf = mix_buf / peak * 0.9
+
+    assert mix_buf is not None
+    mp3_path = Path(path).with_suffix(".mp3")
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        wav_path = tmp.name
+    try:
+        with AudioFile(wav_path, "w", sr, mix_buf.shape[0]) as f:
+            f.write(mix_buf)
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", wav_path,
+             "-codec:a", "libmp3lame", "-b:a", "320k", str(mp3_path)],
+            check=True,
+            capture_output=True,
+        )
+        print(f"  → {mp3_path} ({mix_buf.shape[1] / sr:.1f}s)")
+    finally:
+        Path(wav_path).unlink(missing_ok=True)
 
 
 def _off(notes, offset):
@@ -132,6 +217,12 @@ def produce_01_welcome():
     _export({"shell": shell, "bass": bass, "enclosure": melody, "drums": drums},
             OUT / "01_Welcome_to_the_Club.mid", bpm, key,
             {"shell": PIANO, "bass": ACOUSTIC_BASS, "enclosure": TRUMPET, "drums": DRUMS})
+    print("  Rendering MP3 via Surge XT...")
+    _render_track01_mp3(
+        {"shell": shell, "bass": bass, "enclosure": melody},
+        OUT / "01_Welcome_to_the_Club.mid",
+        bpm,
+    )
 
 
 # =====================================================================
