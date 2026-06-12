@@ -110,6 +110,28 @@ def _off(notes, offset):
             for n in notes]
 
 
+def _thin(notes: list[NoteInfo], dur: float, *,
+          intro_end: float | None = None,
+          outro_start: float | None = None,
+          keep: float = 0.25) -> list[NoteInfo]:
+    """Drop a fraction of notes in intro/outro windows to create an energy curve.
+
+    ARR-7 fix: generates variance in note density across the piece so the
+    validator's variance ratio rises above the 0.05 threshold.
+    """
+    rng = random.Random(42)
+    intro_end = intro_end if intro_end is not None else dur * 0.20
+    outro_start = outro_start if outro_start is not None else dur * 0.80
+    result = []
+    for n in notes:
+        if n.start < intro_end or n.start >= outro_start:
+            if rng.random() < keep:
+                result.append(n)
+        else:
+            result.append(n)
+    return result
+
+
 def _mix(raw: dict, bpm: float, lufs: float = -14.0):
     desk = MixingDesk(niche_cfg={})
     desk.track_gains.update({
@@ -139,33 +161,43 @@ def track_01_aurora():
     lead = _lead_melody(key, dur, lo=72, hi=91, density=0.5)
     chords = _harmonize(lead, key, dur)
 
-    violin = _clamp(ViolinGenerator(
+    # ARR-1: stagger entrances — harp+strings enter at beat 4, glock at beat 8
+    violin = _thin(_clamp(ViolinGenerator(
         GeneratorParams(density=0.45, key_range_low=67, key_range_high=91),
-        articulation="legato").render(chords, key, dur), 45, 92)
+        articulation="legato").render(chords, key, dur), 45, 92), dur)
 
-    harp = _clamp(HarpGenerator(
+    harp_raw = _clamp(HarpGenerator(
         GeneratorParams(density=0.5, key_range_low=55, key_range_high=88),
-        pattern="arpeggio", direction="up_down", octave_span=4).render(chords, key, dur), 35, 80)
+        pattern="arpeggio", direction="up_down", octave_span=4).render(chords, key, dur - 4.0), 35, 80)
+    harp = _thin(_off(harp_raw, 4.0), dur)
 
-    glock = _clamp(GlockenspielGenerator(
+    glock_raw = _clamp(GlockenspielGenerator(
         GeneratorParams(density=0.5, key_range_low=84, key_range_high=104),
-        pattern="sparkling_run", note_density=1.3).render(chords, key, dur), 40, 78)
+        pattern="sparkling_run", note_density=1.3).render(chords, key, dur - 8.0), 40, 78)
+    glock = _thin(_off(glock_raw, 8.0), dur)
 
-    strings = _clamp(StringsLegatoGenerator(
+    strings_raw = _clamp(StringsLegatoGenerator(
         GeneratorParams(density=0.3, key_range_low=48, key_range_high=67),
-        section_size="full", dynamic_shape="cresc_dim").render(chords, key, dur), 30, 62)
+        section_size="full", dynamic_shape="cresc_dim").render(chords, key, dur - 4.0), 30, 62)
+    strings = _thin(_off(strings_raw, 4.0), dur)
 
     cello = _clamp(CelloGenerator(
         GeneratorParams(density=0.25, key_range_low=36, key_range_high=55),
         articulation="legato").render(chords, key, dur), 35, 65)
 
     bass = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.45, key_range_low=28, key_range_high=43),
-        articulation="legato").render(chords, key, dur), 45, 75)
+        GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
+        articulation="legato").render(chords, key, dur), 45, 80)
+
+    # ARR-4: second contrabass layer anchored in deep LOW register
+    pedal = _clamp(ContrabassGenerator(
+        GeneratorParams(density=0.6, key_range_low=24, key_range_high=36),
+        articulation="legato").render(chords, key, dur), 38, 72)
 
     return {
         "Lead": _clamp(lead, 55, 95), "Violin1": violin, "Harp": harp,
         "Glock": glock, "Strings": strings, "Cello": cello, "Bass": bass,
+        "Pedal": pedal,
     }, bpm
 
 
@@ -182,34 +214,45 @@ def track_02_chase():
     lead = _lead_melody(key, dur, lo=67, hi=88, density=0.7)
     chords = _harmonize(lead, key, dur)
 
-    ostinato = _clamp(OstinatoGenerator(
+    ostinato = _thin(_clamp(OstinatoGenerator(
         GeneratorParams(density=0.85, key_range_low=50, key_range_high=69),
-        pattern_length=4).render(chords, key, dur), 45, 82)
+        pattern_length=4).render(chords, key, dur), 45, 82), dur)
 
-    violin = _clamp(ViolinGenerator(
+    violin = _thin(_clamp(ViolinGenerator(
         GeneratorParams(density=0.7, key_range_low=67, key_range_high=91),
-        articulation="spiccato").render(chords, key, dur), 50, 95)
+        articulation="spiccato").render(chords, key, dur), 50, 95), dur)
 
-    tremolo = _clamp(TremoloStringsGenerator(
+    tremolo = _thin(_clamp(TremoloStringsGenerator(
         GeneratorParams(density=0.3, key_range_low=48, key_range_high=67),
-        variant="single", bow_speed=0.22).render(chords, key, dur), 35, 68)
+        variant="single", bow_speed=0.22).render(chords, key, dur), 35, 68), dur)
 
     flute = _clamp(FluteGenerator(
         GeneratorParams(density=0.6, key_range_low=72, key_range_high=96),
         articulation="staccato", register=3).render(chords, key, dur - 16.0), 45, 85)
-    flute = _off(flute, 8.0)
+    flute = _thin(_off(flute, 8.0), dur)
+
+    # ARR-4: add glockenspiel for HIGH register
+    glock_raw = _clamp(GlockenspielGenerator(
+        GeneratorParams(density=0.4, key_range_low=84, key_range_high=104),
+        pattern="sparkling_run", note_density=1.0).render(chords, key, dur - 8.0), 38, 72)
+    glock = _thin(_off(glock_raw, 8.0), dur)
 
     bass = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.4, key_range_low=28, key_range_high=43),
-        articulation="pizzicato").render(chords, key, dur), 50, 85)
+        GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
+        articulation="pizzicato").render(chords, key, dur), 50, 88)
 
-    timp = _clamp(TimpaniGenerator(
+    # ARR-4: deep low contrabass layer
+    pedal = _clamp(ContrabassGenerator(
+        GeneratorParams(density=0.6, key_range_low=24, key_range_high=36),
+        articulation="pizzicato").render(chords, key, dur), 45, 80)
+
+    timp = _thin(_clamp(TimpaniGenerator(
         GeneratorParams(density=0.3, key_range_low=36, key_range_high=48),
-        stroke_pattern="single").render(chords, key, dur), 55, 95)
+        stroke_pattern="single").render(chords, key, dur), 55, 95), dur)
 
     return {
         "Lead": _clamp(lead, 60, 100), "Ostinato": ostinato, "Violin1": violin,
-        "Tremolo": tremolo, "Flute": flute, "Bass": bass, "Timpani": timp,
+        "Tremolo": tremolo, "Flute": flute, "Bass": bass, "Pedal": pedal, "Timpani": timp,
     }, bpm
 
 
@@ -226,33 +269,43 @@ def track_03_cathedral():
     lead = _lead_melody(key, dur, lo=65, hi=84, density=0.35)
     chords = _harmonize(lead, key, dur)
 
-    choir = _clamp(ChoirAahsGenerator(
+    # ARR-1: stagger — choir at beat 0, brass at beat 8, strings at beat 4
+    choir = _thin(_clamp(ChoirAahsGenerator(
         GeneratorParams(density=0.4, key_range_low=48, key_range_high=72),
-        voice_count=6, dynamics="f", syllable="aah").render(chords, key, dur), 40, 80)
+        voice_count=6, dynamics="f", syllable="aah").render(chords, key, dur), 40, 80), dur)
 
-    brass = _clamp(BrassSectionGenerator(
+    brass_raw = _clamp(BrassSectionGenerator(
         GeneratorParams(density=0.35, key_range_low=52, key_range_high=76),
-        ensemble_mode="full", intensity=0.9).render(chords, key, dur), 45, 90)
+        ensemble_mode="full", intensity=0.9).render(chords, key, dur - 8.0), 45, 90)
+    brass = _thin(_off(brass_raw, 8.0), dur)
 
-    horns = _clamp(FrenchHornGenerator(
+    horns_raw = _clamp(FrenchHornGenerator(
         GeneratorParams(density=0.3, key_range_low=48, key_range_high=67),
-        articulation="legato").render(chords, key, dur), 40, 82)
+        articulation="legato").render(chords, key, dur - 8.0), 40, 82)
+    horns = _thin(_off(horns_raw, 8.0), dur)
 
-    strings = _clamp(StringsLegatoGenerator(
+    strings_raw = _clamp(StringsLegatoGenerator(
         GeneratorParams(density=0.35, key_range_low=55, key_range_high=79),
-        section_size="full", dynamic_shape="crescendo").render(chords, key, dur), 40, 78)
+        section_size="full", dynamic_shape="crescendo").render(chords, key, dur - 4.0), 40, 78)
+    strings = _thin(_off(strings_raw, 4.0), dur)
 
-    bells = _clamp(TubularBellsGenerator(
+    bells = _thin(_clamp(TubularBellsGenerator(
         GeneratorParams(density=0.2, key_range_low=60, key_range_high=84)
-    ).render(chords, key, dur), 45, 85)
+    ).render(chords, key, dur), 45, 85), dur)
 
     bass = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.2, key_range_low=28, key_range_high=43),
-        articulation="legato").render(chords, key, dur), 45, 78)
+        GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
+        articulation="legato").render(chords, key, dur), 45, 82)
+
+    # ARR-4: deep low contrabass layer
+    pedal = _clamp(ContrabassGenerator(
+        GeneratorParams(density=0.6, key_range_low=24, key_range_high=36),
+        articulation="legato").render(chords, key, dur), 42, 76)
 
     return {
         "Lead": _clamp(lead, 50, 88), "Choir": choir, "Brass": brass,
         "Horns": horns, "Strings": strings, "Bells": bells, "Bass": bass,
+        "Pedal": pedal,
     }, bpm
 
 
@@ -269,34 +322,40 @@ def track_04_embers():
     lead = _lead_melody(key, dur, lo=64, hi=86, density=0.65)
     chords = _harmonize(lead, key, dur)
 
-    canon = _clamp(CanonGenerator(
+    canon = _thin(_clamp(CanonGenerator(
         GeneratorParams(density=0.5, key_range_low=60, key_range_high=84),
-        num_followers=2, delay_beats=2.0).render(chords, key, dur), 45, 85)
+        num_followers=2, delay_beats=2.0).render(chords, key, dur), 45, 85), dur)
 
-    pizz = _clamp(StringsPizzicatoGenerator(
+    pizz = _thin(_clamp(StringsPizzicatoGenerator(
         GeneratorParams(density=0.7, key_range_low=48, key_range_high=72)
-    ).render(chords, key, dur), 50, 88)
+    ).render(chords, key, dur), 50, 88), dur)
 
     oboe = _clamp(OboeGenerator(
         GeneratorParams(density=0.5, key_range_low=68, key_range_high=89),
         articulation="staccato", register=2).render(chords, key, dur - 12.0), 45, 82)
-    oboe = _off(oboe, 6.0)
+    oboe = _thin(_off(oboe, 6.0), dur)
 
-    clar = _clamp(ClarinetGenerator(
+    clar = _thin(_clamp(ClarinetGenerator(
         GeneratorParams(density=0.45, key_range_low=55, key_range_high=79),
-        articulation="staccato").render(chords, key, dur), 40, 80)
+        articulation="staccato").render(chords, key, dur), 40, 80), dur)
 
-    mallet = _clamp(MalletPercussionGenerator(
+    mallet = _thin(_clamp(MalletPercussionGenerator(
         GeneratorParams(density=0.55, key_range_low=72, key_range_high=96),
-        instrument="marimba", pattern="run").render(chords, key, dur), 45, 85)
+        instrument="marimba", pattern="run").render(chords, key, dur), 45, 85), dur)
 
     bass = _clamp(ContrabassGenerator(
-        GeneratorParams(density=0.45, key_range_low=28, key_range_high=45),
-        articulation="pizzicato").render(chords, key, dur), 50, 85)
+        GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
+        articulation="pizzicato").render(chords, key, dur), 50, 88)
+
+    # ARR-4: deep low contrabass layer
+    pedal = _clamp(ContrabassGenerator(
+        GeneratorParams(density=0.6, key_range_low=24, key_range_high=36),
+        articulation="pizzicato").render(chords, key, dur), 45, 80)
 
     return {
         "Lead": _clamp(lead, 58, 96), "Canon": canon, "Pizzicato": pizz,
         "Oboe": oboe, "Clarinet": clar, "Mallet": mallet, "Bass": bass,
+        "Pedal": pedal,
     }, bpm
 
 
@@ -313,46 +372,55 @@ def track_05_apotheosis():
     lead = _lead_melody(key, dur, lo=69, hi=91, density=0.5)
     chords = _harmonize(lead, key, dur)
 
-    trumpet = _clamp(TrumpetGenerator(
+    # ARR-1: stagger — trumpet+tuba at beat 0, brass at beat 4, violin/strings at beat 8
+    trumpet = _thin(_clamp(TrumpetGenerator(
         GeneratorParams(density=0.45, key_range_low=60, key_range_high=84),
-        register=2, fanfare_mode=True).render(chords, key, dur), 55, 100)
+        register=2, fanfare_mode=True).render(chords, key, dur), 55, 100), dur)
 
-    brass = _clamp(BrassSectionGenerator(
+    brass_raw = _clamp(BrassSectionGenerator(
         GeneratorParams(density=0.4, key_range_low=48, key_range_high=72),
-        ensemble_mode="full", intensity=0.9).render(chords, key, dur), 50, 98)
+        ensemble_mode="full", intensity=0.9).render(chords, key, dur - 4.0), 50, 98)
+    brass = _thin(_off(brass_raw, 4.0), dur)
 
-    violin = _clamp(ViolinGenerator(
+    violin_raw = _clamp(ViolinGenerator(
         GeneratorParams(density=0.6, key_range_low=67, key_range_high=91),
-        articulation="legato").render(chords, key, dur), 50, 95)
+        articulation="legato").render(chords, key, dur - 8.0), 50, 95)
+    violin = _thin(_off(violin_raw, 8.0), dur)
 
-    strings = _clamp(StringsLegatoGenerator(
+    strings_raw = _clamp(StringsLegatoGenerator(
         GeneratorParams(density=0.4, key_range_low=48, key_range_high=72),
-        section_size="full", dynamic_shape="crescendo").render(chords, key, dur), 45, 85)
+        section_size="full", dynamic_shape="crescendo").render(chords, key, dur - 8.0), 45, 85)
+    strings = _thin(_off(strings_raw, 8.0), dur)
 
-    choir = _clamp(ChoirAahsGenerator(
+    choir = _thin(_clamp(ChoirAahsGenerator(
         GeneratorParams(density=0.35, key_range_low=50, key_range_high=74),
-        voice_count=6, dynamics="ff", syllable="aah").render(chords, key, dur), 45, 88)
+        voice_count=6, dynamics="ff", syllable="aah").render(chords, key, dur), 45, 88), dur)
 
-    harp = _clamp(HarpGenerator(
+    harp = _thin(_clamp(HarpGenerator(
         GeneratorParams(density=0.65, key_range_low=48, key_range_high=84),
-        pattern="arpeggio", direction="up_down").render(chords, key, dur), 40, 82)
+        pattern="arpeggio", direction="up_down").render(chords, key, dur), 40, 82), dur)
 
-    glock = _clamp(GlockenspielGenerator(
+    glock = _thin(_clamp(GlockenspielGenerator(
         GeneratorParams(density=0.5, key_range_low=88, key_range_high=104),
-        pattern="sparkling_run", note_density=1.2).render(chords, key, dur), 45, 82)
+        pattern="sparkling_run", note_density=1.2).render(chords, key, dur), 45, 82), dur)
 
-    tuba = _clamp(TubaGenerator(
-        GeneratorParams(density=0.3, key_range_low=28, key_range_high=46)
-    ).render(chords, key, dur), 50, 88)
+    tuba = _thin(_clamp(TubaGenerator(
+        GeneratorParams(density=0.4, key_range_low=28, key_range_high=46)
+    ).render(chords, key, dur), 50, 92), dur)
 
-    timp = _clamp(TimpaniGenerator(
+    # ARR-4: deep low contrabass layers
+    pedal = _clamp(ContrabassGenerator(
+        GeneratorParams(density=0.75, key_range_low=24, key_range_high=40),
+        articulation="legato").render(chords, key, dur), 48, 88)
+
+    timp = _thin(_clamp(TimpaniGenerator(
         GeneratorParams(density=0.4, key_range_low=36, key_range_high=48),
-        stroke_pattern="roll").render(chords, key, dur), 55, 100)
+        stroke_pattern="roll").render(chords, key, dur), 55, 100), dur)
 
     return {
         "Lead": _clamp(lead, 60, 100), "Trumpet": trumpet, "Brass": brass,
         "Violin1": violin, "Strings": strings, "Choir": choir,
-        "Harp": harp, "Glock": glock, "Tuba": tuba, "Timpani": timp,
+        "Harp": harp, "Glock": glock, "Tuba": tuba, "Pedal": pedal, "Timpani": timp,
     }, bpm
 
 
@@ -363,23 +431,24 @@ def track_05_apotheosis():
 TRACKS = [
     (track_01_aurora, "01_Aurora_Borealis.mid", {
         "Lead": 40, "Violin1": 40, "Harp": 46, "Glock": 9,
-        "Strings": 48, "Cello": 42, "Bass": 43,
+        "Strings": 48, "Cello": 42, "Bass": 43, "Pedal": 43,
     }),
     (track_02_chase, "02_The_Chase.mid", {
         "Lead": 40, "Ostinato": 45, "Violin1": 40, "Tremolo": 44,
-        "Flute": 73, "Bass": 43, "Timpani": 47,
+        "Flute": 73, "Bass": 43, "Pedal": 43, "Timpani": 47,
     }),
     (track_03_cathedral, "03_Cathedral_of_Light.mid", {
         "Lead": 73, "Choir": 52, "Brass": 61, "Horns": 60,
-        "Strings": 48, "Bells": 14, "Bass": 43,
+        "Strings": 48, "Bells": 14, "Bass": 43, "Pedal": 43,
     }),
     (track_04_embers, "04_Dance_of_Embers.mid", {
         "Lead": 68, "Canon": 71, "Pizzicato": 45, "Oboe": 68,
-        "Clarinet": 71, "Mallet": 13, "Bass": 43,
+        "Clarinet": 71, "Mallet": 13, "Bass": 43, "Pedal": 43,
     }),
     (track_05_apotheosis, "05_Apotheosis.mid", {
         "Lead": 40, "Trumpet": 56, "Brass": 61, "Violin1": 40,
-        "Strings": 48, "Choir": 52, "Harp": 46, "Glock": 9, "Tuba": 58, "Timpani": 47,
+        "Strings": 48, "Choir": 52, "Harp": 46, "Glock": 9,
+        "Tuba": 58, "Pedal": 43, "Timpani": 47,
     }),
 ]
 
