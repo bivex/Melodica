@@ -182,7 +182,7 @@ class TestBuildRpp:
         assert "TEMPO 140 4 4" in rpp
         assert "SAMPLERATE 48000" in rpp
         assert 'RENDER_FILE "/tmp/out.wav"' in rpp
-        assert "RENDER_SRATE 48000" in rpp
+        assert "RENDER_RANGE 1 0 " in rpp
         assert "<SOURCE MIDI" in rpp
         assert "BLOCKB64" in rpp
         assert rp.SURGE_VST3_HEADER in rpp
