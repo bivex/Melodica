@@ -323,9 +323,12 @@ class OstinatoGenerator(PhraseGenerator):
             if chord != prev_chord and prev_chord is not None and prev_pitch is not None:
                 pitch = self._voice_lead_pitch(pitch, prev_pitch)
 
-            # Velocity calculations with accent and optional velocity jitter
+            # Velocity calculations with accent tied to beat position in bar
             base_vel = self._velocity()
-            accent = self.accent_pattern[pat_idx % len(self.accent_pattern)]
+            # accent_pattern indexed by beat position, not pattern index
+            # e.g. 4/4: beat 0=strong, 1=weak, 2=medium, 3=weak
+            beat_in_bar = int(event.onset) % len(self.accent_pattern)
+            accent = self.accent_pattern[beat_in_bar]
             vel = int(base_vel * accent)
             if self.velocity_jitter > 0:
                 vel += rng.randint(-self.velocity_jitter, self.velocity_jitter)
