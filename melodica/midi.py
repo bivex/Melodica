@@ -463,12 +463,15 @@ def export_multitrack_midi(
             microtonal_tracks.append(name)
 
     # Identify percussion tracks — these must live on GM channel 9 (the
-    # dedicated drum channel) so synths/soundfonts play them as percussion
-    # rather than as a pitched instrument. A track is percussion if its
-    # name matches a drum/percussion keyword, or its explicit GM program is
-    # the drum/percussion alias (0 via the "drums"/"percussion" GM entries).
+    # dedicated drum channel) so synths/soundfonts play them as the unpitched
+    # drum kit rather than as a pitched instrument. A track is percussion if
+    # its name matches a drum-kit keyword.
+    # IMPORTANT: only UNPITCHED percussion belongs on channel 9. Pitched
+    # tuned percussion (timpani, glockenspiel, marimba, tubular bells, etc.)
+    # plays real notes and must stay on a normal channel with its GM program,
+    # so those keywords are deliberately excluded here.
     DRUM_CHANNEL = 9
-    _PERC_KEYWORDS = ("drum", "percussion", "perc", "kit", "taiko", "timpani", "ghost")
+    _PERC_KEYWORDS = ("drum", "percussion", "perc", "kit", "taiko", "ghost")
 
     def _is_percussion(name: str) -> bool:
         low = name.lower()

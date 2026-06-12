@@ -149,6 +149,27 @@ class TestExportMultitrackBasic:
         assert chans["ghosts"] == {9}
         assert 9 not in chans["lead"]
 
+    def test_pitched_tuned_percussion_not_on_channel_9(self, tmp_path):
+        # Tuned/pitched percussion plays real notes and must keep its own GM
+        # program on a normal channel — never the unpitched drum channel.
+        path = tmp_path / "tuned.mid"
+        export_multitrack_midi(
+            {
+                "Timpani": _make_notes(40),
+                "Glock": _make_notes(96),
+                "Bells": _make_notes(72),
+                "Mallet": _make_notes(84),
+                "drums": _make_notes(38),
+            },
+            path,
+        )
+        chans = self._track_channels(path)
+        assert 9 not in chans["Timpani"], "timpani is pitched — must not be on ch9"
+        assert 9 not in chans["Glock"]
+        assert 9 not in chans["Bells"]
+        assert 9 not in chans["Mallet"]
+        assert chans["drums"] == {9}, "unpitched drums still route to ch9"
+
     def test_note_roundtrip(self, tmp_path):
         path = tmp_path / "test.mid"
         notes = [
