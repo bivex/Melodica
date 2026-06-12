@@ -165,6 +165,155 @@ def _mix(raw: dict, bpm: float, lufs: float = -14.0):
     return master.apply_mastering(mixed)
 
 
+def apply_pipeline(
+    tracks: dict,
+    bpm: float,
+    chords: list | None = None,
+    key=None,
+    section_breaks: list | None = None,
+) -> dict:
+    """Apply production pipeline stages to a raw tracks dict.
+
+    Runs the subset of DEFAULT_PIPELINE stages that operate purely on
+    tracks/chords/key — skipping mixing/mastering/export which are handled
+    separately by _mix() and export_multitrack_midi().
+
+    Stages applied (in order):
+      humanize        — per-instrument micro-timing + velocity scatter
+      phrase_dynamics — per-phrase crescendo/diminuendo arch
+      articulations   — articulation string → CC11/CC1/CC64 + duration shaping
+      non_chord_tones — passing/neighbour tones on LEAD+STRINGS tracks
+      tension         — global tension boost/duck based on chord complexity
+      texture         — density automation via TensionCurve
+      transitions     — CC11 expression sweeps at section boundaries
+      harmonic_verify — detect & fix m2/tritone clashes across tracks
+    """
+    from melodica.composer.album_pipeline import (
+        _apply_humanization,
+        _TrackProfile,
+        Role,
+    )
+    from melodica.composer.phrase_dynamics import apply_phrase_dynamics_to_pipeline
+    from melodica.composer.articulations import ArticulationEngine
+    from melodica.composer.harmonic_verifier import verify_and_fix, VerifierConfig
+    import statistics
+
+    # Compute total duration first — needed for density in profiles
+    total_dur = max(
+        (n.start + n.duration) for notes in tracks.values() for n in notes
+        if notes
+    ) if any(tracks.values()) else 64.0
+
+    # Build _TrackProfile from actual note data so humanization works correctly
+    profiles: dict[str, _TrackProfile] = {}
+    for tname, notes in tracks.items():
+        tl = tname.lower()
+        if any(x in tl for x in ("bass", "tuba", "pedal", "contrabass")):
+            role = Role.BASS
+        elif any(x in tl for x in ("lead", "melody", "theme", "trumpet", "flute", "oboe")):
+            role = Role.LEAD
+        elif any(x in tl for x in ("strings", "violin", "viola", "cello")):
+            role = Role.STRINGS
+        elif any(x in tl for x in ("choir",)):
+            role = Role.CHOIR
+        elif any(x in tl for x in ("timpani", "perc", "glock")):
+            role = Role.PERC
+        elif any(x in tl for x in ("brass", "horn", "trombone")):
+            role = Role.PAD
+        else:
+            role = Role.PAD
+        if notes:
+            pitches = [int(n.pitch) for n in notes]
+            vels = [int(n.velocity) for n in notes]
+            avg_p = statistics.mean(pitches)
+            p_range = max(pitches) - min(pitches)
+            rms_vel = statistics.mean(vels)
+            density = len(notes) / max(total_dur, 1.0)
+        else:
+            avg_p, p_range, rms_vel, density = 60.0, 24.0, 80.0, 0.5
+        profiles[tname] = _TrackProfile(
+            avg_pitch=avg_p,
+            pitch_range=p_range,
+            density=density,
+            rms_velocity=rms_vel,
+            role=role,
+        )
+
+    # 1. Humanize
+    tracks = _apply_humanization(tracks, profiles)
+
+    # 2. Phrase dynamics
+    tracks = apply_phrase_dynamics_to_pipeline(tracks)
+
+    # 3. Articulations — per-instrument CC shaping
+    engine = ArticulationEngine()
+    tracks = {
+        tname: engine.apply(notes, instrument=tname.lower(), total_beats=total_dur)
+        if notes else notes
+        for tname, notes in tracks.items()
+    }
+
+    # 4. Non-chord tones on melodic tracks
+    if chords and key:
+        from melodica.composer.non_chord_tones import NonChordToneGenerator
+        gen = NonChordToneGenerator(
+            passing_prob=0.18, neighbor_prob=0.08,
+            suspension_prob=0.06, anticipation_prob=0.04,
+        )
+        tracks = {
+            tname: gen.add_non_chord_tones(notes, chords, key)
+            if profiles.get(tname) and profiles[tname].role in (Role.LEAD, Role.STRINGS) and notes
+            else notes
+            for tname, notes in tracks.items()
+        }
+
+    # 5. Texture automation
+    if chords:
+        try:
+            from melodica.composer.texture_controller import TextureController
+            from melodica.composer.tension_curve import TensionCurve
+            tc = TensionCurve(
+                total_beats=total_dur, curve_type="classical",
+                peak_position=0.65, peak_intensity=0.9, resolution_length=0.25,
+            )
+            ctrl = TextureController(tension_curve=tc)
+            tracks = ctrl.apply_texture(tracks, total_dur)
+        except Exception:
+            pass
+
+    # 6. Transition sweeps at section boundaries (no-op if none provided)
+    if section_breaks:
+        try:
+            from melodica.composer.transition_coordinator import TransitionCoordinator
+            cc_dummy: dict = {}
+            non_bass = [t for t in tracks if "bass" not in t.lower()]
+            for beat, _label in section_breaks:
+                TransitionCoordinator.apply_sweeps(
+                    tracks, cc_dummy, target_tracks=non_bass,
+                    cc_num=11, start_val=100, end_val=60,
+                    start_beat=max(0.0, beat - 2.0), end_beat=beat,
+                    curve_type="exponential", steps=12,
+                )
+                TransitionCoordinator.apply_sweeps(
+                    tracks, cc_dummy, target_tracks=non_bass,
+                    cc_num=11, start_val=60, end_val=100,
+                    start_beat=beat, end_beat=beat + 2.0,
+                    curve_type="exponential", steps=12,
+                )
+        except Exception:
+            pass
+
+    # 7. Harmonic verification — fix clashes
+    config = VerifierConfig(
+        dissonance_tolerance=0.6, fix_transpose=True,
+        fix_remove=False, fix_velocity=True,
+        fix_shorten=True, apply_shading=True,
+    )
+    tracks, _ = verify_and_fix(tracks, config)
+
+    return tracks
+
+
 # ===========================================================================
 # I. Sonata Appassionata — G Minor, 108 BPM
 #    Uses SonataFormPlan to allocate P/T/S/C zones with correct dynamics.
@@ -636,6 +785,7 @@ def main():
     for producer, filename, instruments in TRACKS:
         print("-" * 78)
         raw, bpm = producer()
+        raw = apply_pipeline(raw, bpm)
         mastered, pan = _mix(raw, bpm)
         export_multitrack_midi(
             mastered,
