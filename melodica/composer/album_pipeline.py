@@ -1490,6 +1490,136 @@ def _stage_phrase_dynamics(kw):
     return kw
 
 
+def _stage_articulations(kw):
+    """Apply ArticulationEngine: articulation string → CC events + duration shaping."""
+    from melodica.composer.articulations import ArticulationEngine
+    engine = ArticulationEngine()
+    total_dur = max(
+        (n.start + n.duration)
+        for notes in kw["tracks"].values()
+        for n in notes
+        if notes
+    ) if any(kw["tracks"].values()) else 64.0
+    result_tracks = {}
+    for tname, notes in kw["tracks"].items():
+        if notes:
+            result_tracks[tname] = engine.apply(notes, instrument=tname.lower(),
+                                                total_beats=total_dur)
+        else:
+            result_tracks[tname] = notes
+    kw["tracks"] = result_tracks
+    return kw
+
+
+def _stage_harmonic_verify(kw):
+    """Run harmonic verifier: detect & fix m2/tritone clashes across tracks."""
+    from melodica.composer.harmonic_verifier import verify_and_fix, VerifierConfig
+    config = VerifierConfig(
+        dissonance_tolerance=0.6,
+        fix_transpose=True,
+        fix_remove=False,
+        fix_velocity=True,
+        fix_shorten=True,
+        apply_shading=True,
+    )
+    fixed_tracks, report = verify_and_fix(kw["tracks"], config)
+    kw["tracks"] = fixed_tracks
+    kw["_harmonic_report"] = report
+    if kw.get("verbose") and report.clashes_detected > 0:
+        print(f"   HarmonicVerifier: {report.clashes_detected} clashes, "
+              f"{report.clashes_fixed} fixed")
+    return kw
+
+
+def _stage_transitions(kw):
+    """TransitionCoordinator: apply CC11 sweeps at section boundaries."""
+    section_breaks = kw.get("section_breaks") or []
+    if not section_breaks:
+        return kw
+    from melodica.composer.transition_coordinator import TransitionCoordinator
+    cc_events: dict = dict(kw.get("cc_events") or {})
+    for beat, _label in section_breaks:
+        sweep_start = max(0.0, beat - 2.0)
+        sweep_end = beat + 2.0
+        non_bass = [t for t in kw["tracks"] if "bass" not in t.lower()]
+        TransitionCoordinator.apply_sweeps(
+            kw["tracks"], cc_events, target_tracks=non_bass,
+            cc_num=11, start_val=100, end_val=60,
+            start_beat=sweep_start, end_beat=beat,
+            curve_type="exponential", steps=12,
+        )
+        TransitionCoordinator.apply_sweeps(
+            kw["tracks"], cc_events, target_tracks=non_bass,
+            cc_num=11, start_val=60, end_val=100,
+            start_beat=beat, end_beat=sweep_end,
+            curve_type="exponential", steps=12,
+        )
+    kw["cc_events"] = cc_events
+    return kw
+
+
+def _stage_texture(kw):
+    """TextureController: density automation driven by tension curve."""
+    chords = kw.get("chords")
+    if not chords:
+        return kw
+    from melodica.composer.texture_controller import TextureController
+    from melodica.composer.tension_curve import TensionCurve
+    total_dur = max(
+        (n.start + n.duration)
+        for notes in kw["tracks"].values()
+        for n in notes
+        if notes
+    ) if any(kw["tracks"].values()) else 64.0
+    tc = TensionCurve(
+        total_beats=total_dur,
+        curve_type="classical",
+        peak_position=0.65,
+        peak_intensity=0.9,
+        resolution_length=0.25,
+    )
+    ctrl = TextureController(tension_curve=tc)
+    kw["tracks"] = ctrl.apply_texture(kw["tracks"], total_dur)
+    return kw
+
+
+def _stage_non_chord_tones(kw):
+    """NonChordTones: add passing/neighbour tones to LEAD tracks."""
+    chords = kw.get("chords")
+    key = kw.get("key")
+    if not chords or not key:
+        return kw
+    from melodica.composer.non_chord_tones import NonChordToneGenerator
+    gen = NonChordToneGenerator(
+        passing_prob=0.18,
+        neighbor_prob=0.08,
+        suspension_prob=0.06,
+        anticipation_prob=0.04,
+    )
+    result = {}
+    for tname, notes in kw["tracks"].items():
+        prof = kw.get("_profiles", {}).get(tname)
+        # Only apply to LEAD and STRINGS — not bass/perc/pad
+        if prof and prof.role in (Role.LEAD, Role.STRINGS) and notes:
+            result[tname] = gen.add_non_chord_tones(notes, chords, key)
+        else:
+            result[tname] = notes
+    kw["tracks"] = result
+    return kw
+
+
+def _stage_diagnostics(kw):
+    """Post-export diagnostics report."""
+    if not kw.get("verbose"):
+        return kw
+    try:
+        from melodica.composer.diagnostics import diagnose_tracks
+        diagnose_tracks(kw["tracks"], bpm=kw.get("bpm", 120.0))
+    except Exception:
+        pass  # diagnostics are informational — never block the pipeline
+    return kw
+
+
 def _stage_sections(kw):
     if kw.get("sections"):
         kw["tracks"] = _apply_section_moods(kw["tracks"], kw["sections"], kw["_profiles"])
@@ -1651,14 +1781,20 @@ DEFAULT_PIPELINE: list[Stage] = [
     Stage("sidechain", _stage_sidechain),
     Stage("humanize", _stage_humanize),
     Stage("phrase_dynamics", _stage_phrase_dynamics),
+    Stage("articulations", _stage_articulations),
+    Stage("non_chord_tones", _stage_non_chord_tones),
     Stage("sections", _stage_sections),
     Stage("tension", _stage_tension),
+    Stage("texture", _stage_texture),
+    Stage("transitions", _stage_transitions),
     Stage("polyphony", _stage_polyphony),
+    Stage("harmonic_verify", _stage_harmonic_verify),
     Stage("psycho", _stage_psycho),
     Stage("sparse_safeguard", _stage_sparse_safeguard),
     Stage("master", _stage_master),
     Stage("export", _stage_export),
     Stage("report", _stage_report),
+    Stage("diagnostics", _stage_diagnostics),
 ]
 
 
