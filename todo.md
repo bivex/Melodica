@@ -7,29 +7,40 @@
 
 ## P4 — Новые задачи (из анализа музыкальных форм)
 
-### 11. FormTemplate — enum + генератор IdeaPart последовательностей
-Wikipedia: sonata, rondo, ternary, through-composed — стандартные формы.
-- `FormTemplate` enum: SONATA, RONDO, TERNARY, THROUGH_COMPOSED, VARIATIONS, BINARY
-- `form_plan(template, scale, n_bars)` → list[IdeaPart] с правильными SectionRole и Scale
-- Sonata: P(tonic)→T→S(dominant)→Development(unstable)→Recapitulation(tonic)
-- Rondo: ABACABA с тональной схемой I-V-I-VI-I-I-I
-- Through-composed: каждый IdeaPart с уникальным material, нет повторов
+### 11. FormTemplate — enum + генератор IdeaPart последовательностей ✓
+### 12. SonataFormPlan — конкретный план с P/T/S/C зонами ✓
+### 13. variation_of поле в IdeaPart + VariationPlan ✓
 
-### 12. SonataFormPlan — конкретный план с P/T/S/C зонами
-Wikipedia: exposition зоны P, T, S, C с конкретными гармоническими функциями.
-- `SonataFormPlan(scale, n_bars)` → IdeaPart список
-- P-zone: tonic, main theme density high
-- T-zone: modulating, bridge к dominant
-- S-zone: dominant (major) / relative major (minor), lyrical
-- C-zone: cadential, reinforces new key
-- Development: нестабильная тональность, фрагментация тем через ModulationEngine
-- Recapitulation: всё в tonic, S-zone транспонируется назад
+---
 
-### 13. variation_of поле в IdeaPart + VariationPlan
-Wikipedia: variation form — melodic/rhythmic/harmonic/minor-mode.
-- `variation_of: str | None` в IdeaPart (ссылка на исходный IdeaPart по имени)
-- `VariationPlan` — генерирует серию вариаций из одного IdeaPart
-- Типы: melodic (SchenkerianElaborator), rhythmic (другой ритм-пресет), harmonic (реharmonization), modal (параллельный минор/мажор), reductive (_thin)
+## P5 — Новые задачи (из анализа контрапункта и оркестровки)
+
+### 14. CanonGenerator — имитативный контрапункт
+Источник: Wikipedia/Counterpoint — canon at the fifth/octave, N beats delay.
+- Взять мелодию, сдвинуть на N beats, транспонировать на квинту/октаву вверх
+- Поддержка 2-4 голосов (canon 2-in-1, 3-in-1)
+- Интеграция с `voice_leading.py` — проверка параллельных квинт/октав
+
+### 15. melodic_transforms() — диатонические трансформации мелодии
+Источник: Wikipedia/Counterpoint — inversion, retrograde, augmentation, diminution.
+- `melodic_inversion(notes, scale)` — зеркало интервалов в диатонике
+- `melodic_retrograde(notes)` — обратный порядок нот
+- `melodic_augmentation(notes, factor)` — умножить длительности
+- `melodic_diminution(notes, factor)` — разделить длительности
+- ToneRow (P/I/R/RI) уже есть для 12-tone — это диатоническая версия
+
+### 16. AntiphonySectionBuilder — call-and-response координация
+Источник: Wikipedia/Orchestration — antiphony between orchestral groups.
+- Разделить IdeaToolConfig треки на группы (strings, winds, brass, perc)
+- Генерировать чередующиеся фразы: group A играет bars 1-2, group B отвечает bars 3-4
+- Поддержка перекрытия (overlap) и эха (echo delay)
+
+### 17. ChordVoicingLayout — авто-раскладка аккорда по оркестровым группам
+Источник: Wikipedia/Orchestration — cellos=root, violas=fifth, violins=third.
+- `voice_chord(chord, instruments)` → dict[instrument → MIDI pitch]
+- Правила: bass=root, inner voices=fifths/thirds, top=melody note
+- Doubling hints: violins+glockenspiel=sparkling, piccolo+celesta=bright
+- Интеграция с `functional_hmm.py` chord output
 
 ---
 
