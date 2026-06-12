@@ -56,7 +56,7 @@ from melodica.composer.melodic_transforms import (
 
 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer, HMMConfig
 from melodica.midi import export_multitrack_midi
-from melodica.form import MusicalForm
+from melodica.form import MusicalForm, FormSection
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 
@@ -277,6 +277,49 @@ def apply_pipeline(
             scaled[tname] = new_notes
         tracks = scaled
 
+    # 0b. FORM-1: Sonata development modulation — transpose notes in development
+    # section through SonataFormPlan.development_keys
+    if form is not None and key is not None:
+        dev_sec = next((s for s in form.sections if s.name == "development"), None)
+        if dev_sec is not None:
+            try:
+                from melodica.composer.sonata_plan import SonataFormPlan
+                plan = SonataFormPlan(key, total_bars=int(total_dur / 4))
+                dev_keys = plan.development_keys  # list[Scale], 3 keys
+                if dev_keys:
+                    dev_start = dev_sec.start_beat
+                    dev_dur   = dev_sec.duration_beats
+                    seg_len   = dev_dur / len(dev_keys)
+                    transposed: dict = {}
+                    for tname, notes in tracks.items():
+                        tl = tname.lower()
+                        # Don't transpose bass/pedal — they stay on root
+                        if any(x in tl for x in ("bass", "pedal", "tuba", "contrabass")):
+                            transposed[tname] = notes
+                            continue
+                        new_notes = []
+                        for n in notes:
+                            beat = float(n.start)
+                            if dev_start <= beat < dev_start + dev_dur:
+                                seg_idx = min(
+                                    int((beat - dev_start) / seg_len),
+                                    len(dev_keys) - 1,
+                                )
+                                dev_key = dev_keys[seg_idx]
+                                # Semitone shift = difference in roots
+                                shift = (dev_key.root - key.root) % 12
+                                # Keep shift small: prefer -6..+6
+                                if shift > 6:
+                                    shift -= 12
+                                new_pitch = max(21, min(108, int(n.pitch) + shift))
+                                new_notes.append(n.__replace__(pitch=new_pitch))
+                            else:
+                                new_notes.append(n)
+                        transposed[tname] = new_notes
+                    tracks = transposed
+            except Exception:
+                pass
+
     # 1. Humanize
     tracks = _apply_humanization(tracks, profiles)
 
@@ -348,6 +391,101 @@ def apply_pipeline(
         fix_shorten=True, apply_shading=True,
     )
     tracks, _ = verify_and_fix(tracks, config)
+
+    # 8. ARR-7: density reshaping — thin notes before 55% mark to push peak later
+    import random as _rng
+    _rng_inst = _rng.Random(42)
+    reshaped: dict = {}
+    peak_target = 0.62  # target peak at 62% of total duration
+    for tname, notes in tracks.items():
+        if not notes:
+            reshaped[tname] = notes
+            continue
+        kept = []
+        for n in notes:
+            pos = float(n.start) / max(total_dur, 1.0)
+            if pos < peak_target * 0.5:
+                # first 31%: keep 55% of notes
+                if _rng_inst.random() < 0.55:
+                    kept.append(n)
+            elif pos < peak_target:
+                # 31–62%: ramp up keep probability linearly 55%→100%
+                t = (pos - peak_target * 0.5) / (peak_target * 0.5)
+                prob = 0.55 + t * 0.45
+                if _rng_inst.random() < prob:
+                    kept.append(n)
+            else:
+                kept.append(n)
+        # Always keep bass/pedal unthinned — rhythm must stay solid
+        tl = tname.lower()
+        if any(x in tl for x in ("bass", "pedal", "tuba", "contrabass")):
+            reshaped[tname] = notes
+        else:
+            reshaped[tname] = kept if kept else notes
+    tracks = reshaped
+
+    # 9. FORM-6: cadential silence — remove notes in last 1.5 beats of each section
+    if form is not None:
+        silenced: dict = {}
+        gap = 1.5  # beats of silence before section boundary
+        # Exclude the very last boundary (end of piece) — cadence lives there
+        boundaries = {s.end_beat for s in form.sections if s.end_beat < total_dur - 0.5}
+        for tname, notes in tracks.items():
+            tl = tname.lower()
+            # Keep bass/pedal — they anchor the cadence
+            if any(x in tl for x in ("bass", "pedal", "tuba", "contrabass", "timpani")):
+                silenced[tname] = notes
+                continue
+            silenced[tname] = [
+                n for n in notes
+                if not any(
+                    (b - gap) <= float(n.start) < b
+                    for b in boundaries
+                )
+            ]
+        tracks = silenced
+
+    # 10. ARR-9: V→I cadence — inject dominant→tonic in last 6 beats if missing
+    # Run AFTER density thinning and silence removal so notes survive
+    if key is not None:
+        from melodica.types_pkg._notes import NoteInfo as _NI
+        _cadence_window = 8.0
+        dom_root = (key.root + 7) % 12
+        lead_tname = next(
+            (t for t in tracks if "lead" in t.lower()),
+            next((t for t in tracks), None)
+        )
+        if lead_tname and tracks.get(lead_tname):
+            lead_notes = tracks[lead_tname]
+            cadence_start = total_dur - _cadence_window
+            mid = total_dur - _cadence_window / 2.0
+            # Check if V→I already present
+            late = [(float(n.start), int(n.pitch) % 12) for n in lead_notes
+                    if float(n.start) >= cadence_start]
+            first_pcs  = {pc for t, pc in late if t < mid}
+            second_pcs = {pc for t, pc in late if t >= mid}
+            cadence_ok = any(
+                ((tp + 7) % 12 in first_pcs or (tp + 11) % 12 in first_pcs)
+                and tp in second_pcs
+                for tp in range(12)
+            )
+            if not cadence_ok:
+                base_vel = 78
+                dom_pitch = 48 + dom_root   # lower octave for clarity
+                ton_pitch = 48 + key.root
+                cadence_notes = [
+                    _NI(pitch=dom_pitch,     velocity=base_vel,     start=cadence_start,
+                        duration=1.5, articulation="legato"),
+                    _NI(pitch=dom_pitch + 4, velocity=base_vel - 5, start=cadence_start + 0.5,
+                        duration=1.0, articulation="legato"),
+                    _NI(pitch=dom_pitch + 7, velocity=base_vel - 8, start=cadence_start + 1.0,
+                        duration=1.0, articulation="legato"),
+                    _NI(pitch=ton_pitch,     velocity=base_vel + 8, start=mid,
+                        duration=_cadence_window / 2.0 - 0.5, articulation="legato"),
+                    _NI(pitch=ton_pitch + 7, velocity=base_vel + 4, start=mid,
+                        duration=_cadence_window / 2.0 - 0.5, articulation="legato"),
+                ]
+                tracks[lead_tname] = lead_notes + cadence_notes
 
     return tracks
 
@@ -437,11 +575,33 @@ def track_01_sonata():
         stroke_pattern="roll").render(chords, key, total_dur - expo_end), 55, 95)
     timp = _off(timp_raw, expo_end)
 
+    # Build MusicalForm with development keys from SonataFormPlan
+    mf = MusicalForm.sonata(G_MINOR, 128.0, base_bpm=108.0)
+    # Split development section into 3 sub-sections with distinct keys (FORM-1)
+    dev_keys = plan.development_keys
+    new_sections = []
+    for sec in mf.sections:
+        if sec.name == "development" and len(dev_keys) >= 2:
+            seg = sec.duration_beats / len(dev_keys)
+            for i, dk in enumerate(dev_keys):
+                new_sections.append(FormSection(
+                    name=f"development_{i+1}",
+                    start_beat=sec.start_beat + i * seg,
+                    duration_beats=seg,
+                    dynamics=sec.dynamics,
+                    tempo_multiplier=sec.tempo_multiplier,
+                    active_families=sec.active_families,
+                    mood=sec.mood,
+                    key=dk,
+                ))
+        else:
+            new_sections.append(sec)
+    mf.sections = new_sections
     return {
         "Lead": _clamp(lead, 50, 100), "Strings": strings, "Violin1": violin,
         "Horns": horns, "Brass": brass, "Bass": bass, "Pedal": pedal,
         "Glock": glock, "Timpani": timp,
-    }, bpm, MusicalForm.sonata(G_MINOR, 128.0, base_bpm=108.0)
+    }, bpm, mf
 
 
 # ===========================================================================
@@ -787,25 +947,25 @@ TRACKS = [
     (track_01_sonata, "01_Sonata_Appassionata.mid", {
         "Lead": 40, "Strings": 48, "Violin1": 40, "Horns": 60,
         "Brass": 61, "Bass": 43, "Pedal": 43, "Glock": 9, "Timpani": 47,
-    }),
+    }, G_MINOR),
     (track_02_canon, "02_Canon_Perpetuus.mid", {
         "Lead": 40, "Canon": 41, "Viola": 42, "Harp": 46,
         "Flute": 73, "Glock": 9, "Bass": 43, "Pedal": 43,
-    }),
+    }, D_MAJOR),
     (track_03_rondo, "03_Rondo_Brillante.mid", {
         "Lead": 71, "Violin1": 40, "Strings": 48, "Flute": 73,
         "Clarinet": 71, "Oboe": 68, "Horns": 60, "Bass": 43,
         "Pedal": 43, "Glock": 9,
-    }),
+    }, BB_MAJOR),
     (track_04_variations, "04_Theme_and_Variations.mid", {
         "Lead": 40, "Strings": 48, "Harp": 46, "Choir": 52,
         "Cello": 42, "Bass": 43, "Pedal": 43, "Glock": 9,
-    }),
+    }, E_MINOR),
     (track_05_arch, "05_Arch_of_Eternity.mid", {
         "Lead": 73, "Violin1": 40, "Strings": 48, "Brass": 61,
         "Choir": 52, "Horns": 60, "Harp": 46, "Glock": 9,
         "Bass": 43, "Pedal": 43, "Timpani": 47,
-    }),
+    }, C_MAJOR),
 ]
 
 
@@ -820,10 +980,10 @@ def main():
     print("=" * 78)
 
     total_notes = 0
-    for producer, filename, instruments in TRACKS:
+    for producer, filename, instruments, track_key in TRACKS:
         print("-" * 78)
         raw, bpm, form = producer()
-        raw = apply_pipeline(raw, bpm, form=form)
+        raw = apply_pipeline(raw, bpm, form=form, key=track_key)
         mastered, pan = _mix(raw, bpm)
         export_multitrack_midi(
             mastered,

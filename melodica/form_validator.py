@@ -662,19 +662,22 @@ def _check_form(
 
     if is_sonata:
         # FORM-1: development modulates through ≥2 keys
+        # Group all development sub-sections (development, development_1, development_2, ...)
+        # into a single logical block and count distinct keys across all of them.
         dev_sections = [s for s in form.sections if "development" in s.name.lower()]
-        for dev in dev_sections:
-            keys_in_dev = {
-                s.key for s in form.sections
-                if s.key is not None
-                and dev.start_beat <= s.start_beat < dev.end_beat
-            }
-            if dev.key is not None:
-                keys_in_dev.add(dev.key)
+        if dev_sections:
+            keys_in_dev = set()
+            for dev in dev_sections:
+                if dev.key is not None:
+                    keys_in_dev.add(dev.key)
+                # Also collect keys of any nested sections within this dev range
+                for s in form.sections:
+                    if s.key is not None and dev.start_beat <= s.start_beat < dev.end_beat:
+                        keys_in_dev.add(s.key)
             if len(keys_in_dev) < 2:
                 issues.append(FormIssue(
                     "FORM-1", "WARNING",
-                    f"Sonata development '{dev.name}' has {len(keys_in_dev)} key(s). "
+                    f"Sonata development has {len(keys_in_dev)} key(s). "
                     "Development should modulate through ≥2 keys "
                     "(relative major/minor, subdominant, dominant)."
                 ))
