@@ -150,8 +150,6 @@ def _build_rpp(
   RENDER_FMT 0 2 0
   RENDER_1X 0
   RENDER_RANGE 1 0 {len_sec:.6f} 0 0
-  RENDER_SRATE {sample_rate}
-  RENDER_CHANNELS 2
   <TRACK
     NAME Surge
     <ITEM
