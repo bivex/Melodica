@@ -462,11 +462,46 @@ def export_multitrack_midi(
         if has_micro:
             microtonal_tracks.append(name)
 
+    # Identify percussion tracks — these must live on GM channel 9 (the
+    # dedicated drum channel) so synths/soundfonts play them as percussion
+    # rather than as a pitched instrument. A track is percussion if its
+    # name matches a drum/percussion keyword, or its explicit GM program is
+    # the drum/percussion alias (0 via the "drums"/"percussion" GM entries).
+    DRUM_CHANNEL = 9
+    _PERC_KEYWORDS = ("drum", "percussion", "perc", "kit", "taiko", "timpani")
+
+    def _is_percussion(name: str) -> bool:
+        low = name.lower()
+        if any(kw in low for kw in _PERC_KEYWORDS):
+            return True
+        # Explicit GM program mapping to a known percussion alias
+        if instruments and name in instruments:
+            # GM has no pitched program for raw drum kits; callers signal
+            # percussion by routing through the drums/percussion name path,
+            # so an explicit program means a pitched instrument — not perc.
+            return False
+        return False
+
+    percussion_tracks = {name for name in tracks_data if _is_percussion(name)}
+
     track_channels: dict[str, list[int]] = {}
     next_chan = 0
     mpe_zone_channels = []  # Collect all MPE member channels for zone setup
+
+    def _advance_past_drum_channel() -> None:
+        """Skip channel 9 for pitched tracks — it's reserved for percussion."""
+        nonlocal next_chan
+        if next_chan == DRUM_CHANNEL:
+            next_chan += 1
+
     for name in tracks_data.keys():
+        # Percussion always goes to the dedicated drum channel.
+        if name in percussion_tracks:
+            track_channels[name] = [DRUM_CHANNEL]
+            continue
+
         is_mpe = name in mpe_set
+        _advance_past_drum_channel()
         if is_mpe:
             # MPE tracks: 7 channels for full polyphonic expression
             pool_size = 7

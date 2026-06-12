@@ -90,6 +90,63 @@ class TestExportMultitrackBasic:
                     channels.add(msg.channel)
         assert len(channels) == 2
 
+    def _track_channels(self, path) -> dict[str, set[int]]:
+        """Map track name -> set of channels used by note_on events."""
+        mid = mido.MidiFile(filename=str(path))
+        out: dict[str, set[int]] = {}
+        for track in mid.tracks[1:]:
+            name = None
+            chans: set[int] = set()
+            for msg in track:
+                if msg.type == "track_name":
+                    name = msg.name
+                elif msg.type == "note_on" and msg.velocity > 0:
+                    chans.add(msg.channel)
+            if name is not None:
+                out[name] = chans
+        return out
+
+    def test_drums_routed_to_channel_9(self, tmp_path):
+        path = tmp_path / "perc.mid"
+        export_multitrack_midi(
+            {
+                "shell": _make_notes(60),
+                "bass": _make_notes(36),
+                "drums": _make_notes(38),
+            },
+            path,
+        )
+        chans = self._track_channels(path)
+        assert chans["drums"] == {9}, "drums must live on GM channel 9"
+
+    def test_pitched_tracks_skip_channel_9(self, tmp_path):
+        # Many pitched tracks: none of them may land on the drum channel.
+        names = {f"mel{i}": _make_notes(60 + i) for i in range(12)}
+        names["drums"] = _make_notes(38)
+        path = tmp_path / "skip9.mid"
+        export_multitrack_midi(names, path)
+        chans = self._track_channels(path)
+        for name, used in chans.items():
+            if name == "drums":
+                assert used == {9}
+            else:
+                assert 9 not in used, f"pitched track {name} must not use channel 9"
+
+    def test_percussion_keyword_variants_routed(self, tmp_path):
+        path = tmp_path / "perc_kw.mid"
+        export_multitrack_midi(
+            {
+                "lead": _make_notes(72),
+                "Chaos_Taiko": _make_notes(40),
+                "perc_loop": _make_notes(42),
+            },
+            path,
+        )
+        chans = self._track_channels(path)
+        assert chans["Chaos_Taiko"] == {9}
+        assert chans["perc_loop"] == {9}
+        assert 9 not in chans["lead"]
+
     def test_note_roundtrip(self, tmp_path):
         path = tmp_path / "test.mid"
         notes = [

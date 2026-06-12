@@ -43,13 +43,17 @@ from melodica.composer.harmonic_verifier import detect_clashes, VerifierConfig
 # MIDI → tracks dict
 # ---------------------------------------------------------------------------
 
-def midi_to_tracks(path: str) -> tuple[dict[str, list[NoteInfo]], "mido.MidiFile"]:
+def midi_to_tracks(path: str) -> tuple[dict[str, list[NoteInfo]], "mido.MidiFile", set[str]]:
     mid = mido.MidiFile(path)
     tracks = {}
+    percussion: set[str] = set()
+    _PERC_KEYWORDS = ("drum", "perc", "kick", "snare", "hihat", "hat",
+                      "taiko", "cymbal", "kit")
     for track in mid.tracks:
         name = None
         notes_on = {}
         note_list = []
+        channels: set[int] = set()
         tick = 0
         for msg in track:
             tick += msg.time
@@ -57,6 +61,7 @@ def midi_to_tracks(path: str) -> tuple[dict[str, list[NoteInfo]], "mido.MidiFile
                 name = msg.name
             elif msg.type == "note_on" and msg.velocity > 0:
                 notes_on[(msg.note, msg.channel)] = (tick, msg.velocity)
+                channels.add(msg.channel)
             elif msg.type in ("note_off",) or (msg.type == "note_on" and msg.velocity == 0):
                 key = (msg.note, msg.channel)
                 if key in notes_on:
@@ -71,7 +76,11 @@ def midi_to_tracks(path: str) -> tuple[dict[str, list[NoteInfo]], "mido.MidiFile
                     ))
         if name and note_list:
             tracks[name] = sorted(note_list, key=lambda n: n.start)
-    return tracks, mid
+            # Percussion = GM drum channel 9, or a name that looks percussive.
+            low = (name or "").lower()
+            if 9 in channels or any(kw in low for kw in _PERC_KEYWORDS):
+                percussion.add(name)
+    return tracks, mid, percussion
 
 
 # ---------------------------------------------------------------------------
@@ -556,7 +565,7 @@ def analyze_suggestions(tracks: dict, total_notes: int, total_dur: float):
 # ---------------------------------------------------------------------------
 
 def analyze_file(midi_path: str, no_music21: bool = False):
-    tracks, mid = midi_to_tracks(midi_path)
+    tracks, mid, percussion = midi_to_tracks(midi_path)
     if not tracks:
         print(f"  No tracks found in {midi_path}")
         return
@@ -564,17 +573,23 @@ def analyze_file(midi_path: str, no_music21: bool = False):
     total_notes = sum(len(n) for n in tracks.values())
     total_dur = mid.length
 
+    # Pitched-only view: percussion (GM ch9 / drum kits) has no harmonic or
+    # register meaning, so exclude it from clash + psychoacoustic analysis.
+    pitched = {n: notes for n, notes in tracks.items() if n not in percussion}
+
     print(f"\n{'=' * 78}")
     print(f"  {Path(midi_path).name}")
     print(f"  Duration: {total_dur:.1f}s ({total_dur / 60:.1f}min)  |  "
           f"Tracks: {len(tracks)}  |  Notes: {total_notes}")
+    if percussion:
+        print(f"  Percussion (excluded from harmonic analysis): {', '.join(sorted(percussion))}")
     print(f"{'=' * 78}")
 
     analyze_track_stats(tracks, total_dur)
     band_counts = analyze_register_distribution(tracks, total_notes)
     analyze_balance_verdict(band_counts, total_notes)
-    analyze_psychoacoustic(tracks)
-    analyze_harmonic(tracks)
+    analyze_psychoacoustic(pitched)
+    analyze_harmonic(pitched)
     analyze_timeline(tracks, total_dur)
 
     if not no_music21:
