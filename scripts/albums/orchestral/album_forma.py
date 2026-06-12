@@ -56,6 +56,7 @@ from melodica.composer.melodic_transforms import (
 
 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer, HMMConfig
 from melodica.midi import export_multitrack_midi
+from melodica.form import MusicalForm
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 
@@ -171,22 +172,23 @@ def apply_pipeline(
     chords: list | None = None,
     key=None,
     section_breaks: list | None = None,
+    form=None,
 ) -> dict:
     """Apply production pipeline stages to a raw tracks dict.
 
     Runs the subset of DEFAULT_PIPELINE stages that operate purely on
     tracks/chords/key — skipping mixing/mastering/export which are handled
-    separately by _mix() and export_multitrack_midi().
-
+    separately by _mix() and export_multitrack_midi().\n
     Stages applied (in order):
-      humanize        — per-instrument micro-timing + velocity scatter
-      phrase_dynamics — per-phrase crescendo/diminuendo arch
-      articulations   — articulation string → CC11/CC1/CC64 + duration shaping
-      non_chord_tones — passing/neighbour tones on LEAD+STRINGS tracks
-      tension         — global tension boost/duck based on chord complexity
-      texture         — density automation via TensionCurve
-      transitions     — CC11 expression sweeps at section boundaries
-      harmonic_verify — detect & fix m2/tritone clashes across tracks
+      section_dynamics  — scale velocity per note to match FormSection.dynamics
+      humanize          — per-instrument micro-timing + velocity scatter
+      phrase_dynamics   — per-phrase crescendo/diminuendo arch
+      articulations     — articulation string → CC11/CC1/CC64 + duration shaping
+      non_chord_tones   — passing/neighbour tones on LEAD+STRINGS tracks
+      tension           — global tension boost/duck based on chord complexity
+      texture           — density automation via TensionCurve
+      transitions       — CC11 expression sweeps at section boundaries
+      harmonic_verify   — detect & fix m2/tritone clashes across tracks
     """
     from melodica.composer.album_pipeline import (
         _apply_humanization,
@@ -403,7 +405,7 @@ def track_01_sonata():
         "Lead": _clamp(lead, 50, 100), "Strings": strings, "Violin1": violin,
         "Horns": horns, "Brass": brass, "Bass": bass, "Pedal": pedal,
         "Glock": glock, "Timpani": timp,
-    }, bpm
+    }, bpm, MusicalForm.sonata(G_MINOR, 128.0, base_bpm=108.0)
 
 
 # ===========================================================================
@@ -469,7 +471,7 @@ def track_02_canon():
         "Lead": dux, "Canon": comes, "Viola": third,
         "Harp": harp, "Flute": flute, "Glock": glock,
         "Bass": bass, "Pedal": pedal,
-    }, bpm
+    }, bpm, MusicalForm.through_composed(D_MAJOR, 96.0, base_bpm=84.0)
 
 
 # ===========================================================================
@@ -558,7 +560,7 @@ def track_03_rondo():
     out["Glock"] = glock
     out["Horns"] = horns
 
-    return out, bpm
+    return out, bpm, MusicalForm.rondo(BB_MAJOR, 100.0, base_bpm=120.0)
 
 
 # ===========================================================================
@@ -643,7 +645,7 @@ def track_04_variations():
         "Lead": all_lead, "Strings": strings, "Harp": harp,
         "Choir": choir, "Cello": cello, "Bass": bass,
         "Pedal": pedal, "Glock": glock_raw,
-    }, bpm
+    }, bpm, MusicalForm.through_composed(E_MINOR, 96.0, base_bpm=72.0)
 
 
 # ===========================================================================
@@ -738,7 +740,7 @@ def track_05_arch():
         "Bass":     bass,
         "Pedal":    pedal,
         "Timpani":  timp_c,
-    }, bpm
+    }, bpm, MusicalForm.ternary(C_MAJOR, 112.0, base_bpm=96.0)
 
 
 # ---------------------------------------------------------------------------
@@ -784,7 +786,7 @@ def main():
     total_notes = 0
     for producer, filename, instruments in TRACKS:
         print("-" * 78)
-        raw, bpm = producer()
+        raw, bpm, form = producer()
         raw = apply_pipeline(raw, bpm)
         mastered, pan = _mix(raw, bpm)
         export_multitrack_midi(
@@ -794,6 +796,7 @@ def main():
             cc_events=pan,
             instruments=instruments,
             reaper_project=True,
+            form=form,
         )
         nc = sum(len(n) for n in raw.values())
         total_notes += nc
