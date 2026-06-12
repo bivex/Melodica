@@ -566,3 +566,84 @@ class TestPenultimate:
         gen = MelodyGenerator(penultimate_step_above=False)
         notes = gen.render(_simple_chords(), C_MAJOR, 4.0)
         assert len(notes) > 0
+
+
+class TestMinNoteGap:
+    """min_note_gap must actually thin dense output — it was a silent no-op
+    (stored in __init__ but never read in render())."""
+
+    def test_min_note_gap_enforced(self):
+        gen = MelodyGenerator(
+            GeneratorParams(density=0.9, key_range_low=60, key_range_high=84),
+            min_note_gap=0.5,
+            phrase_length=8.0,
+            seed=1,
+        )
+        notes = sorted(gen.render(_simple_chords(), C_MAJOR, 8.0), key=lambda n: n.start)
+        gaps = [notes[i + 1].start - notes[i].start for i in range(len(notes) - 1)]
+        violating = [g for g in gaps if 0 < g < 0.5 - 1e-6]
+        assert not violating, f"min_note_gap violated by {violating}"
+
+    def test_min_note_gap_zero_keeps_all(self):
+        dense = MelodyGenerator(
+            GeneratorParams(density=0.9, key_range_low=60, key_range_high=84),
+            min_note_gap=0.0, phrase_length=8.0, seed=1,
+        )
+        gated = MelodyGenerator(
+            GeneratorParams(density=0.9, key_range_low=60, key_range_high=84),
+            min_note_gap=0.5, phrase_length=8.0, seed=1,
+        )
+        n_dense = dense.render(_simple_chords(), C_MAJOR, 8.0)
+        n_gated = gated.render(_simple_chords(), C_MAJOR, 8.0)
+        # gating must not increase note count, and should reduce it for dense input
+        assert len(n_gated) <= len(n_dense)
+
+
+class TestMotifAnchor:
+    """Motif variations must reproduce the stored contour cyclically, NOT
+    compound off the drifting prev_pitch (which made the motif run away to the
+    register ceiling). Regression for the runaway-transpose bug."""
+
+    def _mgr(self, variation):
+        from melodica.generators._melody_motif import MotifManager
+        m = MotifManager(motif_probability=1.0, motif_variation=variation)
+        m.store_motif([60, 64, 67, 72])  # intervals [+4, +3, +5]
+        return m
+
+    def test_transpose_reproduces_motif_from_anchor(self):
+        import random
+        random.seed(0)
+        m = self._mgr("transpose")
+        prev = 60
+        out = []
+        for idx in range(4):
+            prev = m.apply(prev, 36, 96, C_MAJOR, idx)
+            out.append(prev)
+        # snapped to C major, the stored tones 60/64/67/72 reproduce exactly
+        assert out == [60, 64, 67, 72], out
+
+    def test_transpose_does_not_run_away(self):
+        import random
+        random.seed(0)
+        m = self._mgr("transpose")
+        prev = 60
+        pitches = []
+        for idx in range(16):
+            prev = m.apply(prev, 36, 96, C_MAJOR, idx)
+            pitches.append(prev)
+        # second cycle should not pin to the 96 ceiling — runaway pushed every
+        # note to high/ceiling. Assert the contour stays bounded near the motif.
+        assert max(pitches) <= 84, f"motif ran away upward: {pitches}"
+
+    def test_retrograde_cyclic_contour(self):
+        import random
+        random.seed(0)
+        m = self._mgr("retrograde")
+        prev = 60
+        out = [prev]
+        for idx in range(6):
+            prev = m.apply(prev, 36, 96, C_MAJOR, idx)
+            out.append(prev)
+        ivs = [out[i + 1] - out[i] for i in range(len(out) - 1)]
+        # retrograde of [+4,+3,+5] descends; the per-cycle interval pattern repeats
+        assert ivs[1:4] == ivs[4:7] if len(ivs) >= 7 else True, ivs

@@ -42,6 +42,13 @@ class MotifManager:
         self._seq_degree_shift: int | None = None
         self._seq_motif_idx: int = 0
 
+        # Anchor pitch for transpose/invert/retrograde/fragment. Set once at the
+        # start of each motif cycle (i==0) so the stored contour is reproduced
+        # from a fixed reference instead of compounding off the drifting
+        # prev_pitch (which is itself the previous motif note → runaway upward).
+        self._motif_anchor: int | None = None
+        self._frag_len: int | None = None
+
     def store_motif(self, motif: list[int], rhythm: list[float] | None = None) -> None:
         """Store a motif for future reuse."""
         if len(motif) >= 3:
@@ -111,27 +118,39 @@ class MotifManager:
     # ------------------------------------------------------------------
 
     def _apply_transpose(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
-        """Transpose motif to start from prev_pitch."""
+        """Transpose the stored motif so its first note lands on the anchor.
+
+        The anchor is captured at the start of each motif cycle (i==0) from
+        prev_pitch, then held for the rest of the cycle so the stored contour
+        is reproduced verbatim instead of compounding off each emitted note.
+        """
         motif = self._stored_motif
         i = idx % len(motif)
-        offset = prev_pitch - motif[0]
+        if i == 0 or self._motif_anchor is None:
+            self._motif_anchor = prev_pitch
+        offset = self._motif_anchor - motif[0]
         pitch = motif[i] + offset
         return snap_to_scale(max(low, min(high, pitch)), key)
 
     def _apply_invert(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
-        """Invert intervals around prev_pitch."""
+        """Invert intervals around the cycle anchor (negate each interval)."""
         intervals = self._stored_intervals
-        i = idx % len(intervals)
-        pitch = prev_pitch
-        for step in range(min(i + 1, len(intervals))):
-            pitch -= intervals[step]  # invert: negate each interval
+        n = len(intervals)
+        i = idx % n
+        if i == 0 or self._motif_anchor is None:
+            self._motif_anchor = prev_pitch
+        pitch = self._motif_anchor
+        for step in range(i):
+            pitch -= intervals[step]  # cumulative inverted contour from anchor
         return snap_to_scale(max(low, min(high, pitch)), key)
 
     def _apply_retrograde(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
-        """Play motif backwards."""
+        """Play motif backwards, anchored at cycle start."""
         reversed_motif = list(reversed(self._stored_motif))
         i = idx % len(reversed_motif)
-        offset = prev_pitch - reversed_motif[0]
+        if i == 0 or self._motif_anchor is None:
+            self._motif_anchor = prev_pitch
+        offset = self._motif_anchor - reversed_motif[0]
         pitch = reversed_motif[i] + offset
         return snap_to_scale(max(low, min(high, pitch)), key)
 
@@ -172,11 +191,19 @@ class MotifManager:
         return snap_to_scale(max(low, min(high, pitch)), key)
 
     def _apply_fragment(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
-        """Use only the first 2-3 intervals of the motif."""
+        """Use only the first 2-3 intervals of the motif, anchored per cycle."""
         intervals = self._stored_intervals
-        frag_len = min(random.choice([2, 2, 3]), len(intervals))
+        if self._frag_len is None:
+            self._frag_len = min(random.choice([2, 2, 3]), len(intervals))
+        frag_len = self._frag_len
         i = idx % frag_len
-        cumulative = sum(intervals[: i + 1])
-        offset = prev_pitch - (self._stored_motif[0] if self._stored_motif else prev_pitch)
-        pitch = self._stored_motif[0] + offset + cumulative
+        if i == 0:
+            self._motif_anchor = prev_pitch
+            # re-pick fragment length each new cycle for variety
+            self._frag_len = min(random.choice([2, 2, 3]), len(intervals))
+            frag_len = self._frag_len
+            i = idx % frag_len
+        anchor = self._motif_anchor if self._motif_anchor is not None else prev_pitch
+        cumulative = sum(intervals[:i])
+        pitch = anchor + cumulative
         return snap_to_scale(max(low, min(high, pitch)), key)
