@@ -328,26 +328,34 @@ def track_04_embers():
     lead = _lead_melody(key, dur, lo=64, hi=86, density=0.65)
     chords = _harmonize(lead, key, dur)
 
-    canon = _thin(_clamp(CanonGenerator(
-        GeneratorParams(density=0.5, key_range_low=60, key_range_high=84),
-        num_followers=2, delay_beats=2.0).render(chords, key, dur), 45, 85), dur)
+    # ARR-7: wider thin windows for stronger energy curve
+    counter = _thin(_clamp(CounterpointGenerator(
+        GeneratorParams(density=0.25, key_range_low=60, key_range_high=84)
+    ).render(chords, key, dur), 45, 85), dur, intro_end=dur*0.30, outro_start=dur*0.75, keep=0.10)
 
-    pizz = _thin(_clamp(StringsPizzicatoGenerator(
-        GeneratorParams(density=0.7, key_range_low=48, key_range_high=72)
-    ).render(chords, key, dur), 50, 88), dur)
+    # ARR-4: pizzicato removed (ignores density, floods MID); replaced with low viola
+    pizz = _thin(_clamp(ViolaGenerator(
+        GeneratorParams(density=0.2, key_range_low=36, key_range_high=55),
+        articulation="pizzicato").render(chords, key, dur), 40, 75), dur, intro_end=dur*0.30, outro_start=dur*0.75, keep=0.10)
 
     oboe = _clamp(OboeGenerator(
         GeneratorParams(density=0.5, key_range_low=68, key_range_high=89),
         articulation="staccato", register=2).render(chords, key, dur - 12.0), 45, 82)
-    oboe = _thin(_off(oboe, 6.0), dur)
+    oboe = _thin(_off(oboe, 6.0), dur, intro_end=dur*0.30, outro_start=dur*0.75, keep=0.10)
 
     clar = _thin(_clamp(ClarinetGenerator(
         GeneratorParams(density=0.45, key_range_low=55, key_range_high=79),
-        articulation="staccato").render(chords, key, dur), 40, 80), dur)
+        articulation="staccato").render(chords, key, dur), 40, 80), dur, intro_end=dur*0.30, outro_start=dur*0.75, keep=0.10)
 
     mallet = _thin(_clamp(MalletPercussionGenerator(
         GeneratorParams(density=0.55, key_range_low=72, key_range_high=96),
-        instrument="marimba", pattern="run").render(chords, key, dur), 45, 85), dur)
+        instrument="marimba", pattern="run").render(chords, key, dur), 45, 85), dur, intro_end=dur*0.30, outro_start=dur*0.75, keep=0.10)
+
+    # ARR-4: glockenspiel for HIGH register
+    glock_raw = _clamp(GlockenspielGenerator(
+        GeneratorParams(density=0.4, key_range_low=84, key_range_high=104),
+        pattern="sparkling_run", note_density=1.0).render(chords, key, dur - 6.0), 38, 72)
+    glock = _thin(_off(glock_raw, 6.0), dur, intro_end=dur*0.30, outro_start=dur*0.75, keep=0.10)
 
     bass = _clamp(ContrabassGenerator(
         GeneratorParams(density=0.85, key_range_low=24, key_range_high=38),
@@ -359,9 +367,9 @@ def track_04_embers():
         articulation="pizzicato").render(chords, key, dur), 45, 80)
 
     return {
-        "Lead": _clamp(lead, 58, 96), "Canon": canon, "Pizzicato": pizz,
-        "Oboe": oboe, "Clarinet": clar, "Mallet": mallet, "Bass": bass,
-        "Pedal": pedal,
+        "Lead": _clamp(lead, 58, 96), "Counter": counter, "Pizzicato": pizz,
+        "Oboe": oboe, "Clarinet": clar, "Mallet": mallet, "Glock": glock,
+        "Bass": bass, "Pedal": pedal,
     }, bpm
 
 
@@ -448,8 +456,8 @@ TRACKS = [
         "Strings": 48, "Bells": 14, "Glock": 9, "Bass": 43, "Pedal": 43,
     }),
     (track_04_embers, "04_Dance_of_Embers.mid", {
-        "Lead": 68, "Canon": 71, "Pizzicato": 45, "Oboe": 68,
-        "Clarinet": 71, "Mallet": 13, "Bass": 43, "Pedal": 43,
+        "Lead": 68, "Counter": 71, "Pizzicato": 41, "Oboe": 68,
+        "Clarinet": 71, "Mallet": 13, "Glock": 9, "Bass": 43, "Pedal": 43,
     }),
     (track_05_apotheosis, "05_Apotheosis.mid", {
         "Lead": 40, "Trumpet": 56, "Brass": 61, "Violin1": 40,
