@@ -169,27 +169,28 @@ class MotifManager:
         return snap_to_scale(max(low, min(high, pitch)), key)
 
     def _apply_sequence(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
-        """Replay interval pattern transposed by a consistent scale degree."""
+        """Replay the stored interval contour transposed by a scale degree.
+
+        A musical sequence repeats the figure at a new pitch level. The anchor
+        and the degree-transposition are fixed once at the start of each cycle,
+        then the contour is built additively from that anchor — NOT recomputed
+        off the drifting prev_pitch (which double-compounded: prev moved AND the
+        cumulative contour re-summed from zero, sending the line to the ceiling).
+        """
         intervals = self._stored_intervals
         motif_len = len(intervals)
         i = idx % motif_len
 
-        # Start of a new sequence cycle: pick transposition once
-        if i == 0 or self._seq_degree_shift is None:
+        # Start of a new sequence cycle: pick transposition and anchor once.
+        if i == 0 or self._seq_degree_shift is None or self._motif_anchor is None:
             self._seq_degree_shift = random.choice(_SEQUENCE_DEGREES)
             self._seq_motif_idx = idx
 
-        degree_shift = self._seq_degree_shift
-        cumulative = sum(intervals[: i + 1])
-        scale_pcs = key.degrees()
-        if scale_pcs:
+            degree_shift = self._seq_degree_shift
+            scale_pcs = key.degrees()
             base_pc = prev_pitch % 12
-            base_idx = None
-            for si, pc in enumerate(scale_pcs):
-                if pc == base_pc:
-                    base_idx = si
-                    break
-            if base_idx is not None:
+            base_idx = next((si for si, pc in enumerate(scale_pcs) if pc == base_pc), None) if scale_pcs else None
+            if scale_pcs and base_idx is not None:
                 target_idx = (base_idx + degree_shift) % len(scale_pcs)
                 semitone_shift = scale_pcs[target_idx] - scale_pcs[base_idx]
                 if degree_shift > 0 and semitone_shift < 0:
@@ -198,10 +199,19 @@ class MotifManager:
                     semitone_shift -= 12
             else:
                 semitone_shift = degree_shift * 2
-        else:
-            semitone_shift = degree_shift * 2
 
-        pitch = prev_pitch + semitone_shift + cumulative
+            # Anchor = transposed start, octave-folded so the contour fits range.
+            rel = [0]
+            run = 0
+            for iv in intervals:
+                run += iv
+                rel.append(run)
+            self._motif_anchor = self._fit_anchor(
+                int(prev_pitch + semitone_shift), min(rel), max(rel), low, high
+            )
+
+        cumulative = sum(intervals[:i])  # contour offset from anchor (i notes in)
+        pitch = self._motif_anchor + cumulative
         return snap_to_scale(max(low, min(high, pitch)), key)
 
     def _apply_fragment(self, prev_pitch: int, low: int, high: int, key: Scale, idx: int) -> int:
