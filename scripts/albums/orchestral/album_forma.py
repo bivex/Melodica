@@ -241,6 +241,42 @@ def apply_pipeline(
             role=role,
         )
 
+    # 0. Section dynamics — scale velocity per note to match FormSection.dynamics
+    if form is not None:
+        # dynamics string → target velocity range (mid, half-width)
+        _DYN_RANGE = {
+            "ppp": (20, 10), "pp": (32, 12), "p": (47, 13),
+            "mp": (62, 13), "mf": (72, 13), "f":  (88, 12),
+            "ff": (104, 11), "fff": (116, 8),
+        }
+        scaled: dict = {}
+        for tname, notes in tracks.items():
+            if not notes:
+                scaled[tname] = notes
+                continue
+            new_notes = []
+            for n in notes:
+                beat = float(n.start)
+                sec = next(
+                    (s for s in reversed(form.sections) if s.start_beat <= beat),
+                    form.sections[0] if form.sections else None,
+                )
+                if sec is None:
+                    new_notes.append(n)
+                    continue
+                mid, hw = _DYN_RANGE.get(sec.dynamics, (72, 13))
+                lo, hi = mid - hw, mid + hw
+                # Scale current velocity into target range preserving relative shape
+                cur = float(n.velocity)
+                # Soft scaling: blend 60% toward target mid, keep 40% original shape
+                target = mid + (cur - 80.0) * (hw / 35.0)
+                target = max(lo, min(hi, target))
+                new_vel = int(round(0.55 * target + 0.45 * cur))
+                new_vel = max(1, min(127, new_vel))
+                new_notes.append(n.__replace__(velocity=new_vel))
+            scaled[tname] = new_notes
+        tracks = scaled
+
     # 1. Humanize
     tracks = _apply_humanization(tracks, profiles)
 
@@ -787,7 +823,7 @@ def main():
     for producer, filename, instruments in TRACKS:
         print("-" * 78)
         raw, bpm, form = producer()
-        raw = apply_pipeline(raw, bpm)
+        raw = apply_pipeline(raw, bpm, form=form)
         mastered, pan = _mix(raw, bpm)
         export_multitrack_midi(
             mastered,
