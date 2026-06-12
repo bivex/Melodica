@@ -366,7 +366,7 @@ def export_multitrack_midi(
     pitch_bend_range: int = 2,
     mpe_tracks: set[str] | None = None,
     reaper_project: bool = False,
-    validate_form: bool | None = None,
+    validate_form: bool = True,
     form: "MusicalForm | None" = None,
 ) -> None:
     """
@@ -876,8 +876,7 @@ def export_multitrack_midi(
         diagnose_tracks(tracks_data, bpm=bpm, label=label)
 
     # Optional: form/arrangement validation
-    _should_validate = validate_form if validate_form is not None else (form is not None)
-    if _should_validate:
+    if validate_form:
         from melodica.form_validator import validate as _validate_form
         _label = str(path) if isinstance(path, (str, Path)) else None
         _validate_form(tracks_data, bpm=bpm, form=form, label=_label)
