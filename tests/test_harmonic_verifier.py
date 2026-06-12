@@ -1107,3 +1107,52 @@ class TestVerifyAndFixExtended:
             ),
         )
         assert report.clashes_fixed == 0
+
+
+# ---------------------------------------------------------------------------
+# Regression: field preservation + transpose target sanity (2026-06)
+# ---------------------------------------------------------------------------
+
+
+class TestFieldPreservation:
+    """Fix helpers must preserve ALL NoteInfo fields, not just the 6 they used
+    to re-list manually. The `absolute` flag was silently dropped, reverting
+    absolute-pitched notes to relative after any verifier fix."""
+
+    def test_try_transpose_preserves_absolute(self):
+        n = NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80, absolute=True)
+        out = _try_transpose(n, 61)
+        assert out.absolute is True
+
+    def test_reduce_velocity_preserves_absolute(self):
+        n = NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80, absolute=True)
+        assert _reduce_velocity(n).absolute is True
+
+    def test_shorten_preserves_absolute(self):
+        n = NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80, absolute=True)
+        assert _shorten(n).absolute is True
+
+    def test_full_pipeline_preserves_absolute(self):
+        tracks = {
+            "A": [NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=70, absolute=True)],
+            "B": [NoteInfo(pitch=61, start=0.0, duration=1.0, velocity=90, absolute=True)],
+        }
+        fixed, _ = verify_and_fix(tracks, VerifierConfig())
+        for notes in fixed.values():
+            for note in notes:
+                assert note.absolute is True
+
+    def test_transpose_does_not_land_on_other_pitch_class(self):
+        """A transpose 'fix' must never move the note onto the other voice's
+        pitch class — that converts a m2/TT clash into a unison (worse)."""
+        n = NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=70)
+        out = _try_transpose(n, 61)  # other note is pc 1
+        assert out.pitch % 12 != 1, "transpose landed on the other note's pitch class"
+
+    def test_transpose_resolves_minor_second(self):
+        """After transposing, the interval to the other note must not still be
+        a unison or minor second."""
+        n = NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=70)
+        out = _try_transpose(n, 61)
+        iv = abs(out.pitch - 61) % 12
+        assert iv not in (0, 1), f"unresolved clash, interval still {iv}"
