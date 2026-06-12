@@ -27,6 +27,7 @@ Rules:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import math
 import random
@@ -34,6 +35,9 @@ import random
 import mido  # type: ignore
 
 from melodica.types import ChordLabel, Note, NoteInfo, Track, Scale, MusicTimeline
+
+if TYPE_CHECKING:
+    from melodica.form import MusicalForm
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +366,8 @@ def export_multitrack_midi(
     pitch_bend_range: int = 2,
     mpe_tracks: set[str] | None = None,
     reaper_project: bool = False,
+    validate_form: bool | None = None,
+    form: "MusicalForm | None" = None,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -379,6 +385,10 @@ def export_multitrack_midi(
     reaper_project: if True, write a .rpp file next to the .mid file with the
         same stem name. The project contains one MIDI track per instrument,
         colour-coded by family, ready to open in REAPER for mixing/mastering.
+    validate_form: if True, run the form/arrangement validator and print warnings.
+        Defaults to True when form is provided, False otherwise.
+    form: optional MusicalForm — enables form-level checks (sonata, ternary, etc.)
+        in addition to arrangement checks.
     """
     from melodica.types import TICKS_PER_BEAT, MIDI_MAX
 
@@ -864,6 +874,13 @@ def export_multitrack_midi(
 
         label = str(path) if isinstance(path, (str, Path)) else None
         diagnose_tracks(tracks_data, bpm=bpm, label=label)
+
+    # Optional: form/arrangement validation
+    _should_validate = validate_form if validate_form is not None else (form is not None)
+    if _should_validate:
+        from melodica.form_validator import validate as _validate_form
+        _label = str(path) if isinstance(path, (str, Path)) else None
+        _validate_form(tracks_data, bpm=bpm, form=form, label=_label)
 
     # Optional: generate a REAPER .RPP project file next to the .mid
     if reaper_project and isinstance(path, (str, Path)):
