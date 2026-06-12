@@ -361,6 +361,7 @@ def export_multitrack_midi(
     tempo_events: list[tuple[float, float]] | None = None,
     pitch_bend_range: int = 2,
     mpe_tracks: set[str] | None = None,
+    reaper_project: bool = False,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -375,6 +376,9 @@ def export_multitrack_midi(
     diagnose: if True, run diagnostic analysis on tracks and print fix suggestions.
     mpe_tracks: set of track names that should get MPE (per-note expression) treatment.
         These tracks get larger voice pools and MPE zone RPN setup.
+    reaper_project: if True, write a .rpp file next to the .mid file with the
+        same stem name. The project contains one MIDI track per instrument,
+        colour-coded by family, ready to open in REAPER for mixing/mastering.
     """
     from melodica.types import TICKS_PER_BEAT, MIDI_MAX
 
@@ -860,6 +864,19 @@ def export_multitrack_midi(
 
         label = str(path) if isinstance(path, (str, Path)) else None
         diagnose_tracks(tracks_data, bpm=bpm, label=label)
+
+    # Optional: generate a REAPER .RPP project file next to the .mid
+    if reaper_project and isinstance(path, (str, Path)):
+        from melodica.reaper_project import export_reaper_project
+        rpp_path = Path(path).with_suffix(".rpp")
+        export_reaper_project(
+            tracks_data,
+            rpp_path,
+            bpm=bpm,
+            time_sig=time_sig,
+            instruments=instruments,
+            volumes=volumes,
+        )
 
 
 def export_midi(
