@@ -403,8 +403,9 @@ def _check_register_crossing(
             med_b = _median_pitch(pitched[name_b])
 
             # Determine which voice is "lower" by median pitch
-            # Only skip if voices are essentially at the same register (< 3 semitones)
-            if abs(med_a - med_b) < 3:
+            # Only flag pairs with clear register separation (≥8 semitones)
+            # — pairs closer than that legitimately overlap in orchestral writing
+            if abs(med_a - med_b) < 8:
                 continue
 
             lower_name  = name_a if med_a < med_b else name_b
