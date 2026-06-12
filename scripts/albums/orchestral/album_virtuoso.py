@@ -141,14 +141,14 @@ def track_01_aurora():
 
     violin = _clamp(ViolinGenerator(
         GeneratorParams(density=0.45, key_range_low=67, key_range_high=91),
-        articulation="legato", register=3).render(chords, key, dur), 45, 92)
+        articulation="legato").render(chords, key, dur), 45, 92)
 
     harp = _clamp(HarpGenerator(
-        GeneratorParams(density=0.7, key_range_low=55, key_range_high=88),
+        GeneratorParams(density=0.5, key_range_low=55, key_range_high=88),
         pattern="arpeggio", direction="up_down", octave_span=4).render(chords, key, dur), 35, 80)
 
     glock = _clamp(GlockenspielGenerator(
-        GeneratorParams(density=0.5, key_range_low=84, key_range_high=108),
+        GeneratorParams(density=0.5, key_range_low=84, key_range_high=104),
         pattern="sparkling_run", note_density=1.3).render(chords, key, dur), 40, 78)
 
     strings = _clamp(StringsLegatoGenerator(
@@ -159,9 +159,13 @@ def track_01_aurora():
         GeneratorParams(density=0.25, key_range_low=36, key_range_high=55),
         articulation="legato").render(chords, key, dur), 35, 65)
 
+    bass = _clamp(ContrabassGenerator(
+        GeneratorParams(density=0.45, key_range_low=28, key_range_high=43),
+        articulation="legato").render(chords, key, dur), 45, 75)
+
     return {
         "Lead": _clamp(lead, 55, 95), "Violin1": violin, "Harp": harp,
-        "Glock": glock, "Strings": strings, "Cello": cello,
+        "Glock": glock, "Strings": strings, "Cello": cello, "Bass": bass,
     }, bpm
 
 
@@ -180,11 +184,11 @@ def track_02_chase():
 
     ostinato = _clamp(OstinatoGenerator(
         GeneratorParams(density=0.85, key_range_low=50, key_range_high=69),
-        pattern_length=4, note_value=0.25).render(chords, key, dur), 45, 82)
+        pattern_length=4).render(chords, key, dur), 45, 82)
 
     violin = _clamp(ViolinGenerator(
         GeneratorParams(density=0.7, key_range_low=67, key_range_high=91),
-        articulation="spiccato", register=3).render(chords, key, dur), 50, 95)
+        articulation="spiccato").render(chords, key, dur), 50, 95)
 
     tremolo = _clamp(TremoloStringsGenerator(
         GeneratorParams(density=0.3, key_range_low=48, key_range_high=67),
@@ -201,7 +205,7 @@ def track_02_chase():
 
     timp = _clamp(TimpaniGenerator(
         GeneratorParams(density=0.3, key_range_low=36, key_range_high=48),
-        pattern="driving").render(chords, key, dur), 55, 95)
+        stroke_pattern="single").render(chords, key, dur), 55, 95)
 
     return {
         "Lead": _clamp(lead, 60, 100), "Ostinato": ostinato, "Violin1": violin,
@@ -228,7 +232,7 @@ def track_03_cathedral():
 
     brass = _clamp(BrassSectionGenerator(
         GeneratorParams(density=0.35, key_range_low=52, key_range_high=76),
-        section="full", dynamics="ff").render(chords, key, dur), 45, 90)
+        ensemble_mode="full", intensity=0.9).render(chords, key, dur), 45, 90)
 
     horns = _clamp(FrenchHornGenerator(
         GeneratorParams(density=0.3, key_range_low=48, key_range_high=67),
@@ -236,7 +240,7 @@ def track_03_cathedral():
 
     strings = _clamp(StringsLegatoGenerator(
         GeneratorParams(density=0.35, key_range_low=55, key_range_high=79),
-        section_size="full", dynamic_shape="swell").render(chords, key, dur), 40, 78)
+        section_size="full", dynamic_shape="crescendo").render(chords, key, dur), 40, 78)
 
     bells = _clamp(TubularBellsGenerator(
         GeneratorParams(density=0.2, key_range_low=60, key_range_high=84)
@@ -267,7 +271,7 @@ def track_04_embers():
 
     canon = _clamp(CanonGenerator(
         GeneratorParams(density=0.5, key_range_low=60, key_range_high=84),
-        voices=3, delay_beats=2.0).render(chords, key, dur), 45, 85)
+        num_followers=2, delay_beats=2.0).render(chords, key, dur), 45, 85)
 
     pizz = _clamp(StringsPizzicatoGenerator(
         GeneratorParams(density=0.7, key_range_low=48, key_range_high=72)
@@ -284,7 +288,7 @@ def track_04_embers():
 
     mallet = _clamp(MalletPercussionGenerator(
         GeneratorParams(density=0.55, key_range_low=72, key_range_high=96),
-        instrument="xylophone", pattern="run").render(chords, key, dur), 45, 85)
+        instrument="marimba", pattern="run").render(chords, key, dur), 45, 85)
 
     bass = _clamp(ContrabassGenerator(
         GeneratorParams(density=0.45, key_range_low=28, key_range_high=45),
@@ -311,19 +315,19 @@ def track_05_apotheosis():
 
     trumpet = _clamp(TrumpetGenerator(
         GeneratorParams(density=0.45, key_range_low=60, key_range_high=84),
-        articulation="marcato", register=2).render(chords, key, dur), 55, 100)
+        register=2, fanfare_mode=True).render(chords, key, dur), 55, 100)
 
     brass = _clamp(BrassSectionGenerator(
         GeneratorParams(density=0.4, key_range_low=48, key_range_high=72),
-        section="full", dynamics="ff").render(chords, key, dur), 50, 98)
+        ensemble_mode="full", intensity=0.9).render(chords, key, dur), 50, 98)
 
     violin = _clamp(ViolinGenerator(
         GeneratorParams(density=0.6, key_range_low=67, key_range_high=91),
-        articulation="legato", register=3).render(chords, key, dur), 50, 95)
+        articulation="legato").render(chords, key, dur), 50, 95)
 
     strings = _clamp(StringsLegatoGenerator(
         GeneratorParams(density=0.4, key_range_low=48, key_range_high=72),
-        section_size="full", dynamic_shape="swell").render(chords, key, dur), 45, 85)
+        section_size="full", dynamic_shape="crescendo").render(chords, key, dur), 45, 85)
 
     choir = _clamp(ChoirAahsGenerator(
         GeneratorParams(density=0.35, key_range_low=50, key_range_high=74),
@@ -331,20 +335,24 @@ def track_05_apotheosis():
 
     harp = _clamp(HarpGenerator(
         GeneratorParams(density=0.65, key_range_low=48, key_range_high=84),
-        pattern="glissando", direction="up").render(chords, key, dur), 40, 82)
+        pattern="arpeggio", direction="up_down").render(chords, key, dur), 40, 82)
+
+    glock = _clamp(GlockenspielGenerator(
+        GeneratorParams(density=0.5, key_range_low=88, key_range_high=104),
+        pattern="sparkling_run", note_density=1.2).render(chords, key, dur), 45, 82)
 
     tuba = _clamp(TubaGenerator(
         GeneratorParams(density=0.3, key_range_low=28, key_range_high=46)
     ).render(chords, key, dur), 50, 88)
 
-    timp = _clamp(TimpaniRollGenerator(
-        GeneratorParams(density=0.4, key_range_low=36, key_range_high=48)
-    ).render(chords, key, dur), 55, 100)
+    timp = _clamp(TimpaniGenerator(
+        GeneratorParams(density=0.4, key_range_low=36, key_range_high=48),
+        stroke_pattern="roll").render(chords, key, dur), 55, 100)
 
     return {
         "Lead": _clamp(lead, 60, 100), "Trumpet": trumpet, "Brass": brass,
         "Violin1": violin, "Strings": strings, "Choir": choir,
-        "Harp": harp, "Tuba": tuba, "Timpani": timp,
+        "Harp": harp, "Glock": glock, "Tuba": tuba, "Timpani": timp,
     }, bpm
 
 
@@ -355,7 +363,7 @@ def track_05_apotheosis():
 TRACKS = [
     (track_01_aurora, "01_Aurora_Borealis.mid", {
         "Lead": 40, "Violin1": 40, "Harp": 46, "Glock": 9,
-        "Strings": 48, "Cello": 42,
+        "Strings": 48, "Cello": 42, "Bass": 43,
     }),
     (track_02_chase, "02_The_Chase.mid", {
         "Lead": 40, "Ostinato": 45, "Violin1": 40, "Tremolo": 44,
@@ -371,7 +379,7 @@ TRACKS = [
     }),
     (track_05_apotheosis, "05_Apotheosis.mid", {
         "Lead": 40, "Trumpet": 56, "Brass": 61, "Violin1": 40,
-        "Strings": 48, "Choir": 52, "Harp": 46, "Tuba": 58, "Timpani": 47,
+        "Strings": 48, "Choir": 52, "Harp": 46, "Glock": 9, "Tuba": 58, "Timpani": 47,
     }),
 ]
 
