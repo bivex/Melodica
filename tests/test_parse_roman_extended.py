@@ -42,6 +42,15 @@ class TestSevenths:
         ("IIdim7",  Quality.FULL_DIM7),
         ("im7b5",   Quality.HALF_DIM7),
         ("IIm7b5",  Quality.HALF_DIM7),
+        # Bare-seventh case sensitivity: lowercase numerals are minor 7,
+        # uppercase are dominant 7 (matches Scale.diatonic_chord and theory).
+        ("ii7",     Quality.MINOR7),
+        ("iii7",    Quality.MINOR7),
+        ("vi7",     Quality.MINOR7),
+        ("I7",      Quality.DOMINANT7),
+        ("IV7",     Quality.DOMINANT7),
+        ("ii9",     Quality.MINOR7),
+        ("vi9",     Quality.MINOR7),
     ])
     def test_seventh_quality(self, symbol, expected_quality):
         chord = C_MAJOR.parse_roman(symbol)

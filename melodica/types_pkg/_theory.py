@@ -155,7 +155,12 @@ class Scale:
             if token in ("m7", "m9", "m11", "m13"):
                 return Quality.MINOR7
             if token in ("7", "9", "11", "13"):
-                return Quality.DOMINANT7
+                # Bare seventh/extension: quality follows the numeral's case,
+                # matching standard theory and Scale.diatonic_chord():
+                #   uppercase (V7, I7, bVII7) -> dominant 7
+                #   lowercase (ii7, vi7)      -> minor 7
+                # (Explicit m7/maj7 tokens above always win regardless of case.)
+                return Quality.DOMINANT7 if is_upper else Quality.MINOR7
             if token == "dim7":
                 return Quality.FULL_DIM7
             if token == "m7b5":
