@@ -28,6 +28,7 @@ Arrangement rules (always, no MusicalForm needed):
   ARR-5  Percussion active throughout entire piece (should rest in quiet sections)
   ARR-6  Dynamic range too narrow (velocity spread < 20)
   ARR-7  Single-density throughout — no energy curve (density variance < 0.05)
+  ARR-8  Parallel fifths or octaves between adjacent voices
 
 Form rules (require MusicalForm):
   FORM-1  Sonata: development has no key modulation (< 2 distinct keys)
@@ -243,6 +244,129 @@ def _check_arrangement(
                 "A strong energy curve requires buildup → climax → release. "
                 "Thin out the intro and coda."
             ))
+
+    # ARR-8: parallel fifths/octaves between adjacent voices
+    issues += _check_parallel_motion(pitched)
+
+    return issues
+
+
+def _check_parallel_motion(
+    pitched: dict[str, list[NoteInfo]],
+    *,
+    sample_beats: float = 0.25,   # time resolution for simultaneous-note snapping
+    max_warnings: int = 3,         # cap output to avoid noise
+) -> list[FormIssue]:
+    """ARR-8 — detect parallel fifths (7 semitones) and octaves (12 semitones).
+
+    Approach (Leon Willett / Aldwell & Schachter):
+      1. For each pair of tracks, collect notes that overlap in time.
+      2. Snap to a coarse time grid (sample_beats) to get 'simultaneous' events.
+      3. At each grid point find the lowest pitch in each voice.
+      4. Compute interval between the two voices at t and t+1.
+      5. If both intervals are 7 or 12 AND both voices moved in the same
+         direction → parallel fifth or octave.
+    """
+    PARALLEL_INTERVALS = {7, 12}  # perfect fifth, octave (mod 12 collapses octave equivalents)
+
+    track_names = [n for n, v in pitched.items() if v]
+    if len(track_names) < 2:
+        return []
+
+    issues: list[FormIssue] = []
+    seen_pairs: set[frozenset[str]] = set()
+
+    # build time grid across all notes
+    all_times: list[float] = []
+    for notes in pitched.values():
+        for n in notes:
+            all_times.append(float(n.start))
+    if not all_times:
+        return []
+    t_min, t_max = min(all_times), max(all_times)
+
+    # snap each track to grid: time → pitch (lowest note active at that time)
+    def _snap(notes: list[NoteInfo]) -> dict[int, int]:
+        grid: dict[int, int] = {}
+        for n in notes:
+            t_start = float(n.start)
+            t_end = t_start + float(n.duration)
+            slot_start = int(t_start / sample_beats)
+            slot_end = max(slot_start + 1, int(t_end / sample_beats))
+            for slot in range(slot_start, slot_end):
+                p = int(round(float(n.pitch)))
+                if slot not in grid or p < grid[slot]:
+                    grid[slot] = p
+        return grid
+
+    snapped = {name: _snap(pitched[name]) for name in track_names}
+
+    # check each pair
+    for i, name_a in enumerate(track_names):
+        for name_b in track_names[i + 1:]:
+            pair = frozenset({name_a, name_b})
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+
+            grid_a = snapped[name_a]
+            grid_b = snapped[name_b]
+            common_slots = sorted(set(grid_a) & set(grid_b))
+            if len(common_slots) < 2:
+                continue
+
+            parallels_fifth = 0
+            parallels_octave = 0
+
+            for idx in range(len(common_slots) - 1):
+                s0, s1 = common_slots[idx], common_slots[idx + 1]
+                if s1 - s0 > 4:  # skip large gaps (not truly consecutive)
+                    continue
+
+                p_a0, p_a1 = grid_a[s0], grid_a[s1]
+                p_b0, p_b1 = grid_b[s0], grid_b[s1]
+
+                interval0 = abs(p_a0 - p_b0) % 12
+                interval1 = abs(p_a1 - p_b1) % 12
+
+                # perfect fifth = 7 semitones mod 12; octave = 0 (mod 12)
+                # also catch raw 12 (exact octave) before mod
+                raw0 = abs(p_a0 - p_b0)
+                raw1 = abs(p_a1 - p_b1)
+
+                is_fifth  = (interval0 == 7 and interval1 == 7)
+                is_octave = (raw0 in {0, 12, 24} and raw1 in {0, 12, 24})
+
+                if not (is_fifth or is_octave):
+                    continue
+
+                # check parallel (same direction) motion
+                move_a = p_a1 - p_a0
+                move_b = p_b1 - p_b0
+                if move_a == 0 and move_b == 0:
+                    continue  # static — not parallel motion
+                if (move_a > 0) == (move_b > 0):  # same direction
+                    if is_octave:
+                        parallels_octave += 1
+                    else:
+                        parallels_fifth += 1
+
+            if parallels_fifth >= 2:
+                issues.append(FormIssue(
+                    "ARR-8", "WARNING",
+                    f"Parallel fifths between '{name_a}' and '{name_b}' "
+                    f"({parallels_fifth} instances). "
+                    "Use contrary or oblique motion to preserve voice independence."
+                ))
+            if parallels_octave >= 2:
+                issues.append(FormIssue(
+                    "ARR-8", "WARNING",
+                    f"Parallel octaves between '{name_a}' and '{name_b}' "
+                    f"({parallels_octave} instances). "
+                    "Parallel octaves merge two voices into one — use contrary motion."
+                ))
+            if len(issues) >= max_warnings:
+                return issues
 
     return issues
 
