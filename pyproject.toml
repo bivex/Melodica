@@ -28,6 +28,9 @@ live = [
 vst = [
     "pedalboard>=0.9",
 ]
+dawdreamer = [
+    "dawdreamer>=0.9",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

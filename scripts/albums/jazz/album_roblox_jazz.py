@@ -39,7 +39,7 @@ from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
-from melodica.vst_player import VSTPlayer
+from melodica.dawdreamer_player import DawDreamerPlayer
 
 # GM Programs
 PIANO = 0
@@ -68,9 +68,11 @@ OUT.mkdir(parents=True, exist_ok=True)
 _harmonizer = CoupledHMMHarmonizer(beam_width=14, chord_change="half")
 
 # ── Surge XT VST3 render (track 01 instruments) ─────────────────────────
-# NOTE: Surge XT cannot load .fxp presets headless through pedalboard
-# (load_preset expects .vstpreset; XML param-mapping mutes the synth).
-# We render through Surge's default patch — one synth timbre for all parts.
+# Backend: DawDreamer (richer param surface than pedalboard, reliable state).
+# Surge XT cannot load .fxp headless (VST2 format). The robust path is saved
+# state: configure a patch once (GUI/params), snapshot via save_state() to a
+# .bin, then load it headless here. If no .bin exists for an instrument we
+# fall back to Surge's default patch.
 SURGE_VST = "/Library/Audio/Plug-Ins/VST3/Surge XT.vst3"
 
 # Instruments of track 01 to route through the VST (drums excluded).
@@ -80,20 +82,25 @@ _TRACK01_GAINS: dict[str, float] = {
     "shell": 0.75, "bass": 0.65, "enclosure": 0.70,
 }
 
+# Optional per-instrument saved-state presets (.bin from DawDreamerPlayer.save_state).
+# Place files under output/roblox_jazz/presets/<name>.bin to use distinct timbres.
+_PRESET_DIR = Path("output/roblox_jazz/presets")
+
 
 def _render_track01_mp3(
     tracks: dict[str, list[NoteInfo]],
     path: Path,
     bpm: float,
 ) -> None:
-    """Render track 01 through Surge XT VST3 (default patch) → WAV → MP3.
+    """Render track 01 through Surge XT VST3 via DawDreamer → WAV → MP3.
 
-    Each instrument gets a fresh VSTPlayer instance. Drums are excluded
-    (no melodic VST). Presets are not loaded — see module note above.
+    Each instrument gets a fresh DawDreamerPlayer. If a saved state
+    (presets/<name>.bin) exists it is loaded for a distinct timbre, else the
+    default patch is used. Drums are excluded (no melodic VST).
     """
     import subprocess
     import tempfile
-    from pedalboard.io import AudioFile
+    import wave
 
     sr = 44100
     mix_buf: np.ndarray | None = None
@@ -102,7 +109,13 @@ def _render_track01_mp3(
         notes = tracks.get(name)
         if not notes:
             continue
-        with VSTPlayer(SURGE_VST, sample_rate=sr, normalize=False) as player:
+        with DawDreamerPlayer(SURGE_VST, sample_rate=sr, normalize=False) as player:
+            preset_bin = _PRESET_DIR / f"{name}.bin"
+            if preset_bin.exists():
+                player.load_state(preset_bin)
+                print(f"  [VST] {name}: loaded preset {preset_bin.name}")
+            else:
+                print(f"  [VST] {name}: default patch (no preset)")
             audio = player.render_notes(notes, bpm=bpm)
 
         audio = audio * _TRACK01_GAINS.get(name, 0.7)
@@ -130,8 +143,14 @@ def _render_track01_mp3(
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         wav_path = tmp.name
     try:
-        with AudioFile(wav_path, "w", sr, mix_buf.shape[0]) as f:
-            f.write(mix_buf)
+        # (channels, samples) float32 → 16-bit PCM WAV (stdlib)
+        interleaved = np.clip(mix_buf.T, -1.0, 1.0)
+        pcm = (interleaved * 32767.0).astype("<i2")
+        with wave.open(wav_path, "wb") as w:
+            w.setnchannels(mix_buf.shape[0])
+            w.setsampwidth(2)
+            w.setframerate(sr)
+            w.writeframes(pcm.tobytes())
         subprocess.run(
             ["ffmpeg", "-y", "-i", wav_path,
              "-codec:a", "libmp3lame", "-b:a", "320k", str(mp3_path)],
