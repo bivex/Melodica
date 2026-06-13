@@ -37,6 +37,8 @@ from melodica.generators.bass import BassGenerator
 from melodica.generators.nebula import NebulaGenerator
 from melodica.generators.drone import DroneGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
+from melodica.generators.harp import HarpGenerator
+from melodica.generators.orchestral_woodwinds import FluteGenerator
 from melodica.rhythm import get_rhythm
 from melodica.types import Scale, Mode
 from melodica.midi import export_multitrack_midi
@@ -81,7 +83,7 @@ def main():
     }
 
     # ------------------------------------------------------------------
-    # Track 1: Dunes At Dusk — Oud (sitar) + drone, endless sand
+    # Track 1: Dunes At Dusk — Oud + drone + harp + flute, endless sand
     # ------------------------------------------------------------------
     generate_track("1 Dunes At Dusk",
         parts=[IdeaPart(
@@ -91,6 +93,8 @@ def main():
                 "Oud":   structure_to_schedule("A B A:var C", 4),
                 "Drone": structure_to_schedule("A", 16),
                 "Wind":  structure_to_schedule("R A R B", 4),
+                "Harp":  structure_to_schedule("R R A B", 4),
+                "Flute": structure_to_schedule("R A R A:var", 4),
             },
         )],
         tracks=[
@@ -100,11 +104,15 @@ def main():
                 instrument="dark_pad", density=0.5, octave_shift=-1),
             TrackConfig(name="Wind", generator=NebulaGenerator(variant="cloud",
                 rhythm=get_rhythm("whole_note")), instrument="sweep_pad", density=0.25),
+            TrackConfig(name="Harp", generator=HarpGenerator(pattern="arpeggio",
+                direction="up", octave_span=2), instrument="harp", density=0.4, octave_shift=1),
+            TrackConfig(name="Flute", generator=FluteGenerator(articulation="sustained",
+                vibrato=True, register=2), instrument="pan_flute", density=0.3, octave_shift=1),
         ],
         out_dir=out_dir, bpm=48)
 
     # ------------------------------------------------------------------
-    # Track 2: Caravan — Oud + strings + bass, slow desert march
+    # Track 2: Caravan — Oud + strings + bass + harp + flute, slow desert march
     # ------------------------------------------------------------------
     generate_track("2 Caravan",
         parts=[IdeaPart(
@@ -115,6 +123,8 @@ def main():
                 "Strings": structure_to_schedule("A", 16),
                 "Bass":    structure_to_schedule("A", 16),
                 "Perc":    structure_to_schedule("R A", 8),
+                "Harp":    structure_to_schedule("R A B A:var", 4),
+                "Flute":   structure_to_schedule("R R A B", 4),
             },
         )],
         tracks=[
@@ -127,6 +137,10 @@ def main():
                 instrument="cello", density=0.6, octave_shift=-1),
             TrackConfig(name="Perc", generator=MelodyGenerator(mode="downbeat_chord",
                 rhythm=get_rhythm("straight_quarters")), instrument="timpani", density=0.5),
+            TrackConfig(name="Harp", generator=HarpGenerator(pattern="arpeggio",
+                direction="up", octave_span=2), instrument="harp", density=0.45, octave_shift=1),
+            TrackConfig(name="Flute", generator=FluteGenerator(articulation="sustained",
+                vibrato=True, register=2), instrument="flute", density=0.35, octave_shift=1),
         ],
         out_dir=out_dir, bpm=62)
 
@@ -289,7 +303,7 @@ def main():
         out_dir=out_dir, bpm=50)
 
     # ------------------------------------------------------------------
-    # Track 9: Sand And Stars — Oud + flute, night returns to silence
+    # Track 9: Sand And Stars — Oud + flute + harp + drone, night returns to silence
     # ------------------------------------------------------------------
     generate_track("9 Sand And Stars",
         parts=[IdeaPart(
@@ -299,15 +313,20 @@ def main():
                 "Oud":   structure_to_schedule("A B A:var C D", 4),
                 "Flute": structure_to_schedule("R A B A:var C", 4),
                 "Drone": structure_to_schedule("A", 20),
+                "Harp":  structure_to_schedule("R R A B A:var", 4),
             },
         )],
         tracks=[
             TrackConfig(name="Oud", generator=MelodyGenerator(mode="scale_walk",
                 rhythm=get_rhythm("markov:ballad")), instrument="sitar", density=0.5),
-            TrackConfig(name="Flute", generator=MelodyGenerator(mode="scale_walk",
-                rhythm=get_rhythm("probabilistic:sparse")), instrument="shakuhachi", density=0.3),
+            TrackConfig(name="Flute", generator=FluteGenerator(articulation="sustained",
+                vibrato=True, register=2, note_density=0.7), instrument="shakuhachi",
+                density=0.3, octave_shift=1),
             TrackConfig(name="Drone", generator=DroneGenerator(variant="tonic"),
                 instrument="dark_pad", density=0.4, octave_shift=-1),
+            TrackConfig(name="Harp", generator=HarpGenerator(pattern="arpeggio",
+                direction="up", octave_span=2, velocity_decay=0.88), instrument="harp",
+                density=0.3, octave_shift=1),
         ],
         out_dir=out_dir, bpm=42)
 

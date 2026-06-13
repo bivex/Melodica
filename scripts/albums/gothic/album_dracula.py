@@ -42,6 +42,9 @@ from melodica.generators.ambient import AmbientPadGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
 from melodica.generators.bass import BassGenerator
 from melodica.generators.drone import DroneGenerator
+from melodica.generators.horror_dissonance import HorrorDissonanceGenerator
+from melodica.generators.organ_drawbars import OrganDrawbarsGenerator
+from melodica.generators.tremolo_strings import TremoloStringsGenerator
 from melodica.composer.album_pipeline import produce_track, Mood
 
 # B Hungarian Minor (root=11, mode=HUNGARIAN_MINOR): B, C#, D, E#, F#, G, A#
@@ -104,10 +107,24 @@ def produce_carpathian_castle():
         velocity=50
     ).render(chords, KEY, dur)
 
+    # Horror dissonance — low, creeping dread beneath the violin
+    horror = HorrorDissonanceGenerator(
+        GeneratorParams(density=0.03, key_range_low=23, key_range_high=47),
+        dissonance_level=0.7, silence_probability=0.4
+    ).render(chords, KEY, dur)
+
+    # Pipe organ drawbars — gothic cathedral swell
+    organ_swell = OrganDrawbarsGenerator(
+        GeneratorParams(density=0.02, velocity_range=(40, 65), key_range_low=35, key_range_high=59),
+        registration="gospel"
+    ).render(chords, KEY, dur)
+
     produce_track(
-        tracks={"violin": violin, "organ": organ, "drone": drone},
+        tracks={"violin": violin, "organ": organ, "drone": drone,
+                "horror": horror, "organ_swell": organ_swell},
         bpm=bpm,
-        instruments={"violin": 40, "organ": 19, "drone": 43}, # Violin, Church Organ, Contrabass
+        instruments={"violin": 40, "organ": 19, "drone": 43,
+                     "horror": 43, "organ_swell": 19},
         path=OUT / "01_The_Carpathian_Castle.mid",
         mood=Mood.CHAMBER, key=KEY
     )
@@ -220,10 +237,24 @@ def produce_blood_is_life():
         if i % 2 == 1:
             timpani.append(types.NoteInfo(pitch=38, start=t + 2.0, duration=0.5, velocity=95))
 
+    # Horror dissonance — Renfield's madness, jagged and violent
+    horror = HorrorDissonanceGenerator(
+        GeneratorParams(density=0.08, key_range_low=35, key_range_high=59),
+        dissonance_level=0.9, silence_probability=0.2
+    ).render(chords, KEY, dur)
+
+    # Organ drawbars — thundering gothic power chords
+    organ_power = OrganDrawbarsGenerator(
+        GeneratorParams(density=0.05, velocity_range=(85, 115), key_range_low=35, key_range_high=59),
+        registration="rock", leslie_speed="fast"
+    ).render(chords, KEY, dur)
+
     produce_track(
-        tracks={"lead": lead_violin, "choir": choir, "dulcimer": dulcimer, "timpani": timpani},
+        tracks={"lead": lead_violin, "choir": choir, "dulcimer": dulcimer,
+                "timpani": timpani, "horror": horror, "organ": organ_power},
         bpm=bpm,
-        instruments={"lead": 40, "choir": 52, "dulcimer": 15, "timpani": 47},
+        instruments={"lead": 40, "choir": 52, "dulcimer": 15, "timpani": 47,
+                     "horror": 43, "organ": 19},
         path=OUT / "03_Blood_is_the_Life.mid",
         mood=Mood.AGGRESSIVE, key=KEY
     )
@@ -330,10 +361,24 @@ def produce_vampire_hunt():
         style="walking"
     ).render(chords, KEY, dur)
 
+    # Horror dissonance — the beast is cornered, desperate
+    horror = HorrorDissonanceGenerator(
+        GeneratorParams(density=0.05, key_range_low=23, key_range_high=47),
+        dissonance_level=0.8, silence_probability=0.3
+    ).render(chords, KEY, dur)
+
+    # Tremolo strings — frantic bowing as the chase reaches its climax
+    trem_strings = TremoloStringsGenerator(
+        GeneratorParams(density=0.6, velocity_range=(80, 110), key_range_low=48, key_range_high=72),
+        bow_speed=1.8, dynamic_swell=True
+    ).render(chords, KEY, dur)
+
     produce_track(
-        tracks={"strings": strings, "brass": brass, "gallop": gallop, "bass": bass},
+        tracks={"strings": strings, "brass": brass, "gallop": gallop, "bass": bass,
+                "horror": horror, "trem": trem_strings},
         bpm=bpm,
-        instruments={"strings": 48, "brass": 61, "gallop": 15, "bass": 32},
+        instruments={"strings": 48, "brass": 61, "gallop": 15, "bass": 32,
+                     "horror": 43, "trem": 44},
         path=OUT / "05_The_Vampire_Hunt.mid",
         mood=Mood.CINEMATIC, key=KEY
     )

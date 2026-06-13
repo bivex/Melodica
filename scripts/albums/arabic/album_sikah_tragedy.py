@@ -34,6 +34,9 @@ from melodica.generators.bass import BassGenerator
 from melodica.generators.nebula import NebulaGenerator
 from melodica.generators.drone import DroneGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
+from melodica.generators.horror_dissonance import HorrorDissonanceGenerator
+from melodica.generators.orchestral_percussion import TimpaniGenerator
+from melodica.generators.choir_ahhs import ChoirAahsGenerator
 from melodica.rhythm import get_rhythm
 from melodica.types import Scale, Mode
 from melodica.midi import export_multitrack_midi
@@ -79,7 +82,7 @@ def main():
     }
 
     # ------------------------------------------------------------------
-    # Track 1: Last Prayer — Solo oud, empty courtyard
+    # Track 1: Last Prayer — Solo oud + horror dread + choir lament, empty courtyard
     # ------------------------------------------------------------------
     generate_track("1 Last Prayer",
         parts=[IdeaPart(
@@ -89,6 +92,8 @@ def main():
                 "Oud":    structure_to_schedule("A B A:var C", 4),
                 "Echo":   structure_to_schedule("A", 16),
                 "Cello":  structure_to_schedule("R R A B", 4),
+                "Dread":  structure_to_schedule("R R R A", 4),
+                "Choir":  structure_to_schedule("R R A B", 4),
             },
         )],
         tracks=[
@@ -98,11 +103,17 @@ def main():
                 rhythm=get_rhythm("whole_note")), instrument="dark_pad", density=0.3),
             TrackConfig(name="Cello", generator=MelodyGenerator(mode="downbeat_chord",
                 rhythm=get_rhythm("half_note")), instrument="cello", density=0.3),
+            TrackConfig(name="Dread", generator=HorrorDissonanceGenerator(
+                variant="psychological", dissonance_level=0.6, silence_probability=0.25),
+                instrument="dark_pad", density=0.2),
+            TrackConfig(name="Choir", generator=ChoirAahsGenerator(
+                voice_count=4, dynamics="pp", vibrato=0.2, syllable="aah"),
+                instrument="choir_pad", density=0.25),
         ],
         out_dir=out_dir, bpm=46)
 
     # ------------------------------------------------------------------
-    # Track 2: Funeral March — Low strings + timpani, bearing the dead
+    # Track 2: Funeral March — Low strings + timpani + choir + horror dread
     # ------------------------------------------------------------------
     generate_track("2 Funeral March",
         parts=[IdeaPart(
@@ -113,6 +124,9 @@ def main():
                 "Timpani":    structure_to_schedule("R A", 8),
                 "Bass":       structure_to_schedule("A", 16),
                 "Drone":      structure_to_schedule("A", 16),
+                "FuneralDrum": structure_to_schedule("R A B A", 4),
+                "Lament":     structure_to_schedule("R R A B", 4),
+                "Dread":      structure_to_schedule("R A", 8),
             },
         )],
         tracks=[
@@ -125,6 +139,15 @@ def main():
                 instrument="tuba", density=0.6, octave_shift=-1),
             TrackConfig(name="Drone", generator=DroneGenerator(variant="tonic"),
                 instrument="dark_pad", density=0.4, octave_shift=-1),
+            TrackConfig(name="FuneralDrum", generator=TimpaniGenerator(
+                stroke_pattern="single", drum_count=4, tuning_follows=True),
+                instrument="timpani", density=0.5, octave_shift=-2),
+            TrackConfig(name="Lament", generator=ChoirAahsGenerator(
+                voice_count=4, dynamics="mp", vibrato=0.3, syllable="aah"),
+                instrument="choir_pad", density=0.4),
+            TrackConfig(name="Dread", generator=HorrorDissonanceGenerator(
+                variant="psychological", dissonance_level=0.5, silence_probability=0.3),
+                instrument="dark_pad", density=0.25),
         ],
         out_dir=out_dir, bpm=55)
 
@@ -246,7 +269,7 @@ def main():
         out_dir=out_dir, bpm=100)
 
     # ------------------------------------------------------------------
-    # Track 7: Ashes And Silence — Drone + piano, smoking ruins at dawn
+    # Track 7: Ashes And Silence — Drone + piano + horror + choir + timpani, smoking ruins
     # ------------------------------------------------------------------
     generate_track("7 Ashes And Silence",
         parts=[IdeaPart(
@@ -256,6 +279,9 @@ def main():
                 "Piano":     structure_to_schedule("R A B A:var", 4),
                 "Drone":     structure_to_schedule("A", 16),
                 "Fragments": structure_to_schedule("R R R A", 4),
+                "Dread":     structure_to_schedule("A", 16),
+                "Requiem":   structure_to_schedule("R R A B", 4),
+                "Toll":      structure_to_schedule("R A R A", 4),
             },
         )],
         tracks=[
@@ -265,6 +291,15 @@ def main():
                 instrument="dark_pad", density=0.5, octave_shift=-1),
             TrackConfig(name="Fragments", generator=NebulaGenerator(variant="cloud",
                 rhythm=get_rhythm("whole_note")), instrument="sweep_pad", density=0.2),
+            TrackConfig(name="Dread", generator=HorrorDissonanceGenerator(
+                variant="psychological", dissonance_level=0.75, silence_probability=0.2),
+                instrument="dark_pad", density=0.3),
+            TrackConfig(name="Requiem", generator=ChoirAahsGenerator(
+                voice_count=4, dynamics="mf", vibrato=0.4, syllable="aah"),
+                instrument="choir_pad", density=0.35),
+            TrackConfig(name="Toll", generator=TimpaniGenerator(
+                stroke_pattern="single", drum_count=2, tuning_follows=True),
+                instrument="timpani", density=0.2, octave_shift=-2),
         ],
         out_dir=out_dir, bpm=42)
 

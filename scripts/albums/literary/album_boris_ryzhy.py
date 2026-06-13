@@ -28,6 +28,8 @@ from melodica.generators.ambient import AmbientPadGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
 from melodica.generators.bass import BassGenerator
 from melodica.generators.accent import RhythmicAccentGenerator
+from melodica.generators.orchestral_strings import ViolinGenerator
+from melodica.generators.choir_ahhs import ChoirAahsGenerator
 from melodica.composer.automation import AutomationCurve
 from melodica.composer.album_pipeline import produce_track, Mood
 
@@ -71,14 +73,27 @@ def produce_partings_forever():
 
     bass = BassGenerator(GeneratorParams(density=0.4, velocity_range=(60, 80), key_range_low=24, key_range_high=36)).render(full_chords, KEY_C_MINOR, dur)
 
+    # Plaintive solo violin — the farewell at the station, bowing into the cold
+    solo_violin = ViolinGenerator(
+        GeneratorParams(density=0.25, velocity_range=(55, 85), key_range_low=60, key_range_high=84),
+        articulation="legato", vibrato=True, con_sordino=True
+    ).render(full_chords, KEY_C_MINOR, dur)
+
+    # Distant choir — the crowd on the platform, wordless
+    choir = ChoirAahsGenerator(
+        GeneratorParams(density=0.03, velocity_range=(25, 45), key_range_low=48, key_range_high=64)
+    ).render(full_chords, KEY_C_MINOR, dur)
+
     cc_events = {
         "violin": AutomationCurve.sine_lfo(11, 40, 100, 0.0, dur, period=8.0)
     }
 
     produce_track(
-        tracks={"piano": piano.notes, "violin": violin.notes, "bass": bass},
+        tracks={"piano": piano.notes, "violin": violin.notes, "bass": bass,
+                "solo_violin": solo_violin, "choir": choir},
         bpm=bpm,
-        instruments={"piano": 0, "violin": 40, "bass": 32},
+        instruments={"piano": 0, "violin": 40, "bass": 32,
+                     "solo_violin": 40, "choir": 52},
         path=OUT / "01_Partings_Forever.mid",
         mood=Mood.CHAMBER, key=KEY_C_MINOR, chords=full_chords, cc_events=cc_events
     )
@@ -152,15 +167,28 @@ def produce_dreams_of_father():
     pad = AmbientPadGenerator(GeneratorParams(density=0.2, velocity_range=(45, 60), key_range_low=48, key_range_high=72)).render(full_chords, KEY_E_MINOR, dur)
     bass = BassGenerator(GeneratorParams(density=0.4, velocity_range=(55, 75), key_range_low=28, key_range_high=40)).render(full_chords, KEY_E_MINOR, dur)
 
+    # Plaintive solo violin — the father's voice, remembered in dreams
+    solo_violin = ViolinGenerator(
+        GeneratorParams(density=0.2, velocity_range=(50, 75), key_range_low=60, key_range_high=84),
+        articulation="legato", vibrato=True, con_sordino=True
+    ).render(full_chords, KEY_E_MINOR, dur)
+
+    # Distant choir — memory dissolving into warmth
+    choir = ChoirAahsGenerator(
+        GeneratorParams(density=0.025, velocity_range=(22, 40), key_range_low=48, key_range_high=64)
+    ).render(full_chords, KEY_E_MINOR, dur)
+
     cc_events = {
         "flute": AutomationCurve.sine_lfo(11, 50, 100, 0.0, dur, period=8.0),
         "pad": AutomationCurve.sine_lfo(74, 40, 85, 0.0, dur, period=16.0)
     }
 
     produce_track(
-        tracks={"guitar": guitar.notes, "flute": flute.notes, "pad": pad, "bass": bass},
+        tracks={"guitar": guitar.notes, "flute": flute.notes, "pad": pad, "bass": bass,
+                "solo_violin": solo_violin, "choir": choir},
         bpm=bpm,
-        instruments={"guitar": 25, "flute": 73, "pad": 89, "bass": 32},
+        instruments={"guitar": 25, "flute": 73, "pad": 89, "bass": 32,
+                     "solo_violin": 40, "choir": 52},
         path=OUT / "03_Dreams_Of_Father.mid",
         mood=Mood.CHAMBER, key=KEY_E_MINOR, chords=full_chords, cc_events=cc_events
     )
@@ -236,6 +264,17 @@ def produce_pale_rider():
     timpani = RhythmicAccentGenerator(preset="gallop", pitch=35, velocity_humanize=12, accent_strength=1.5).render(full_chords, KEY_G_PHRYGIAN, dur)
     bass = BassGenerator(GeneratorParams(density=0.6, velocity_range=(80, 105), key_range_low=24, key_range_high=36)).render(full_chords, KEY_G_PHRYGIAN, dur)
 
+    # Plaintive solo violin — the rider's lament, cutting through the gallop
+    solo_violin = ViolinGenerator(
+        GeneratorParams(density=0.35, velocity_range=(75, 105), key_range_low=60, key_range_high=84),
+        articulation="legato", vibrato=True, con_sordino=False
+    ).render(full_chords, KEY_G_PHRYGIAN, dur)
+
+    # Choir aahs — the apocalyptic chorus, voices of the dead
+    choir = ChoirAahsGenerator(
+        GeneratorParams(density=0.04, velocity_range=(45, 70), key_range_low=48, key_range_high=68)
+    ).render(full_chords, KEY_G_PHRYGIAN, dur)
+
     # Accelerando from 120 to 145
     tempo_events = [(float(b), 120.0 + (145.0 - 120.0) * (b / dur)) for b in range(0, int(dur), 4)]
 
@@ -245,9 +284,11 @@ def produce_pale_rider():
     }
 
     produce_track(
-        tracks={"strings": strings, "horn": horn, "timpani": timpani, "bass": bass},
+        tracks={"strings": strings, "horn": horn, "timpani": timpani, "bass": bass,
+                "solo_violin": solo_violin, "choir": choir},
         bpm=bpm,
-        instruments={"strings": 44, "horn": 60, "timpani": 47, "bass": 43},
+        instruments={"strings": 44, "horn": 60, "timpani": 47, "bass": 43,
+                     "solo_violin": 40, "choir": 52},
         path=OUT / "05_Pale_Rider.mid",
         mood=Mood.CINEMATIC, key=KEY_G_PHRYGIAN, chords=full_chords, cc_events=cc_events, tempo_events=tempo_events
     )

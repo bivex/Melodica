@@ -32,6 +32,8 @@ from melodica.generators.drone import DroneGenerator
 from melodica.generators.ambient import AmbientPadGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
 from melodica.generators.bass import BassGenerator
+from melodica.generators.plucked_solo import PianoSoloGenerator
+from melodica.generators.choir_ahhs import ChoirAahsGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -121,8 +123,20 @@ def produce_study():
                                      velocity=random.randint(50, 70)))
         t += random.uniform(3.0, 8.0)
 
-    tracks = {"harpsichord": harp, "bass": bass, "perc": clicks}
-    inst = {"harpsichord": HARPSICHORD, "bass": CONTRABASS, "perc": XYLOPHONE}
+    # Sparse piano — isolated introspective notes between harpsichord phrases
+    piano_sparse = PianoSoloGenerator(
+        GeneratorParams(density=0.06, velocity_range=(25, 45), key_range_low=48, key_range_high=72)
+    ).render(chords, KEY, dur)
+
+    # Distant choir murmur — barely audible existential presence
+    choir_distant = ChoirAahsGenerator(
+        GeneratorParams(density=0.02, velocity_range=(20, 35), key_range_low=48, key_range_high=60)
+    ).render(chords, KEY, dur)
+
+    tracks = {"harpsichord": harp, "bass": bass, "perc": clicks,
+              "piano": piano_sparse, "choir": choir_distant}
+    inst = {"harpsichord": HARPSICHORD, "bass": CONTRABASS, "perc": XYLOPHONE,
+            "piano": PIANO, "choir": CHOIR}
     _export(tracks, OUT / "01_The_Study.mid", bpm, inst, lufs=-18.0)
 
 # =====================================================================
@@ -208,8 +222,20 @@ def produce_library():
         ))
         t += random.uniform(5.0, 15.0)
 
-    tracks = {"flute": flute, "choir": choir, "perc": piano}
-    inst = {"flute": FLUTE, "choir": PAD_CHOIR, "perc": PIANO}
+    # Sparse piano — pages turning, single notes like footsteps between shelves
+    piano_pages = PianoSoloGenerator(
+        GeneratorParams(density=0.04, velocity_range=(20, 35), key_range_low=48, key_range_high=72)
+    ).render(chords, KEY, dur)
+
+    # Wider choir — the forbidden whispers fill the stacks
+    choir_whisper = ChoirAahsGenerator(
+        GeneratorParams(density=0.025, velocity_range=(18, 30), key_range_low=48, key_range_high=64)
+    ).render(chords, KEY, dur)
+
+    tracks = {"flute": flute, "choir": choir, "perc": piano,
+              "piano": piano_pages, "choir2": choir_whisper}
+    inst = {"flute": FLUTE, "choir": PAD_CHOIR, "perc": PIANO,
+            "piano": PIANO, "choir2": CHOIR}
     _export(tracks, OUT / "03_The_Library.mid", bpm, inst, lufs=-20.0)
 
 # =====================================================================
@@ -323,11 +349,23 @@ def produce_handshake():
         phrase_length=16.0, note_range_low=57, note_range_high=69
     ).render(chords[6:], KEY, dur - 48.0)
 
+    # Sparse piano — the human moment, warm single notes under the cello
+    piano_bench = PianoSoloGenerator(
+        GeneratorParams(density=0.08, velocity_range=(30, 50), key_range_low=48, key_range_high=72)
+    ).render(chords, KEY, dur)
+
+    # Choir aahs — Isabel's presence, distant and grateful
+    choir_bench = ChoirAahsGenerator(
+        GeneratorParams(density=0.03, velocity_range=(22, 38), key_range_low=52, key_range_high=68)
+    ).render(chords, KEY, dur)
+
     tracks = {
         "cello": cello, "strings": strings,
-        "voice": _off(voice, 48.0)
+        "voice": _off(voice, 48.0),
+        "piano": piano_bench, "choir": choir_bench
     }
-    inst = {"cello": CELLO, "strings": STRING_ENS, "voice": VOICE_OOH}
+    inst = {"cello": CELLO, "strings": STRING_ENS, "voice": VOICE_OOH,
+            "piano": PIANO, "choir": CHOIR}
     _export(tracks, OUT / "06_The_Handshake.mid", bpm, inst, lufs=-18.0)
 
 # =====================================================================

@@ -28,6 +28,8 @@ from melodica.generators.ambient import AmbientPadGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
 from melodica.generators.bass import BassGenerator
 from melodica.generators.accent import RhythmicAccentGenerator
+from melodica.generators.orchestral_brass import TrumpetGenerator
+from melodica.generators.chromatic_percussion import GlockenspielGenerator
 from melodica.composer.automation import AutomationCurve
 from melodica.composer.album_pipeline import produce_track, Mood
 
@@ -84,17 +86,32 @@ def produce_paper_ballerina():
     pad = AmbientPadGenerator(GeneratorParams(density=0.3, velocity_range=(45, 60), key_range_low=48, key_range_high=72)).render(full_chords, KEY_LYDIAN, dur)
     strings = StringsEnsembleGenerator(GeneratorParams(density=0.4, velocity_range=(40, 55), key_range_low=36, key_range_high=60)).render(full_chords, KEY_LYDIAN, dur)
 
+    # Fairy tale trumpet — a distant fanfare announcing the ballerina's entrance
+    trumpet = TrumpetGenerator(
+        GeneratorParams(density=0.15, velocity_range=(55, 80), key_range_low=60, key_range_high=79),
+        articulation="legato", con_sordino=True, register=60
+    ).render(full_chords, KEY_LYDIAN, dur)
+
+    # Glockenspiel — fairy tale bells shimmering over the shimmer layer
+    glock_bells = GlockenspielGenerator(
+        GeneratorParams(density=0.35, velocity_range=(50, 70), key_range_low=84, key_range_high=108),
+        pattern="random"
+    ).render(full_chords, KEY_LYDIAN, dur)
+
     cc_events = {
         "flute": AutomationCurve.sine_lfo(11, 50, 110, 0.0, dur, period=8.0),
         "strings": AutomationCurve.sine_lfo(11, 40, 80, 0.0, dur, period=16.0)
     }
 
     produce_track(
-        tracks={"box": box.notes, "glock": glock.notes, "celesta": celesta.notes, 
-                "flute": flute.notes, "clarinet": clarinet.notes, 
-                "harp": harp, "pad": pad, "strings": strings},
+        tracks={"box": box.notes, "glock": glock.notes, "celesta": celesta.notes,
+                "flute": flute.notes, "clarinet": clarinet.notes,
+                "harp": harp, "pad": pad, "strings": strings,
+                "trumpet": trumpet, "glock_bells": glock_bells},
         bpm=bpm,
-        instruments={"box": 10, "glock": 9, "celesta": 8, "flute": 73, "clarinet": 71, "harp": 46, "pad": 88, "strings": 48},
+        instruments={"box": 10, "glock": 9, "celesta": 8, "flute": 73, "clarinet": 71,
+                     "harp": 46, "pad": 88, "strings": 48,
+                     "trumpet": 56, "glock_bells": 9},
         path=OUT / "01_The_Paper_Ballerina.mid",
         mood=Mood.CHAMBER, key=KEY_LYDIAN, chords=full_chords, cc_events=cc_events
     )
@@ -142,10 +159,26 @@ def produce_midnight_troll():
     tuba = BassGenerator(GeneratorParams(density=0.4, velocity_range=(85, 110), key_range_low=24, key_range_high=40)).render(full_chords, KEY_HUNGARIAN_MAJOR, dur)
     woodblock = RhythmicAccentGenerator(preset="gallop", pitch=76, velocity_humanize=15, accent_strength=1.5).render(full_chords, KEY_HUNGARIAN_MAJOR, dur)
 
+    # Military trumpet — mischievous staccato stabs, the troll's herald
+    trumpet = TrumpetGenerator(
+        GeneratorParams(density=0.2, velocity_range=(80, 105), key_range_low=60, key_range_high=79),
+        articulation="staccato", con_sordino=False, register=60
+    ).render(full_chords, KEY_HUNGARIAN_MAJOR, dur)
+
+    # Glockenspiel — the troll's treasure chest, glinting in the dark
+    glock_bells = GlockenspielGenerator(
+        GeneratorParams(density=0.4, velocity_range=(65, 90), key_range_low=72, key_range_high=96),
+        pattern="up_down"
+    ).render(full_chords, KEY_HUNGARIAN_MAJOR, dur)
+
     produce_track(
-        tracks={"marimba": marimba.notes, "xylo": xylo.notes, "oboe": oboe, "brass": brass.notes, "bassoon": bassoon, "tuba": tuba, "woodblock": woodblock},
+        tracks={"marimba": marimba.notes, "xylo": xylo.notes, "oboe": oboe,
+                "brass": brass.notes, "bassoon": bassoon, "tuba": tuba, "woodblock": woodblock,
+                "trumpet": trumpet, "glock_bells": glock_bells},
         bpm=bpm,
-        instruments={"marimba": 12, "xylo": 13, "oboe": 68, "brass": 61, "bassoon": 70, "tuba": 58, "woodblock": 115},
+        instruments={"marimba": 12, "xylo": 13, "oboe": 68, "brass": 61,
+                     "bassoon": 70, "tuba": 58, "woodblock": 115,
+                     "trumpet": 56, "glock_bells": 9},
         path=OUT / "02_The_Midnight_Troll.mid",
         mood=Mood.CHAMBER, key=KEY_HUNGARIAN_MAJOR, chords=full_chords
     )
@@ -185,6 +218,18 @@ def produce_paper_boat():
     timpani = RhythmicAccentGenerator(preset="gallop", pitch=36, velocity_humanize=12, accent_strength=1.5).render(full_chords, KEY_HUNGARIAN_MAJOR, dur)
     tuba = BassGenerator(GeneratorParams(density=0.6, velocity_range=(90, 115), key_range_low=24, key_range_high=40)).render(full_chords, KEY_HUNGARIAN_MAJOR, dur)
 
+    # Heroic trumpet — the tin soldier stands firm as the boat rushes the rapids
+    trumpet = TrumpetGenerator(
+        GeneratorParams(density=0.3, velocity_range=(90, 120), key_range_low=60, key_range_high=79),
+        articulation="legato", con_sordino=False, register=60, fanfare_mode=True
+    ).render(full_chords, KEY_HUNGARIAN_MAJOR, dur)
+
+    # Glockenspiel — the soldier's one-legged resolve, bright and determined
+    glock_bells = GlockenspielGenerator(
+        GeneratorParams(density=0.45, velocity_range=(70, 95), key_range_low=72, key_range_high=96),
+        pattern="up"
+    ).render(full_chords, KEY_HUNGARIAN_MAJOR, dur)
+
     # Accelerando tempo map (120 to 145 BPM)
     tempo_events = [(float(b), 120.0 + (145.0 - 120.0) * (b / dur)) for b in range(0, int(dur), 4)]
 
@@ -193,9 +238,12 @@ def produce_paper_boat():
     }
 
     produce_track(
-        tracks={"trem_high": trem_high, "trem_low": trem_low, "spiccato": spiccato.notes, "horn": horn, "timpani": timpani, "tuba": tuba},
+        tracks={"trem_high": trem_high, "trem_low": trem_low, "spiccato": spiccato.notes,
+                "horn": horn, "timpani": timpani, "tuba": tuba,
+                "trumpet": trumpet, "glock_bells": glock_bells},
         bpm=120,
-        instruments={"trem_high": 44, "trem_low": 44, "spiccato": 45, "horn": 60, "timpani": 47, "tuba": 58},
+        instruments={"trem_high": 44, "trem_low": 44, "spiccato": 45, "horn": 60,
+                     "timpani": 47, "tuba": 58, "trumpet": 56, "glock_bells": 9},
         path=OUT / "03_The_Paper_Boat.mid",
         mood=Mood.CINEMATIC, key=KEY_HUNGARIAN_MAJOR, chords=full_chords, cc_events=cc_events, tempo_events=tempo_events
     )

@@ -26,6 +26,8 @@ from melodica.generators.drone import DroneGenerator
 from melodica.generators.ambient import AmbientPadGenerator
 from melodica.generators.rest import RestGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
+from melodica.generators.tremolo_strings import TremoloStringsGenerator
+from melodica.generators.orchestral_strings import CelloGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -99,6 +101,7 @@ def _master(raw: dict, bpm: float, lufs: float = -20.0):
         "guitar": 0.65, "strings": 0.45, "arp": 0.5, "bass": 0.35,
         "vibes": 0.55, "motif": 0.6, "pad_space": 0.4,
         "glock": 0.4,
+        "tremolo_strings": 0.4, "cello_low": 0.45,
     })
     mixed = desk.apply_mixing(raw, [], int(bpm))
     master = MasteringDesk(target_lufs=lufs)
@@ -150,11 +153,19 @@ def produce_01_afterimage():
     motif = LM.render("grief_bowl", offset=170.0, transpose=4,
                        fragment_start=0.0, fragment_end=6.5, augment_factor=1.5)
 
+    # Tremolo strings: low shimmering tension bed
+    tremolo_strings = TremoloStringsGenerator(GeneratorParams(density=0.04, key_range_low=36, key_range_high=48), variant="chord", dynamic_swell=True).render(chords, key, dur)
+    # Cello low: deep sustained counter-voice below the melody cello
+    cello_low = CelloGenerator(GeneratorParams(density=0.03, key_range_low=36, key_range_high=48), articulation="sustained", vibrato=True).render(chords, key, dur - 50.0)
+    cello_low = _off(cello_low, 20.0)
+
     _export({"pad": pad, "drone": drone, "cello": cello, "piano": piano,
-             "harp": harp, "bowl": bowl, "motif": motif},
+             "harp": harp, "bowl": bowl, "motif": motif,
+             "tremolo_strings": tremolo_strings, "cello_low": cello_low},
             OUT / "01_Afterimage.mid", bpm, key,
             {"pad": PAD_SPACE, "drone": ACOUSTIC_BASS, "cello": CELLO,
-             "piano": PIANO, "harp": HARP, "bowl": BOWL, "motif": BOWL})
+             "piano": PIANO, "harp": HARP, "bowl": BOWL, "motif": BOWL,
+             "tremolo_strings": 49, "cello_low": CELLO})
 
 
 # Track 2 — Hollow
@@ -261,11 +272,19 @@ def produce_04_between():
     motif2 = LM.render("grief", offset=180.0, transpose=11, fragment_start=6.5, fragment_end=13.0, diminish_factor=1.5)
     motif3 = LM.render("grief_bowl", offset=190.0, transpose=11, fragment_start=0.0, fragment_end=3.5, augment_factor=2.0)
 
+    # Tremolo strings: dark slow swell underneath the pad
+    tremolo_strings = TremoloStringsGenerator(GeneratorParams(density=0.04, key_range_low=36, key_range_high=48), variant="chord", dynamic_swell=True).render(chords, key, dur)
+    # Cello low: deep sorrowful voice entering after cello drone
+    cello_low = CelloGenerator(GeneratorParams(density=0.03, key_range_low=36, key_range_high=48), articulation="sustained", vibrato=True).render(chords, key, dur - 60.0)
+    cello_low = _off(cello_low, 30.0)
+
     _export({"pad": pad, "cello": cello, "piano": piano + coda_piano, "harp": harp + coda_harp,
-             "choir": choir + coda_choir, "bowl": bowl, "motif": motif + motif2 + motif3},
+             "choir": choir + coda_choir, "bowl": bowl, "motif": motif + motif2 + motif3,
+             "tremolo_strings": tremolo_strings, "cello_low": cello_low},
             OUT / "04_Between.mid", bpm, key,
             {"pad": PAD_SPACE, "cello": CELLO, "piano": PIANO,
-             "harp": HARP, "choir": CHOIR, "bowl": BOWL, "motif": PIANO})
+             "harp": HARP, "choir": CHOIR, "bowl": BOWL, "motif": PIANO,
+             "tremolo_strings": 49, "cello_low": CELLO})
 
 
 # Track 5 — Return
@@ -331,11 +350,19 @@ def produce_06_white_fog():
 
     motif = LM.render("grief_choir", offset=155.0, transpose=0, retrograde=True, augment_factor=1.5)
 
+    # Tremolo strings: ghostly shimmering fog texture
+    tremolo_strings = TremoloStringsGenerator(GeneratorParams(density=0.04, key_range_low=36, key_range_high=48), variant="chord", dynamic_swell=True).render(chords, key, dur)
+    # Cello low: slow mournful line weaving under the vibes
+    cello_low = CelloGenerator(GeneratorParams(density=0.03, key_range_low=36, key_range_high=48), articulation="sustained", vibrato=True).render(chords, key, dur - 60.0)
+    cello_low = _off(cello_low, 30.0)
+
     _export({"pad": pad, "cello": cello, "harp": harp, "vibes": vibes,
-             "choir": choir, "motif": motif},
+             "choir": choir, "motif": motif,
+             "tremolo_strings": tremolo_strings, "cello_low": cello_low},
             OUT / "06_White_Fog.mid", bpm, key,
             {"pad": PAD_SPACE, "cello": CELLO, "harp": HARP,
-             "vibes": VIBRAPHONE, "choir": CHOIR, "motif": CHOIR})
+             "vibes": VIBRAPHONE, "choir": CHOIR, "motif": CHOIR,
+             "tremolo_strings": 49, "cello_low": CELLO})
 
 
 # Track 7 — Embers

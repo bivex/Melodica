@@ -26,6 +26,8 @@ from melodica.generators.drone import DroneGenerator
 from melodica.generators.ambient import AmbientPadGenerator
 from melodica.generators.rest import RestGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
+from melodica.generators.chord_gen import ChordGenerator
+from melodica.generators.chromatic_percussion import CelestaGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -200,6 +202,7 @@ def _master(raw: dict, bpm: float, lufs: float = -18.0):
         "pad": 0.45, "choir": 0.5, "drone": 0.4, "bowl": 0.55,
         "guitar": 0.65, "strings": 0.55, "arp": 0.5, "bass": 0.4,
         "bells": 0.45, "vibes": 0.5, "glock": 0.4,
+        "chords_layer": 0.4, "celesta": 0.45,
     })
     mixed = desk.apply_mixing(raw, [], int(bpm))
     master = MasteringDesk(target_lufs=lufs)
@@ -237,7 +240,13 @@ def produce_01_morning_light():
     bells = [NoteInfo(pitch=84, start=float(i * 25), duration=6.0, velocity=50) for i in range(8)]
     motif = LM.render("home", offset=160.0, augment_factor=1.5)
 
-    _export({"pad": pad, "piano": piano, "bells": bells, "motif": motif}, OUT / "01_Morning_Light.mid", bpm, key, {"pad": PAD_WARM, "piano": PIANO, "bells": BOWL, "motif": PIANO})
+    # Chord warmth: soft closed voicings in mid register
+    chords_layer = ChordGenerator(GeneratorParams(density=0.04, key_range_low=48, key_range_high=72), voicing="closed").render(chords, key, dur)
+    # Celesta: delicate high sparkle entering after pad settles
+    celesta = CelestaGenerator(GeneratorParams(density=0.05, key_range_low=72, key_range_high=88), pattern="dreamy_arpeggio").render(chords, key, dur - 56.0)
+    celesta = _off(celesta, 32.0)
+
+    _export({"pad": pad, "piano": piano, "bells": bells, "motif": motif, "chords_layer": chords_layer, "celesta": celesta}, OUT / "01_Morning_Light.mid", bpm, key, {"pad": PAD_WARM, "piano": PIANO, "bells": BOWL, "motif": PIANO, "chords_layer": PAD_WARM, "celesta": GLOCKENSPIEL})
 
 def produce_02_open_door():
     print("--- 02_Open_Door ---")
@@ -295,7 +304,13 @@ def produce_05_living_room():
     choir = _off(choir, 24.0)
     motif = LM.render("home_choir", offset=160.0, transpose=9, augment_factor=2.0)
 
-    _export({"pad": pad, "piano": piano, "cello": cello, "choir": choir, "motif": motif}, OUT / "05_Living_Room.mid", bpm, key, {"pad": PAD_WARM, "piano": PIANO, "cello": CELLO, "choir": CHOIR, "motif": CHOIR})
+    # Chord layer: cozy mid-register harmonic support
+    chords_layer = ChordGenerator(GeneratorParams(density=0.04, key_range_low=48, key_range_high=72), voicing="closed").render(chords, key, dur)
+    # Celesta: gentle high shimmer entering mid-track
+    celesta = CelestaGenerator(GeneratorParams(density=0.05, key_range_low=72, key_range_high=84), pattern="dreamy_arpeggio").render(chords, key, dur - 80.0)
+    celesta = _off(celesta, 48.0)
+
+    _export({"pad": pad, "piano": piano, "cello": cello, "choir": choir, "motif": motif, "chords_layer": chords_layer, "celesta": celesta}, OUT / "05_Living_Room.mid", bpm, key, {"pad": PAD_WARM, "piano": PIANO, "cello": CELLO, "choir": CHOIR, "motif": CHOIR, "chords_layer": PAD_WARM, "celesta": GLOCKENSPIEL})
 
 def produce_06_rainy_window():
     print("--- 06_Rainy_Window ---")
@@ -341,7 +356,13 @@ def produce_08_fireplace():
     choir = _off(choir, 36.0)
     motif = LM.render("home", offset=180.0, augment_factor=2.5)
 
-    _export({"pad": pad, "piano": piano, "cello": cello, "choir": choir, "motif": motif}, OUT / "08_Fireplace.mid", bpm, key, {"pad": PAD_WARM, "piano": PIANO, "cello": CELLO, "choir": CHOIR, "motif": PIANO})
+    # Chord layer: slow warm harmonics like firelight flickering
+    chords_layer = ChordGenerator(GeneratorParams(density=0.03, key_range_low=48, key_range_high=72), voicing="closed").render(chords, key, dur)
+    # Celesta: rare crystalline accents high up, entering late
+    celesta = CelestaGenerator(GeneratorParams(density=0.04, key_range_low=72, key_range_high=88), pattern="dreamy_arpeggio").render(chords, key, dur - 100.0)
+    celesta = _off(celesta, 60.0)
+
+    _export({"pad": pad, "piano": piano, "cello": cello, "choir": choir, "motif": motif, "chords_layer": chords_layer, "celesta": celesta}, OUT / "08_Fireplace.mid", bpm, key, {"pad": PAD_WARM, "piano": PIANO, "cello": CELLO, "choir": CHOIR, "motif": PIANO, "chords_layer": PAD_WARM, "celesta": GLOCKENSPIEL})
 
 def produce_09_goodnight():
     print("--- 09_Goodnight ---")

@@ -14,7 +14,8 @@ from melodica.generators import (
     MelodyGenerator, BassGenerator, StringsEnsembleGenerator, 
     AmbientPadGenerator, ArpeggiatorGenerator, SynthEffectsGenerator,
     CelestaGenerator, FluteGenerator, TimpaniGenerator, BrassSectionGenerator,
-    WoodwindsEnsembleGenerator
+    WoodwindsEnsembleGenerator, ViolinGenerator, CelloGenerator,
+    ChoirAahsGenerator, HarpGenerator
 )
 from melodica.types import Scale, Mode
 from melodica.midi import export_multitrack_midi
@@ -38,6 +39,10 @@ def main():
         TrackConfig(name="Woodwinds", generator=WoodwindsEnsembleGenerator(), instrument="flute", density=0.4),
         TrackConfig(name="Timpani", generator=TimpaniGenerator(), instrument="timpani", density=0.3, octave_shift=-2),
         TrackConfig(name="Celesta", generator=ArpeggiatorGenerator(), instrument="celesta", density=0.4, octave_shift=1),
+        TrackConfig(name="ViolinSolo", generator=ViolinGenerator(articulation="sustained", vibrato=True, double_stops=False), instrument="violin", density=0.5, octave_shift=1),
+        TrackConfig(name="CelloSection", generator=CelloGenerator(articulation="sustained", vibrato=True, bass_voice=True), instrument="cello", density=0.55, octave_shift=-1),
+        TrackConfig(name="ChoirAahs", generator=ChoirAahsGenerator(voice_count=4, dynamics="mf", vibrato=0.3, syllable="aah"), instrument="choir_pad", density=0.4),
+        TrackConfig(name="Harp", generator=HarpGenerator(pattern="arpeggio", direction="up", octave_span=3, velocity_decay=0.92), instrument="harp", density=0.35, octave_shift=1),
     ]
 
     album_configs = [
