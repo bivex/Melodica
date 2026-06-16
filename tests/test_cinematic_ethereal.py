@@ -26,6 +26,8 @@ def test_glass_harp_generator():
 def test_handpan_generator():
     chords = [ChordLabel(root=0, quality=Quality.MAJOR, start=0.0, duration=4.0)]
     
+    import random
+    random.seed(0)
     gen = HandPanGenerator(strike_damping=0.3)
     notes = gen.render(chords, C_MAJOR, 4.0)
     
