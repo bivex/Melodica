@@ -382,7 +382,7 @@ def build_1(name):
                 mode="phrygian_pad",
                 chord_dur=4.0,
                 velocity_level=0.15,
-                register="mid",
+                register="high",
             )
 
         case "vocals_hint":
@@ -586,7 +586,7 @@ def build_2(name):
                 mode="phrygian_pad",
                 chord_dur=4.0,
                 velocity_level=0.18,
-                register="mid",
+                register="high",
             )
 
         case "lead":
@@ -780,7 +780,7 @@ def build_3(name):
                 mode="minor_pad",
                 chord_dur=4.0,
                 velocity_level=0.14,
-                register="mid",
+                register="high",
             )
 
         case "keys_comp":
@@ -978,7 +978,7 @@ def build_4(name):
                 mode="phrygian_pad",
                 chord_dur=4.0,
                 velocity_level=0.12,
-                register="mid",
+                register="high",
             )
 
         case "lead":
