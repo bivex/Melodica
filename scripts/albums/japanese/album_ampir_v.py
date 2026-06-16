@@ -39,6 +39,7 @@ from melodica.generators.percussion_latino import ShakerGenerator
 from melodica.generators.sound_design import WindMachineGenerator
 from melodica.generators.orchestral_drum import ConcertBassDrumGenerator
 from melodica.generators.cinematic_ethereal import HandPanGenerator, GlassHarpGenerator
+from melodica.generators.solo_melody import SoloMelodyGenerator
 from melodica.midi import export_multitrack_midi
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -112,9 +113,12 @@ def produce_green_arrow():
         pop_intensity=0.8, note_density=0.4
     ).render(chords, key_a, dur)
 
-    # Searching breathy alto flute melody
-    flute = AltoFluteGenerator(
-        breath_vibrato=True, note_density=0.45
+    # Searching breathy alto flute melody using expressive SoloMelodyGenerator
+    flute = SoloMelodyGenerator(
+        params=GeneratorParams(key_range_low=55, key_range_high=88),
+        style="vocal_mimic",
+        vibrato_depth=0.6,
+        chromaticism=0.1
     ).render(chords, key_a, dur)
 
     # Steady rustling rainstick in the background
@@ -188,9 +192,12 @@ def produce_tongue_awakening():
     dur = 180.0
     chords = _chords(key_e, "i i i iv i i v i" * 5, dur)
 
-    # Lyrical, crying erhu representing the pain and transformation of the bite
-    erhu = ErhuGenerator(
-        glide_probability=0.55, vibrato_depth=0.4
+    # Lyrical, crying erhu representing the pain and transformation of the bite using SoloMelodyGenerator
+    erhu = SoloMelodyGenerator(
+        params=GeneratorParams(key_range_low=60, key_range_high=80),
+        style="cinematic_strings",
+        vibrato_depth=0.8,
+        chromaticism=0.2
     ).render(chords, key_e, dur)
 
     # Pulsing koto tremolos representing blood flow
@@ -230,9 +237,12 @@ def produce_sunny_city():
         strike_damping=0.5
     ).render(chords, key_g, dur)
 
-    # Low breathy flute representing the summer breeze of the past
-    flute = AltoFluteGenerator(
-        breath_vibrato=False, note_density=0.4
+    # Low breathy flute representing the summer breeze of the past using SoloMelodyGenerator
+    flute = SoloMelodyGenerator(
+        params=GeneratorParams(key_range_low=55, key_range_high=85),
+        style="vocal_mimic",
+        vibrato_depth=0.5,
+        chromaticism=0.1
     ).render(chords, key_g, dur)
 
     # Music box-like kalimba representing memory fragments
@@ -267,9 +277,12 @@ def produce_red_liquid():
         friction_noise=0.3
     ).render(chords, key_d, dur)
 
-    # Lyrical floating erhu bows
-    erhu = ErhuGenerator(
-        glide_probability=0.35, vibrato_depth=0.3
+    # Lyrical floating erhu bows using SoloMelodyGenerator
+    erhu = SoloMelodyGenerator(
+        params=GeneratorParams(key_range_low=60, key_range_high=80),
+        style="modal_ambient",
+        vibrato_depth=0.7,
+        chromaticism=0.15
     ).render(chords, key_d, dur)
 
     # Seashore sweeps fading out as Roman drifts into unconsciousness
