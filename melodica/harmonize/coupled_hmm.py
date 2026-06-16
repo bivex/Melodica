@@ -15,6 +15,7 @@ Weights loaded from melodica/harmonize/weights/ (trained by train_full_modes.py)
 from __future__ import annotations
 
 import math
+import warnings
 import numpy as np
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -110,7 +111,6 @@ PNOTE, PCHANGE = _load_weights()
 # Pre-compute log versions for Viterbi (add small epsilon to avoid log(0))
 _EPS = 1e-8
 LOG_PNOTE = np.log(np.clip(PNOTE, _EPS, 1.0))
-LOG_NOT_PNOTE = np.log(np.clip(1.0 - PNOTE, _EPS, 1.0))
 LOG_PCHANGE = np.log(np.clip(PCHANGE, _EPS, 1.0))
 
 # ---------------------------------------------------------------------------
@@ -219,6 +219,44 @@ MODE_PRIORS = _init_mode_priors()
 
 
 # ---------------------------------------------------------------------------
+# Modal cadence map (Layer 1 penultimate attraction)
+# ---------------------------------------------------------------------------
+# Characteristic pre-cadential scale degree (as a semitone offset from the
+# tonic) for each mode. The Layer-1 Viterbi biases the penultimate step toward
+# (key_root + PENULTIMATE_DEGREE[mode]) % 12 instead of a hardcoded dominant.
+# A hardcoded +7 (V->I) is only correct for major/common-minor harmony; for
+# Phrygian the characteristic cadence is bII->i (+1), for Dorian IV->i (+5),
+# for Mixolydian bVII->I (+10), etc. Without this, every modal piece is
+# pulled toward a major V-I and loses its color. See _hmm_helpers.MODAL_CADENCES
+# for the full cadence grammar (used by functional_hmm; coupled_hmm only needs
+# the penultimate degree here).
+PENULTIMATE_DEGREE: dict[Mode, int] = {
+    # V -> I / V -> i  (authentic cadence)
+    Mode.MAJOR: 7, Mode.IONIAN: 7,
+    Mode.NATURAL_MINOR: 7, Mode.AEOLIAN: 7, Mode.AEOLIAN_BB7: 7,
+    Mode.HARMONIC_MINOR: 7, Mode.MELODIC_MINOR: 7,
+    Mode.LYDIAN: 7,
+    # bII -> i  (Phrygian / double-harmonic / Neapolitan cadence)
+    Mode.PHRYGIAN: 1, Mode.PHRYGIAN_DOMINANT: 1, Mode.BAYATI: 1,
+    Mode.DOUBLE_HARMONIC: 1, Mode.DOUBLE_HARM_MAJOR: 1,
+    Mode.BYZANTINE: 1, Mode.PERSIAN: 1, Mode.HUNGARIAN_MINOR: 1,
+    Mode.GYPSY: 1, Mode.SPANISH_8_TONE: 1,
+    Mode.NEAPOLITAN_MINOR: 1, Mode.NEAPOLITAN_MAJOR: 1,
+    # IV -> i  (Dorian / modal plagal cadence)
+    Mode.DORIAN: 5, Mode.DORIAN_PENTATONIC: 5, Mode.DORIAN_B2: 5,
+    # bVII -> I  (Mixolydian cadence)
+    Mode.MIXOLYDIAN: 10, Mode.MIXOLYDIAN_B6: 10,
+}
+# Fallback for modes not listed above: standard dominant (V).
+_PENULT_DEFAULT = 7
+
+
+def _penultimate_degree(mode: Mode) -> int:
+    """Characteristic pre-cadential degree offset for a mode."""
+    return PENULTIMATE_DEGREE.get(mode, _PENULT_DEFAULT)
+
+
+# ---------------------------------------------------------------------------
 # Coupled HMM Configuration & Harmonizer
 # ---------------------------------------------------------------------------
 
@@ -235,6 +273,8 @@ class HMMConfig:
     tonic_end_bias: float = 2.5               # Recommended range: [1.0, 5.0]. Cadential attraction to the key tonic on the final step.
     dominant_penultimate_bias: float = 1.5    # Recommended range: [0.5, 3.0]. Cadential attraction to the dominant root on the penultimate step.
     extended_chord_penalty: float = 1.0       # Recommended range: [0.0, 2.0]. Penalty for extended/9th chords to prevent their overuse.
+    requested_key_bias: float = 6.0           # Recommended range: [2.0, 12.0]. Per-step Layer-2 emission bonus for the exact (root, mode) the caller requested (initial_scale). Honors the composer's mode (prevents collapse of Phrygian/Dorian/Mixolydian to major). Additive, so strong chord evidence can still overcome it; favors modal fidelity over free modulation detection.
+    requested_key_mode_bias: float = 2.0      # Recommended range: [0.0, 6.0]. Milder per-step Layer-2 bonus for the requested MODE on any other root, so the harmonization keeps the modality even if the tonal center shifts.
 
 
 @dataclass
@@ -254,6 +294,18 @@ class CoupledHMMHarmonizer:
     chord_change: str = "bars"
     bar_grid: BarGrid | None = None
     config: HMMConfig = field(default_factory=HMMConfig)
+
+    def __post_init__(self) -> None:
+        # CoupledHMM runs an exact Viterbi over all 1728 states (12x12x12);
+        # beam_width is accepted for API compatibility with other engines but
+        # has no effect here. Warn (rather than silently ignore) so callers
+        # relying on beam pruning are not misled.
+        if self.beam_width != 12:
+            warnings.warn(
+                "CoupledHMMHarmonizer uses exact Viterbi (no beam pruning); "
+                "beam_width=%r is ignored." % (self.beam_width,),
+                stacklevel=2,
+            )
 
     def harmonize(
         self,
@@ -297,8 +349,10 @@ class CoupledHMMHarmonizer:
                 observations, initial_scale, change_points, constraints, tension_curve, key_path=None
             )
 
-            # Pass 2: Estimate key center sequence (Layer 2) from initial chords
-            key_path = self._viterbi_keys(draft_chords, debug=debug)
+            # Pass 2: Estimate key center sequence (Layer 2) from initial chords.
+            # initial_scale is forwarded so Layer 2 respects the requested mode
+            # instead of collapsing modal input to major/minor.
+            key_path = self._viterbi_keys(draft_chords, requested_scale=initial_scale, debug=debug)
 
         # 3. Pass 3: Refined chord sequence, now coupled to key centers
         chord_path = self._viterbi_chords(
@@ -492,7 +546,12 @@ class CoupledHMMHarmonizer:
                             if r_curr == key_root:
                                 coupling_bias += self.config.tonic_end_bias
                         elif t_step == T - 2:
-                            if r_curr == (key_root + 7) % 12:
+                            # Modal: attract to the characteristic pre-cadential
+                            # degree of the current key's mode, not a hardcoded
+                            # dominant (V). Phrygian -> bII, Dorian -> IV,
+                            # Mixolydian -> bVII, major/minor -> V, etc.
+                            penult = _penultimate_degree(MODES_LIST[key_type])
+                            if r_curr == (key_root + penult) % 12:
                                 coupling_bias += self.config.dominant_penultimate_bias
                         
                     dp_new[r_curr, k_curr, :] += score_emit + t_bias + coupling_bias
@@ -528,8 +587,21 @@ class CoupledHMMHarmonizer:
     # Layer 2: Key Viterbi
     # ------------------------------------------------------------------
 
-    def _viterbi_keys(self, chords: list[tuple[int, int]], debug: bool = False) -> list[tuple[int, int]]:
-        """Find most likely key sequence given chord observations."""
+    def _viterbi_keys(
+        self,
+        chords: list[tuple[int, int]],
+        requested_scale: Scale | None = None,
+        debug: bool = False,
+    ) -> list[tuple[int, int]]:
+        """Find most likely key sequence given chord observations.
+
+        requested_scale: the key the caller asked for (initial_scale in
+        harmonize()). When supplied, a Bayesian bias is added to the emissions
+        of the matching (root, mode) state so Layer 2 respects the composer's
+        intent instead of collapsing to major/minor — while still allowing the
+        Viterbi path to modulate away where the evidence is strong. This is
+        distinct from force_key, which freezes the path entirely.
+        """
         n_s = N_TONES * N_KEY_TYPES  # 24
         T = len(chords)
 
@@ -537,8 +609,14 @@ class CoupledHMMHarmonizer:
         SWITCH_LOG = math.log(0.02 / (n_s - 1))
         log_key_priors = np.tile(MODE_PRIORS, N_TONES)
 
-        # Incorporate mode priors into transitions so modulating to exotic modes is penalized
-        trans = np.full((n_s, n_s), SWITCH_LOG) + log_key_priors[None, :]
+        # Transition matrix is a clean Markovian STAY/SWITCH. Mode priors are
+        # applied per-step in the emissions (below) and at init, NOT in the
+        # transition matrix: adding them only to the off-diagonal (the diagonal
+        # was overwritten by fill_diagonal) made the prior ineffective once a
+        # key was entered, because STAY_LOG (≈-0.02) dominates SWITCH_LOG
+        # (≈-10.75) regardless of the prior. Folding the prior into every
+        # emission keeps it acting symmetrically at every step instead.
+        trans = np.full((n_s, n_s), SWITCH_LOG)
         np.fill_diagonal(trans, STAY_LOG)
 
         roots = np.array([c[0] for c in chords])
@@ -548,12 +626,40 @@ class CoupledHMMHarmonizer:
         key_types = np.arange(N_KEY_TYPES)
         offsets = (roots[:, None] - key_roots[None, :]) % N_TONES  # [T, 12]
 
+        # Emissions carry the per-mode prior so exotic modes are penalized at
+        # every step (and rewarded for common modes), symmetrically.
         emit_all = np.empty((T, n_s))
         for kt in range(N_KEY_TYPES):
             emit_all[:, kt::N_KEY_TYPES] = (
                 KEY_OFFSET_LOG[kt][offsets]
                 + LOG_KEY_TYPE_PRIOR[kt, ctypes[:, None]]
+                + MODE_PRIORS[kt]
             )
+
+        # Respect the caller's requested key. Without this, Layer 2 ignores
+        # initial_scale and collapses modal input (Phrygian/Dorian/Mixolydian)
+        # to major ~100% of the time, because MODE_PRIORS strongly favors
+        # major/minor and the chord evidence alone is often ambiguous.
+        #
+        # This favors modal fidelity over free modulation detection: when the
+        # composer explicitly sets a mode (the common case in the album
+        # generators), the harmonization should honor that mode rather than
+        # silently rewrite it to major. The bias is additive (not a hard
+        # constraint), so overwhelmingly strong chord evidence can still
+        # overcome it; in practice modulations are detected less aggressively,
+        # which is the intended trade-off for modal material.
+        requested_bias = np.zeros(n_s)
+        if requested_scale is not None and requested_scale.mode in MODES_LIST:
+            req_kt = MODES_LIST.index(requested_scale.mode)
+            for req_root in range(N_TONES):
+                req_state = req_root * N_KEY_TYPES + req_kt
+                if req_root == requested_scale.root:
+                    # Strong pull toward the exact requested key.
+                    requested_bias[req_state] = self.config.requested_key_bias
+                else:
+                    # Milder pull toward the same mode on any root.
+                    requested_bias[req_state] = self.config.requested_key_mode_bias
+            emit_all += requested_bias[None, :]
 
         NEG_INF = -1e9
         backtrack = np.zeros((T, n_s), dtype=np.int32)
