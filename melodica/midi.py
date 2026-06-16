@@ -365,7 +365,7 @@ def export_multitrack_midi(
     tempo_events: list[tuple[float, float]] | None = None,
     pitch_bend_range: int = 2,
     mpe_tracks: set[str] | None = None,
-    reaper_project: bool = False,
+    reaper_project: bool = True,
     validate_form: bool = True,
     form: "MusicalForm | None" = None,
 ) -> None:
@@ -382,9 +382,10 @@ def export_multitrack_midi(
     diagnose: if True, run diagnostic analysis on tracks and print fix suggestions.
     mpe_tracks: set of track names that should get MPE (per-note expression) treatment.
         These tracks get larger voice pools and MPE zone RPN setup.
-    reaper_project: if True, write a .rpp file next to the .mid file with the
-        same stem name. The project contains one MIDI track per instrument,
-        colour-coded by family, ready to open in REAPER for mixing/mastering.
+    reaper_project: if True (default), write a .rpp file next to the .mid file
+        with the same stem name. The project contains one MIDI track per
+        instrument, colour-coded by family, ready to open in REAPER for
+        mixing/mastering. Pass False to skip .rpp generation.
     validate_form: if True, run the form/arrangement validator and print warnings.
         Defaults to True when form is provided, False otherwise.
     form: optional MusicalForm — enables form-level checks (sonata, ternary, etc.)
