@@ -109,12 +109,24 @@ class SoloMelodyGenerator(PhraseGenerator):
             pcs = chord.pitch_classes()
             
             pitch = prev_pitch
-            expression: dict[int, int] = {}
+            expression: dict[int | str, any] = {}
             articulation = "sustain"
             dur = event.duration
 
+            # 0. Timing & Velocity Humanization (utilizes global intelligence config if available)
+            time_human = 0.015
+            vel_human = 0.15
+            if self.params.intel:
+                if hasattr(self.params.intel, "time_humanization"):
+                    time_human = self.params.intel.time_humanization
+                if hasattr(self.params.intel, "velocity_humanization"):
+                    vel_human = self.params.intel.velocity_humanization
+            
+            onset_delay = random.uniform(-time_human, time_human)
+            start_time = max(0.0, event.onset + onset_delay)
+
             # ---------------------------------------------------------------
-            # Pitch Selection Algorithms per Style
+            # Pitch Selection & Expressive Modulation Algorithms per Style
             # ---------------------------------------------------------------
             if self.style == "blues_lick":
                 blues_steps = [0, 3, 5, 6, 7, 10]
@@ -132,8 +144,12 @@ class SoloMelodyGenerator(PhraseGenerator):
                 else:
                     pitch = nearest_pitch(target_pitch, prev_pitch)
                 
-                if dur > 0.6:
-                    expression = {1: int(40 + 50 * self.vibrato_depth)}
+                # Dynamic expression & pitch bends
+                expression = {}
+                if selected_step == 6:  # flat 5th (blue note) -> slow bend up
+                    expression["pitch_bend"] = [(0.0, -1500), (0.12, 0)]
+                elif dur > 0.6:
+                    expression[1] = int(40 + 50 * self.vibrato_depth)
 
             elif self.style == "shred_guitar":
                 is_fast_run = (event.duration < 0.25)
@@ -144,8 +160,11 @@ class SoloMelodyGenerator(PhraseGenerator):
                     leap_pc = random.choice(pcs) if pcs else root_pc
                     pitch = nearest_pitch(leap_pc, prev_pitch + 12)
                 
+                expression = {}
                 if not is_fast_run:
                     expression = {74: 105, 1: int(60 * self.vibrato_depth)}
+                    # Quick slide-in bend for accented notes
+                    expression["pitch_bend"] = [(0.0, -2048), (0.05, 0)]
                     articulation = "accent"
                 else:
                     articulation = "legato"
@@ -163,6 +182,7 @@ class SoloMelodyGenerator(PhraseGenerator):
                     pitch = nearest_pitch(chord_tone, prev_pitch)
                 
                 pitch = max(low - 6, min(high + 6, pitch))
+                expression = {}
 
             elif self.style == "space_synth":
                 pitch = nearest_pitch(root_pc, prev_pitch)
@@ -173,6 +193,8 @@ class SoloMelodyGenerator(PhraseGenerator):
                 expression = {74: lfo_val}
                 if dur > 1.0:
                     expression[1] = int(50 + 40 * self.vibrato_depth)
+                    # Swelling CC 11 filter/volume sweep
+                    expression[11] = [(0.0, 50), (dur * 0.4, 110), (dur, 60)]
 
             elif self.style == "neo_soul_keys":
                 # Stepwise R&B leads
@@ -181,6 +203,7 @@ class SoloMelodyGenerator(PhraseGenerator):
                     pitch = nearest_pitch(pcs[1], prev_pitch)
                 pitch = max(low + 6, min(high - 6, pitch))
                 articulation = "sustain"
+                expression = {}
 
             elif self.style == "vocal_mimic":
                 # Lyrical, melismatic vocal line
@@ -189,6 +212,22 @@ class SoloMelodyGenerator(PhraseGenerator):
                     pitch = nearest_pitch(pcs[2], prev_pitch)
                 articulation = "legato"
                 expression = {74: 85}  # warm vocal formants
+                
+                # Vocal CC 11 swells
+                expr_11 = []
+                steps = int(dur / 0.1)
+                for s in range(steps + 1):
+                    t_rel = s * 0.1
+                    if t_rel <= dur:
+                        phase = t_rel / dur
+                        val = int(55 + 60 * math.sin(phase * math.pi))
+                        expr_11.append((round(t_rel, 3), val))
+                if expr_11:
+                    expression[11] = expr_11
+                
+                # Vocal scoop bend
+                if dur > 0.4:
+                    expression["pitch_bend"] = [(0.0, -1500), (0.12, 0)]
 
             elif self.style == "cinematic_strings":
                 # Tension/Release Algorithm
@@ -206,9 +245,26 @@ class SoloMelodyGenerator(PhraseGenerator):
                     else:
                         pitch = nearest_pitch(random.choice(pcs) if pcs else root_pc, prev_pitch)
                 
+                expression = {}
                 # Mod-wheel CC 1 tremolo sweeps
                 tremolo_val = int(80 + 35 * math.sin(event.onset * 2.0))
-                expression = {1: tremolo_val}
+                expression[1] = tremolo_val
+                
+                # CC 11 crescendo/decrescendo swells
+                expr_11 = []
+                steps = int(dur / 0.1)
+                for s in range(steps + 1):
+                    t_rel = s * 0.1
+                    if t_rel <= dur:
+                        phase = t_rel / dur
+                        val = int(45 + 75 * math.sin(phase * math.pi))
+                        expr_11.append((round(t_rel, 3), val))
+                if expr_11:
+                    expression[11] = expr_11
+                
+                # Legato slide-in bends
+                if dur > 0.8:
+                    expression["pitch_bend"] = [(0.0, -1000), (0.1, 0)]
 
             elif self.style == "bebop_horn":
                 # Triplet-displaced double enclosures
@@ -220,18 +276,32 @@ class SoloMelodyGenerator(PhraseGenerator):
                     articulation = "staccato"
                 else:
                     pitch = nearest_pitch(random.choice(pcs) if pcs else root_pc, prev_pitch)
+                expression = {}
 
             elif self.style == "modal_ambient":
                 # Long modal Lydian/Dorian drone
                 pitch = nearest_pitch(root_pc, prev_pitch)
-                # snapping to high Lydian sharp 4th if key mode supports it or manually
                 if random.random() < 0.3:
                     pitch = nearest_pitch(root_pc + 6, prev_pitch) # sharp 4th Lydian tension
                 
                 # Detuning vibrato fine-pitch bends
                 detune_offset = random.randint(-15, 15)
-                expression = {1: 30, 98: 64 + detune_offset}  # CC 98 is detuning fine tuning
+                expression = {1: 30, 98: 64 + detune_offset}
                 articulation = "sustain"
+                
+                # Ethereal volume swells
+                expression[11] = [(0.0, 40), (dur * 0.5, 95), (dur, 30)]
+                
+                # Microtonal pitch bend drift LFO
+                pb_points = []
+                steps = int(dur / 0.25)
+                for s in range(steps + 1):
+                    t_rel = s * 0.25
+                    if t_rel <= dur:
+                        val = int(250 * math.sin(t_rel * 1.5 * 2.0 * math.pi))
+                        pb_points.append((round(t_rel, 3), val))
+                if pb_points:
+                    expression["pitch_bend"] = pb_points
 
             # Clamp and snap to scale bounds
             pitch = snap_to_scale(pitch, key)
@@ -248,7 +318,8 @@ class SoloMelodyGenerator(PhraseGenerator):
             else:
                 vel = 80
 
-            vel += random.randint(-6, 6)
+            # Velocity humanization
+            vel += int(vel * random.uniform(-vel_human, vel_human))
             vel = max(1, min(127, vel))
 
             # ---------------------------------------------------------------
@@ -259,7 +330,7 @@ class SoloMelodyGenerator(PhraseGenerator):
                 notes.append(
                     NoteInfo(
                         pitch=snap_to_scale(pitch - 2, key),
-                        start=round(event.onset - 0.16, 6),
+                        start=round(start_time - 0.16, 6),
                         duration=0.07,
                         velocity=max(1, vel - 15),
                         articulation="legato"
@@ -268,7 +339,7 @@ class SoloMelodyGenerator(PhraseGenerator):
                 notes.append(
                     NoteInfo(
                         pitch=snap_to_scale(pitch - 1, key),
-                        start=round(event.onset - 0.08, 6),
+                        start=round(start_time - 0.08, 6),
                         duration=0.07,
                         velocity=max(1, vel - 8),
                         articulation="legato"
@@ -278,13 +349,14 @@ class SoloMelodyGenerator(PhraseGenerator):
             # Main note
             main_note = NoteInfo(
                 pitch=pitch,
-                start=round(event.onset, 6),
+                start=round(start_time, 6),
                 duration=round(dur, 6),
                 velocity=vel,
                 articulation=articulation,
                 expression=expression,
             )
             notes.append(main_note)
+
 
             # Neo-Soul Chord stab backing chords on syncopated offbeats
             if self.style == "neo_soul_keys" and (event.onset % 1.0 > 0.1) and random.random() < 0.6:
