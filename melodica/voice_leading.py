@@ -71,6 +71,14 @@ _GM_RANGE: dict[int, tuple[int, int]] = {
      0: (21, 108),   # Piano
     46: (24, 103),   # Orchestral Harp
     47: (36, 60),    # Timpani
+    # Synth / Pads
+    38: (24, 60),    # Synth Bass 1
+    39: (24, 60),    # Synth Bass 2
+    80: (55, 108),   # Synth Lead 1
+    81: (55, 108),   # Synth Lead 2
+    88: (48, 96),    # Pad 1 (New Age)
+    89: (48, 96),    # Pad 2 (Warm)
+    92: (48, 96),    # Pad 5 (Bowed)
 }
 
 _DEFAULT_RANGE = (24, 108)  # fallback if program unknown
