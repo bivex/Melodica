@@ -338,3 +338,363 @@ class WoodwindSoloGenerator(_WindBrassSoloBase):
                 ))
 
         return sorted(notes, key=lambda x: x.start)
+
+
+class FlugelhornGenerator(_WindBrassSoloBase):
+    """
+    Flugelhorn Generator.
+    Simulates a warm, lyrical jazz ballad flugelhorn with soft attacks
+    and gentle vibrato expression sweeps.
+    """
+    name: str = "Flugelhorn Generator"
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        breath_vibrato: bool = True,
+        note_density: float = 1.0,
+    ) -> None:
+        super().__init__(params)
+        self.breath_vibrato = breath_vibrato
+        self.note_density = note_density
+        # Register: Gb3 (54) to C6 (84)
+        self.params.key_range_low = max(54, self.params.key_range_low)
+        self.params.key_range_high = min(84, self.params.key_range_high)
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        mid = (self.params.key_range_low + self.params.key_range_high) // 2
+        prev_pitch = mid
+
+        for chord in chords:
+            pcs = chord.pitch_classes()
+            if not pcs:
+                continue
+
+            pc = random.choice(pcs)
+            pitch = nearest_pitch(pc, prev_pitch)
+            pitch = snap_to_scale(pitch, key)
+            pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+            prev_pitch = pitch
+
+            vel = self._velocity(68)  # soft ballad attack
+            dur = chord.duration * 0.92
+
+            expression = {}
+            if self.breath_vibrato:
+                # Gentle 5Hz vibrato on CC 11
+                step = 0.06
+                expr_points = []
+                t = 0.0
+                while t < dur:
+                    val = int(82 + 8 * math.sin(t * 5.0 * 2.0 * math.pi))
+                    expr_points.append((t, val))
+                    t += step
+                if expr_points:
+                    expression[11] = expr_points
+
+            note = NoteInfo(
+                pitch=pitch,
+                start=round(chord.start, 6),
+                duration=round(dur, 6),
+                velocity=vel,
+            )
+            if expression:
+                note.expression = expression
+            notes.append(note)
+
+        return sorted(notes, key=lambda x: x.start)
+
+
+class EnglishHornGenerator(_WindBrassSoloBase):
+    """
+    English Horn (Cor Anglais) Generator.
+    Produces a warm, melancholy, lyrical alto oboe line.
+    """
+    name: str = "English Horn"
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        vibrato: bool = True,
+        note_density: float = 1.0,
+    ) -> None:
+        super().__init__(params)
+        self.vibrato = vibrato
+        self.note_density = note_density
+        # Register: E3 (52) to Bb5 (82)
+        self.params.key_range_low = max(52, self.params.key_range_low)
+        self.params.key_range_high = min(82, self.params.key_range_high)
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        mid = (self.params.key_range_low + self.params.key_range_high) // 2
+        prev_pitch = mid
+
+        for chord in chords:
+            pcs = chord.pitch_classes()
+            if not pcs:
+                continue
+
+            pc = random.choice(pcs)
+            pitch = nearest_pitch(pc, prev_pitch)
+            pitch = snap_to_scale(pitch, key)
+            pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+            prev_pitch = pitch
+
+            vel = self._velocity(72)
+            dur = chord.duration * 0.94
+
+            expression = {}
+            if self.vibrato:
+                # Oboe/English horn vibrato (CC 1)
+                step = 0.08
+                expr_points = []
+                t = 0.0
+                while t < dur:
+                    val = int(40 + 20 * math.sin(t * 4.5 * 2.0 * math.pi))
+                    expr_points.append((t, val))
+                    t += step
+                if expr_points:
+                    expression[1] = expr_points
+
+            note = NoteInfo(
+                pitch=pitch,
+                start=round(chord.start, 6),
+                duration=round(dur, 6),
+                velocity=vel,
+            )
+            if expression:
+                note.expression = expression
+            notes.append(note)
+
+        return sorted(notes, key=lambda x: x.start)
+
+
+class BassClarinetGenerator(_WindBrassSoloBase):
+    """
+    Bass Clarinet Generator.
+    Low register warm woodwind generator.
+    """
+    name: str = "Bass Clarinet"
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        note_density: float = 1.0,
+    ) -> None:
+        super().__init__(params)
+        self.note_density = note_density
+        # Register: D2 (38) to G5 (79)
+        self.params.key_range_low = max(38, self.params.key_range_low)
+        self.params.key_range_high = min(79, self.params.key_range_high)
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        mid = (self.params.key_range_low + self.params.key_range_high) // 2
+        prev_pitch = mid
+
+        for chord in chords:
+            pcs = chord.pitch_classes()
+            if not pcs:
+                continue
+
+            pc = random.choice(pcs)
+            pitch = nearest_pitch(pc, prev_pitch)
+            pitch = snap_to_scale(pitch, key)
+            pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+            prev_pitch = pitch
+
+            vel = self._velocity(65)  # low warm woody dynamic
+            dur = chord.duration * 0.90
+
+            # Clarinet has very minimal vibrato, but nice volume breath swells
+            expression = {
+                11: [(0.0, 50), (dur * 0.2, 85), (dur * 0.8, 80), (dur, 30)]
+            }
+
+            note = NoteInfo(
+                pitch=pitch,
+                start=round(chord.start, 6),
+                duration=round(dur, 6),
+                velocity=vel,
+                expression=expression,
+            )
+            notes.append(note)
+
+        return sorted(notes, key=lambda x: x.start)
+
+
+class EuphoniumGenerator(_WindBrassSoloBase):
+    """
+    Euphonium (Baritone Horn) Generator.
+    Produces warm, resonant low brass solo lines with slow, swelling marcato dynamics.
+    """
+    name: str = "Euphonium Generator"
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        note_density: float = 1.0,
+    ) -> None:
+        super().__init__(params)
+        self.note_density = note_density
+        # Register: Bb1 (34) to Bb4 (70)
+        self.params.key_range_low = max(34, self.params.key_range_low)
+        self.params.key_range_high = min(70, self.params.key_range_high)
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        mid = (self.params.key_range_low + self.params.key_range_high) // 2
+        prev_pitch = mid
+
+        for chord in chords:
+            pcs = chord.pitch_classes()
+            if not pcs:
+                continue
+
+            pc = random.choice(pcs)
+            pitch = nearest_pitch(pc, prev_pitch)
+            pitch = snap_to_scale(pitch, key)
+            pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+            prev_pitch = pitch
+
+            vel = self._velocity(70)
+            dur = chord.duration * 0.94
+
+            # Low brass slow marcato swell
+            expression = {
+                11: [(0.0, 40), (dur * 0.25, 95), (dur * 0.8, 80), (dur, 40)]
+            }
+
+            note = NoteInfo(
+                pitch=pitch,
+                start=round(chord.start, 6),
+                duration=round(dur, 6),
+                velocity=vel,
+                expression=expression,
+            )
+            notes.append(note)
+
+        return sorted(notes, key=lambda x: x.start)
+
+
+class AltoFluteGenerator(_WindBrassSoloBase):
+    """
+    Alto Flute Generator.
+    Produces low, breathy woodwind tones with gentle pitch vibrato sweeps.
+    """
+    name: str = "Alto Flute"
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        breath_vibrato: bool = True,
+        note_density: float = 1.0,
+    ) -> None:
+        super().__init__(params)
+        self.breath_vibrato = breath_vibrato
+        self.note_density = note_density
+        # Register: G3 (55) to G6 (91)
+        self.params.key_range_low = max(55, self.params.key_range_low)
+        self.params.key_range_high = min(91, self.params.key_range_high)
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        mid = (self.params.key_range_low + self.params.key_range_high) // 2
+        prev_pitch = mid
+
+        for chord in chords:
+            pcs = chord.pitch_classes()
+            if not pcs:
+                continue
+
+            pc = random.choice(pcs)
+            pitch = nearest_pitch(pc, prev_pitch)
+            pitch = snap_to_scale(pitch, key)
+            pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+            prev_pitch = pitch
+
+            vel = self._velocity(66)  # breathy low dynamic
+            dur = chord.duration * 0.90
+
+            expression = {}
+            if self.breath_vibrato:
+                step = 0.06
+                expr_points = []
+                t = 0.0
+                while t < dur:
+                    val = int(80 + 8 * math.sin(t * 5.5 * 2.0 * math.pi))
+                    expr_points.append((t, val))
+                    t += step
+                if expr_points:
+                    expression[11] = expr_points
+
+            note = NoteInfo(
+                pitch=pitch,
+                start=round(chord.start, 6),
+                duration=round(dur, 6),
+                velocity=vel,
+            )
+            if expression:
+                note.expression = expression
+            notes.append(note)
+
+        return sorted(notes, key=lambda x: x.start)
+
+

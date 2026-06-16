@@ -293,11 +293,13 @@ class VibraphoneGenerator(_ChromaticPercussionBase):
         *,
         pattern: str = "warm_chords",  # warm_chords, motor_arpeggio
         motor_speed_hz: float = 6.0,  # motor tremolo speed
+        pedal: bool = True,           # sustain pedaling (CC 64)
         note_density: float = 1.0,
     ) -> None:
         super().__init__(params, note_density=note_density)
         self.pattern = pattern
         self.motor_speed_hz = motor_speed_hz
+        self.pedal = pedal
 
     def render(
         self,
@@ -322,7 +324,7 @@ class VibraphoneGenerator(_ChromaticPercussionBase):
 
             if self.pattern == "warm_chords":
                 # Lush sustained chords, up to 4 mallet voices
-                for pc in pcs[:4]:
+                for idx, pc in enumerate(pcs[:4]):
                     pitch = self._resolve_pitch(pc, mid, key, low, high)
                     duration = chord.duration * 0.95
                     
@@ -338,6 +340,11 @@ class VibraphoneGenerator(_ChromaticPercussionBase):
                         t += step
                     if expr_points:
                         expression[11] = expr_points
+
+                    # If pedal is enabled, inject sustain pedal CC 64 messages
+                    if self.pedal:
+                        # Send pedal release and re-press at start of chord to clear resonance
+                        expression[64] = [(0.0, 0), (0.04, 127)]
 
                     note = NoteInfo(
                         pitch=pitch,

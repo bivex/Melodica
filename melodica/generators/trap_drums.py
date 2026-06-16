@@ -49,7 +49,11 @@ SNARE = 38
 HH_CLOSED = 42
 HH_OPEN = 46
 CLAP = 39
-SUB_808 = 36  # Low C
+# 808 sub-bass notes use the chord root (see render()); there is no fixed
+# SUB_808 GM pitch — the previous SUB_808 = 36 was identical to KICK and
+# never applied to the actual 808 notes (they use nearest_pitch on the
+# chord root). It only appeared in the sidechain ducking check, where it
+# was harmless because the real 808 notes never matched 36 anyway.
 
 
 def _get_section_multiplier(s_type: SectionRole | str, onset: float, total_beats: float) -> float:
@@ -289,14 +293,15 @@ class TrapDrumsGenerator(PhraseGenerator):
                             roll_step = 0.071428
                             roll_len = 7
                             
-                        # Tune sweep (pitch sweeps)
-                        use_sweep = random.random() < 0.5
-                        if use_sweep:
-                            start_pitch_offset = random.choice([-5, -4, -3, -2, 2, 3, 4, 5, 7])
-                            end_pitch_offset = random.choice([-7, -5, -3, 0, 2, 5, 7])
-                        else:
-                            start_pitch_offset = 0
-                            end_pitch_offset = 0
+                        # Tune sweep: previously this added pitch_offset to
+                        # HH_CLOSED (42) and snap_to_scale'd the result,
+                        # which landed on unrelated GM percussion pitches
+                        # (35=bd, 37=side stick, 38=snare, 41-49=toms/crash).
+                        # Hi-hats do not pitch-shift in real trap; the roll
+                        # stays on HH_CLOSED with an occasional HH_OPEN for
+                        # tonal variation. Velocity curve carries the "sweep".
+                        use_open = random.random() < 0.15  # sparse open-hat accents
+                        use_sweep = False  # disabled: pitch sweeps on hats were spurious instrument changes
                             
                         # Velocity curve: 70% crescendo (swell), 30% decrescendo
                         use_crescendo = random.random() < 0.7
@@ -306,31 +311,27 @@ class TrapDrumsGenerator(PhraseGenerator):
                             r_onset = onset + r * roll_step
                             if r_onset >= duration_beats:
                                 break
-                                
-                            # Calculate tuned pitch with Scale Snapping & safety clamp
+
+                            # Roll pitch: stay on HH_CLOSED (42), with a sparse
+                            # HH_OPEN (46) accent for timbral variation. No
+                            # pitch offsets — those previously walked into other
+                            # GM percussion instruments.
                             if roll_len > 1:
                                 interp = r / (roll_len - 1)
                             else:
                                 interp = 1.0
-                            pitch_offset = int(start_pitch_offset + (end_pitch_offset - start_pitch_offset) * interp)
-                            raw_pitch = HH_CLOSED + pitch_offset
-                            if key is not None:
-                                snapped_pitch = snap_to_scale(raw_pitch, key)
-                            else:
-                                snapped_pitch = raw_pitch
-                            roll_pitch = max(41, min(127, snapped_pitch))
-                            
+                            roll_pitch = HH_OPEN if (use_open and r == roll_len - 1) else HH_CLOSED
+
                             # Calculate dynamic velocity curve
                             if use_crescendo:
                                 curve = 0.35 + 0.65 * (interp ** 2)
                             else:
                                 curve = 0.9 - 0.5 * (interp ** 1.5)
-                                
+
                             roll_vel = max(1, min(127, int(self._velocity(0.85) * curve)))
-                            
+
                             # Alternating CC 10 wide stereo micro-panning
                             pan_val = 32 if r % 2 == 0 else 96
-                            
                             self._add_note(
                                 notes,
                                 roll_pitch,
@@ -424,13 +425,14 @@ class TrapDrumsGenerator(PhraseGenerator):
                         vel_ratio = 0.7 + 0.45 * (step / 7)
                         self._add_note(notes, SNARE, onset, 0.05, self._velocity(vel_ratio), duration_beats)
                     
-                    # Pitched hi-hat 32nd-triplet sweep: 5 notes from 3.5 to 3.9167
+                    # Hi-hat 32nd-triplet sweep: 5 notes from 3.5 to 3.9167.
+                    # Stay on HH_CLOSED — the previous pitch_offset = step walked
+                    # the pitch 42->46 (through toms/crash on GM kits). The
+                    # "sweep" feel now comes from the velocity curve.
                     for step in range(5):
                         onset = bar_start + 3.5 + step * 0.083333
-                        pitch_offset = step
-                        roll_pitch = max(0, min(127, HH_CLOSED + pitch_offset))
                         vel_ratio = 0.65 + 0.25 * (step / 4)
-                        self._add_note(notes, roll_pitch, onset, 0.07, self._velocity(vel_ratio), duration_beats)
+                        self._add_note(notes, HH_CLOSED, onset, 0.07, self._velocity(vel_ratio), duration_beats)
                     
                     # Final open hat accent
                     self._add_note(notes, HH_OPEN, bar_start + 3.9, 0.2, self._velocity(1.15), duration_beats)
@@ -551,10 +553,13 @@ class TrapDrumsGenerator(PhraseGenerator):
                 if is_offbeat:
                     shift += swing_delay
 
-            # Apply pocket delays
+            # Apply pocket delays. Only apply the hi-hat delay to actual
+            # hi-hat pitches (42/46); the previous 40-48 range also caught
+            # toms (41/43/45/47) and electric snare (40), shifting their
+            # timing out of the groove.
             if n.pitch in (SNARE, CLAP):
                 shift += self.snare_delay
-            elif n.pitch in (HH_CLOSED, HH_OPEN) or (40 <= n.pitch <= 48 and n.pitch != SNARE and n.pitch != CLAP):
+            elif n.pitch in (HH_CLOSED, HH_OPEN):
                 shift += self.hihat_delay
 
             n.start = round(max(0.0, n.start + shift), 6)
@@ -617,10 +622,17 @@ class TrapDrumsGenerator(PhraseGenerator):
 
         # 3. Post-Process Sidechain Ducking Pass
         if self.sidechain_depth > 0.0:
-            kick_onsets = [n.start for n in notes if n.pitch in (KICK, SUB_808)]
+            # Sidechain: duck non-kick notes around kick onsets. The 808
+            # sub-bass notes (computed from the chord root) are NOT kicked
+            # here — they sustain through. Only the percussive KICK (36)
+            # triggers ducking.
+            kick_onsets = [n.start for n in notes if n.pitch == KICK]
             for n in notes:
-                if n.pitch not in (KICK, SUB_808):
-                    for kick_start in kick_onsets:
+                # Don't duck the kick itself, nor the 808 sub-bass (which is
+                # marked with articulation="808" and sustains through kicks).
+                if n.pitch == KICK or getattr(n, "articulation", None) == "808":
+                    continue
+                for kick_start in kick_onsets:
                         if abs(n.start - kick_start) < 0.20 or (n.start <= kick_start < n.start + n.duration):
                             n.velocity = max(1, int(n.velocity * (1.0 - self.sidechain_depth)))
                             break

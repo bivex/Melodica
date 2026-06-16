@@ -366,6 +366,7 @@ from melodica.generators.plucked_solo import (
     PianoSoloGenerator,
     AcousticGuitarGenerator,
     EthnicPluckedGenerator,
+    KalimbaGenerator,
 )
 from melodica.generators.keyboard_sustained import (
     ChurchOrganGenerator,
@@ -387,7 +388,47 @@ from melodica.generators.wind_brass_solo import (
     MutedTrumpetGenerator,
     SynthBrassGenerator,
     WoodwindSoloGenerator,
+    FlugelhornGenerator,
+    EnglishHornGenerator,
+    BassClarinetGenerator,
+    EuphoniumGenerator,
+    AltoFluteGenerator,
 )
+from melodica.generators.sax_section import SaxophoneSectionGenerator
+from melodica.generators.country_ensemble import (
+    PedalSteelGenerator,
+    DobroLapSteelGenerator,
+    FiddleGenerator,
+)
+from melodica.generators.indian_ensemble import (
+    TanpuraGenerator,
+    SitarGenerator,
+    TablaGenerator,
+)
+from melodica.generators.arabic_ensemble import (
+    OudGenerator,
+    NeyGenerator,
+    DarbukaGenerator,
+)
+from melodica.generators.east_asian_ensemble import (
+    ErhuGenerator,
+    ShamisenGenerator,
+    KotoGenerator,
+)
+from melodica.generators.folk_ensemble import BandoneonGenerator
+from melodica.generators.cinematic_ethereal import (
+    GlassHarpGenerator,
+    HandPanGenerator,
+    ThereminGenerator,
+)
+from melodica.generators.vocal_accordion import (
+    VocalScatGenerator,
+    GregorianChantGenerator,
+    MusetteAccordionGenerator,
+)
+from melodica.generators.percussion_latino import ShakerGenerator
+from melodica.generators.sound_design import WindMachineGenerator
+from melodica.generators.orchestral_drum import ConcertBassDrumGenerator
 from melodica.generators.synth_effects import SynthEffectsGenerator
 from melodica.generators.ethnic_world import EthnicWorldGenerator
 from melodica.generators.sfx_percussion import SFXPercussionGenerator
@@ -634,6 +675,29 @@ __all__ = [
     "MutedTrumpetGenerator",
     "SynthBrassGenerator",
     "WoodwindSoloGenerator",
+    "FlugelhornGenerator",
+    "EnglishHornGenerator",
+    "BassClarinetGenerator",
+    "SaxophoneSectionGenerator",
+    "PedalSteelGenerator",
+    "DobroLapSteelGenerator",
+    "FiddleGenerator",
+    "TanpuraGenerator",
+    "SitarGenerator",
+    "TablaGenerator",
+    "OudGenerator",
+    "NeyGenerator",
+    "DarbukaGenerator",
+    "ErhuGenerator",
+    "ShamisenGenerator",
+    "KotoGenerator",
+    "BandoneonGenerator",
+    "GlassHarpGenerator",
+    "HandPanGenerator",
+    "ThereminGenerator",
+    "VocalScatGenerator",
+    "GregorianChantGenerator",
+    "MusetteAccordionGenerator",
     "SynthEffectsGenerator",
     "EthnicWorldGenerator",
     "SFXPercussionGenerator",
@@ -658,4 +722,10 @@ __all__ = [
     "StopTimeGenerator",
     "WalkingBassLineGenerator",
     "ShellVoicingGenerator",
+    "EuphoniumGenerator",
+    "AltoFluteGenerator",
+    "KalimbaGenerator",
+    "ShakerGenerator",
+    "WindMachineGenerator",
+    "ConcertBassDrumGenerator",
 ]

@@ -398,3 +398,80 @@ class EthnicPluckedGenerator(_PluckedSoloBase):
             notes.append(note)
 
         return sorted(notes, key=lambda x: x.start)
+
+
+class KalimbaGenerator(_PluckedSoloBase):
+    """
+    Kalimba Generator (African Mbira).
+    Produces plucked thumb piano notes with metallic pop transients.
+    """
+    name: str = "Kalimba Solo"
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        pop_intensity: float = 0.5,
+        note_density: float = 1.0,
+    ) -> None:
+        super().__init__(params)
+        self.pop_intensity = max(0.0, min(1.0, pop_intensity))
+        self.note_density = note_density
+        # Register: C3 (48) to C6 (84)
+        self.params.key_range_low = max(48, self.params.key_range_low)
+        self.params.key_range_high = min(84, self.params.key_range_high)
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        chords = self._apply_note_density(chords)
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        mid = (self.params.key_range_low + self.params.key_range_high) // 2
+        prev_pitch = mid
+
+        for chord in chords:
+            pcs = chord.pitch_classes()
+            if not pcs:
+                continue
+
+            pc = random.choice(pcs)
+            pitch = nearest_pitch(pc, prev_pitch)
+            pitch = snap_to_scale(pitch, key)
+            pitch = max(self.params.key_range_low, min(self.params.key_range_high, pitch))
+            prev_pitch = pitch
+
+            vel = self._velocity(72)
+            dur = min(chord.duration * 0.7, 0.22)  # very short pluck decay
+
+            # Add metallic pop harmonic transient (octave or octave + fifth higher)
+            if self.pop_intensity > 0 and random.random() < 0.7:
+                harmonic = random.choice([12, 19])
+                pop_pitch = pitch + harmonic
+                if pop_pitch <= self.params.key_range_high:
+                    notes.append(
+                        NoteInfo(
+                            pitch=pop_pitch,
+                            start=round(chord.start + 0.002, 6),
+                            duration=0.06,  # ultra short pop transient
+                            velocity=max(5, int(vel * self.pop_intensity * 0.5)),
+                        )
+                    )
+
+            notes.append(
+                NoteInfo(
+                    pitch=pitch,
+                    start=round(chord.start, 6),
+                    duration=round(dur, 6),
+                    velocity=vel,
+                )
+            )
+
+        return sorted(notes, key=lambda x: x.start)
+
