@@ -118,7 +118,7 @@ class VocalAdlibsGenerator(PhraseGenerator):
                     pitch=pitch,
                     start=round(event.onset, 6),
                     duration=round(max(0.1, dur), 6),
-                    velocity=max(0, min(MIDI_MAX, vel)),
+                    velocity=max(1, min(MIDI_MAX, vel)),
                 )
             )
             prev_pitch = pitch

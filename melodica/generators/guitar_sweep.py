@@ -123,7 +123,7 @@ class GuitarSweepGenerator(PhraseGenerator):
                         pitch=pitch,
                         start=round(note_start, 6),
                         duration=round(note_dur, 6),
-                        velocity=max(0, min(MIDI_MAX, vel)),
+                        velocity=max(1, min(MIDI_MAX, vel)),
                         articulation=None if self.let_ring else "staccato",
                     )
                 )

@@ -1782,13 +1782,18 @@ DEFAULT_PIPELINE: list[Stage] = [
     Stage("humanize", _stage_humanize),
     Stage("phrase_dynamics", _stage_phrase_dynamics),
     Stage("articulations", _stage_articulations),
+    # harmonic_verify must run BEFORE non_chord_tones: the verifier removes
+    # clashes from the base harmony, then ornamentation (passing/neighbor/
+    # suspension tones) is added on top. The old order (non_chord_tones then
+    # harmonic_verify) caused the verifier to delete exactly the ornamentation
+    # it had just inserted.
+    Stage("harmonic_verify", _stage_harmonic_verify),
     Stage("non_chord_tones", _stage_non_chord_tones),
     Stage("sections", _stage_sections),
     Stage("tension", _stage_tension),
     Stage("texture", _stage_texture),
     Stage("transitions", _stage_transitions),
     Stage("polyphony", _stage_polyphony),
-    Stage("harmonic_verify", _stage_harmonic_verify),
     Stage("psycho", _stage_psycho),
     Stage("sparse_safeguard", _stage_sparse_safeguard),
     Stage("master", _stage_master),

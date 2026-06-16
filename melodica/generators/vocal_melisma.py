@@ -131,7 +131,7 @@ class VocalMelismaGenerator(PhraseGenerator):
                         pitch=pitch,
                         start=round(note_start, 6),
                         duration=round(max(0.05, note_dur * 0.9), 6),
-                        velocity=max(0, min(MIDI_MAX, vel)),
+                        velocity=max(1, min(MIDI_MAX, vel)),
                     )
                 )
                 prev_pitch = pitch

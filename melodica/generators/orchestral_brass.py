@@ -212,16 +212,24 @@ class _OrchestralBrassBase(PhraseGenerator):
             arpeggio_pcs.append(pcs[1])          # third
         if len(pcs) >= 3:
             arpeggio_pcs.append(pcs[2])          # fifth
-        # Add octave
-        arpeggio_pcs.append((pcs[0] + 12) % 12)
+        # Add octave. (pcs[0] + 12) % 12 == pcs[0], so the previous code added
+        # the root pitch class again and the arpeggio ended on a unison rather
+        # than a true octave. Track an explicit "raise an octave" flag instead.
+        arpeggio_pcs.append(pcs[0])
+        is_octave = [False] * (len(arpeggio_pcs) - 1) + [True]
 
         note_dur = chord.duration / max(len(arpeggio_pcs), 1)
         current_pitch = prev_pitch
 
         for i, pc in enumerate(arpeggio_pcs):
             pitch = self._resolve_pitch(pc, current_pitch, key)
+            # Force the final note up a full octave above the previous tone so
+            # the fanfare resolves on a true high octave, not a unison.
+            if is_octave[i]:
+                pitch += 12
+                pitch = max(self._range["low"], min(self._range["high"], pitch))
             # Fanfare should ascend — if not ascending, push upward
-            if i > 0 and pitch <= current_pitch:
+            elif i > 0 and pitch <= current_pitch:
                 pitch = snap_to_scale(current_pitch + random.randint(2, 5), key)
                 pitch = max(self._range["low"], min(self._range["high"], pitch))
 

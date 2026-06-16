@@ -192,7 +192,7 @@ class ArpeggiatorGenerator(PhraseGenerator):
                         pitch=pitch,
                         start=round(event.onset, 6),
                         duration=event.duration,
-                        velocity=max(0, min(types.MIDI_MAX, vel)),
+                        velocity=max(1, min(types.MIDI_MAX, vel)),
                     )
                 )
                 last_pitch = pitch
@@ -222,7 +222,7 @@ class ArpeggiatorGenerator(PhraseGenerator):
                 pitch=p,
                 start=round(event.onset, 6),
                 duration=event.duration,
-                velocity=max(0, min(types.MIDI_MAX, vel)),
+                velocity=max(1, min(types.MIDI_MAX, vel)),
             )
             for p in pitches
         ]

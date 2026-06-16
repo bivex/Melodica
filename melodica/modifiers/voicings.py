@@ -21,7 +21,7 @@ Handles Drop 2, Inversions, and Top-note voicing strategies.
 from __future__ import annotations
 
 import typing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from melodica.types import NoteInfo
 from melodica.modifiers import ModifierContext, PhraseModifier
 
@@ -36,19 +36,22 @@ class DropVoicingModifier:
         for n in notes:
             t = round(n.start, 4)
             groups.setdefault(t, []).append(n)
-            
+
         result = []
         for t, g in groups.items():
             if len(g) >= 3:
-                g.sort(key=lambda x: x.pitch, reverse=True) # Top to bottom
+                # Work on copies so the caller's NoteInfo objects are not mutated
+                # in place (these classes are not PhraseModifier subclasses, so
+                # ModifierPipeline._clone_notes does not shield them).
+                g = [replace(n) for n in sorted(g, key=lambda x: x.pitch, reverse=True)]
                 # Drop rules:
                 if self.drop_mode == "drop_2":
-                    g[1].pitch -= 12
+                    g[1] = replace(g[1], pitch=g[1].pitch - 12)
                 elif self.drop_mode == "drop_3":
-                    g[2].pitch -= 12
+                    g[2] = replace(g[2], pitch=g[2].pitch - 12)
                 elif self.drop_mode == "drop_2_4" and len(g) >= 4:
-                    g[1].pitch -= 12
-                    g[3].pitch -= 12
+                    g[1] = replace(g[1], pitch=g[1].pitch - 12)
+                    g[3] = replace(g[3], pitch=g[3].pitch - 12)
             result.extend(g)
         return result
 
@@ -62,13 +65,15 @@ class TopNoteVoicingModifier:
         for n in notes:
             t = round(n.start, 4)
             groups.setdefault(t, []).append(n)
-            
+
         result = []
         for t, g in groups.items():
             if not g: continue
             if not context.chords:
                 result.extend(g)
                 continue
+            # Work on copies to avoid mutating the caller's notes in place.
+            g = [replace(n) for n in g]
             # Find the note that is the target degree in the current chord
             # Find closest chord by time
             relevant_chord = next((c for c in context.chords if abs(c.start - t) < 0.1), context.chords[0])
@@ -76,18 +81,18 @@ class TopNoteVoicingModifier:
             # Approximation: target_degree 1=index 0, 3=index 1, 5=index 2
             deg_idx = {1:0, 3:1, 5:2, 7:3}.get(self.target_degree, 0)
             target_pc = pcs[deg_idx % len(pcs)]
-            
+
             # Find which note in g matches target_pc
             target_note = min(g, key=lambda x: abs(x.pitch % 12 - target_pc))
-            other_notes = [x for x in g if x != target_note]
-            
+            other_notes = [x for x in g if x is not target_note]
+
             # Reposition target_note to be the highest
             max_pitch = max((n.pitch for n in other_notes), default=60)
             while target_note.pitch <= max_pitch:
                 target_note.pitch += 12
             while target_note.pitch > max_pitch + 12:
                 target_note.pitch -= 12
-                
+
             result.extend(g)
         return result
 
@@ -98,18 +103,19 @@ class InversionModifier:
 
     def modify(self, notes: list[NoteInfo], context: ModifierContext) -> list[NoteInfo]:
         if self.inversion == 0: return notes
-        
+
         groups = {}
         for n in notes:
             t = round(n.start, 4)
             groups.setdefault(t, []).append(n)
-            
+
         result = []
         for t, g in groups.items():
             if len(g) >= 2:
-                g.sort(key=lambda x: x.pitch)
+                # Work on copies to avoid mutating the caller's notes in place.
+                g = [replace(n) for n in sorted(g, key=lambda x: x.pitch)]
                 for i in range(self.inversion % len(g)):
-                    g[i].pitch += 12
+                    g[i] = replace(g[i], pitch=g[i].pitch + 12)
             result.extend(g)
         return result
 
@@ -136,16 +142,17 @@ class ChordVoicingSpreadModifier:
                 result.extend(g)
                 continue
 
-            g.sort(key=lambda x: x.pitch)
+            # Work on copies to avoid mutating the caller's notes in place.
+            g = [replace(n) for n in sorted(g, key=lambda x: x.pitch)]
             if self.spread_mode == "spread":
                 # Move every other note up or down
-                for i, n in enumerate(g):
+                for i in range(len(g)):
                     if i % 2 == 1:
-                        n.pitch += 12
+                        g[i] = replace(g[i], pitch=g[i].pitch + 12)
             elif self.spread_mode == "open":
                 # Double octaves for bass/top
-                g[0].pitch -= 12
-                g[-1].pitch += 12
+                g[0] = replace(g[0], pitch=g[0].pitch - 12)
+                g[-1] = replace(g[-1], pitch=g[-1].pitch + 12)
 
             result.extend(g)
         return result

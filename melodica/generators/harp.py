@@ -143,7 +143,7 @@ class HarpGenerator(PhraseGenerator):
         note = NoteInfo(
             pitch=pitch,
             start=round(onset_h, 6),
-            duration=round(decay_time, 6),
+            duration=round(duration, 6),
             velocity=max(1, min(127, vel)),
         )
         note.expression = expression

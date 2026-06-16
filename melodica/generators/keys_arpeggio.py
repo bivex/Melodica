@@ -122,7 +122,7 @@ class KeysArpeggioGenerator(PhraseGenerator):
                     pitch=pitch,
                     start=round(event.onset, 6),
                     duration=event.duration,
-                    velocity=max(0, min(MIDI_MAX, vel)),
+                    velocity=max(1, min(MIDI_MAX, vel)),
                 )
             )
 

@@ -157,7 +157,7 @@ class OrganDrawbarsGenerator(PhraseGenerator):
                     pitch=pitch,
                     start=round(onset, 6),
                     duration=max(0.01, round(leslie_dur - voice_delay, 6)),
-                    velocity=max(0, min(MIDI_MAX, vel)),
+                    velocity=max(1, min(MIDI_MAX, vel)),
                     articulation="sustain",
                 )
                 note.expression = expression

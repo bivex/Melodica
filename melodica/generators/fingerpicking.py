@@ -146,7 +146,7 @@ class FingerpickingGenerator(PhraseGenerator):
                     pitch=pitch,
                     start=round(event.onset, 6),
                     duration=round(duration, 6),
-                    velocity=max(0, min(127, vel)),
+                    velocity=max(1, min(127, vel)),
                 )
             )
 

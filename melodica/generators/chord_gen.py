@@ -143,7 +143,7 @@ class ChordGenerator(PhraseGenerator):
                         pitch=snap_to_scale(pitch, active_key),
                         start=round(event.onset, 6),
                         duration=event.duration,
-                        velocity=max(0, min(127, vel)),
+                        velocity=max(1, min(127, vel)),
                     )
                 )
 
@@ -156,7 +156,7 @@ class ChordGenerator(PhraseGenerator):
                         pitch=bass_pitch,
                         start=round(event.onset, 6),
                         duration=event.duration,
-                        velocity=max(0, min(127, vel - 10)),
+                        velocity=max(1, min(127, vel - 10)),
                     )
                 )
 

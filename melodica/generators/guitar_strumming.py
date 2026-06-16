@@ -143,7 +143,7 @@ class GuitarStrummingGenerator(PhraseGenerator):
                         ), key),
                         start=round(event.onset + delay, 6),
                         duration=round(max(0.04, strum_dur), 6),
-                        velocity=max(0, min(MIDI_MAX, vel)),
+                        velocity=max(1, min(MIDI_MAX, vel)),
                         articulation="staccato" if is_muted else None,
                     )
                 )

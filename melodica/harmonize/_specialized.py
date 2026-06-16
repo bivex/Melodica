@@ -250,26 +250,25 @@ class GeneticHarmonizer:
                 new_pop.append(child)
             population = new_pop
 
-        best = max(
-            population,
-            key=lambda ind: sum(
-                0.5
-                * (
-                    sum(
-                        1
-                        for p in observations[t]
-                        if p
-                        in _chord_pcs_for_degree(chords_def[ind[t]][0], chords_def[ind[t]][1])
-                    )
-                    / max(1, len(observations[t]))
-                )
-                if observations[t]
-                else 0.0
-                + (0.1 if t > 0 and ind[t] != ind[t - 1] else 0.0)
-                + (0.2 if t > 0 and (ind[t - 1], ind[t]) in good_pairs else 0.0)
-                for t in range(len(ind))
-            ),
-        )
+        def _score_individual(ind):
+            # Mirrors the fitness used in the evolution loop (lines ~224-237):
+            # melody-fit weighted 0.5, plus a change bonus (0.1) and a
+            # good-pair bonus (0.2). The previous form accidentally nested
+            # the bonuses inside the `else` branch of the observation check,
+            # so they were unreachable (observations[t] is always truthy).
+            s = 0.0
+            for t in range(len(ind)):
+                if observations[t]:
+                    cpcs = _chord_pcs_for_degree(chords_def[ind[t]][0], chords_def[ind[t]][1])
+                    s += 0.5 * (sum(1 for p in observations[t] if p in cpcs)
+                                / max(1, len(observations[t])))
+                if t > 0 and ind[t] != ind[t - 1]:
+                    s += 0.1
+                if t > 0 and (ind[t - 1], ind[t]) in good_pairs:
+                    s += 0.2
+            return s
+
+        best = max(population, key=_score_individual)
 
         result = []
         for i, state in enumerate(best):

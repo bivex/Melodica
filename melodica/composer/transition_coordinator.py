@@ -11,6 +11,8 @@ ducking of low frequencies (vacuum effect), and lead-in fills.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from melodica.types import NoteInfo, Track
 from melodica.composer.automation import AutomationCurve
 
@@ -52,7 +54,9 @@ class TransitionCoordinator:
                         # Silence: omit the note entirely
                         continue
                     else:
-                        note.scale_velocity(duck_factor)
+                        # Duck on a copy so the caller's NoteInfo objects in the
+                        # original tracks dict are not mutated in place.
+                        note = replace(note, velocity=max(1, min(127, int(note.velocity * duck_factor))))
                 new_notes.append(note)
 
             if is_track:

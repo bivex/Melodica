@@ -489,7 +489,7 @@ class MelodyGenerator(PhraseGenerator):
                     pitch=int(round(pitch)),
                     start=round(event.onset, 6),
                     duration=dur,
-                    velocity=max(0, min(types.MIDI_MAX, vel)),
+                    velocity=max(1, min(types.MIDI_MAX, vel)),
                 )
             )
 

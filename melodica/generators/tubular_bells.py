@@ -98,7 +98,9 @@ class TubularBellsGenerator(PhraseGenerator):
                 step_idx = 0
                 
                 # Dynamic crescendo for rolls
-                steps = int(chord.duration / step)
+                # Guard against very short chords (< one step): int() truncates
+                # to 0 and the step_idx/steps division below raises ZeroDivisionError.
+                steps = max(1, int(chord.duration / step))
                 cc11_list = []
                 for s in range(steps):
                     cc11_list.append((s * step, int(40 + 80 * (s / steps))))
