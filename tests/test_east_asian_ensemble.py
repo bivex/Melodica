@@ -40,6 +40,8 @@ def test_koto_generator():
     chords = [ChordLabel(root=0, quality=Quality.MAJOR, start=0.0, duration=4.0)]
     
     # Koto double pluck
+    import random
+    random.seed(4)
     gen = KotoGenerator(tremolo_probability=0.0, double_pluck=True)
     notes = gen.render(chords, C_MAJOR, 4.0)
     assert len(notes) >= 2

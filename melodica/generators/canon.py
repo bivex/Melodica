@@ -26,11 +26,14 @@ Usage
 from __future__ import annotations
 
 import copy
+import random
 from dataclasses import dataclass, field
 from typing import Literal
 
-from melodica.types import Scale, Mode
-from melodica.types_pkg._notes import NoteInfo
+from melodica.generators import GeneratorParams, PhraseGenerator
+from melodica.types import Scale, Mode, ChordLabel, NoteInfo
+from melodica.render_context import RenderContext
+from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +151,7 @@ CanonType = Literal[
 
 
 @dataclass
-class CanonGenerator:
+class CanonGenerator(PhraseGenerator):
     """Generate imitative counterpoint (canon) voices from a dux melody.
 
     Parameters
@@ -171,6 +174,65 @@ class CanonGenerator:
     n_voices: int = 2
     canon_type: CanonType = "fifth"
     velocity_decay: float = 0.88
+
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        delay_beats: float = 4.0,
+        interval_semitones: int = 7,
+        n_voices: int = 2,
+        canon_type: CanonType = "fifth",
+        velocity_decay: float = 0.88,
+        interval: int | None = None,
+    ) -> None:
+        super().__init__(params)
+        self.delay_beats = delay_beats
+        self.interval_semitones = interval if interval is not None else interval_semitones
+        self.n_voices = n_voices
+        self.canon_type = canon_type
+        self.velocity_decay = velocity_decay
+
+    def render(
+        self,
+        chords: list[ChordLabel],
+        key: Scale,
+        duration_beats: float,
+        context: RenderContext | None = None,
+    ) -> list[NoteInfo]:
+        if not chords:
+            return []
+            
+        dux = []
+        low = self.params.key_range_low if self.params else 60
+        high = self.params.key_range_high if self.params else 80
+        
+        t = 0.0
+        prev_pitch = (low + high) // 2
+        
+        while t < duration_beats:
+            chord = chord_at(chords, t)
+            if chord is not None:
+                pcs = chord.pitch_classes()
+                if pcs:
+                    pc = random.choice(pcs)
+                    pitch = nearest_pitch(pc, prev_pitch)
+                    pitch = snap_to_scale(pitch, key)
+                    pitch = max(low, min(high, pitch))
+                    prev_pitch = pitch
+                    
+                    dux.append(
+                        NoteInfo(
+                            pitch=pitch,
+                            start=t,
+                            duration=0.45,
+                            velocity=80,
+                        )
+                    )
+            t += 0.5
+            
+        voices = self.generate(dux, scale=key)
+        return self.merge_voices(voices)
 
     def generate(
         self,

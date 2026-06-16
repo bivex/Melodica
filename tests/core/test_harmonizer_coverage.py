@@ -19,7 +19,8 @@ def test_coupled_hmm_init_and_harmonize():
     assert isinstance(chords, list)
 
 def test_coupled_hmm_emit_logic():
-    # Проверка того, что наши правки с LOG_NOT_PNOTE работают
-    from melodica.harmonize.coupled_hmm import LOG_NOT_PNOTE, LOG_PNOTE
-    assert LOG_NOT_PNOTE.shape == LOG_PNOTE.shape
-    assert np.all(LOG_NOT_PNOTE <= 0) # Log вероятности <= 0
+    from melodica.harmonize.coupled_hmm import LOG_PNOTE, LOG_PCHANGE
+    assert LOG_PNOTE.ndim == 2
+    assert LOG_PCHANGE.ndim == 3
+    assert np.all(LOG_PNOTE <= 0)
+    assert np.all(LOG_PCHANGE <= 0)

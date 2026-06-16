@@ -630,12 +630,12 @@ class ElectronicDrumsGenerator(PhraseGenerator):
             import math as _math
             phase = (alt_count / 8) * 2 * _math.pi
             offset = int(_math.sin(phase) * spread)
-            return max(0, min(127, 64 + offset))
+            return max(1, min(127, 64 + offset))
         elif mode == "humanize":
             # Gaussian drift — subtle random micro-panning
             import random as _rnd
             drift = _rnd.gauss(0, spread * 0.4)
-            return max(0, min(127, int(64 + drift)))
+            return max(1, min(127, int(64 + drift)))
         else:
             return 64
 

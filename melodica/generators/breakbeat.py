@@ -110,7 +110,7 @@ class BreakbeatGenerator(PhraseGenerator):
             for pitch, offset, vel in pattern:
                 onset = t + offset * speed
                 if onset < duration_beats:
-                    dur = 0.15 if pitch in (HH_CLOSED, HH_OPEN) else 0.25
+                    dur = 0.4 if pitch == HH_OPEN else (0.15 if pitch == HH_CLOSED else 0.25)
                     notes.append(
                         NoteInfo(
                             pitch=pitch,

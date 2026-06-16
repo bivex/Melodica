@@ -342,6 +342,8 @@ def apply_articulation(
         # --- CC74: brightness ---
         n.expression[74] = profile.brightness
 
+    return notes
+
 
 # ---------------------------------------------------------------------------
 # Bridge note generation — convert ChordLabel list → NoteInfo for a track
@@ -475,4 +477,3 @@ def apply_modulation_bridges(
             tracks[tname] = existing + bridge
 
     return tracks
-    return notes

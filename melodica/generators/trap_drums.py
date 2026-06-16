@@ -344,7 +344,7 @@ class TrapDrumsGenerator(PhraseGenerator):
                             
                         # Advance step pointer past the roll duration
                         roll_duration_beats = roll_len * roll_step
-                        steps_to_skip = int(roll_duration_beats / step_duration)
+                        steps_to_skip = int(round(roll_duration_beats / step_duration))
                         i += max(1, steps_to_skip)
                     else:
                         # Normal hi-hat note

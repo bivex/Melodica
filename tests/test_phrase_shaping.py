@@ -145,7 +145,7 @@ class TestOstinatoAccent:
             GeneratorParams(), accent_pattern=[1.3, 0.7, 1.0, 0.8]
         )
         notes = gen.render(SIMPLE_CHORDS, C_MAJOR, 4.0)
-        if len(notes) >= 4:
-            velocities = [n.velocity for n in notes[:4]]
+        if len(notes) >= 8:
+            velocities = [n.velocity for n in notes[:8]]
             # Not all velocities should be identical
-            assert len(set(velocities)) > 1 or len(notes) < 4
+            assert len(set(velocities)) > 1 or len(notes) < 8

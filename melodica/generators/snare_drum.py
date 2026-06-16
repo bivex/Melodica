@@ -93,22 +93,22 @@ class SnareDrumGenerator(PhraseGenerator):
 
         while t < start + duration:
             rel_t = t - start
-            beat_num = int(t) % 4
+            beat_in_bar = t % 4.0
             
             # Flam on beat 1 or 3
-            if (beat_num == 0 or beat_num == 2) and (t - int(t) == 0):
+            if abs(beat_in_bar - 0.0) < 0.01 or abs(beat_in_bar - 2.0) < 0.01:
                 # Double hit (flam): soft grace note right before the main hit
                 notes.append(NoteInfo(
                     pitch=SNARE_AC,
                     start=round(t - 0.04, 6),
                     duration=0.05,
-                    velocity=int(50 + random.randint(-5, 5)),
+                    velocity=max(1, min(127, int(50 + random.randint(-5, 5)))),
                 ))
                 notes.append(NoteInfo(
                     pitch=SNARE_AC,
                     start=round(t, 6),
                     duration=0.1,
-                    velocity=int(100 + random.randint(-5, 5)),
+                    velocity=max(1, min(127, int(100 + random.randint(-5, 5)))),
                 ))
             else:
                 # Deciding whether to place a note based on typical march accents
@@ -126,7 +126,7 @@ class SnareDrumGenerator(PhraseGenerator):
                     ))
 
             # Add occasional triplet/sextuplet fills on beat 4
-            if beat_num == 3 and (t - int(t) == 0) and density > 0.5:
+            if abs(beat_in_bar - 3.0) < 0.01 and density > 0.5:
                 # Add rapid triplet roll instead of regular steps
                 for i in range(6):
                     triplet_t = t + i * (1.0 / 6.0)
@@ -135,7 +135,7 @@ class SnareDrumGenerator(PhraseGenerator):
                             pitch=SNARE_AC,
                             start=round(triplet_t, 6),
                             duration=0.06,
-                            velocity=int(65 + i * 8 + random.randint(-5, 5)),
+                            velocity=max(1, min(127, int(65 + i * 8 + random.randint(-5, 5)))),
                         ))
                 t += 1.0
             else:
@@ -195,8 +195,8 @@ class SnareDrumGenerator(PhraseGenerator):
         density = self.params.density
 
         while t < start + duration:
-            beat_num = int(t) % 4
-            is_beat_1_or_3 = (t - int(t) == 0.0) and (beat_num == 0 or beat_num == 2)
+            beat_in_bar = t % 4.0
+            is_beat_1_or_3 = abs(beat_in_bar - 0.0) < 0.01 or abs(beat_in_bar - 2.0) < 0.01
             
             if is_beat_1_or_3:
                 # Heavy rimshot
@@ -212,7 +212,7 @@ class SnareDrumGenerator(PhraseGenerator):
                         pitch=SNARE_AC,
                         start=round(t + 0.125, 6),
                         duration=0.08,
-                        velocity=int(40 + density * 20),
+                        velocity=max(1, min(127, int(40 + density * 20))),
                     ))
             else:
                 # Random ghost notes on other beats
@@ -221,7 +221,7 @@ class SnareDrumGenerator(PhraseGenerator):
                         pitch=SNARE_AC,
                         start=round(t, 6),
                         duration=0.08,
-                        velocity=int(30 + random.randint(5, 20)),
+                        velocity=max(1, min(127, int(30 + random.randint(5, 20)))),
                     ))
 
             t += 0.25  # step in 16ths

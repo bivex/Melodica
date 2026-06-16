@@ -208,7 +208,32 @@ class EuclideanGenerator(RhythmGenerator):
     step_duration: float = 0.5
     preset: str | None = None
 
-    def __post_init__(self):
+    def __init__(
+        self,
+        pulses: int = 4,
+        steps: int = 8,
+        rotation: int = 0,
+        step_duration: float = 0.5,
+        preset: str | None = None,
+        *,
+        hits_per_bar: int | None = None,
+        slots_per_beat: int | None = None,
+        offset: int | None = None,
+        gate: float = 0.9,
+    ) -> None:
+        if hits_per_bar is not None:
+            pulses = hits_per_bar
+        if slots_per_beat is not None:
+            steps = 4 * slots_per_beat
+            step_duration = 1.0 / slots_per_beat
+        if offset is not None:
+            rotation = -offset
+
+        self.pulses = pulses
+        self.steps = steps
+        self.rotation = rotation
+        self.step_duration = step_duration
+        self.preset = preset
         if self.preset and self.preset in NAMED_PATTERNS:
             p, s, r = NAMED_PATTERNS[self.preset]
             self.pulses = p

@@ -273,8 +273,9 @@ class DrumKitPatternGenerator(PhraseGenerator):
 
         bar_idx = 0
         while t < duration_beats:
-            is_final_bar = (fills_enabled and duration_beats > 4.0 and (t >= duration_beats - 4.0))
-            is_final_bar_mute = self.mute_boundaries and is_final_bar
+            is_actual_final_bar = (duration_beats > 4.0 and (t >= duration_beats - 4.0))
+            is_final_bar = fills_enabled and is_actual_final_bar
+            is_final_bar_mute = self.mute_boundaries and is_actual_final_bar
             is_verse_start = (s_type == "verse" and bar_idx == 0 and self.kick_less_verse)
 
             pattern = STYLE_PATTERNS.get(self.style, STYLE_PATTERNS["rock"])
@@ -335,7 +336,7 @@ class DrumKitPatternGenerator(PhraseGenerator):
                             )
 
             # Phrase-boundary transitions
-            if is_final_bar:
+            if is_final_bar and not is_final_bar_mute:
                 if s_type in ("chorus", "pre_chorus"):
                     # Heavy descending 16th tom fills + snare double punch + crash
                     fill_notes = [
@@ -381,7 +382,7 @@ class DrumKitPatternGenerator(PhraseGenerator):
                             )
                         )
             # Normal fill at end of bar (only if not phrase final bar or auto_fills is disabled)
-            elif random.random() < self.fill_frequency:
+            elif random.random() < self.fill_frequency and not is_final_bar_mute:
                 fill_start = t + 3.0
                 for i, tom in enumerate([TOM_HIGH, TOM_MID, TOM_LOW]):
                     onset = fill_start + i * 0.25
@@ -466,11 +467,11 @@ class DrumKitPatternGenerator(PhraseGenerator):
             # Sine LFO across hits — hi-hat "breathes" left-right
             phase = (alt_count / 8) * 2 * math.pi
             offset = int(math.sin(phase) * spread)
-            return max(0, min(127, 64 + offset))
+            return max(1, min(127, 64 + offset))
         elif mode == "humanize":
             # Gaussian drift — subtle random micro-panning
             drift = random.gauss(0, spread * 0.4)
-            return max(0, min(127, int(64 + drift)))
+            return max(1, min(127, int(64 + drift)))
         return 64
 
     def _apply_pro_features(self, notes: list[NoteInfo]) -> list[NoteInfo]:

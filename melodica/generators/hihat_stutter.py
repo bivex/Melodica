@@ -212,7 +212,7 @@ class HiHatStutterGenerator(PhraseGenerator):
                     else: # "mono"
                         pan_val = 64
                     
-                    note.expression[10] = max(0, min(127, pan_val + random.randint(-8, 8)))
+                    note.expression[10] = max(1, min(127, pan_val + random.randint(-8, 8)))
                     notes.append(note)
                 continue
 
@@ -312,7 +312,7 @@ class HiHatStutterGenerator(PhraseGenerator):
                     else: # "mono"
                         pan_val = 64
                     
-                    note.expression[10] = max(0, min(127, pan_val + random.randint(-8, 8)))
+                    note.expression[10] = max(1, min(127, pan_val + random.randint(-8, 8)))
                     notes.append(note)
                 continue
 
