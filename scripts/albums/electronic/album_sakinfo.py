@@ -130,7 +130,7 @@ def produce_signal_birth():
         path=OUT / "01_Signal_Birth.mid",
         mood=Mood.AMBIENT,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
@@ -204,7 +204,7 @@ def produce_static_veins():
         path=OUT / "02_Static_Veins.mid",
         mood=Mood.INTIMATE,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
@@ -257,7 +257,7 @@ def produce_archive_of_skin():
         path=OUT / "03_Archive_of_Skin.mid",
         mood=Mood.INTIMATE,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
@@ -321,7 +321,7 @@ def produce_machine_psalms():
         path=OUT / "04_Machine_Psalms.mid",
         mood=Mood.AGGRESSIVE,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
@@ -379,7 +379,7 @@ def produce_ghost_channel():
         path=OUT / "05_Ghost_Channel.mid",
         mood=Mood.AMBIENT,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
@@ -448,7 +448,7 @@ def produce_sakinfo_core():
         path=OUT / "06_Sakinfo_Core.mid",
         mood=Mood.CINEMATIC,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
@@ -510,7 +510,7 @@ def produce_memory_grid():
         path=OUT / "07_Memory_Grid.mid",
         mood=Mood.EXPERIMENTAL,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
@@ -570,7 +570,7 @@ def produce_zero_bloom():
         path=OUT / "08_Zero_Bloom.mid",
         mood=Mood.AGGRESSIVE,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
@@ -622,7 +622,7 @@ def produce_last_transmission():
         path=OUT / "09_Last_Transmission.mid",
         mood=Mood.INTIMATE,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
@@ -673,7 +673,7 @@ def produce_afterimage():
         path=OUT / "10_Afterimage.mid",
         mood=Mood.AMBIENT,
         key=key,
-        verbose=False,
+        verbose=True,
     )
 
 
