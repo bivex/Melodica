@@ -1718,6 +1718,7 @@ def _stage_export(kw):
         instruments=kw["instruments"],
         cc_events=kw["_all_cc"],
         tempo_events=kw.get("tempo_events"),
+        diagnose=kw.get("verbose", True),
     )
     return kw
 

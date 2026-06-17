@@ -360,7 +360,7 @@ def export_multitrack_midi(
     cc_events: "dict[str, list[tuple[float, int, int]]] | None" = None,
     instruments: "dict[str, int] | None" = None,
     volumes: dict[str, int] | None = None,
-    diagnose: bool = False,
+    diagnose: bool = True,
     humanize: bool = True,
     tempo_events: list[tuple[float, float]] | None = None,
     pitch_bend_range: int = 2,
