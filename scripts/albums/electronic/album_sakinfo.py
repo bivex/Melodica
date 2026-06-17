@@ -409,9 +409,9 @@ def produce_sakinfo_core():
     # Layer direct, inverse, and octave transpositions across the track
     for bar in range(0, 24, 4):
         offset = bar * 4.0
-        piano.extend(registry.render("sakinfo", offset=offset))
-        choir.extend(registry.render("sakinfo", variant="inverse", offset=offset, transpose=12))
-        strings.extend(registry.render("sakinfo", variant="inverse", offset=offset, transpose=-12))
+        piano.extend(registry.render("sakinfo", offset=offset, transpose=12))      # Lead piano in higher octave
+        choir.extend(registry.render("sakinfo", variant="inverse", offset=offset, transpose=0))    # Choir in mid register
+        strings.extend(registry.render("sakinfo", variant="inverse", offset=offset, transpose=12)) # Strings in higher octave
 
     # Aggressive drum beat (electronic / hybrid)
     drums = BreakbeatGenerator(
@@ -420,17 +420,17 @@ def produce_sakinfo_core():
         ghost_notes=True
     ).render(chords, key, dur)
 
-    # Solid analog bass (low octave range)
+    # Solid analog bass (low octave range - clean sine wave Reese bass)
     bass = SynthBassGenerator(
         params=GeneratorParams(key_range_low=24, key_range_high=42),
-        waveform="saw",
-        pattern="straight"
+        waveform="sine",
+        pattern="reese"
     ).render(chords, key, dur)
 
-    # Cinematic Brass Section (mid-high range)
+    # Cinematic Brass Section (mid-high range - spread voicing to avoid clutter)
     brass_notes = AmbientPadGenerator(
         params=GeneratorParams(key_range_low=53, key_range_high=68),
-        voicing="chords"
+        voicing="spread"
     ).render(chords, key, dur)
 
     tracks = {
