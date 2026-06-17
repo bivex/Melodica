@@ -3,15 +3,16 @@
 # Licensed under the MIT License.
 
 """
-album_downtempo_trap.py — "Downtempo Trap & Phonk" Album.
+album_downtempo_trap.py — "New Wave Downtempo Trap" Album.
 
-A chill, atmospheric trap album featuring deep sub-bass lines, crisp trap drums,
-vocal chops, and smoky leads, all mixed and mastered via the core album pipeline.
+An album leveraging the new modern trap generators (CloudRapGenerator,
+PluggnbGenerator, PhonkGenerator) to create lush, masterfully mixed
+downtempo tracks.
 
 Tracks:
-  1. Midnight Static — 70 BPM — G Aeolian (Smoky Jazz Trumpet & Deep Sub)
-  2. Neon Drift      — 76 BPM — C Aeolian (Chill Trap/Wave with High Arps & Choir Chops)
-  3. Ghost Grid      — 65 BPM — E Aeolian (Dark Downtempo Phonk with Memphis Cowbells)
+  1. Cloud Ethereal — 72 BPM — F# Aeolian (Atmospheric wave & airy arps)
+  2. Plugg Wave      — 80 BPM — D# Aeolian (Ninth chords pluggnb & sliding 808)
+  3. Drift Ghost      — 68 BPM — A Aeolian (Dark, heavy cowbell drift phonk)
 """
 
 import random
@@ -19,26 +20,23 @@ from pathlib import Path
 
 from melodica.types import Scale, Mode, ChordLabel, NoteInfo, parse_progression
 from melodica.generators import GeneratorParams
-from melodica.generators.solo_melody import SoloMelodyGenerator
-from melodica.generators.ambient import AmbientPadGenerator
-from melodica.generators.dark_pad import DarkPadGenerator
-from melodica.generators.drone import DroneGenerator
-from melodica.generators.arpeggiator import ArpeggiatorGenerator
+from melodica.generators.cloud_rap import CloudRapGenerator
+from melodica.generators.pluggnb import PluggnbGenerator
+from melodica.generators.phonk import PhonkGenerator
 from melodica.generators.synth_bass import SynthBassGenerator
-from melodica.generators.trap_drums import TrapDrumsGenerator
 from melodica.composer.album_pipeline import produce_track, Mood
 
 # ------------------------------------------------------------------
-# GM Programs mapping
+# GM Programs
 # ------------------------------------------------------------------
-ELECTRIC_PIANO = 4
-TRUMPET = 56
-SYNTH_LEAD = 80
-CELLO = 42
+PIANO = 0
+STRINGS = 48
 CHOIR = 52
 PAD_WARM = 89
-BELLS = 14
+PAD_SPACE = 91
+COWBELL_BLOCK = 14  # Tubular bells for melodic cowbell phonk texture
 SYNTH_BASS = 38
+SYNTH_LEAD = 80
 DRUMS = 0
 
 random.seed(2026)
@@ -46,236 +44,307 @@ OUT = Path("output/album_downtempo_trap")
 OUT.mkdir(parents=True, exist_ok=True)
 
 
+# ------------------------------------------------------------------
+# Intercepting Generators for Accurate Track Separation
+# ------------------------------------------------------------------
+
+class InterceptCloudRapGenerator(CloudRapGenerator):
+    def render_separated(self, chords: list[ChordLabel], key: Scale, duration_beats: float) -> dict[str, list[NoteInfo]]:
+        pads_list = []
+        drums_list = []
+        leads_list = []
+        
+        orig_pad = self._render_pad
+        orig_drums = self._render_drums
+        orig_arp = self._render_arp
+        
+        self._render_pad = lambda notes, *args: orig_pad(pads_list, *args)
+        self._render_drums = lambda notes, *args: orig_drums(drums_list, *args)
+        self._render_arp = lambda notes, *args: orig_arp(leads_list, *args)
+        
+        self.render(chords, key, duration_beats)
+        
+        self._render_pad = orig_pad
+        self._render_drums = orig_drums
+        self._render_arp = orig_arp
+        
+        return {"pads": pads_list, "drums": drums_list, "leads": leads_list}
+
+
+class InterceptPluggnbGenerator(PluggnbGenerator):
+    def render_separated(self, chords: list[ChordLabel], key: Scale, duration_beats: float) -> dict[str, list[NoteInfo]]:
+        pads_list = []
+        bass_list = []
+        drums_list = []
+        leads_list = []
+        
+        orig_pad = self._render_pad
+        orig_808 = self._render_808
+        orig_drums = self._render_drums
+        orig_melody = self._render_melody
+        
+        self._render_pad = lambda notes, *args: orig_pad(pads_list, *args)
+        self._render_808 = lambda notes, *args: orig_808(bass_list, *args)
+        self._render_drums = lambda notes, *args: orig_drums(drums_list, *args)
+        self._render_melody = lambda notes, *args: orig_melody(leads_list, *args)
+        
+        self.render(chords, key, duration_beats)
+        
+        self._render_pad = orig_pad
+        self._render_808 = orig_808
+        self._render_drums = orig_drums
+        self._render_melody = orig_melody
+        
+        return {"pads": pads_list, "synth_bass": bass_list, "drums": drums_list, "leads": leads_list}
+
+
+class InterceptPhonkGenerator(PhonkGenerator):
+    def render_separated(self, chords: list[ChordLabel], key: Scale, duration_beats: float) -> dict[str, list[NoteInfo]]:
+        bass_list = []
+        drums_list = []
+        cowbell_list = []
+        pads_list = []
+        
+        orig_bass = self._render_bass
+        orig_kick = self._render_kick
+        orig_snare = self._render_snare
+        orig_hihats = self._render_hihats
+        orig_cowbell = self._render_cowbell
+        orig_memphis = self._render_memphis
+        
+        self._render_bass = lambda notes, *args: orig_bass(bass_list, *args)
+        self._render_kick = lambda notes, *args: orig_kick(drums_list, *args)
+        self._render_snare = lambda notes, *args: orig_snare(drums_list, *args)
+        self._render_hihats = lambda notes, *args: orig_hihats(drums_list, *args)
+        self._render_cowbell = lambda notes, *args: orig_cowbell(cowbell_list, *args)
+        self._render_memphis = lambda notes, *args: orig_memphis(pads_list, *args)
+        
+        self.render(chords, key, duration_beats)
+        
+        self._render_bass = orig_bass
+        self._render_kick = orig_kick
+        self._render_snare = orig_snare
+        self._render_hihats = orig_hihats
+        self._render_cowbell = orig_cowbell
+        self._render_memphis = orig_memphis
+        
+        return {"synth_bass": bass_list, "drums": drums_list, "phonk_cowbells": cowbell_list, "pads": pads_list}
+
+
 # =====================================================================
-# Track 1: Midnight Static — 70 BPM — G Aeolian
+# Track 1: Cloud Ethereal — 72 BPM — F# Aeolian
 # =====================================================================
-def produce_midnight_static():
-    print("  1. Midnight Static [G Aeolian — 70 BPM]")
-    key = Scale(root=7, mode=Mode.AEOLIAN)  # G Aeolian
+def produce_cloud_ethereal():
+    print("  1. Cloud Ethereal [F# Aeolian — 72 BPM]")
+    key = Scale(root=6, mode=Mode.AEOLIAN)  # F# Aeolian
     dur = 96.0  # 24 bars
-    chords = parse_progression("i:4 VI:4 III:4 v:4 " * 6, key)
+    chords = parse_progression("i:4 VI:4 III:4 VII:4 " * 6, key)
 
-    # 1. Warm ambient pad (mid register to avoid bass clutter)
-    pad = DarkPadGenerator(
-        params=GeneratorParams(key_range_low=55, key_range_high=72),
-        mode="minor_pad",
-        chord_dur=8.0,
-        velocity_level=0.30,
-        register="mid"
-    ).render(chords, key, dur)
+    # Use the new CloudRapGenerator to render the core notes
+    gen = InterceptCloudRapGenerator(
+        variant="ethereal",
+        pad_density=0.7,
+        drum_sparseness=0.3,
+        arp_speed="slow"
+    )
+    parted = gen.render_separated(chords, key, dur)
 
-    # 2. Electric Piano Chords (spread voicing, mid range)
-    piano = AmbientPadGenerator(
-        params=GeneratorParams(key_range_low=48, key_range_high=64),
-        voicing="spread",
-        overlap=1.2
-    ).render(chords, key, dur)
-
-    # 3. Clean sub synth bass (monophonic sine wave, strictly low-end)
-    bass = SynthBassGenerator(
+    # Add a deep clean sub-bass line underneath (sine wave sub-bass)
+    sub_bass = SynthBassGenerator(
         params=GeneratorParams(key_range_low=24, key_range_high=42),
         waveform="sine",
         pattern="sub_kick"
     ).render(chords, key, dur)
 
-    # 4. Smoky Jazz Trumpet (lead melody, enters staggered at bar 4)
-    lead_gen = SoloMelodyGenerator(
-        params=GeneratorParams(key_range_low=64, key_range_high=84),
-        style="bebop_horn",
-        vibrato_depth=0.5
-    )
-    lead = lead_gen.render(chords, key, dur)
-    # Stagger: filter out notes before beat 16.0 (bar 4)
-    lead = [n for n in lead if n.start >= 16.0]
+    pads = parted["pads"]
+    leads = parted["leads"]
+    drums = parted["drums"]
 
-    # 5. Minimal Trap Drums (enters staggered at bar 2)
-    drums_gen = TrapDrumsGenerator(
-        variant="minimal",
-        hat_roll_density=0.35,
-        kick_pattern="standard",
-        sidechain_depth=0.5,
-        ghost_snare_prob=0.3
-    )
-    drums = drums_gen.render(chords, key, dur)
-    # Stagger: filter out notes before beat 8.0 (bar 2)
+    # Scale velocities to resolve warnings and improve mix
+    for n in pads:
+        n.scale_velocity(1.5)
+    for n in leads:
+        n.scale_velocity(1.6)
+
+    # Stagger entrances to avoid uniform density
+    # Pads start immediately at beat 0
+    # Drums enter at beat 8.0 (bar 2)
+    # Arpeggios/leads enter at beat 16.0 (bar 4)
     drums = [n for n in drums if n.start >= 8.0]
+    leads = [n for n in leads if n.start >= 16.0]
 
     tracks = {
-        "ambient_pad": pad,
-        "electric_piano": piano,
-        "synth_bass": bass,
-        "lead_trumpet": lead,
+        "pads": pads,
+        "leads": leads,
         "drums": drums,
+        "synth_bass": sub_bass,
     }
 
     inst = {
-        "ambient_pad": PAD_WARM,
-        "electric_piano": ELECTRIC_PIANO,
-        "synth_bass": SYNTH_BASS,
-        "lead_trumpet": TRUMPET,
+        "pads": PAD_SPACE,
+        "leads": SYNTH_LEAD,
         "drums": DRUMS,
+        "synth_bass": SYNTH_BASS,
     }
 
     produce_track(
         tracks=tracks,
-        bpm=70.0,
+        bpm=72.0,
         instruments=inst,
-        path=OUT / "01_Midnight_Static.mid",
+        path=OUT / "01_Cloud_Ethereal.mid",
         mood=Mood.AMBIENT,
         key=key,
+        genre="trap",
     )
 
 
 # =====================================================================
-# Track 2: Neon Drift — 76 BPM — C Aeolian
+# Track 2: Plugg Wave — 80 BPM — D# Aeolian
 # =====================================================================
-def produce_neon_drift():
-    print("  2. Neon Drift [C Aeolian — 76 BPM]")
-    key = Scale(root=0, mode=Mode.AEOLIAN)  # C Aeolian
+def produce_plugg_wave():
+    print("  2. Plugg Wave [D# Aeolian — 80 BPM]")
+    key = Scale(root=3, mode=Mode.AEOLIAN)  # D# Aeolian
     dur = 96.0  # 24 bars
-    chords = parse_progression("i:4 v:4 VI:4 VII:4 " * 6, key)
+    chords = parse_progression("iadd9:4 iv7:4 VII7:4 III7:4 " * 6, key)
 
-    # 1. Warm bass (sustained Reese bass, sine-saw hybrid style in low end)
-    bass = SynthBassGenerator(
-        params=GeneratorParams(key_range_low=24, key_range_high=40),
-        waveform="sine",
-        pattern="reese"
-    ).render(chords, key, dur)
-
-    # 2. Vocal chops (choir pad playing airy vocal-like melodies, mid register)
-    vocals = AmbientPadGenerator(
-        params=GeneratorParams(key_range_low=60, key_range_high=72),
-        voicing="spread",
-        overlap=1.0
-    ).render(chords, key, dur)
-
-    # 3. High arpeggiator synth (staggered entrance, starts at bar 4)
-    arp = ArpeggiatorGenerator(
-        params=GeneratorParams(key_range_low=72, key_range_high=96),
-        pattern="up_down",
-        note_duration=0.25
-    ).render(chords, key, dur)
-    arp = [n for n in arp if n.start >= 16.0]
-
-    # 4. Melodic trap drums (complex rolls, syncopated kick, starts at bar 2)
-    drums_gen = TrapDrumsGenerator(
-        variant="melodic",
-        hat_roll_density=0.75,
-        kick_pattern="syncopated",
-        sidechain_depth=0.7,
-        ghost_snare_prob=0.35
+    # Instantiate generator with lower key range to force 808 sub-bass low
+    gen = InterceptPluggnbGenerator(
+        params=GeneratorParams(key_range_low=24, key_range_high=42),
+        variant="pluggnb",
+        pad_voicing="ninth",
+        include_808=True,
+        hat_style="gentle",
+        melody_register=5
     )
-    drums = drums_gen.render(chords, key, dur)
+    parted = gen.render_separated(chords, key, dur)
+
+    pads = parted["pads"]
+    bass = parted["synth_bass"]
+    drums = parted["drums"]
+    leads = parted["leads"]
+
+    # Scale velocities
+    for n in pads:
+        n.scale_velocity(1.4)
+    for n in leads:
+        n.scale_velocity(1.5)
+
+    # Stagger entrances
+    # Pads start immediately
+    # Bass enters at beat 8.0
+    # Drums enter at beat 16.0
+    # Lead melody enters at beat 24.0
+    bass = [n for n in bass if n.start >= 8.0]
+    drums = [n for n in drums if n.start >= 16.0]
+    leads = [n for n in leads if n.start >= 24.0]
+
+    tracks = {
+        "pads": pads,
+        "synth_bass": bass,
+        "drums": drums,
+        "leads": leads,
+    }
+
+    inst = {
+        "pads": PAD_WARM,
+        "synth_bass": SYNTH_BASS,
+        "drums": DRUMS,
+        "leads": CHOIR,  # Choir vocal chops style
+    }
+
+    produce_track(
+        tracks=tracks,
+        bpm=80.0,
+        instruments=inst,
+        path=OUT / "02_Plugg_Wave.mid",
+        mood=Mood.INTIMATE,
+        key=key,
+        genre="trap",
+    )
+
+
+# =====================================================================
+# Track 3: Drift Ghost — 68 BPM — A Aeolian
+# =====================================================================
+def produce_drift_ghost():
+    print("  3. Drift Ghost [A Aeolian — 68 BPM]")
+    key = Scale(root=9, mode=Mode.AEOLIAN)  # A Aeolian
+    dur = 96.0  # 24 bars
+    chords = parse_progression("i:4 VI:4 v7:4 i:4 " * 6, key)
+
+    # Instantiate generator with lower key range to force phonk bass low
+    gen = InterceptPhonkGenerator(
+        params=GeneratorParams(key_range_low=24, key_range_high=42),
+        variant="drift_phonk",
+        cowbell_density=0.8,
+        bass_slide_amount=6,
+        filter_cutoff=0.4,
+        memphis_chops=True,
+        aggression=0.7
+    )
+    parted = gen.render_separated(chords, key, dur)
+
+    bass = parted["synth_bass"]
+    drums = parted["drums"]
+    cowbells = parted["phonk_cowbells"]
+    pads = parted["pads"]
+
+    # Scale velocities to resolve low velocity warnings and match phonk aggression
+    for n in cowbells:
+        n.scale_velocity(1.3)
+    for n in pads:
+        # Memphis chops style
+        n.scale_velocity(1.5)
+    for n in bass:
+        # Beef up the sliding bass
+        n.scale_velocity(1.1)
+
+    # Stagger entrances
+    # Bass starts immediately (drift intro)
     drums = [n for n in drums if n.start >= 8.0]
+    cowbells = [n for n in cowbells if n.start >= 16.0]
+    pads = [n for n in pads if n.start >= 24.0]
 
     tracks = {
         "synth_bass": bass,
-        "vocal_chops": vocals,
-        "arp_synth": arp,
         "drums": drums,
+        "phonk_cowbells": cowbells,
+        "pads": pads,
     }
 
     inst = {
         "synth_bass": SYNTH_BASS,
-        "vocal_chops": CHOIR,
-        "arp_synth": SYNTH_LEAD,
         "drums": DRUMS,
+        "phonk_cowbells": COWBELL_BLOCK,
+        "pads": PAD_SPACE,
     }
 
     produce_track(
         tracks=tracks,
-        bpm=76.0,
+        bpm=68.0,
         instruments=inst,
-        path=OUT / "02_Neon_Drift.mid",
-        mood=Mood.CINEMATIC,
-        key=key,
-    )
-
-
-# =====================================================================
-# Track 3: Ghost Grid — 65 BPM — E Aeolian
-# =====================================================================
-def produce_ghost_grid():
-    print("  3. Ghost Grid [E Aeolian — 65 BPM]")
-    key = Scale(root=4, mode=Mode.AEOLIAN)  # E Aeolian
-    dur = 96.0  # 24 bars
-    chords = parse_progression("i:4 VI:4 VII:4 i:4 " * 6, key)
-
-    # 1. Wobble sub synth bass (monophonic, low register)
-    bass = SynthBassGenerator(
-        params=GeneratorParams(key_range_low=24, key_range_high=42),
-        waveform="sine",
-        pattern="wobble"
-    ).render(chords, key, dur)
-
-    # 2. Dark pad (phrygian / suspension texture, mid register)
-    pad = DarkPadGenerator(
-        params=GeneratorParams(key_range_low=53, key_range_high=68),
-        mode="phrygian_pad",
-        chord_dur=8.0,
-        velocity_level=0.35,
-        register="mid"
-    ).render(chords, key, dur)
-
-    # 3. Phonk cowbells (arpeggiator on bells, high-mid register)
-    cowbells = ArpeggiatorGenerator(
-        params=GeneratorParams(key_range_low=72, key_range_high=84),
-        pattern="up",
-        note_duration=0.5
-    ).render(chords, key, dur)
-    # Stagger: enters at beat 16.0 (bar 4)
-    cowbells = [n for n in cowbells if n.start >= 16.0]
-
-    # 4. Standard trap drums (syncopated, heavy sidechain, enters at bar 2)
-    drums_gen = TrapDrumsGenerator(
-        variant="standard",
-        hat_roll_density=0.45,
-        kick_pattern="syncopated",
-        sidechain_depth=0.8,
-        ghost_snare_prob=0.3
-    )
-    drums = drums_gen.render(chords, key, dur)
-    drums = [n for n in drums if n.start >= 8.0]
-
-    tracks = {
-        "wobble_bass": bass,
-        "dark_pad": pad,
-        "phonk_cowbells": cowbells,
-        "drums": drums,
-    }
-
-    inst = {
-        "wobble_bass": SYNTH_BASS,
-        "dark_pad": PAD_WARM,
-        "phonk_cowbells": BELLS,
-        "drums": DRUMS,
-    }
-
-    produce_track(
-        tracks=tracks,
-        bpm=65.0,
-        instruments=inst,
-        path=OUT / "03_Ghost_Grid.mid",
+        path=OUT / "03_Drift_Ghost.mid",
         mood=Mood.EXPERIMENTAL,
         key=key,
+        genre="trap",
     )
 
 
 # ------------------------------------------------------------------
-# Main production script
+# Main production loop
 # ------------------------------------------------------------------
 def main():
     print("\n" + "=" * 60)
-    print("   DOWNTEMPO TRAP & PHONK — Album Production")
-    print("   Lush Atmospheres, Crisp Beats & Warm Subs")
+    print("   SAKINFO PART II: NEW WAVE DOWNTEMPO TRAP")
+    print("   Leveraging Modern Algorithmic Trap Generators")
     print("=" * 60 + "\n")
 
-    produce_midnight_static()
-    produce_neon_drift()
-    produce_ghost_grid()
+    produce_cloud_ethereal()
+    produce_plugg_wave()
+    produce_drift_ghost()
 
     print("\n" + "=" * 60)
-    print("   PRODUCTION COMPLETE: DOWNTEMPO TRAP")
+    print("   PRODUCTION COMPLETE: NEW DOWNTEMPO TRAP")
     print(f"   MIDI output saved to: {OUT.absolute()}")
     print("=" * 60 + "\n")
 
