@@ -365,7 +365,7 @@ def export_multitrack_midi(
     tempo_events: list[tuple[float, float]] | None = None,
     pitch_bend_range: int = 2,
     mpe_tracks: set[str] | None = None,
-    reaper_project: bool = True,
+    reaper_project: bool = False,
     validate_form: bool = True,
     form: "MusicalForm | None" = None,
 ) -> None:
