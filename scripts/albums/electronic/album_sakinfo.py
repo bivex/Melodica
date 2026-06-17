@@ -91,22 +91,31 @@ def produce_signal_birth():
         velocity=40
     ).render(chords, key, dur)
 
+    # 1. Drone Pad (very low registers, avoiding mid frequencies)
+    drone = DroneGenerator(
+        params=GeneratorParams(key_range_low=24, key_range_high=38),
+        velocity=40
+    ).render(chords, key, dur)
+
     # 2. Granular Noise / Atmosphere
     granular = DarkPadGenerator(
+        params=GeneratorParams(key_range_low=20, key_range_high=32),
         mode="tritone_drone", register="low", velocity_level=0.30, chord_dur=8.0
     ).render(chords, key, dur)
 
-    # 3. Lead Piano: Single felt piano playing the direct theme
+    # 3. Lead Piano: Single felt piano playing the direct theme (staggered entrance)
     lead = []
-    for bar in range(0, 16, 4):
-        lead.extend(registry.render("sakinfo", offset=bar * 4.0))
+    for bar in range(4, 16, 4):  # starts at beat 16.0
+        lead.extend(registry.render("sakinfo", offset=bar * 4.0, transpose=12))
 
-    # 4. Support Cello: countermelody through contrary motion
+    # 4. Support Cello: countermelody through contrary motion (staggered entrance)
     cello_gen = CountermelodyGenerator(
         primary_melody=lead,
         motion_preference="contrary",
         dissonance_on_weak=True
     )
+    cello_gen.params.key_range_low = 40
+    cello_gen.params.key_range_high = 55
     cello = cello_gen.render(chords, key, dur)
 
     tracks = {
@@ -411,15 +420,16 @@ def produce_sakinfo_core():
         ghost_notes=True
     ).render(chords, key, dur)
 
-    # Solid analog bass
+    # Solid analog bass (low octave range)
     bass = SynthBassGenerator(
+        params=GeneratorParams(key_range_low=24, key_range_high=42),
         waveform="saw",
         pattern="straight"
     ).render(chords, key, dur)
 
-    # Cinematic Brass Section
+    # Cinematic Brass Section (mid-high range)
     brass_notes = AmbientPadGenerator(
-        params=GeneratorParams(key_range_low=48, key_range_high=60),
+        params=GeneratorParams(key_range_low=53, key_range_high=68),
         voicing="chords"
     ).render(chords, key, dur)
 
@@ -465,22 +475,24 @@ def produce_memory_grid():
     marimba = []
     for step in range(0, 128):
         if step % 3 == 0:  # Triggers every 3 sixteenths (polyrhythmic grid)
-            pitch = 62 + (step % 4) * 2
+            pitch = 74 + (step % 4) * 2  # Higher octave
             marimba.append(NoteInfo(pitch=pitch, start=step * 0.25, duration=0.20, velocity=65))
 
-    # 2. Pizzicato Strings countermelodies
+    # 2. Pizzicato Strings countermelodies (staggered: enters at beat 16.0)
     pizz = []
-    for step in range(0, 128):
+    for step in range(64, 128):  # starts at beat 16.0
         if step % 4 == 0:  # 4/4 grid response
             pitch = 50 + (step % 3) * 4
             pizz.append(NoteInfo(pitch=pitch, start=step * 0.25, duration=0.20, velocity=55))
 
-    # 3. Modular Synth (Arpeggiator)
+    # 3. Modular Synth (Arpeggiator) (staggered: enters at beat 8.0)
     arp = ArpeggiatorGenerator(
-        params=GeneratorParams(key_range_low=58, key_range_high=80),
+        params=GeneratorParams(key_range_low=60, key_range_high=84),
         pattern="up_down",
         note_duration=0.5
     ).render(chords, key, dur)
+    # Stagger: filter out notes before beat 8.0
+    arp = [n for n in arp if n.start >= 8.0]
 
     # 4. Minimal percussion / click rhythm
     drums = ElectronicDrumsGenerator(
@@ -489,11 +501,18 @@ def produce_memory_grid():
         pattern="minimal"
     ).render(chords, key, dur)
 
+    # 5. Low-end foundation bass/drone (fixes missing low-end warning)
+    bass = DroneGenerator(
+        params=GeneratorParams(key_range_low=24, key_range_high=38),
+        velocity=35
+    ).render(chords, key, dur)
+
     tracks = {
         "marimba": marimba,
         "pizz_strings": pizz,
         "modular_synth": arp,
         "drums": drums,
+        "synth_bass": bass,
     }
 
     inst = {
@@ -501,6 +520,7 @@ def produce_memory_grid():
         "pizz_strings": CELLO,
         "modular_synth": SYNTH_LEAD,
         "drums": DRUMS,
+        "synth_bass": SYNTH_BASS,
     }
 
     produce_track(
@@ -523,10 +543,10 @@ def produce_zero_bloom():
     dur = 96.0
     chords = parse_progression("i:4 VI:4 III:4 VII:4 " * 6, key)
 
-    # 1. Rapid arpeggiator playing speedy variants of the theme
+    # 1. Rapid arpeggiator playing speedy variants of the theme (transposed higher for air)
     arp = []
     for bar in range(24):
-        arp.extend(registry.render("sakinfo", variant="speedy", offset=bar * 4.0, transpose=12))
+        arp.extend(registry.render("sakinfo", variant="speedy", offset=bar * 4.0, transpose=24))
 
     # 2. Hard Techno Kick & Hats
     drums = ElectronicDrumsGenerator(
@@ -535,8 +555,9 @@ def produce_zero_bloom():
         pattern="four_on_floor"
     ).render(chords, key, dur)
 
-    # 3. Reese Bass (Sawtooth slides)
+    # 3. Reese Bass (Sawtooth slides in lower octave)
     bass = SynthBassGenerator(
+        params=GeneratorParams(key_range_low=24, key_range_high=45),
         waveform="saw",
         pattern="reese",
         slide_probability=0.3
@@ -585,10 +606,10 @@ def produce_last_transmission():
     # Progression: F – C – Dm – Bb (I – V – vi – IV in F Major)
     chords = parse_progression("I:4 V:4 vi:4 IV:4 " * 4, key)
 
-    # 1. Lead Piano: Theme returns in the relative major context (transposed)
+    # 1. Lead Piano: Theme returns in the relative major context (transposed up an octave for air)
     piano = []
     for bar in range(0, 16, 4):
-        piano.extend(registry.render("sakinfo", variant="triumphant_major", offset=bar * 4.0))
+        piano.extend(registry.render("sakinfo", variant="triumphant_major", offset=bar * 4.0, transpose=12))
 
     # 2. Soft Strings (emotional chords)
     strings = AmbientPadGenerator(
@@ -603,16 +624,24 @@ def produce_last_transmission():
         voicing="chords"
     ).render(chords, key, dur)
 
+    # 4. Low-end bass drone (fixes missing low register warning)
+    bass = DroneGenerator(
+        params=GeneratorParams(key_range_low=24, key_range_high=35),
+        velocity=35
+    ).render(chords, key, dur)
+
     tracks = {
         "lead_piano": piano,
         "soft_strings": strings,
         "warm_pad": pad,
+        "bass_drone": bass,
     }
 
     inst = {
         "lead_piano": PIANO,
         "soft_strings": STRINGS,
         "warm_pad": PAD_WARM,
+        "bass_drone": CELLO,
     }
 
     produce_track(
