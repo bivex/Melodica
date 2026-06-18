@@ -159,9 +159,7 @@ class DawDreamerPlayer:
         for n in notes:
             start = max(0.0, n.start) * beat_sec
             dur = max(1e-3, n.duration * beat_sec)
-            self.synth.add_midi_note(
-                int(n.pitch), int(n.velocity), start, dur, beats=False
-            )
+            self.synth.add_midi_note(int(n.pitch), int(n.velocity), start, dur, beats=False)
 
     def render_notes(
         self,
@@ -177,7 +175,7 @@ class DawDreamerPlayer:
         self.engine.load_graph([(self.synth, [])])
         self.engine.render(duration)
         audio = self.engine.get_audio()
-        return self._normalize_audio(audio)
+        return audio
 
     def render_tracks(
         self,
@@ -207,23 +205,38 @@ class DawDreamerPlayer:
         bpm: float = 120.0,
         channel: int = 0,
         program: int | None = None,
+        bit_depth: int = 32,
     ) -> Path:
-        """Render NoteInfo list and save as 16-bit PCM WAV (stdlib only)."""
-        audio = self.render_notes(notes, bpm=bpm, channel=channel, program=program)
-        return self._write_wav(audio, path)
+        """Render NoteInfo list and save as WAV.
 
-    def _write_wav(self, audio: np.ndarray, path: str | Path) -> Path:
-        """Write a (channels, samples) float32 array as 16-bit PCM WAV."""
+        bit_depth=32: 32-bit float PCM (full dynamic range, no clipping)
+        bit_depth=16: 16-bit PCM (clips at ±1.0, for MP3 delivery)
+        """
+        audio = self.render_notes(notes, bpm=bpm, channel=channel, program=program)
+        return self._write_wav(audio, path, bit_depth=bit_depth)
+
+    def _write_wav(self, audio: np.ndarray, path: str | Path, bit_depth: int = 32) -> Path:
+        """Write a (channels, samples) float32 array as WAV."""
         import wave
+        import struct
 
         path = Path(path)
-        # (channels, samples) -> interleaved (samples, channels)
         interleaved = audio.T
-        clipped = np.clip(interleaved, -1.0, 1.0)
-        pcm = (clipped * 32767.0).astype("<i2")
+
+        if bit_depth == 32:
+            wav_format = 3  # WAVE_FORMAT_IEEE_FLOAT
+            sampwidth = 4
+            pcm = np.clip(interleaved, -1.0, 1.0).astype("<f4")
+        elif bit_depth == 16:
+            wav_format = 1  # WAVE_FORMAT_PCM
+            sampwidth = 2
+            pcm = (np.clip(interleaved, -1.0, 1.0) * 32767.0).astype("<i2")
+        else:
+            raise ValueError(f"Unsupported bit_depth: {bit_depth}. Use 16 or 32.")
+
         with wave.open(str(path), "wb") as w:
             w.setnchannels(audio.shape[0])
-            w.setsampwidth(2)
+            w.setsampwidth(sampwidth)
             w.setframerate(self._sr)
             w.writeframes(pcm.tobytes())
         return path
@@ -242,10 +255,21 @@ class DawDreamerPlayer:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             wav_path = tmp.name
         try:
-            self.render_wav(notes, wav_path, bpm=bpm, channel=channel, program=program)
+            self.render_wav(
+                notes, wav_path, bpm=bpm, channel=channel, program=program, bit_depth=16
+            )
             subprocess.run(
-                ["ffmpeg", "-y", "-i", wav_path,
-                 "-codec:a", "libmp3lame", "-b:a", "320k", str(path)],
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    wav_path,
+                    "-codec:a",
+                    "libmp3lame",
+                    "-b:a",
+                    "320k",
+                    str(path),
+                ],
                 check=True,
                 capture_output=True,
             )

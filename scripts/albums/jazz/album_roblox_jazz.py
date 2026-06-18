@@ -78,13 +78,15 @@ SURGE_PRESETS = "/Library/Application Support/Surge XT"
 _TRACK01_INSTRUMENTS: tuple[str, ...] = ("shell", "bass", "enclosure")
 
 _TRACK01_GAINS: dict[str, float] = {
-    "shell": 0.75, "bass": 0.65, "enclosure": 0.70,
+    "shell": 0.75,
+    "bass": 0.65,
+    "enclosure": 0.70,
 }
 
 # Real Surge XT .fxp presets per instrument (loaded natively by REAPER).
 _TRACK01_FXP: dict[str, str] = {
-    "shell":     f"{SURGE_PRESETS}/patches_3rdparty/Dan Maurer/Keys/FM Acoustic Piano 1.fxp",
-    "bass":      f"{SURGE_PRESETS}/patches_3rdparty/Malfunction/Basses/Jazz Man.fxp",
+    "shell": f"{SURGE_PRESETS}/patches_3rdparty/Dan Maurer/Keys/FM Acoustic Piano 1.fxp",
+    "bass": f"{SURGE_PRESETS}/patches_3rdparty/Malfunction/Basses/Jazz Man.fxp",
     "enclosure": f"{SURGE_PRESETS}/patches_3rdparty/Malfunction/Brass/Clean Trumpet.fxp",
 }
 
@@ -156,26 +158,27 @@ def _render_track01_mp3(
         print("  [VST] no audio rendered for track 01")
         return
 
-    peak = np.max(np.abs(mix_buf))
-    if peak > 0:
-        mix_buf = mix_buf / peak * 0.9
-
     assert mix_buf is not None
     mp3_path = Path(path).with_suffix(".mp3")
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         wav_path = tmp.name
     try:
-        # (channels, samples) float32 → 16-bit PCM WAV (stdlib)
-        interleaved = np.clip(mix_buf.T, -1.0, 1.0)
-        pcm = (interleaved * 32767.0).astype("<i2")
-        with wave.open(wav_path, "wb") as w:
-            w.setnchannels(mix_buf.shape[0])
-            w.setsampwidth(2)
-            w.setframerate(sr)
-            w.writeframes(pcm.tobytes())
+        from pedalboard.io import AudioFile
+
+        with AudioFile(wav_path, "w", sr, mix_buf.shape[0]) as f:
+            f.write(mix_buf)
         subprocess.run(
-            ["ffmpeg", "-y", "-i", wav_path,
-             "-codec:a", "libmp3lame", "-b:a", "320k", str(mp3_path)],
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                wav_path,
+                "-codec:a",
+                "libmp3lame",
+                "-b:a",
+                "320k",
+                str(mp3_path),
+            ],
             check=True,
             capture_output=True,
         )
@@ -185,9 +188,10 @@ def _render_track01_mp3(
 
 
 def _off(notes, offset):
-    return [NoteInfo(pitch=n.pitch, start=n.start + offset,
-                     duration=n.duration, velocity=n.velocity)
-            for n in notes]
+    return [
+        NoteInfo(pitch=n.pitch, start=n.start + offset, duration=n.duration, velocity=n.velocity)
+        for n in notes
+    ]
 
 
 def _get_chords(scale: Scale, dur: float):
@@ -198,14 +202,32 @@ def _get_chords(scale: Scale, dur: float):
 
 def _master(raw: dict, bpm: float, lufs: float = -16.0):
     desk = MixingDesk(niche_cfg={})
-    desk.track_gains.update({
-        "piano": 0.8, "comp": 0.65, "bass": 0.7, "sax": 0.7,
-        "trumpet": 0.65, "drums": 0.55, "guide": 0.5, "shell": 0.65,
-        "enclosure": 0.7, "slip": 0.7, "trade_a": 0.7, "trade_b": 0.7,
-        "stop": 0.65, "walk_line": 0.7, "blues": 0.7, "bebop": 0.65,
-        "vibes": 0.55, "flute": 0.6, "marimba": 0.6, "swing": 0.5,
-        "melody": 0.7, "ghosts": 0.35,
-    })
+    desk.track_gains.update(
+        {
+            "piano": 0.8,
+            "comp": 0.65,
+            "bass": 0.7,
+            "sax": 0.7,
+            "trumpet": 0.65,
+            "drums": 0.55,
+            "guide": 0.5,
+            "shell": 0.65,
+            "enclosure": 0.7,
+            "slip": 0.7,
+            "trade_a": 0.7,
+            "trade_b": 0.7,
+            "stop": 0.65,
+            "walk_line": 0.7,
+            "blues": 0.7,
+            "bebop": 0.65,
+            "vibes": 0.55,
+            "flute": 0.6,
+            "marimba": 0.6,
+            "swing": 0.5,
+            "melody": 0.7,
+            "ghosts": 0.35,
+        }
+    )
     mixed = desk.apply_mixing(raw, [], int(bpm))
     master = MasteringDesk(target_lufs=lufs)
     return master.apply_mastering(mixed)
@@ -213,8 +235,9 @@ def _master(raw: dict, bpm: float, lufs: float = -16.0):
 
 def _export(tracks: dict, path: Path, bpm: float, key: Scale, instruments: dict):
     final_notes, cc_events = _master(tracks, bpm)
-    export_multitrack_midi(final_notes, str(path), bpm=bpm, key=key,
-                           instruments=instruments, cc_events=cc_events)
+    export_multitrack_midi(
+        final_notes, str(path), bpm=bpm, key=key, instruments=instruments, cc_events=cc_events
+    )
 
 
 # =====================================================================
@@ -229,28 +252,43 @@ def produce_01_welcome():
 
     shell = ShellVoicingGenerator(
         params=GeneratorParams(density=0.07, key_range_low=54, key_range_high=72),
-        voicing_type="root_shell", rhythm="charleston", voice_leading=True
+        voicing_type="root_shell",
+        rhythm="charleston",
+        voice_leading=True,
     ).render(chords, key, dur)
 
     bass = WalkingBassLineGenerator(
         params=GeneratorParams(density=0.08, key_range_low=28, key_range_high=36),
-        contour="ascending", target_note="root", passing_tones="mixed"
+        contour="ascending",
+        target_note="root",
+        passing_tones="mixed",
     ).render(chords, key, dur)
 
     melody = EnclosureGenerator(
-        params=GeneratorParams(density=0.09, velocity_range=(55, 90), key_range_low=60, key_range_high=84),
-        enclosure_type="mixed", target="chord_tones", density=0.8
+        params=GeneratorParams(
+            density=0.09, velocity_range=(55, 90), key_range_low=60, key_range_high=84
+        ),
+        enclosure_type="mixed",
+        target="chord_tones",
+        density=0.8,
     ).render(chords, key, dur - 24.0)
     melody = _off(melody, 16.0)
 
     drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.08), style="jazz", groove_swing=0.67,
-        fill_frequency=0.15, auto_fills=True
+        GeneratorParams(density=0.08),
+        style="jazz",
+        groove_swing=0.67,
+        fill_frequency=0.15,
+        auto_fills=True,
     ).render(chords, key, dur)
 
-    _export({"shell": shell, "bass": bass, "enclosure": melody, "drums": drums},
-            OUT / "01_Welcome_to_the_Club.mid", bpm, key,
-            {"shell": PIANO, "bass": ACOUSTIC_BASS, "enclosure": TRUMPET, "drums": DRUMS})
+    _export(
+        {"shell": shell, "bass": bass, "enclosure": melody, "drums": drums},
+        OUT / "01_Welcome_to_the_Club.mid",
+        bpm,
+        key,
+        {"shell": PIANO, "bass": ACOUSTIC_BASS, "enclosure": TRUMPET, "drums": DRUMS},
+    )
     print("  Rendering MP3 via Surge XT...")
     _render_track01_mp3(
         {"shell": shell, "bass": bass, "enclosure": melody},
@@ -271,33 +309,55 @@ def produce_02_trading():
 
     trade = TradingFoursGenerator(
         params=GeneratorParams(density=0.1, velocity_range=(50, 90)),
-        trade_length=4, style="call_response", density=1.2,
-        player_a_range=(60, 84), player_b_range=(52, 72)
+        trade_length=4,
+        style="call_response",
+        density=1.2,
+        player_a_range=(60, 84),
+        player_b_range=(52, 72),
     ).render(chords, key, dur)
 
     shell = ShellVoicingGenerator(
         params=GeneratorParams(density=0.06, key_range_low=54, key_range_high=72),
-        voicing_type="rootless", rhythm="half_note", voice_leading=True
+        voicing_type="rootless",
+        rhythm="half_note",
+        voice_leading=True,
     ).render(chords, key, dur)
 
     bass = WalkingBassGenerator(
         GeneratorParams(density=0.07, key_range_low=28, key_range_high=36),
-        approach_style="mixed", swing_eighth_ratio=0.67
+        approach_style="mixed",
+        swing_eighth_ratio=0.67,
     ).render(chords, key, dur)
 
     drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.09), style="jazz", groove_swing=0.67,
-        fill_frequency=0.2, auto_fills=True
+        GeneratorParams(density=0.09),
+        style="jazz",
+        groove_swing=0.67,
+        fill_frequency=0.2,
+        auto_fills=True,
     ).render(chords, key, dur)
 
     ghosts = GhostNotesGenerator(
-        GeneratorParams(density=0.04), pattern="jazz", target="snare",
-        ghost_velocity=30, ghost_density=0.4
+        GeneratorParams(density=0.04),
+        pattern="jazz",
+        target="snare",
+        ghost_velocity=30,
+        ghost_density=0.4,
     ).render(chords, key, dur)
 
-    _export({"trade_a": trade, "shell": shell, "bass": bass, "drums": drums, "ghosts": ghosts},
-            OUT / "02_Trading_Places.mid", bpm, key,
-            {"trade_a": TRUMPET, "shell": EPIANO, "bass": ACOUSTIC_BASS, "drums": DRUMS, "ghosts": DRUMS})
+    _export(
+        {"trade_a": trade, "shell": shell, "bass": bass, "drums": drums, "ghosts": ghosts},
+        OUT / "02_Trading_Places.mid",
+        bpm,
+        key,
+        {
+            "trade_a": TRUMPET,
+            "shell": EPIANO,
+            "bass": ACOUSTIC_BASS,
+            "drums": DRUMS,
+            "ghosts": DRUMS,
+        },
+    )
 
 
 # =====================================================================
@@ -311,35 +371,58 @@ def produce_03_slip_slide():
     chords = _get_chords(key, dur)
 
     slip = SideSlippingGenerator(
-        params=GeneratorParams(density=0.09, velocity_range=(52, 88), key_range_low=56, key_range_high=78),
-        slip_direction="both", resolution_style="chromatic",
-        pattern_source="mixed", phrase_length=5
+        params=GeneratorParams(
+            density=0.09, velocity_range=(52, 88), key_range_low=56, key_range_high=78
+        ),
+        slip_direction="both",
+        resolution_style="chromatic",
+        pattern_source="mixed",
+        phrase_length=5,
     ).render(chords, key, dur - 20.0)
     slip = _off(slip, 12.0)
 
     guide = GuideToneGenerator(
         params=GeneratorParams(density=0.05, key_range_low=52, key_range_high=60),
-        voice="both", connect=True, velocity_profile="legato"
+        voice="both",
+        connect=True,
+        velocity_profile="legato",
     ).render(chords, key, dur)
 
     bass = WalkingBassLineGenerator(
         params=GeneratorParams(density=0.07, key_range_low=28, key_range_high=36),
-        contour="scalar", target_note="root"
+        contour="scalar",
+        target_note="root",
     ).render(chords, key, dur)
 
     drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.06), style="jazz", groove_swing=0.67,
-        fill_frequency=0.12, auto_fills=True
+        GeneratorParams(density=0.06),
+        style="jazz",
+        groove_swing=0.67,
+        fill_frequency=0.12,
+        auto_fills=True,
     ).render(chords, key, dur)
 
     ghosts = GhostNotesGenerator(
-        GeneratorParams(density=0.03), pattern="jazz", target="snare",
-        ghost_velocity=28, ghost_density=0.35
+        GeneratorParams(density=0.03),
+        pattern="jazz",
+        target="snare",
+        ghost_velocity=28,
+        ghost_density=0.35,
     ).render(chords, key, dur)
 
-    _export({"slip": slip, "guide": guide, "bass": bass, "drums": drums, "ghosts": ghosts},
-            OUT / "03_Slip_and_Slide.mid", bpm, key,
-            {"slip": TENOR_SAX, "guide": VIBRAPHONE, "bass": ACOUSTIC_BASS, "drums": DRUMS, "ghosts": DRUMS})
+    _export(
+        {"slip": slip, "guide": guide, "bass": bass, "drums": drums, "ghosts": ghosts},
+        OUT / "03_Slip_and_Slide.mid",
+        bpm,
+        key,
+        {
+            "slip": TENOR_SAX,
+            "guide": VIBRAPHONE,
+            "bass": ACOUSTIC_BASS,
+            "drums": DRUMS,
+            "ghosts": DRUMS,
+        },
+    )
 
 
 # =====================================================================
@@ -354,28 +437,42 @@ def produce_04_stop_go():
 
     stop = StopTimeGenerator(
         params=GeneratorParams(density=0.08, key_range_low=54, key_range_high=72),
-        pattern="shuffle", accent_note="shell", fill_last_beat=True
+        pattern="shuffle",
+        accent_note="shell",
+        fill_last_beat=True,
     ).render(chords, key, dur)
 
     bebop = BebopScaleGenerator(
-        params=GeneratorParams(density=0.1, velocity_range=(55, 92), key_range_low=60, key_range_high=84),
-        scale_type="dominant", direction="mixed", accent_chord_tones=True
+        params=GeneratorParams(
+            density=0.1, velocity_range=(55, 92), key_range_low=60, key_range_high=84
+        ),
+        scale_type="dominant",
+        direction="mixed",
+        accent_chord_tones=True,
     ).render(chords, key, dur - 32.0)
     bebop = _off(bebop, 20.0)
 
     bass = WalkingBassGenerator(
         GeneratorParams(density=0.08, key_range_low=28, key_range_high=36),
-        approach_style="chromatic", swing_eighth_ratio=0.67
+        approach_style="chromatic",
+        swing_eighth_ratio=0.67,
     ).render(chords, key, dur)
 
     drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.1), style="jazz", groove_swing=0.67,
-        fill_frequency=0.25, auto_fills=True
+        GeneratorParams(density=0.1),
+        style="jazz",
+        groove_swing=0.67,
+        fill_frequency=0.25,
+        auto_fills=True,
     ).render(chords, key, dur)
 
-    _export({"stop": stop, "bebop": bebop, "bass": bass, "drums": drums},
-            OUT / "04_Stop_Go_Dance.mid", bpm, key,
-            {"stop": PIANO, "bebop": TRUMPET, "bass": ACOUSTIC_BASS, "drums": DRUMS})
+    _export(
+        {"stop": stop, "bebop": bebop, "bass": bass, "drums": drums},
+        OUT / "04_Stop_Go_Dance.mid",
+        bpm,
+        key,
+        {"stop": PIANO, "bebop": TRUMPET, "bass": ACOUSTIC_BASS, "drums": DRUMS},
+    )
 
 
 # =====================================================================
@@ -390,34 +487,57 @@ def produce_05_crystal():
 
     guide = GuideToneGenerator(
         params=GeneratorParams(density=0.05, key_range_low=60, key_range_high=84),
-        voice="alternate", connect=True, velocity_profile="legato"
+        voice="alternate",
+        connect=True,
+        velocity_profile="legato",
     ).render(chords, key, dur)
 
     enc = EnclosureGenerator(
-        params=GeneratorParams(density=0.06, velocity_range=(48, 75), key_range_low=72, key_range_high=96),
-        enclosure_type="diatonic_above_below", target="guide_tones", density=0.6
+        params=GeneratorParams(
+            density=0.06, velocity_range=(48, 75), key_range_low=72, key_range_high=96
+        ),
+        enclosure_type="diatonic_above_below",
+        target="guide_tones",
+        density=0.6,
     ).render(chords, key, dur - 28.0)
     enc = _off(enc, 16.0)
 
     shell = ShellVoicingGenerator(
         params=GeneratorParams(density=0.04, key_range_low=54, key_range_high=72),
-        voicing_type="spread", rhythm="whole_note", voice_leading=True,
-        include_extensions=True
+        voicing_type="spread",
+        rhythm="whole_note",
+        voice_leading=True,
+        include_extensions=True,
     ).render(chords, key, dur)
 
     bass = WalkingBassLineGenerator(
         params=GeneratorParams(density=0.05, key_range_low=24, key_range_high=36),
-        contour="mixed", target_note="guide_tones", passing_tones="diatonic"
+        contour="mixed",
+        target_note="guide_tones",
+        passing_tones="diatonic",
     ).render(chords, key, dur)
 
     drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.03), style="jazz", groove_swing=0.55,
-        fill_frequency=0.08, auto_fills=True
+        GeneratorParams(density=0.03),
+        style="jazz",
+        groove_swing=0.55,
+        fill_frequency=0.08,
+        auto_fills=True,
     ).render(chords, key, dur)
 
-    _export({"guide": guide, "enclosure": enc, "shell": shell, "bass": bass, "drums": drums},
-            OUT / "05_Crystal_Chimes.mid", bpm, key,
-            {"guide": VIBRAPHONE, "enclosure": FLUTE, "shell": EPIANO, "bass": FRETLESS_BASS, "drums": DRUMS})
+    _export(
+        {"guide": guide, "enclosure": enc, "shell": shell, "bass": bass, "drums": drums},
+        OUT / "05_Crystal_Chimes.mid",
+        bpm,
+        key,
+        {
+            "guide": VIBRAPHONE,
+            "enclosure": FLUTE,
+            "shell": EPIANO,
+            "bass": FRETLESS_BASS,
+            "drums": DRUMS,
+        },
+    )
 
 
 # =====================================================================
@@ -432,39 +552,71 @@ def produce_06_pizza_blues():
 
     bass_line = WalkingBassLineGenerator(
         params=GeneratorParams(density=0.1, key_range_low=28, key_range_high=36),
-        contour="mixed", target_note="root", passing_tones="chromatic"
+        contour="mixed",
+        target_note="root",
+        passing_tones="chromatic",
     ).render(chords, key, dur)
 
     shell = ShellVoicingGenerator(
         params=GeneratorParams(density=0.07, key_range_low=54, key_range_high=72),
-        voicing_type="root_shell", rhythm="freddie_green", voice_leading=True
+        voicing_type="root_shell",
+        rhythm="freddie_green",
+        voice_leading=True,
     ).render(chords, key, dur)
 
     blues = BluesLickGenerator(
         GeneratorParams(density=0.09, velocity_range=(52, 88), key_range_low=60, key_range_high=84),
-        lick_style="standard", phrase_length=4, rest_probability=0.2
+        lick_style="standard",
+        phrase_length=4,
+        rest_probability=0.2,
     ).render(chords, key, dur - 32.0)
     blues = _off(blues, 20.0)
 
     sax = SaxSoloGenerator(
         GeneratorParams(density=0.07, velocity_range=(48, 82), key_range_low=56, key_range_high=78),
-        style="bebop", blues_notes=True, chromaticism=0.5
+        style="bebop",
+        blues_notes=True,
+        chromaticism=0.5,
     ).render(chords, key, dur - 56.0)
     sax = _off(sax, 40.0)
 
     drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.08), style="jazz", groove_swing=0.67,
-        fill_frequency=0.18, auto_fills=True
+        GeneratorParams(density=0.08),
+        style="jazz",
+        groove_swing=0.67,
+        fill_frequency=0.18,
+        auto_fills=True,
     ).render(chords, key, dur)
 
     ghosts = GhostNotesGenerator(
-        GeneratorParams(density=0.04), pattern="jazz", target="snare",
-        ghost_velocity=32, ghost_density=0.45
+        GeneratorParams(density=0.04),
+        pattern="jazz",
+        target="snare",
+        ghost_velocity=32,
+        ghost_density=0.45,
     ).render(chords, key, dur)
 
-    _export({"shell": shell, "bass": bass_line, "blues": blues, "sax": sax, "drums": drums, "ghosts": ghosts},
-            OUT / "06_Pizza_Party_Blues.mid", bpm, key,
-            {"shell": PIANO, "bass": ACOUSTIC_BASS, "blues": TRUMPET, "sax": TENOR_SAX, "drums": DRUMS, "ghosts": DRUMS})
+    _export(
+        {
+            "shell": shell,
+            "bass": bass_line,
+            "blues": blues,
+            "sax": sax,
+            "drums": drums,
+            "ghosts": ghosts,
+        },
+        OUT / "06_Pizza_Party_Blues.mid",
+        bpm,
+        key,
+        {
+            "shell": PIANO,
+            "bass": ACOUSTIC_BASS,
+            "blues": TRUMPET,
+            "sax": TENOR_SAX,
+            "drums": DRUMS,
+            "ghosts": DRUMS,
+        },
+    )
 
 
 # =====================================================================
@@ -479,34 +631,58 @@ def produce_07_escalation():
 
     trade = TradingFoursGenerator(
         params=GeneratorParams(density=0.12, velocity_range=(50, 95)),
-        trade_length=4, style="escalating", density=1.4,
-        player_a_range=(58, 82), player_b_range=(52, 66)
+        trade_length=4,
+        style="escalating",
+        density=1.4,
+        player_a_range=(58, 82),
+        player_b_range=(52, 66),
     ).render(chords, key, dur)
 
     stop = StopTimeGenerator(
         params=GeneratorParams(density=0.06, key_range_low=54, key_range_high=60),
-        pattern="big_four", accent_note="root", fill_last_beat=True
+        pattern="big_four",
+        accent_note="root",
+        fill_last_beat=True,
     ).render(chords, key, dur)
 
     enc = EnclosureGenerator(
-        params=GeneratorParams(density=0.08, velocity_range=(52, 90), key_range_low=60, key_range_high=84),
-        enclosure_type="double_chromatic", target="all", density=0.9
+        params=GeneratorParams(
+            density=0.08, velocity_range=(52, 90), key_range_low=60, key_range_high=84
+        ),
+        enclosure_type="double_chromatic",
+        target="all",
+        density=0.9,
     ).render(chords, key, dur - 24.0)
     enc = _off(enc, 16.0)
 
     bass = WalkingBassLineGenerator(
         params=GeneratorParams(density=0.09, key_range_low=24, key_range_high=36),
-        contour="arpeggiated", target_note="root", passing_tones="chromatic"
+        contour="arpeggiated",
+        target_note="root",
+        passing_tones="chromatic",
     ).render(chords, key, dur)
 
     drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.11), style="jazz", groove_swing=0.67,
-        fill_frequency=0.22, auto_fills=True
+        GeneratorParams(density=0.11),
+        style="jazz",
+        groove_swing=0.67,
+        fill_frequency=0.22,
+        auto_fills=True,
     ).render(chords, key, dur)
 
-    _export({"trade_a": trade, "stop": stop, "enclosure": enc, "bass": bass, "drums": drums},
-            OUT / "07_Escalation_Station.mid", bpm, key,
-            {"trade_a": TRUMPET, "stop": PIANO, "enclosure": ALTO_SAX, "bass": ACOUSTIC_BASS, "drums": DRUMS})
+    _export(
+        {"trade_a": trade, "stop": stop, "enclosure": enc, "bass": bass, "drums": drums},
+        OUT / "07_Escalation_Station.mid",
+        bpm,
+        key,
+        {
+            "trade_a": TRUMPET,
+            "stop": PIANO,
+            "enclosure": ALTO_SAX,
+            "bass": ACOUSTIC_BASS,
+            "drums": DRUMS,
+        },
+    )
 
 
 # =====================================================================
@@ -520,41 +696,75 @@ def produce_08_starlight():
     chords = _get_chords(key, dur)
 
     slip = SideSlippingGenerator(
-        params=GeneratorParams(density=0.05, velocity_range=(46, 72), key_range_low=72, key_range_high=96),
-        slip_direction="both", resolution_style="scale",
-        pattern_source="scale", phrase_length=6
+        params=GeneratorParams(
+            density=0.05, velocity_range=(46, 72), key_range_low=72, key_range_high=96
+        ),
+        slip_direction="both",
+        resolution_style="scale",
+        pattern_source="scale",
+        phrase_length=6,
     ).render(chords, key, dur - 32.0)
     slip = _off(slip, 20.0)
 
     guide = GuideToneGenerator(
         params=GeneratorParams(density=0.04, key_range_low=52, key_range_high=60),
-        voice="both", connect=True, velocity_profile="legato"
+        voice="both",
+        connect=True,
+        velocity_profile="legato",
     ).render(chords, key, dur)
 
     shell = ShellVoicingGenerator(
         params=GeneratorParams(density=0.04, key_range_low=54, key_range_high=60),
-        voicing_type="B_form", rhythm="syncopated", voice_leading=True,
-        drop_2=True, include_extensions=True
+        voicing_type="B_form",
+        rhythm="syncopated",
+        voice_leading=True,
+        drop_2=True,
+        include_extensions=True,
     ).render(chords, key, dur)
 
     bass = WalkingBassGenerator(
         GeneratorParams(density=0.05, key_range_low=24, key_range_high=36),
-        approach_style="diatonic", swing_eighth_ratio=0.55
+        approach_style="diatonic",
+        swing_eighth_ratio=0.55,
     ).render(chords, key, dur)
 
     drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.03), style="jazz", groove_swing=0.55,
-        fill_frequency=0.06, auto_fills=True
+        GeneratorParams(density=0.03),
+        style="jazz",
+        groove_swing=0.55,
+        fill_frequency=0.06,
+        auto_fills=True,
     ).render(chords, key, dur)
 
     ghosts = GhostNotesGenerator(
-        GeneratorParams(density=0.02), pattern="jazz", target="snare",
-        ghost_velocity=22, ghost_density=0.25
+        GeneratorParams(density=0.02),
+        pattern="jazz",
+        target="snare",
+        ghost_velocity=22,
+        ghost_density=0.25,
     ).render(chords, key, dur)
 
-    _export({"slip": slip, "guide": guide, "shell": shell, "bass": bass, "drums": drums, "ghosts": ghosts},
-            OUT / "08_Starlight_Lounge.mid", bpm, key,
-            {"slip": FLUTE, "guide": VIBRAPHONE, "shell": EPIANO, "bass": FRETLESS_BASS, "drums": DRUMS, "ghosts": DRUMS})
+    _export(
+        {
+            "slip": slip,
+            "guide": guide,
+            "shell": shell,
+            "bass": bass,
+            "drums": drums,
+            "ghosts": ghosts,
+        },
+        OUT / "08_Starlight_Lounge.mid",
+        bpm,
+        key,
+        {
+            "slip": FLUTE,
+            "guide": VIBRAPHONE,
+            "shell": EPIANO,
+            "bass": FRETLESS_BASS,
+            "drums": DRUMS,
+            "ghosts": DRUMS,
+        },
+    )
 
 
 # =====================================================================
@@ -569,57 +779,95 @@ def produce_09_finale():
 
     shell = ShellVoicingGenerator(
         params=GeneratorParams(density=0.08, key_range_low=54, key_range_high=72),
-        voicing_type="root_shell", rhythm="charleston", voice_leading=True
+        voicing_type="root_shell",
+        rhythm="charleston",
+        voice_leading=True,
     ).render(chords, key, dur)
 
     guide = GuideToneGenerator(
         params=GeneratorParams(density=0.04, key_range_low=52, key_range_high=60),
-        voice="alternate", connect=True
+        voice="alternate",
+        connect=True,
     ).render(chords, key, dur)
 
     trade = TradingFoursGenerator(
         params=GeneratorParams(density=0.1, velocity_range=(52, 92)),
-        trade_length=4, style="escalating", density=1.2,
-        player_a_range=(60, 84), player_b_range=(52, 72)
+        trade_length=4,
+        style="escalating",
+        density=1.2,
+        player_a_range=(60, 84),
+        player_b_range=(52, 72),
     ).render(chords, key, dur - 48.0)
     trade = _off(trade, 32.0)
 
     enc = EnclosureGenerator(
-        params=GeneratorParams(density=0.07, velocity_range=(50, 85), key_range_low=60, key_range_high=84),
-        enclosure_type="mixed", target="guide_tones", density=0.7
+        params=GeneratorParams(
+            density=0.07, velocity_range=(50, 85), key_range_low=60, key_range_high=84
+        ),
+        enclosure_type="mixed",
+        target="guide_tones",
+        density=0.7,
     ).render(chords, key, dur - 72.0)
     enc = _off(enc, 52.0)
 
     bass = WalkingBassLineGenerator(
         params=GeneratorParams(density=0.09, key_range_low=28, key_range_high=36),
-        contour="mixed", target_note="root", passing_tones="mixed"
+        contour="mixed",
+        target_note="root",
+        passing_tones="mixed",
     ).render(chords, key, dur)
 
     bebop = BebopScaleGenerator(
-        params=GeneratorParams(density=0.08, velocity_range=(50, 88), key_range_low=72, key_range_high=96),
-        scale_type="major", direction="ascending", accent_chord_tones=True
+        params=GeneratorParams(
+            density=0.08, velocity_range=(50, 88), key_range_low=72, key_range_high=96
+        ),
+        scale_type="major",
+        direction="ascending",
+        accent_chord_tones=True,
     ).render(chords, key, dur - 56.0)
     bebop = _off(bebop, 40.0)
 
     drums = DrumKitPatternGenerator(
-        GeneratorParams(density=0.1), style="jazz", groove_swing=0.67,
-        fill_frequency=0.2, auto_fills=True
+        GeneratorParams(density=0.1),
+        style="jazz",
+        groove_swing=0.67,
+        fill_frequency=0.2,
+        auto_fills=True,
     ).render(chords, key, dur)
 
     ghosts = GhostNotesGenerator(
-        GeneratorParams(density=0.05), pattern="jazz", target="snare",
-        ghost_velocity=32, ghost_density=0.45
+        GeneratorParams(density=0.05),
+        pattern="jazz",
+        target="snare",
+        ghost_velocity=32,
+        ghost_density=0.45,
     ).render(chords, key, dur)
 
-    _export({
-        "shell": shell, "guide": guide, "trade_a": trade,
-        "enclosure": enc, "bass": bass, "bebop": bebop,
-        "drums": drums, "ghosts": ghosts,
-    }, OUT / "09_Pixel_Jazz_Finale.mid", bpm, key, {
-        "shell": PIANO, "guide": MARIMBA, "trade_a": TRUMPET,
-        "enclosure": ALTO_SAX, "bass": ACOUSTIC_BASS, "bebop": FLUTE,
-        "drums": DRUMS, "ghosts": DRUMS,
-    })
+    _export(
+        {
+            "shell": shell,
+            "guide": guide,
+            "trade_a": trade,
+            "enclosure": enc,
+            "bass": bass,
+            "bebop": bebop,
+            "drums": drums,
+            "ghosts": ghosts,
+        },
+        OUT / "09_Pixel_Jazz_Finale.mid",
+        bpm,
+        key,
+        {
+            "shell": PIANO,
+            "guide": MARIMBA,
+            "trade_a": TRUMPET,
+            "enclosure": ALTO_SAX,
+            "bass": ACOUSTIC_BASS,
+            "bebop": FLUTE,
+            "drums": DRUMS,
+            "ghosts": DRUMS,
+        },
+    )
 
 
 def main():

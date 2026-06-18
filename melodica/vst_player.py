@@ -112,12 +112,14 @@ def list_surge_xt_presets() -> list[dict[str, str]]:
                 except Exception:
                     author = ""
                     cat = cat_dir.name
-                results.append({
-                    "name": name,
-                    "category": cat,
-                    "author": author,
-                    "path": str(fxp),
-                })
+                results.append(
+                    {
+                        "name": name,
+                        "category": cat,
+                        "author": author,
+                        "path": str(fxp),
+                    }
+                )
     return results
 
 
@@ -186,8 +188,10 @@ def _notes_to_mido_messages(
     for n in notes:
         onset = max(0.0, n.start) * beat_sec
         offset = (n.start + n.duration) * beat_sec
-        events.append((onset,  1, dict(type="note_on",  note=n.pitch, velocity=n.velocity, channel=channel)))
-        events.append((offset, 0, dict(type="note_off", note=n.pitch, velocity=0,          channel=channel)))
+        events.append(
+            (onset, 1, dict(type="note_on", note=n.pitch, velocity=n.velocity, channel=channel))
+        )
+        events.append((offset, 0, dict(type="note_off", note=n.pitch, velocity=0, channel=channel)))
 
     # sort by abs time; note_off (priority 0) before note_on (priority 1) at same time
     events.sort(key=lambda e: (e[0], e[1]))
@@ -212,8 +216,10 @@ def _tracks_to_mido_messages(tracks: list[Track], bpm: float) -> list[mido.Messa
         for n in t.notes:
             onset = max(0.0, n.start) * beat_sec
             offset = (n.start + n.duration) * beat_sec
-            events.append((onset,  1, dict(type="note_on",  note=n.pitch, velocity=n.velocity, channel=ch)))
-            events.append((offset, 0, dict(type="note_off", note=n.pitch, velocity=0,          channel=ch)))
+            events.append(
+                (onset, 1, dict(type="note_on", note=n.pitch, velocity=n.velocity, channel=ch))
+            )
+            events.append((offset, 0, dict(type="note_off", note=n.pitch, velocity=0, channel=ch)))
 
     events.sort(key=lambda e: (e[0], e[1]))
 
@@ -318,7 +324,7 @@ class VSTPlayer:
         msgs = _notes_to_mido_messages(notes, bpm, channel, program)
         duration = _total_duration(notes, bpm)
         audio = self.plugin(msgs, duration=duration, sample_rate=self._sr, reset=True)
-        return self._normalize_audio(audio)
+        return audio
 
     def render_tracks(
         self,
@@ -330,7 +336,7 @@ class VSTPlayer:
         msgs = _tracks_to_mido_messages(tracks, bpm)
         duration = _total_tracks_duration(tracks, bpm)
         audio = self.plugin(msgs, duration=duration, sample_rate=self._sr, reset=True)
-        return self._normalize_audio(audio)
+        return audio
 
     # ------------------------------------------------------------------
     # Save to file
