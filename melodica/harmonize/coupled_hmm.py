@@ -117,6 +117,17 @@ LOG_PCHANGE = np.log(np.clip(PCHANGE, _EPS, 1.0))
 # Universal Modal Priors (Layer 2)
 # ---------------------------------------------------------------------------
 
+# Modes whose interval sets contain microtonal (non-integer-semitone) steps.
+# The HMM operates on 12 pitch classes, so `_init_modal_priors` snaps such
+# steps to the nearest semitone — e.g. ARABIC_SIKAH [0,1.5,3.5,5,7,8.5,10.5]
+# collapses to NATURAL_MINOR's {0,2,3,5,7,8,10}. These modes are therefore
+# silently misrepresented in the prior tables; they are kept in MODES_LIST
+# for the Layer-1 (chord) Viterbi, which works on melody pitch classes
+# directly, but Layer-2 (key) detection for them is unreliable. Populated by
+# `_init_modal_priors`; read by tests and diagnostics.
+_MICROTONAL_MODES: set[Mode] = set()
+
+
 def _init_modal_priors():
     """Dynamically build priors for all 78 modes."""
     # ν: P(chord_type | key_type)
@@ -142,8 +153,17 @@ def _init_modal_priors():
 
     for m_idx, mode in enumerate(MODES_LIST):
         intervals = get_mode_intervals(mode)
+        # Detect microtonal (non-integer-semitone) intervals. The HMM state
+        # space is 12-TET only, so a step like 1.5 semitones cannot be
+        # represented: `round(iv) % 12` snaps it to a neighbour, silently
+        # rewriting the mode. ARABIC_SIKAH [0,1.5,3.5,5,7,8.5,10.5] e.g.
+        # collapses to NATURAL_MINOR's pitch classes here. Flag these modes
+        # once so callers know the prior table does not actually reflect the
+        # mode's microtonal colour (see _MICROTONAL_MODES below).
+        if any(abs(iv - round(iv)) > 0.01 for iv in intervals):
+            _MICROTONAL_MODES.add(mode)
         scale_pcs = {round(iv) % 12 for iv in intervals}
-        
+
         # 1. Root offsets: high weight for notes in scale, preferring the tonic (offset 0)
         for pc in scale_pcs:
             if pc == 0:
@@ -195,7 +215,25 @@ LOG_KEY_TYPE_PRIOR = np.log(KEY_TYPE_PRIOR + _EPS)
 
 
 def _init_mode_priors() -> np.ndarray:
-    """Build prior log-probabilities for each mode based on its category."""
+    """Build prior log-probabilities for each mode based on its category.
+
+    Two-stage: (1) assign a base prior from the mode's MODE_DATABASE category;
+    (2) apply alias-group consistency so that two names declared as the same
+    scale (see theory.modes._INTENTIONAL_ALIASES) are treated identically by
+    Layer 2. Without stage 2 the database contradicts itself: e.g. YAMAN is
+    declared an alias of LYDIAN, yet Yaman sat in the −10 bucket while Lydian
+    was at 0.0 — so requesting Yaman would still detect as Lydian/Major on
+    free-detection material, and a Yaman/Lydian ambiguity could never resolve
+    to Yaman. The rule is purely a consistency fix: within each alias group,
+    every member inherits the BEST (highest) prior of the group, so the
+    database's own "these are the same scale" declarations are honoured.
+    """
+    # Modes whose MODE_DATABASE category understates their harmonic centrality.
+    # Lydian is a core church mode but is tagged "Film"; without this override
+    # it lands in the −10 bucket and collapses to Major on free detection,
+    # losing the raised-4th colour even when explicitly requested.
+    COMMON_OVERRIDES = {Mode.LYDIAN}
+
     priors = np.zeros(N_KEY_TYPES)
     for m_idx, mode in enumerate(MODES_LIST):
         defn = MODE_DATABASE.get(mode)
@@ -203,19 +241,50 @@ def _init_mode_priors() -> np.ndarray:
             category = "Exotic"
         else:
             category = defn.category
-            
-        if category == "Common":
-            priors[m_idx] = 0.0      # High priority (Major, Minor)
+
+        if mode in COMMON_OVERRIDES or category == "Common":
+            priors[m_idx] = 0.0      # High priority (Major, Minor, Lydian)
         elif category in ("Jazz", "Blues", "Symmetric"):
             priors[m_idx] = -3.0     # Medium priority
         elif category in ("Atmospheric", "Verdi", "Classical", "Pentatonic"):
             priors[m_idx] = -5.0     # Low priority
         else:
             priors[m_idx] = -10.0    # Very low priority (Ethnic/Exotic like Pelog, Slendro, Messiaen)
-            
+
+    # Alias-group consistency: every member of a declared alias group inherits
+    # the group's best (highest) prior. Imports _INTENTIONAL_ALIASES lazily to
+    # avoid a module-load cycle. This lifts e.g. YAMAN to Lydian's 0.0,
+    # SUPER_LOCRIAN to Altered's −3.0, ACOUSTIC_MAJOR to Lydian Dominant's
+    # −3.0, and the Messiaen modes to their Symmetric/Jazz peers' levels —
+    # removing the internal contradiction where two names for the same scale
+    # received different Layer-2 priors.
+    from melodica.theory.modes import _INTENTIONAL_ALIASES
+    mode_to_idx = {m: i for i, m in enumerate(MODES_LIST)}
+    for group in _INTENTIONAL_ALIASES:
+        members = [mode_to_idx[m] for m in group if m in mode_to_idx]
+        if len(members) < 2:
+            continue
+        best = max(priors[i] for i in members)
+        for i in members:
+            priors[i] = best
+
     return priors
 
 MODE_PRIORS = _init_mode_priors()
+
+# Warn once at import time about microtonal modes whose 12-TET prior table
+# does not faithfully represent them. This is informational: the modes still
+# work for Layer-1 chord harmonization (melody pitch classes are used as-is)
+# but Layer-2 key detection may collapse them to a neighbouring common scale.
+if _MICROTONAL_MODES:
+    warnings.warn(
+        "CoupledHMMHarmonizer: the following requested modes contain "
+        "microtonal intervals that cannot be represented in the 12-TET "
+        "prior table and will be snapped to the nearest semitone; "
+        "Layer-2 key detection for them is unreliable: "
+        + ", ".join(sorted(m.value for m in _MICROTONAL_MODES)),
+        stacklevel=1,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -272,8 +341,9 @@ class HMMConfig:
     emission_weight: float = 20.0             # Recommended range: [1.0, 24.0]. Scaling factor for the active note log emissions. NOTE: emissions are normalized to ~[-1,0] (divided by total note weight), so they must be scaled up to compete with the structural biases below (tension/anti-stagnation/coupling on a log scale of 2-4). Too low → chords ignore the melody; ~20 keeps harmonization tracking the notes while structure still breaks ties.
     tonic_end_bias: float = 2.5               # Recommended range: [1.0, 5.0]. Cadential attraction to the key tonic on the final step.
     dominant_penultimate_bias: float = 1.5    # Recommended range: [0.5, 3.0]. Cadential attraction to the dominant root on the penultimate step.
+    cadence_transition_bias: float = 4.5      # Recommended range: [0.0, 8.0]. Per-step bonus added to the *transition* (not emission) for the key-specific penultimate→tonic root motion at the FINAL step. This is the structural driver of the V→I / bII→i / IV→i / bVII→I cadence: because the melody's final pitch is rarely the tonic, emission alone resists resolving to the tonic chord, and additive biases (tonic_end_bias) saturate at ~50-60% reliability. Folding the reward into the transition makes the cadential resolution a path property (chord→chord) rather than a per-frame preference, so it wins regardless of melody contour. Scaled with the mode's characteristic penultimate degree (see _penultimate_degree).
     extended_chord_penalty: float = 1.0       # Recommended range: [0.0, 2.0]. Penalty for extended/9th chords to prevent their overuse.
-    requested_key_bias: float = 6.0           # Recommended range: [2.0, 12.0]. Per-step Layer-2 emission bonus for the exact (root, mode) the caller requested (initial_scale). Honors the composer's mode (prevents collapse of Phrygian/Dorian/Mixolydian to major). Additive, so strong chord evidence can still overcome it; favors modal fidelity over free modulation detection.
+    requested_key_bias: float = 6.0           # Recommended range: [2.0, 12.0]. Per-step Layer-2 emission bonus for the exact (root, mode) the caller requested (initial_scale). Honors the composer's mode (prevents collapse of Phrygian/Dorian/Mixolydian to major). The requested mode's MODE_PRIORS penalty is cancelled out for this mode (see _viterbi_keys), so this bonus is the sole arbiter of the requested mode against the (prior-weighted) common modes; it must therefore comfortably exceed a typical per-step offset/type-prior gap to win. Additive, so strong chord evidence can still overcome it; favors modal fidelity over free modulation detection.
     requested_key_mode_bias: float = 2.0      # Recommended range: [0.0, 6.0]. Milder per-step Layer-2 bonus for the requested MODE on any other root, so the harmonization keeps the modality even if the tonal center shifts.
 
 
@@ -475,22 +545,38 @@ class CoupledHMMHarmonizer:
             dp_prev_reshaped = dp[t_step - 1]
             dp_new = np.full((12, 12, 12), NEG_INF)
 
+            # Pre-compute the cadence target pair for the FINAL step. The
+            # cadence is a chord->chord resolution (penult -> tonic), so it is
+            # implemented as a transition-level bonus, NOT an additive emission
+            # bias. Additive biases (tonic_end_bias) saturate at ~50-60%
+            # reliability because the melody's final pitch is rarely the tonic,
+            # so emission alone resists resolving to the tonic chord; folding
+            # the reward into the transition makes the cadence a path property
+            # that wins regardless of melody contour. Only fires when we have a
+            # key_path (i.e. this is the coupled/refined pass), so the draft
+            # pass is unaffected.
+            cadence_final_pair = None
+            if t_step == T - 1 and key_path is not None and T >= 2:
+                key_root_f, key_type_f = key_path[t_step]
+                penult = _penultimate_degree(MODES_LIST[key_type_f])
+                cadence_final_pair = ((key_root_f + penult) % 12, key_root_f % 12)
+
             for r_prev in range(12):
                 for r_curr in range(12):
                     interval = (r_curr - r_prev) % 12
-                    
+
                     # Copy predecessor slice [k_prev, r_prevprev]
                     dp_slice = dp_prev_reshaped[r_prev].copy()
-                    
+
                     # Apply path-dependent interval diversity penalty
                     if t_step >= 2:
                         r_prevprev_penalized = (r_prev - interval) % 12
                         dp_slice[:, r_prevprev_penalized] -= self.config.interval_diversity_penalty
-                    
+
                     # Max over r_prevprev
                     best_r_prevprev = np.argmax(dp_slice, axis=1)
                     max_prevprev = dp_slice[np.arange(12), best_r_prevprev]
-                    
+
                     # Base transition matrix lookup [k_prev, k_curr]
                     trans_base = LOG_PCHANGE[:, interval, :].copy()
                     # Anti-stagnation: penalize a LITERALLY repeated chord
@@ -505,7 +591,16 @@ class CoupledHMMHarmonizer:
                             trans_base,
                             trans_base.diagonal() - self.config.anti_stagnation_penalty,
                         )
-                    
+
+                    # Cadence transition bonus: at the final step, reward the
+                    # characteristic penultimate->tonic root motion (e.g. V->I
+                    # in major, bII->i in Phrygian, IV->i in Dorian). Boosts
+                    # every (k_prev, k_curr) pair uniformly so the Viterbi
+                    # picks the dominant-quality predecessor that best
+                    # resolves, rather than hard-coding a single type.
+                    if cadence_final_pair is not None and (r_prev, r_curr) == cadence_final_pair:
+                        trans_base = trans_base + self.config.cadence_transition_bias
+
                     # Combine path scores and transitions
                     scores = max_prevprev[:, None] + trans_base
                     
@@ -609,6 +704,15 @@ class CoupledHMMHarmonizer:
         SWITCH_LOG = math.log(0.02 / (n_s - 1))
         log_key_priors = np.tile(MODE_PRIORS, N_TONES)
 
+        # If a mode is requested, cancel its prior in the per-step emissions
+        # (see the requested_bias block below). The init step also adds
+        # log_key_priors on top of emit_all[0], so without cancelling here
+        # too the requested mode's prior leaks back in at t=0 and (for an
+        # extreme prior) re-introduces the Layer-2 collapse that fix #1
+        # was meant to remove. `log_key_priors_cancelled` is what actually
+        # feeds the init dp below.
+        log_key_priors_cancelled = log_key_priors
+
         # Transition matrix is a clean Markovian STAY/SWITCH. Mode priors are
         # applied per-step in the emissions (below) and at init, NOT in the
         # transition matrix: adding them only to the off-diagonal (the diagonal
@@ -651,21 +755,42 @@ class CoupledHMMHarmonizer:
         requested_bias = np.zeros(n_s)
         if requested_scale is not None and requested_scale.mode in MODES_LIST:
             req_kt = MODES_LIST.index(requested_scale.mode)
+            # The requested mode's MODE_PRIORS penalty is stacked AGAINST the
+            # requested_key_bias reward. For exotic modes (prior = −10) the
+            # penalty dominated the +6 reward, so the requested mode lost to
+            # major/minor at every step and was detected ~0% of the time.
+            # Cancel the requested mode's own prior everywhere (on every root)
+            # so the requested_key_bias / requested_key_mode_bias act as the
+            # sole arbiters of the requested mode. Other modes keep their
+            # priors, so unrelated exotic scales are still penalized and free
+            # modulation detection still works.
+            requested_bias[req_kt::N_KEY_TYPES] = -MODE_PRIORS[req_kt]
+            # The init step adds log_key_priors on top of emit_all[0], so
+            # cancel the requested mode's prior there too — otherwise it
+            # leaks back in at t=0 (the per-step cancellation in emit_all
+            # only affects t>=0 emissions, but log_key_priors is added once
+            # more at init, double-counting the requested mode's prior).
+            log_key_priors_cancelled = log_key_priors.copy()
+            log_key_priors_cancelled[req_kt::N_KEY_TYPES] = 0.0
+            # Add the strong exact-key reward on top of the cancellation, and
+            # the milder same-mode-on-other-roots reward elsewhere. These ADD
+            # to the (already zeroed) prior, they do not overwrite the
+            # cancellation.
             for req_root in range(N_TONES):
                 req_state = req_root * N_KEY_TYPES + req_kt
                 if req_root == requested_scale.root:
                     # Strong pull toward the exact requested key.
-                    requested_bias[req_state] = self.config.requested_key_bias
+                    requested_bias[req_state] += self.config.requested_key_bias
                 else:
                     # Milder pull toward the same mode on any root.
-                    requested_bias[req_state] = self.config.requested_key_mode_bias
+                    requested_bias[req_state] += self.config.requested_key_mode_bias
             emit_all += requested_bias[None, :]
 
         NEG_INF = -1e9
         backtrack = np.zeros((T, n_s), dtype=np.int32)
 
         # Apply mode prior log probabilities to initial state
-        dp = emit_all[0] + log_key_priors
+        dp = emit_all[0] + log_key_priors_cancelled
 
         if debug:
             print("\n[Layer 2 Debug: Top 3 Key Centers per Step]")
