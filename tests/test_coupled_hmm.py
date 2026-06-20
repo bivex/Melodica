@@ -1507,24 +1507,53 @@ class TestMicrotonalCollapseSemantics:
             f"  got:      {sorted(m.value for m in _MICROTONAL_MODES)}"
         )
 
-    def test_arabic_sikah_prior_snaps_to_natural_minor_pcs(self):
-        """Document the known snap: ARABIC_SIKAH's intervals
-        [0, 1.5, 3.5, 5, 7, 8.5, 10.5] round (Python round-half-to-even:
-        1.5->2, 3.5->4, 8.5->8, 10.5->10) to the pitch-class set
-        {0,2,4,5,7,8,10} = natural-minor / aeolian pitch classes. This is
-        NOT a bug to fix in the 12-TET HMM (it is the documented
-        limitation the warning announces), but pinning it catches
-        accidental re-categorization that would silently change behaviour.
+    def test_arabic_sikah_uses_fuzzy_24edo_membership(self):
+        """Pin the new fuzzy-membership behaviour for ARABIC_SIKAH.
+
+        Before the 24-EDO fix, sikah's intervals [0, 1.5, 3.5, 5, 7, 8.5, 10.5]
+        were SNAPPED via `round(iv) % 12` to {0,2,4,5,7,8,10}, losing the
+        quarter-tone colour (and the neutral 3rd collapsed to major 3rd).
+
+        Now each quarter-tone step (1.5, 3.5, 8.5, 10.5) splits its membership
+        0.5/0.5 between the two neighbouring 12-TET pcs, so sikah's prior
+        table covers {0,1,2,3,4,5,7,8,9,10,11} with half-weights on the split
+        pcs. Layer 2 can now distinguish sikah from natural_minor (pure minor
+        3rd) and major (pure major 3rd). Output chords remain 12-TET.
         """
         from melodica.harmonize.coupled_hmm import KEY_OFFSET_LOG, MODES_LIST
+        import math
         sikah_idx = MODES_LIST.index(Mode.ARABIC_SIKAH)
         off = KEY_OFFSET_LOG[sikah_idx]
-        import math
         floor = math.log(0.01)
+        # All pcs the fuzzy membership touches are above the floor.
         members = {pc for pc in range(12) if off[pc] > floor + 0.5}
-        assert members == {0, 2, 4, 5, 7, 8, 10}, (
-            f"ARABIC_SIKAH snapped pitch-class set changed: {sorted(members)}. "
+        # Quarter-tone splits 1.5->1,2; 3.5->3,4; 8.5->8,9; 10.5->10,11.
+        # Plus integer steps 0,5,7. So: {0,1,2,3,4,5,7,8,9,10,11} (no 6).
+        assert members == {0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11}, (
+            f"ARABIC_SIKAH fuzzy membership changed: {sorted(members)}. "
             "Update this test if the interval table changed intentionally."
+        )
+
+    def test_microtonal_modes_are_distinguishable_from_common(self):
+        """Regression guard for the 24-EDO fuzzy fix: a microtonal enum mode
+        must have a Layer-2 prior (KEY_OFFSET_LOG) that is DISTINCT from its
+        nearest common-mode neighbours, not identical. Before the fix sikah
+        snapped to natural_minor's PCs and was nearly indistinguishable."""
+        import numpy as np
+        from melodica.harmonize.coupled_hmm import KEY_OFFSET_LOG, MODES_LIST
+        sikah = MODES_LIST.index(Mode.ARABIC_SIKAH)
+        natmin = MODES_LIST.index(Mode.NATURAL_MINOR)
+        major = MODES_LIST.index(Mode.MAJOR)
+        # A meaningful distinction requires a non-trivial max-difference.
+        d_natmin = np.abs(KEY_OFFSET_LOG[sikah] - KEY_OFFSET_LOG[natmin]).max()
+        d_major = np.abs(KEY_OFFSET_LOG[sikah] - KEY_OFFSET_LOG[major]).max()
+        assert d_natmin >= 1.0, (
+            f"ARABIC_SIKAH indistinguishable from NATURAL_MINOR "
+            f"(max-diff={d_natmin:.3f}); 24-EDO fuzzy fix regressed"
+        )
+        assert d_major >= 1.0, (
+            f"ARABIC_SIKAH indistinguishable from MAJOR "
+            f"(max-diff={d_major:.3f}); 24-EDO fuzzy fix regressed"
         )
 
 
