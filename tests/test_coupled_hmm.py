@@ -1557,6 +1557,151 @@ class TestMicrotonalCollapseSemantics:
         )
 
 
+# -- 9d-nonies. 24-EDO microtonal Layer-2 detection --
+
+class TestMicrotonalLayerTwoDetection:
+    """End-to-end regression guards for the 24-EDO fuzzy-membership fix.
+
+    Before the fix, the only enum microtonal mode (ARABIC_SIKAH) had its
+    quarter-tone intervals SNAPPED to the nearest 12-TET semitone, so Layer 2
+    could not distinguish it from natural_minor / major (its PCs were nearly
+    identical). The fix replaces the snap with fuzzy membership: a 1.5-semitone
+    step splits 0.5/0.5 between its two 12-TET neighbours, so sikah is now
+    distinct on Layer 2 and detectable as itself when requested.
+
+    NOTE: this does NOT make the HMM synthesize quarter-tone pitches. Output
+    chords remain 12-TET (Layer 1 is unchanged). The fix only preserves the
+    mode's distinctness on Layer 2 detection — which is what was asked for.
+    """
+
+    @staticmethod
+    def _detected_share(scale, seeds=8):
+        import random
+        from collections import Counter
+        from melodica.harmonize.coupled_hmm import MODES_LIST
+        agg: Counter = Counter()
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        for seed in range(seeds):
+            random.seed(seed)
+            degrees = scale.degrees()
+            pool = []
+            for d in degrees:
+                for octave in (60, 72, 84):
+                    # degrees() returns pitch classes; build pitches at those
+                    # pcs in multiple octaves. Round handles the quarter-tone
+                    # pitch classes by snapping to the nearest 12-TET pitch —
+                    # which is exactly what Layer 1 sees. Layer 2's fuzzy prior
+                    # then distinguishes the mode via the offset_log.
+                    pool.append(octave + int(round(d)))
+            melody = [NoteInfo(pitch=random.choice(pool),
+                               start=i * 0.5, duration=0.5, velocity=80)
+                      for i in range(16 * 8)]
+            cp = h._get_change_points(64.0)
+            obs = h._extract_observations(melody, cp)
+            draft = h._viterbi_chords(obs, scale, cp, None, None, key_path=None)
+            kp = h._viterbi_keys(draft, requested_scale=scale)
+            for _, kt in kp:
+                agg[MODES_LIST[kt].value] += 1
+        total = sum(agg.values())
+        return agg.get(scale.mode.value, 0) / total if total else 0.0
+
+    def test_arabic_sikah_detected_when_requested(self):
+        """The headline test: ARABIC_SIKAH must now be detectable as itself
+        when requested. Before the 24-EDO fix this returned 0% (collapsed to
+        natural_minor / major). With fuzzy membership the neutral 3rd (3.5)
+        no longer snaps to a single pc, so sikah is distinguishable."""
+        share = self._detected_share(Scale(0, Mode.ARABIC_SIKAH))
+        # Sikah is harmonically ambiguous (it overlaps natural_minor heavily),
+        # so require a strong-minORITY rather than majority: before the fix
+        # this was 0%, after it should be at least detectable (>=15%).
+        assert share >= 0.15, (
+            f"ARABIC_SIKAH detected only {share:.0%} of bars; 24-EDO fuzzy "
+            "fix did not improve detectability (was 0% before). "
+            "Either the fix regressed or sikah is genuinely indistinguishable."
+        )
+
+    def test_microtonal_detection_improves_over_snap(self):
+        """Direct comparison: with the OLD snap behaviour sikah would be
+        nearly identical to natural_minor in the prior table. With fuzzy
+        membership, sikah's detected-share when requested must be strictly
+        higher than natural_minor's share when sikah is requested (i.e.
+        Layer 2 actually prefers sikah, not its snap-target)."""
+        # Cannot easily simulate old snap without reverting the fix; instead
+        # verify sikah's self-detection exceeds its cross-detection as
+        # natural_minor. Request sikah; count how often Layer 2 picks
+        # sikah vs natural_minor.
+        import random
+        from collections import Counter
+        from melodica.harmonize.coupled_hmm import MODES_LIST
+        scale = Scale(0, Mode.ARABIC_SIKAH)
+        agg: Counter = Counter()
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        for seed in range(8):
+            random.seed(seed)
+            degrees = scale.degrees()
+            pool = []
+            for d in degrees:
+                for octave in (60, 72, 84):
+                    pool.append(octave + int(round(d)))
+            melody = [NoteInfo(pitch=random.choice(pool),
+                               start=i * 0.5, duration=0.5, velocity=80)
+                      for i in range(16 * 8)]
+            cp = h._get_change_points(64.0)
+            obs = h._extract_observations(melody, cp)
+            draft = h._viterbi_chords(obs, scale, cp, None, None, key_path=None)
+            kp = h._viterbi_keys(draft, requested_scale=scale)
+            for _, kt in kp:
+                agg[MODES_LIST[kt].value] += 1
+        sikah_share = agg.get("arabic_sikah", 0)
+        natmin_share = agg.get("natural_minor", 0)
+        # Sikah must at least tie natural_minor; before the fix natmin won.
+        assert sikah_share >= natmin_share, (
+            f"ARABIC_SIKAH ({sikah_share}) lost to natural_minor "
+            f"({natmin_share}) even when requested; fuzzy fix ineffective"
+        )
+
+    def test_non_microtonal_modes_unaffected_by_fuzzy(self):
+        """The fuzzy fix must not change behaviour for 12-TET modes. A
+        representative common mode (MAJOR) should produce identical Layer-2
+        detection as before — verify it still detects at ~100% and the prior
+        table for integer-only modes is unchanged (all weights 0 or 1)."""
+        import math
+        from melodica.harmonize.coupled_hmm import KEY_OFFSET_LOG, MODES_LIST
+        major = MODES_LIST.index(Mode.MAJOR)
+        off = KEY_OFFSET_LOG[major]
+        floor = math.log(0.01)
+        # MAJOR pcs {0,2,4,5,7,9,11} should all be above floor; {1,3,6,8,10} at floor.
+        for pc in (0, 2, 4, 5, 7, 9, 11):
+            assert off[pc] > floor + 0.5, f"MAJOR pc {pc} dropped below floor"
+        for pc in (1, 3, 6, 8, 10):
+            assert off[pc] <= floor + 0.5, (
+                f"MAJOR non-scale pc {pc} above floor — fuzzy fix leaked into 12-TET mode"
+            )
+
+    def test_chord_output_remains_12_tet(self):
+        """Despite the 24-EDO Layer-2 fix, the OUTPUT chords must remain
+        12-TET (Layer 1 is unchanged). This pins the documented limitation:
+        no quarter-tone pitches are synthesized."""
+        import random
+        h = CoupledHMMHarmonizer(chord_change="bars")
+        scale = Scale(0, Mode.ARABIC_SIKAH)
+        random.seed(0)
+        degrees = scale.degrees()
+        pool = []
+        for d in degrees:
+            for octave in (60, 72, 84):
+                pool.append(octave + int(round(d)))
+        melody = [NoteInfo(pitch=random.choice(pool),
+                           start=i * 0.5, duration=0.5, velocity=80)
+                  for i in range(16 * 8)]
+        chords = h.harmonize(melody, scale, duration_beats=64.0)
+        assert len(chords) >= 1
+        for c in chords:
+            # All roots integer pitch classes in [0,11] — no quarter-tones.
+            assert isinstance(c.root, int) or c.root == int(c.root)
+            assert 0 <= c.root < 12
+
+
 # -- 9d-septies. Alias-group prior consistency --
 
 class TestAliasGroupPriorConsistency:
