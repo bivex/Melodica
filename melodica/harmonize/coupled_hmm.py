@@ -153,24 +153,55 @@ def _init_modal_priors():
 
     for m_idx, mode in enumerate(MODES_LIST):
         intervals = get_mode_intervals(mode)
-        # Detect microtonal (non-integer-semitone) intervals. The HMM state
-        # space is 12-TET only, so a step like 1.5 semitones cannot be
-        # represented: `round(iv) % 12` snaps it to a neighbour, silently
-        # rewriting the mode. ARABIC_SIKAH [0,1.5,3.5,5,7,8.5,10.5] e.g.
-        # collapses to NATURAL_MINOR's pitch classes here. Flag these modes
-        # once so callers know the prior table does not actually reflect the
-        # mode's microtonal colour (see _MICROTONAL_MODES below).
-        if any(abs(iv - round(iv)) > 0.01 for iv in intervals):
+        # Detect microtonal (non-integer-semitone) intervals. The HMM Layer-1
+        # (chord) state space is 12-TET only, but Layer 2 (key) priors can still
+        # represent the quarter-tone colour via fuzzy membership (see below).
+        is_microtonal = any(abs(iv - round(iv)) > 0.01 for iv in intervals)
+        if is_microtonal:
             _MICROTONAL_MODES.add(mode)
-        scale_pcs = {round(iv) % 12 for iv in intervals}
 
-        # 1. Root offsets: high weight for notes in scale, preferring the tonic (offset 0)
+        # Build the 12-TET pitch-class membership of the mode. Integer steps get
+        # full membership (1.0); a quarter-tone step like 1.5 splits its
+        # membership 0.5/0.5 between pc 1 and pc 2. This is the 24-EDO-aware
+        # replacement for the old `round(iv) % 12` snap: a neutral 3rd (3.5) is
+        # now "half minor 3rd + half major 3rd" instead of being forced to one,
+        # so Layer 2 can distinguish e.g. ARABIC_SIKAH from NATURAL_MINOR (whose
+        # 3rd is a pure minor 3rd). Layer 1 still emits 12-TET chords only — the
+        # fuzzy weights live in the *key* prior table (KEY_OFFSET_LOG), which
+        # never has to produce a sound, only a likelihood. Note: this does NOT
+        # make the HMM synthesize quarter-tone pitches in the output; it only
+        # preserves the mode's distinctness on Layer 2 detection. The output
+        # chords remain 12-TET (a known limitation, see _warn_mode_limitations).
+        pc_weights: dict[int, float] = {}
+        for iv in intervals:
+            iv_mod = iv % 12.0
+            lo = int(math.floor(iv_mod)) % 12
+            frac = iv_mod - math.floor(iv_mod)
+            if frac < 0.01:
+                pc_weights[lo] = pc_weights.get(lo, 0.0) + 1.0
+            elif frac > 0.99:
+                hi = (lo + 1) % 12
+                pc_weights[hi] = pc_weights.get(hi, 0.0) + 1.0
+            else:
+                hi = (lo + 1) % 12
+                pc_weights[lo] = pc_weights.get(lo, 0.0) + (1.0 - frac)
+                pc_weights[hi] = pc_weights.get(hi, 0.0) + frac
+        scale_pcs = set(pc_weights)
+
+        # 1. Root offsets: high weight for notes in scale, preferring the tonic
+        # (offset 0). For microtonal modes the weight is proportional to the
+        # fuzzy membership, so a quarter-tone step contributes half-weight to
+        # each of its two 12-TET neighbours (e.g. sikah's neutral 3rd boosts
+        # both pc 3 and pc 4 by 0.5x, rather than snapping to one).
+        total_non_tonic = sum(pc_weights.values()) - pc_weights.get(0, 0.0)
         for pc in scale_pcs:
+            wt = pc_weights[pc]
             if pc == 0:
                 offset_logs[m_idx, pc] = math.log(0.25)
             else:
-                offset_logs[m_idx, pc] = math.log(0.55 / (len(scale_pcs) - 1))
-            
+                # proportional to membership, normalized over non-tonic weight
+                offset_logs[m_idx, pc] = math.log(0.55 * wt / total_non_tonic)
+
         # 2. Chord types: prior reflects how completely the chord's tones fit
         #    the mode (built on the tonic, offset 0). The score is the RATIO of
         #    matched chord tones to total chord tones — NOT an absolute count.
@@ -203,11 +234,11 @@ def _init_modal_priors():
             # Special case for Dominant 7 (often used even if not strictly diatonic)
             if t_idx == 8 and 4 in scale_pcs and 10 in scale_pcs:
                 type_priors[m_idx, t_idx] = 0.20
-            
+
         # Normalize priors (DEPRECATED: Normalization per-mode causes pentatonic scale-size bias
         # by boosting incompatible chords in smaller scales).
         # type_priors[m_idx] /= type_priors[m_idx].sum()
-        
+
     return type_priors, offset_logs
 
 KEY_TYPE_PRIOR, KEY_OFFSET_LOG = _init_modal_priors()
@@ -272,16 +303,18 @@ def _init_mode_priors() -> np.ndarray:
 
 MODE_PRIORS = _init_mode_priors()
 
-# Warn once at import time about microtonal modes whose 12-TET prior table
-# does not faithfully represent them. This is informational: the modes still
-# work for Layer-1 chord harmonization (melody pitch classes are used as-is)
-# but Layer-2 key detection may collapse them to a neighbouring common scale.
+# Warn once at import time about microtonal modes. Their quarter-tone colour
+# is now PRESERVED on Layer 2 via fuzzy PC membership (a 1.5-semitone step
+# splits 0.5/0.5 between its two 12-TET neighbours instead of snapping to one),
+# so they are distinguishable from neighbouring common scales. They still
+# cannot produce quarter-tone pitches in the OUTPUT (Layer 1 emits 12-TET
+# chords only); this is the remaining limitation. The warning is informational.
 if _MICROTONAL_MODES:
     warnings.warn(
-        "CoupledHMMHarmonizer: the following requested modes contain "
-        "microtonal intervals that cannot be represented in the 12-TET "
-        "prior table and will be snapped to the nearest semitone; "
-        "Layer-2 key detection for them is unreliable: "
+        "CoupledHMMHarmonizer: the following modes contain microtonal "
+        "intervals; their Layer-2 distinctness is preserved via fuzzy 24-EDO "
+        "membership, but output chords remain 12-TET (quarter-tone pitches "
+        "are not synthesized): "
         + ", ".join(sorted(m.value for m in _MICROTONAL_MODES)),
         stacklevel=1,
     )
@@ -363,9 +396,9 @@ def _is_microtonal_mode(mode: Mode | str) -> bool:
     Covers every mode source (Mode enum, EXOTIC_SCALE_DATABASE strings,
     Melakarta names) because it inspects the resolved intervals directly,
     not the membership of _MICROTONAL_MODES (which is only populated for the
-    78 enum modes during prior building). The HMM state space is 12-TET, so
-    `_init_modal_priors` snaps microtonal steps to the nearest semitone —
-    e.g. makam_rast [0,2,3.5,5,7,9,10.5] loses its quarter-tone colour.
+    78 enum modes during prior building). For enum modes the quarter-tone
+    colour is now preserved on Layer 2 via fuzzy membership; for string
+    modes (not in MODES_LIST) the colour is lost on both layers.
     """
     try:
         intervals = get_mode_intervals(mode)
@@ -388,12 +421,17 @@ def _warn_mode_limitations(scale: Scale, *, force: bool = False) -> None:
        enum (e.g. 'flamenco' -> harmonic_minor). When `force` is True the
        situation is worse: force_key silently falls back to MAJOR (m_idx=0).
 
-    2. **Microtonal limitation.** Even within MODES_LIST, modes with
-       non-integer-semitone steps (ARABIC_SIKAH, etc.) have their prior
-       table snapped to 12-TET; for string modes this compounds with (1).
+    2. **Microtonal limitation (string modes only).** String modes with
+       non-integer-semitone steps lose their quarter-tone colour entirely
+       (Layer 1 has no state for them and Layer 2 cannot see them). Enum
+       microtonal modes (ARABIC_SIKAH, etc.) are PRESERVED on Layer 2 via
+       fuzzy 24-EDO membership — they are distinguishable from neighbouring
+       common scales — but output chords remain 12-TET (no quarter-tone
+       pitches synthesized). The remaining limitation for enum microtonal
+       modes is output-only.
 
-    The module-level import warning (_MICROTONAL_MODES) only covers enum
-    modes; this per-call check covers everything the caller actually passed.
+    The module-level import warning (_MICROTONAL_MODES) covers enum modes;
+    this per-call check covers everything the caller actually passed.
 
     Mode matching is by `.value` (e.g. Mode.MAJOR.value == 'major'), so a
     string mode 'major' is correctly recognised as the MAJOR enum and does
@@ -408,7 +446,8 @@ def _warn_mode_limitations(scale: Scale, *, force: bool = False) -> None:
         for m in MODES_LIST
     )
     if in_modes_list:
-        # Enum mode: microtonal snap is already warned at import time.
+        # Enum mode: microtonal colour is preserved via fuzzy membership
+        # (warned at import time); output limitation is informational.
         return
     msgs = []
     msgs.append(
@@ -418,8 +457,8 @@ def _warn_mode_limitations(scale: Scale, *, force: bool = False) -> None:
     )
     if _is_microtonal_mode(mode):
         msgs.append(
-            f"mode {name!r} has microtonal intervals; its prior table is "
-            "snapped to the nearest semitone (12-TET limitation)"
+            f"mode {name!r} has microtonal intervals that are fully lost "
+            "(no fuzzy preservation for string modes; output is 12-TET)"
         )
     warnings.warn("; ".join(msgs), stacklevel=3)
 
