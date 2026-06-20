@@ -354,6 +354,77 @@ class WeightedNote:
 
 
 # ---------------------------------------------------------------------------
+# Mode-limitation warnings (per-call, covers all mode sources)
+# ---------------------------------------------------------------------------
+
+def _is_microtonal_mode(mode: Mode | str) -> bool:
+    """True if the mode's interval set contains a non-integer-semitone step.
+
+    Covers every mode source (Mode enum, EXOTIC_SCALE_DATABASE strings,
+    Melakarta names) because it inspects the resolved intervals directly,
+    not the membership of _MICROTONAL_MODES (which is only populated for the
+    78 enum modes during prior building). The HMM state space is 12-TET, so
+    `_init_modal_priors` snaps microtonal steps to the nearest semitone —
+    e.g. makam_rast [0,2,3.5,5,7,9,10.5] loses its quarter-tone colour.
+    """
+    try:
+        intervals = get_mode_intervals(mode)
+    except Exception:
+        return False
+    return any(abs(iv - round(iv)) > 0.01 for iv in intervals)
+
+
+def _warn_mode_limitations(scale: Scale, *, force: bool = False) -> None:
+    """Warn once per call about modes the HMM cannot faithfully represent.
+
+    Two limitations are surfaced, both for modes NOT in MODES_LIST (the 78
+    enum modes that populate Layer 2's state space):
+
+    1. **Unknown-mode limitation.** Layer 2 (key detection) operates over
+       MODES_LIST only. A mode that resolves via EXOTIC_SCALE_DATABASE or
+       MELAKARTA_NAMES (219 + 72 string modes) is harmonizable on Layer 1
+       (chords, which read melody pitch classes directly) but can NEVER be
+       detected as itself on Layer 2 — it is silently mapped to the nearest
+       enum (e.g. 'flamenco' -> harmonic_minor). When `force` is True the
+       situation is worse: force_key silently falls back to MAJOR (m_idx=0).
+
+    2. **Microtonal limitation.** Even within MODES_LIST, modes with
+       non-integer-semitone steps (ARABIC_SIKAH, etc.) have their prior
+       table snapped to 12-TET; for string modes this compounds with (1).
+
+    The module-level import warning (_MICROTONAL_MODES) only covers enum
+    modes; this per-call check covers everything the caller actually passed.
+
+    Mode matching is by `.value` (e.g. Mode.MAJOR.value == 'major'), so a
+    string mode 'major' is correctly recognised as the MAJOR enum and does
+    NOT trigger a spurious warning.
+    """
+    mode = scale.mode
+    name = mode.value if hasattr(mode, "value") else str(mode)
+    # Match by value, not identity: Scale accepts both Mode enums and raw
+    # strings, and 'major' (str) should match Mode.MAJOR (enum).
+    in_modes_list = any(
+        (m.value if hasattr(m, "value") else str(m)) == name
+        for m in MODES_LIST
+    )
+    if in_modes_list:
+        # Enum mode: microtonal snap is already warned at import time.
+        return
+    msgs = []
+    msgs.append(
+        f"mode {name!r} is not in MODES_LIST (Layer-2 key-detection state "
+        f"space); it will be detected as the nearest enum mode, not as itself"
+        + ("; force_key will silently fall back to MAJOR" if force else "")
+    )
+    if _is_microtonal_mode(mode):
+        msgs.append(
+            f"mode {name!r} has microtonal intervals; its prior table is "
+            "snapped to the nearest semitone (12-TET limitation)"
+        )
+    warnings.warn("; ".join(msgs), stacklevel=3)
+
+
+# ---------------------------------------------------------------------------
 # Coupled HMM Harmonizer
 # ---------------------------------------------------------------------------
 
@@ -390,6 +461,11 @@ class CoupledHMMHarmonizer:
         if not melody:
             return []
 
+        # Warn if the requested mode cannot be faithfully represented by the
+        # 78-enum Layer-2 state space (string modes from EXOTIC_SCALE_DATABASE
+        # or MELAKARTA_NAMES, plus microtonal modes). See _warn_mode_limitations.
+        _warn_mode_limitations(initial_scale)
+
         # 1. Prepare observations
         change_points = self._get_change_points(duration_beats)
         observations = self._extract_observations(melody, change_points)
@@ -409,7 +485,11 @@ class CoupledHMMHarmonizer:
                     # Find matching mode enum
                     f_mode = next((m for m in Mode if m.value == f_mode), Mode.MAJOR)
                 f_scale = Scale(root=f_root, mode=f_mode)
-            
+
+            # Warn specifically about force_key's silent MAJOR fallback, which
+            # is more damaging than the Layer-2 mapping in the free path.
+            _warn_mode_limitations(f_scale, force=True)
+
             # Map the forced scale to root and mode index
             m_idx = MODES_LIST.index(f_scale.mode) if f_scale.mode in MODES_LIST else 0
             key_path = [(f_scale.root, m_idx)] * T
