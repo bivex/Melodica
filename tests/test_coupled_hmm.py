@@ -1648,6 +1648,154 @@ class TestAliasGroupPriorConsistency:
         )
 
 
+# -- 9d-octies. String-mode / Melakarta mode-limitation warnings --
+
+class TestStringModeWarnings:
+    """Regression guards for the per-call mode-limitation warnings.
+
+    CoupledHMMHarmonizer's Layer 2 state space is the 78 Mode enums
+    (MODES_LIST). 291 additional modes resolve via EXOTIC_SCALE_DATABASE
+    (219 string modes) and MELAKARTA_NAMES (72 Carnatic ragas) — they
+    harmonize on Layer 1 but can NEVER be detected as themselves on Layer 2,
+    and force_key silently falls back to MAJOR for them. Before these
+    warnings that was silent corruption (composer asks for 'flamenco', gets
+    harmonic_minor / major with no signal). The warnings surface it.
+
+    Also covers microtonal string modes (32 in EXOTIC_SCALE_DATABASE) whose
+    prior tables are snapped to 12-TET — the import-time _MICROTONAL_MODES
+    warning only covers enum modes, so the per-call check closes the gap.
+    """
+
+    @staticmethod
+    def _mode_warnings(scale, *, force_key=None):
+        """Capture mode-limitation UserWarnings from a single harmonize() call."""
+        import warnings
+        import random
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            h = CoupledHMMHarmonizer(chord_change="bars")
+            random.seed(0)
+            degrees = scale.degrees()
+            pool = [60 + int(round(d)) for d in degrees]
+            melody = [NoteInfo(pitch=random.choice(pool),
+                               start=i * 0.5, duration=0.5, velocity=80)
+                      for i in range(16)]
+            h.harmonize(melody, scale, duration_beats=8.0, force_key=force_key)
+        return [str(w.message) for w in caught
+                if issubclass(w.category, UserWarning)
+                and "MODES_LIST" in str(w.message)]
+
+    # --- False-positive guards: enum modes must NOT warn ---
+
+    @pytest.mark.parametrize("mode_str", [
+        "major", "ionian", "natural_minor", "aeolian",
+        "harmonic_minor", "melodic_minor",
+        "dorian", "phrygian", "lydian", "mixolydian", "locrian",
+        "yaman", "double_harmonic", "byzantine",
+        "arabic_sikah",  # enum microtonal — import warning covers it
+    ])
+    def test_enum_mode_does_not_warn(self, mode_str):
+        """Modes in MODES_LIST (matched by .value) must not trigger the
+        per-call warning. Catches the regression where string 'major'
+        failed to match enum Mode.MAJOR."""
+        w = self._mode_warnings(Scale(0, mode_str))
+        assert w == [], f"Enum mode {mode_str!r} triggered spurious warning: {w}"
+
+    # --- Should-warn cases: the three string-mode categories ---
+
+    def test_flamenco_warns_unknown_mode(self):
+        """flamenco (EXOTIC_SCALE_DATABASE, 12-TET) must warn that Layer 2
+        cannot detect it as itself."""
+        w = self._mode_warnings(Scale(0, "flamenco"))
+        assert len(w) == 1, f"Expected 1 warning, got {len(w)}: {w}"
+        assert "flamenco" in w[0] and "MODES_LIST" in w[0]
+        # Non-microtonal, so no microtonal clause.
+        assert "microtonal" not in w[0].lower()
+
+    def test_makam_rast_warns_unknown_and_microtonal(self):
+        """makam_rast (3.5/10.5 semitone steps) must warn about BOTH the
+        unknown-mode limitation AND the microtonal snap."""
+        w = self._mode_warnings(Scale(0, "makam_rast"))
+        assert len(w) == 1, f"Expected 1 combined warning, got {len(w)}"
+        msg = w[0]
+        assert "makam_rast" in msg
+        assert "MODES_LIST" in msg
+        assert "microtonal" in msg.lower(), (
+            f"Microtonal clause missing for makam_rast: {msg}"
+        )
+
+    def test_melakarta_raga_warns_unknown_mode(self):
+        """mechakalyani (Melakarta, 12-TET) must warn about the unknown-mode
+        limitation. Melakarta ragas are 12-TET so no microtonal clause."""
+        w = self._mode_warnings(Scale(0, "mechakalyani"))
+        assert len(w) == 1, f"Expected 1 warning, got {len(w)}"
+        assert "mechakalyani" in w[0] and "MODES_LIST" in w[0]
+        assert "microtonal" not in w[0].lower()
+
+    # --- force_key silent-MAJOR-fallback warning ---
+
+    def test_force_key_string_mode_warns_major_fallback(self):
+        """force_key with a non-MODES_LIST mode silently falls back to
+        MAJOR (m_idx=0). The warning must surface this specifically — it is
+        more damaging than the free-path nearest-enum mapping."""
+        w = self._mode_warnings(Scale(0, "major"),
+                                force_key=Scale(0, "flamenco"))
+        # initial_scale=MAJOR produces no warning; only the force_key one fires.
+        flamenco_warnings = [m for m in w if "flamenco" in m]
+        assert len(flamenco_warnings) == 1, (
+            f"Expected 1 flamenco/force warning, got {len(flamenco_warnings)}: {w}"
+        )
+        assert "force_key will silently fall back to MAJOR" in flamenco_warnings[0], (
+            f"force_key MAJOR-fallback clause missing: {flamenco_warnings[0]}"
+        )
+
+    def test_force_key_enum_mode_does_not_warn(self):
+        """force_key with an enum mode (e.g. Mode.DORIAN) must not warn."""
+        w = self._mode_warnings(Scale(0, "major"),
+                                force_key=Scale(0, "dorian"))
+        assert w == [], f"Enum force_key triggered spurious warning: {w}"
+
+    # --- Harmonization still works (warnings don't break behavior) ---
+
+    def test_flamenco_still_produces_valid_chords(self):
+        """A warned mode must still produce structurally valid output — the
+        warning is informational, not a refusal. Layer 1 harmonization is
+        unaffected by the limitation."""
+        import random
+        import warnings
+        scale = Scale(0, "flamenco")
+        random.seed(0)
+        degrees = scale.degrees()
+        pool = [60 + int(round(d)) for d in degrees]
+        melody = [NoteInfo(pitch=random.choice(pool),
+                           start=i * 0.5, duration=0.5, velocity=80)
+                  for i in range(32)]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            h = CoupledHMMHarmonizer(chord_change="bars")
+            chords = h.harmonize(melody, scale, duration_beats=16.0)
+        assert len(chords) >= 1
+        for c in chords:
+            assert 0 <= c.root < 12
+            assert c.duration > 0
+        assert abs(sum(c.duration for c in chords) - 16.0) < 0.01
+
+    # --- Coverage of microtonal string-mode detection ---
+
+    def test_is_microtonal_mode_covers_string_modes(self):
+        """_is_microtonal_mode must detect microtonality for string modes
+        (the import-time _MICROTONAL_MODES only covers enums). This is the
+        helper that powers the per-call microtonal clause."""
+        from melodica.harmonize.coupled_hmm import _is_microtonal_mode
+        # Microtonal string modes (samples from EXOTIC_SCALE_DATABASE)
+        for m in ("makam_rast", "segah", "shur", "rast",
+                  "harmonic_series_8", "golden_ratio_scale"):
+            assert _is_microtonal_mode(m), f"{m} should be microtonal"
+        # 12-TET string modes
+        for m in ("flamenco", "hijaz", "mechakalyani", "dhirasankarabharanam"):
+            assert not _is_microtonal_mode(m), f"{m} should NOT be microtonal"
+
+
 @pytest.mark.slow
 class TestAllModesSweep:
     """Full 78-mode regression sweep. The strongest guard: every mode in
