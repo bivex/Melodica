@@ -444,3 +444,7 @@ dist/
 /.hypothesis
 /.venv_dd
 test_output.rpp
+
+# Large generated corpora — regenerate from source via scripts/generators/convert_*.py
+melodica/harmonize/corpus_t5harmony/*.ntc2
+melodica/harmonize/corpus_t5harmony/songlist.txt
