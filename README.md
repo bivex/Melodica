@@ -101,6 +101,122 @@ To prevent pitch bend cross-talk in multitrack MIDI files, Melodica structurally
 
 ## 5. Operational Procedures
 
+### 5. Usage Workflow (BPMN Process Map)
+
+The diagram below illustrates the multi-lane BPMN process mapping the user actions, system processing, and output phases when using Melodica:
+
+```mermaid
+bpmn
+  %% Participant definitions (Swimlanes)
+  participant "User" as U
+  participant "IdeaTool Pipeline" as IT
+  participant "Harmonizer Engine" as HE
+  participant "Phrase Generators" as PG
+  participant "Modifier Pipeline" as MP
+  participant "MIDI Exporter" as ME
+  participant "MIDI Analyzer" as MA
+
+  %% === Lane 1: User Actions ===
+  subgraph Lane1 [Lane 1: User / Composer]
+    U1[Define track structure<br/>(IdeaPart / schedule)]
+    U2[Select generators & scales]
+    U3[Configure modifiers & density]
+    U4[Execute generation script]
+    U5[Analyze MIDI output]
+    U6[Iterate / refine]
+  end
+
+  %% === Lane 2: System - Pipeline ===
+  subgraph Lane2 [Lane 2: IdeaTool Pipeline]
+    IT1[Build IdeaToolConfig<br/>with TrackConfigs]
+    IT2[structure_to_schedule]
+    IT3[Generate note slots]
+  end
+
+  %% === Lane 3: System - Harmonization ===
+  subgraph Lane3 [Lane 3: Harmonizer Engine]
+    HE1[Select engine<br/>(coupled_hmm default)]
+    HE2[Chord inference<br/>from melody]
+    HE3[Key / modulation tracking]
+  end
+
+  %% === Lane 4: System - Generation ===
+  subgraph Lane4 [Lane 4: Phrase Generators]
+    PG1[MelodyGenerator]
+    PG2[MarkovMelodyGenerator]
+    PG3[Specialized generators<br/>(TremoloStrings, Bass, …)]
+    PG4[render() → notes]
+  end
+
+  %% === Lane 5: System - Expression ===
+  subgraph Lane5 [Lane 5: Modifier Pipeline]
+    MP1[HumanizeModifier<br/>(timing jitter)]
+    MP2[MetricAccentModifier<br/>(swing / groove)]
+    MP3[VelocityCurveModifier]
+    MP4[process() → final notes]
+  end
+
+  %% === Lane 6: System - Output ===
+  subgraph Lane6 [Lane 6: MIDI & Diagnostics]
+    ME1[notes_to_midi()]
+    ME2[Export multitrack .mid<br/>(isolated channel pools)]
+    MA1[midi_analyzer.py]
+    MA2[Register balance report]
+    MA3[Harmonic clash audit]
+  end
+
+  %% === User Flow ===
+  U1 --> U2 --> U3 --> U4
+  U4 --> U5
+  U5 --> U6
+  U6 --> U3  %% feedback loop
+
+  %% === Pipeline Flow ===
+  U4 -.->|triggers| IT1
+  IT1 --> IT2 --> IT3
+
+  %% === Harmonization Flow ===
+  IT3 -.->|requests chords| HE1
+  HE1 --> HE2 --> HE3
+  HE3 -.->|returns chords| IT3
+
+  %% === Generation Flow ===
+  IT3 -.->|requests phrases| PG1
+  IT3 -.->|requests phrases| PG2
+  IT3 -.->|requests phrases| PG3
+  PG1 --> PG4
+  PG2 --> PG4
+  PG3 --> PG4
+
+  %% === Modification Flow ===
+  PG4 -.->|raw notes| MP1
+  MP1 --> MP2 --> MP3 --> MP4
+
+  %% === Export Flow ===
+  MP4 -.->|final notes| ME1
+  ME1 --> ME2
+
+  %% === Analysis Flow ===
+  U5 -.->|optional audit| MA1
+  MA1 --> MA2
+  MA1 --> MA3
+  MA2 -.->|balance warnings| U6
+  MA3 -.->|clash warnings| U6
+```
+
+**Process Summary:**
+
+| Lane | Role | Key Artifacts |
+|:---|:---|:---|
+| Lane 1 – User / Composer | Defines intent, iterates on output | `scripts/*.py`, `IdeaPart`, `TrackConfig` |
+| Lane 2 – IdeaTool Pipeline | Schedules parts, orchestrates generation | `structure_to_schedule()`, `IdeaToolConfig` |
+| Lane 3 – Harmonizer Engine | Infers chords and key context | `harmonize()`, engine selection |
+| Lane 4 – Phrase Generators | Produces melodic / rhythmic phrases | `render()`, `MelodyGenerator`, `TremoloStringsGenerator` |
+| Lane 5 – Modifier Pipeline | Applies humanization and dynamics | `HumanizeModifier`, `MetricAccentModifier` |
+| Lane 6 – MIDI & Diagnostics | Exports multitrack files and audits quality | `notes_to_midi()`, `midi_analyzer.py` |
+
+The feedback loop (`Iterate / refine`) allows the user to adjust generator parameters, `octave_shift`, or density based on analyzer warnings before re-generating.
+
 ### 5.1. Quick Start
 
 ```python
