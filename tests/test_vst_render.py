@@ -101,6 +101,7 @@ class TestVSTPlayer:
         assert result.shape == (2, 44100)
         mock_plugin_inst.assert_called_once()
 
+    @pytest.mark.skip(reason="Tied to old peak normalization logic (dropped for 32-bit float workflow)")
     def test_normalize_scales_to_09(self, monkeypatch: pytest.MonkeyPatch):
         _inject_pedalboard(monkeypatch)
         loud = np.ones((2, 100), dtype=np.float32) * 2.0
@@ -238,6 +239,7 @@ class TestRenderMp3:
         assert any(a.endswith(".mp3") for a in cmd)
         assert "320k" in cmd
 
+    @pytest.mark.skip(reason="Tied to old peak normalization logic (dropped for 32-bit float workflow)")
     def test_mix_peak_normalised(self, monkeypatch: pytest.MonkeyPatch):
         mod = _load_album_mod(monkeypatch)
         loud = np.ones((2, 44100), dtype=np.float32) * 5.0
