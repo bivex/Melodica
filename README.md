@@ -106,102 +106,86 @@ To prevent pitch bend cross-talk in multitrack MIDI files, Melodica structurally
 The diagram below illustrates the multi-lane BPMN process mapping the user actions, system processing, and output phases when using Melodica:
 
 ```mermaid
-bpmn
-  %% Participant definitions (Swimlanes)
-  participant "User" as U
-  participant "IdeaTool Pipeline" as IT
-  participant "Harmonizer Engine" as HE
-  participant "Phrase Generators" as PG
-  participant "Modifier Pipeline" as MP
-  participant "MIDI Exporter" as ME
-  participant "MIDI Analyzer" as MA
+graph TD
+    subgraph Lane1 [Lane 1: User / Composer]
+        U1[Define track structure<br/>IdeaPart / schedule]
+        U2[Select generators & scales]
+        U3[Configure modifiers & density]
+        U4[Execute generation script]
+        U5[Analyze MIDI output]
+        U6[Iterate / refine]
+    end
 
-  %% === Lane 1: User Actions ===
-  subgraph Lane1 [Lane 1: User / Composer]
-    U1[Define track structure<br/>(IdeaPart / schedule)]
-    U2[Select generators & scales]
-    U3[Configure modifiers & density]
-    U4[Execute generation script]
-    U5[Analyze MIDI output]
-    U6[Iterate / refine]
-  end
+    subgraph Lane2 [Lane 2: IdeaTool Pipeline]
+        IT1[Build IdeaToolConfig<br/>with TrackConfigs]
+        IT2[structure_to_schedule]
+        IT3[Generate note slots]
+    end
 
-  %% === Lane 2: System - Pipeline ===
-  subgraph Lane2 [Lane 2: IdeaTool Pipeline]
-    IT1[Build IdeaToolConfig<br/>with TrackConfigs]
-    IT2[structure_to_schedule]
-    IT3[Generate note slots]
-  end
+    subgraph Lane3 [Lane 3: Harmonizer Engine]
+        HE1[Select engine<br/>coupled_hmm default]
+        HE2[Chord inference<br/>from melody]
+        HE3[Key / modulation tracking]
+    end
 
-  %% === Lane 3: System - Harmonization ===
-  subgraph Lane3 [Lane 3: Harmonizer Engine]
-    HE1[Select engine<br/>(coupled_hmm default)]
-    HE2[Chord inference<br/>from melody]
-    HE3[Key / modulation tracking]
-  end
+    subgraph Lane4 [Lane 4: Phrase Generators]
+        PG1[MelodyGenerator]
+        PG2[MarkovMelodyGenerator]
+        PG3[Specialized generators<br/>TremoloStrings, Bass, …]
+        PG4[render() → notes]
+    end
 
-  %% === Lane 4: System - Generation ===
-  subgraph Lane4 [Lane 4: Phrase Generators]
-    PG1[MelodyGenerator]
-    PG2[MarkovMelodyGenerator]
-    PG3[Specialized generators<br/>(TremoloStrings, Bass, …)]
-    PG4[render() → notes]
-  end
+    subgraph Lane5 [Lane 5: Modifier Pipeline]
+        MP1[HumanizeModifier<br/>timing jitter]
+        MP2[MetricAccentModifier<br/>swing / groove]
+        MP3[VelocityCurveModifier]
+        MP4[process() → final notes]
+    end
 
-  %% === Lane 5: System - Expression ===
-  subgraph Lane5 [Lane 5: Modifier Pipeline]
-    MP1[HumanizeModifier<br/>(timing jitter)]
-    MP2[MetricAccentModifier<br/>(swing / groove)]
-    MP3[VelocityCurveModifier]
-    MP4[process() → final notes]
-  end
+    subgraph Lane6 [Lane 6: MIDI & Diagnostics]
+        ME1[notes_to_midi]
+        ME2[Export multitrack .mid<br/>isolated channel pools]
+        MA1[midi_analyzer.py]
+        MA2[Register balance report]
+        MA3[Harmonic clash audit]
+    end
 
-  %% === Lane 6: System - Output ===
-  subgraph Lane6 [Lane 6: MIDI & Diagnostics]
-    ME1[notes_to_midi()]
-    ME2[Export multitrack .mid<br/>(isolated channel pools)]
-    MA1[midi_analyzer.py]
-    MA2[Register balance report]
-    MA3[Harmonic clash audit]
-  end
+    U1 --> U2
+    U2 --> U3
+    U3 --> U4
+    U4 --> U5
+    U5 --> U6
+    U6 --> U3
 
-  %% === User Flow ===
-  U1 --> U2 --> U3 --> U4
-  U4 --> U5
-  U5 --> U6
-  U6 --> U3  %% feedback loop
+    U4 -.-> IT1
+    IT1 --> IT2
+    IT2 --> IT3
 
-  %% === Pipeline Flow ===
-  U4 -.->|triggers| IT1
-  IT1 --> IT2 --> IT3
+    IT3 -.-> HE1
+    HE1 --> HE2
+    HE2 --> HE3
+    HE3 -.-> IT3
 
-  %% === Harmonization Flow ===
-  IT3 -.->|requests chords| HE1
-  HE1 --> HE2 --> HE3
-  HE3 -.->|returns chords| IT3
+    IT3 -.-> PG1
+    IT3 -.-> PG2
+    IT3 -.-> PG3
+    PG1 --> PG4
+    PG2 --> PG4
+    PG3 --> PG4
 
-  %% === Generation Flow ===
-  IT3 -.->|requests phrases| PG1
-  IT3 -.->|requests phrases| PG2
-  IT3 -.->|requests phrases| PG3
-  PG1 --> PG4
-  PG2 --> PG4
-  PG3 --> PG4
+    PG4 -.-> MP1
+    MP1 --> MP2
+    MP2 --> MP3
+    MP3 --> MP4
 
-  %% === Modification Flow ===
-  PG4 -.->|raw notes| MP1
-  MP1 --> MP2 --> MP3 --> MP4
+    MP4 -.-> ME1
+    ME1 --> ME2
 
-  %% === Export Flow ===
-  MP4 -.->|final notes| ME1
-  ME1 --> ME2
-
-  %% === Analysis Flow ===
-  U5 -.->|optional audit| MA1
-  MA1 --> MA2
-  MA1 --> MA3
-  MA2 -.->|balance warnings| U6
-  MA3 -.->|clash warnings| U6
+    U5 -.-> MA1
+    MA1 --> MA2
+    MA1 --> MA3
+    MA2 -.-> U6
+    MA3 -.-> U6
 ```
 
 **Process Summary:**
