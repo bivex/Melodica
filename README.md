@@ -132,14 +132,14 @@ graph TD
         PG1[MelodyGenerator]
         PG2[MarkovMelodyGenerator]
         PG3[Specialized generators<br/>TremoloStrings, Bass, …]
-        PG4[render() → notes]
+        PG4[render() to notes]
     end
 
     subgraph Lane5 [Lane 5: Modifier Pipeline]
         MP1[HumanizeModifier<br/>timing jitter]
         MP2[MetricAccentModifier<br/>swing / groove]
         MP3[VelocityCurveModifier]
-        MP4[process() → final notes]
+        MP4[process() to final notes]
     end
 
     subgraph Lane6 [Lane 6: MIDI & Diagnostics]
