@@ -28,7 +28,21 @@ MAX_SELF_LOOP = 0.20
 # -----------------------------------------
 
 def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
-    """Load .ntc files and return as a list of tensors + per-song weights."""
+    """Load .ntc/.ntc2 files and return as a list of tensors + per-song weights.
+
+    Handles both formats:
+      - **.ntc** (legacy): one bracket per line, the melody pitch classes.
+        `1.0 [4, 7, 10]`
+      - **.ntc2** (extended): two brackets — a leading chord bracket
+        `[root type bass]` and a trailing melody bracket `[pc, pc, ...]`.
+        `1.0 4/4 0 major [0 0 0] [4, 7]`
+
+    The melody is ALWAYS in the LAST bracket of the line (rfind), so this
+    loader reads both formats correctly. The chord/key/meter fields in .ntc2
+    are currently ignored by the trainer but are preserved for future
+    structured-field training. Legacy .ntc files have only one bracket, so
+    last == first and behaviour is unchanged.
+    """
     songs = []
     weights = []
     songlist_path = data_dir / songlist_file
@@ -38,7 +52,10 @@ def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
         names = [line.strip() for line in songlist_path.read_text().splitlines() if line.strip()]
 
     for i, name in enumerate(names):
-        filepath = data_dir / f"{name}.ntc"
+        # Try .ntc2 first, fall back to .ntc for legacy corpora
+        filepath = data_dir / f"{name}.ntc2"
+        if not filepath.exists():
+            filepath = data_dir / f"{name}.ntc"
         if not filepath.exists():
             continue
         song_steps = []
@@ -47,7 +64,13 @@ def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
                 line = line.strip()
                 if "[" not in line:
                     continue
-                notes_str = line[line.find("[") + 1 : line.find("]")]
+                # Melody is the LAST bracket (works for both .ntc and .ntc2).
+                # Legacy loader used find() which grabbed the FIRST bracket —
+                # correct for .ntc (one bracket) but wrong for .ntc2 (chord
+                # bracket comes first).
+                last_open = line.rfind("[")
+                last_close = line.rfind("]")
+                notes_str = line[last_open + 1 : last_close]
                 notes = [int(n.strip()) for n in notes_str.split(",") if n.strip()]
                 vec = torch.zeros(N_TONES)
                 for n in notes:
