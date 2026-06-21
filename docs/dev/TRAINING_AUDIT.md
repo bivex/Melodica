@@ -444,9 +444,6 @@ question separate from the E-step correctness verified here.
   `MIN_LL_DELTA = 1.0` best-LL tracking correctly retains the highest-likelihood
   weights rather than the final-iteration weights (robust to late-stage LL
   oscillation).
-  `MIN_LL_DELTA = 1.0` best-LL tracking correctly retains the highest-likelihood
-  weights rather than the final-iteration weights (robust to late-stage LL
-  oscillation).
 
 ---
 
