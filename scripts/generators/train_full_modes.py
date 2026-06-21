@@ -127,6 +127,12 @@ def main():
         default=50000,
         help="Batch budget (total steps B * max_t) to prevent OOM (default: 50000)"
     )
+    parser.add_argument(
+        "--max-songs",
+        type=int,
+        default=None,
+        help="Limit the number of loaded songs for training (default: None, trains on all)"
+    )
     args = parser.parse_args()
 
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
@@ -149,6 +155,12 @@ def main():
     print(f"  Loading corpus from {corpus_dir}...")
     raw_songs, raw_weights = load_ntc_songs(corpus_dir)
     print(f"    Loaded {len(raw_songs)} songs")
+
+    if args.max_songs is not None and args.max_songs < len(raw_songs):
+        import random
+        random.seed(42)
+        raw_songs = random.sample(raw_songs, args.max_songs)
+        print(f"    Limited to {len(raw_songs)} randomly sampled songs for training")
 
     # Sort songs by length to minimize padding within batches
     raw_songs = sorted(raw_songs, key=lambda s: s.shape[0])
