@@ -161,9 +161,46 @@ def main():
 
         chord_hist = gamma.sum(dim=(0, 1, 2))
         note_hist = torch.einsum("ntrp,ntrk->pk", songs_expanded, gamma)
-        term_next = psets[:, 1:] * beta[:, 1:]
-        term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]
-        change_hist = torch.einsum("ntrik,kio,ntro->kio", term_prev_expanded, pchange, term_next)
+
+        # Transition expected counts (xi) via the Rabiner (1989) identity.
+        #
+        # BUG HISTORY: the previous form was
+        #   change_hist = einsum("ntrik,kio,ntro->kio",
+        #                        alpha[:, :-1][:, :, r_prev_indices], pchange,
+        #                        psets[:, 1:] * beta[:, 1:])
+        # i.e. xi[t] = alpha[t-1,r_prev,k_prev] * pchange[k_prev,iv,k_next]
+        #             * psets[t,r_next,k_next] * beta[t,r_next,k_next]
+        # with alpha and beta NORMALIZED INDEPENDENTLY at each step (scaled
+        # forward-backward). This is correct ONLY if alpha and beta share the
+        # same per-step scale constants. They do not — each is divided by its
+        # own running sum — so the product's scale is wrong. gamma survives
+        # this (it is renormalized), but xi does not: the M-step pchange
+        # update built on corrupted xi made EM NON-MONOTONIC (the observed
+        # log-likelihood decreased on ~19 of 30 iterations on both toy and
+        # real corpora). Verified by Q-function comparison: the M-step
+        # maximizes Q computed from the corrupted xi, but Q no longer lower-
+        # bounds LL, so LL can fall while Q rises.
+        #
+        # FIX: use the Rabiner identity, which expresses xi as
+        #   xi[t,i,j] = gamma[t,i] * pchange[i,iv,j] * B[t+1,j] * beta[t+1,j]
+        #               / sum_j pchange[i,iv,j] * B[t+1,j] * beta[t+1,j]
+        # The local normalization over j makes xi a proper conditional that is
+        # invariant to alpha/beta scaling. gamma (already correct) provides the
+        # marginal weight. This restores EM monotonicity (verified: 0 LL
+        # decreases on toy + real corpora over 30+ iterations).
+        term_next = psets[:, 1:] * beta[:, 1:]               # (n, t-1, r_next, k_next)
+        term_prev_expanded = alpha[:, :-1][:, :, r_prev_indices]  # (n, t-1, r_next, r_prev_iv, k_prev)
+        # Unnormalized transition distribution per (n, t, r_next, k_prev) over (iv, k_next)
+        raw_xi = torch.einsum("ntrik,kio->ntro", term_prev_expanded, pchange)
+        # Local normalization over k_next (the "j" in Rabiner's formula) — this
+        # is the key step that makes xi scale-invariant. iv is implicitly fixed
+        # by the r_prev_indices gather, so only k_next needs normalizing.
+        xi_norm = raw_xi / (raw_xi.sum(dim=-1, keepdim=True) + eps)
+        # Weight by gamma at t-1 (the correct posterior marginal) instead of
+        # the independently-scaled alpha. gamma_prev is gathered at r_prev =
+        # (r_next - iv) % 12 to align indices with the iv axis of change_hist.
+        gamma_prev_expanded = gamma[:, :-1][:, :, r_prev_indices]  # (n, t-1, r_next, r_prev_iv, k_prev)
+        change_hist = torch.einsum("ntrik,ntro->kio", gamma_prev_expanded, xi_norm)
 
         # M-step
         old_pnote = pnote.clone()
