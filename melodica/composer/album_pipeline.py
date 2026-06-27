@@ -1921,7 +1921,7 @@ def produce_track(
     psycho_verify_enabled: bool = True,
     verbose: bool = True,
     genre: str | None = None,
-    sections: List[Tuple[float, Mood]] | None = None,
+    sections: List[Tuple[float, Mood | str]] | None = None,
     chords: List | None = None,
     cc_events: Dict[str, List[Tuple[float, int, int]]] | None = None,
     tempo_events: List[Tuple[float, float]] | None = None,
