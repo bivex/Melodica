@@ -233,7 +233,8 @@ def test_dynamic_tempo_export(tmp_path):
         path=output_file,
         mood=Mood.CHAMBER,
         tempo_events=tempo_events,
-        verbose=False
+        verbose=False,
+        sections=[(0.0, Mood.CHAMBER)],
     )
 
     # Read back MIDI file and inspect set_tempo events

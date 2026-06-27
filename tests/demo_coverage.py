@@ -150,7 +150,8 @@ def run_demo():
         path=out_dir / "coverage_test.mid",
         mood=Mood.CINEMATIC,
         key=KEY,
-        chords=full_chords
+        chords=full_chords,
+        sections=[(0.0, Mood.CINEMATIC)],
     )
     
     print("Coverage Demo completed successfully!")

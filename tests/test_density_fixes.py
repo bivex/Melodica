@@ -56,6 +56,7 @@ def test_no_double_velocity_compression():
             mood=Mood.CHAMBER,
             psycho_verify_enabled=False,
             verbose=False,
+            sections=[(0.0, Mood.CHAMBER)],
         )
     # Profile RMS should not be suspiciously low (double-compress would halve it)
     rms = report["profiles"]["lead"]["rms"]
