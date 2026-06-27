@@ -148,12 +148,14 @@ def test_compile_continuous_album(tmp_path):
         "bpm": 100.0,
         "instruments": {"lead": 73},
         "cc_events": {"lead": [(0.0, 74, 64)]},
+        "sections": [(0.0, Mood.CHAMBER)],
     }
     t2_meta = {
         "tracks": t2_notes,
         "bpm": 120.0,
         "instruments": {"lead": 73},
         "cc_events": {"lead": [(0.0, 74, 80)]},
+        "sections": [(0.0, Mood.CHAMBER)],
     }
 
     out_file = tmp_path / "continuous_album.mid"
@@ -250,6 +252,7 @@ def test_compile_continuous_album_modulation(tmp_path):
         "instruments": {"lead": 73},
         "cc_events": {},
         "key": key_a,
+        "sections": [(0.0, Mood.CHAMBER)],
     }
     t2_meta = {
         "tracks": t2_notes,
@@ -257,6 +260,7 @@ def test_compile_continuous_album_modulation(tmp_path):
         "instruments": {"lead": 40},
         "cc_events": {},
         "key": key_b,
+        "sections": [(0.0, Mood.CHAMBER)],
     }
 
     out_file = tmp_path / "modulation_album.mid"

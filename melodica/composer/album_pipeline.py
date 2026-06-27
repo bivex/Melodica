@@ -2066,10 +2066,35 @@ def compile_continuous_album(
     from melodica.composer.automation import AutomationCurve
     from melodica.theory.modulation import ModulationEngine
 
+    if not tracks_metadata:
+        raise ValueError("tracks_metadata cannot be empty.")
+
+    # Mandatory sectioning and ordering check
+    for idx, meta in enumerate(tracks_metadata):
+        if "sections" not in meta or not meta["sections"]:
+            raise ValueError(
+                f"Track at index {idx} is missing mandatory 'sections' list."
+            )
+        sections = meta["sections"]
+        last_beat = -1.0
+        for sec_idx, section in enumerate(sections):
+            if not isinstance(section, (tuple, list)) or len(section) < 2:
+                raise ValueError(
+                    f"Track {idx} section {sec_idx} must be a tuple/list of (start_beat, mood)."
+                )
+            beat, sec_mood = section
+            if beat < last_beat:
+                raise ValueError(
+                    f"Track {idx} sections are not in chronological order: "
+                    f"section at index {sec_idx} starts at beat {beat}, which is less than preceding beat {last_beat}."
+                )
+            last_beat = beat
+
     combined_tracks: Dict[str, List[NoteInfo]] = {}
     combined_instruments: Dict[str, int] = {}
     combined_cc_events: Dict[str, List[Tuple[float, int, int]]] = {}
     combined_tempo_events: List[Tuple[float, float]] = []
+    combined_sections: List[Tuple[float, Mood]] = []
 
     current_start_beat = 0.0
     first_bpm = tracks_metadata[0].get("bpm", 120.0) if tracks_metadata else 120.0
@@ -2082,6 +2107,11 @@ def compile_continuous_album(
         cc_events = meta.get("cc_events", {})
         tempo_events = meta.get("tempo_events", [])
         this_key = meta.get("key", None)
+        sections = meta.get("sections", [])
+
+        # Accumulate and shift sections
+        for beat, sec_mood in sections:
+            combined_sections.append((beat + current_start_beat, sec_mood))
 
         # Calculate track duration in beats
         track_dur = 0.0
@@ -2209,12 +2239,13 @@ def compile_continuous_album(
         )
         current_start_beat = max(0.0, next_start)
 
-    # Sort all notes and CC events
+    # Sort all notes, CC events, and combined sections
     for name in combined_tracks.keys():
         combined_tracks[name].sort(key=lambda note: note.start)
     for name in combined_cc_events.keys():
         combined_cc_events[name].sort(key=lambda ev: ev[0])
     combined_tempo_events.sort(key=lambda ev: ev[0])
+    combined_sections.sort(key=lambda ev: ev[0])
 
     # Produce the continuous multi-track MIDI
     return produce_track(
@@ -2226,4 +2257,5 @@ def compile_continuous_album(
         key=first_key,
         cc_events=combined_cc_events,
         tempo_events=combined_tempo_events,
+        sections=combined_sections,
     )
