@@ -2087,14 +2087,13 @@ class SectionProfile:
     mood: Mood
     dynamics_range: float
     brightness_ceiling: int
-    relative_gain: float  # relative loudness scale (1.0 = normal)
-    note_density: float   # 1.0 = keep all notes, < 1.0 = thin out notes
-    register_width: float  # 1.0 = normal, < 1.0 = narrow register
-    timing_drift: float    # maximum jitter offset in beats (e.g., 0.05)
-    velocity_drift: float  # random velocity offset range (e.g., 10)
-    reverb_amount: int     # CC 91 value (0-127)
-    filter_cutoff: int     # CC 74 value (0-127)
-    active_layers: list[str] | None = None  # track name keywords allowed in this section
+    energy_target: float       # relative loudness scale (1.0 = normal)
+    note_density: float        # 1.0 = keep all notes, < 1.0 = thin out notes
+    timing_drift: float        # timing humanization scaling factor
+    velocity_drift: float      # random velocity offset range
+    reverb_amount: int         # CC 91 value (0-127)
+    filter_cutoff: int         # CC 74 value (0-127)
+    active_roles: list[Role] | None = None  # If specified, only tracks with these roles play
 
 
 SECTION_PROFILES = {
@@ -2102,78 +2101,86 @@ SECTION_PROFILES = {
         mood=Mood.AMBIENT,
         dynamics_range=0.8,
         brightness_ceiling=95,
-        relative_gain=0.7,
+        energy_target=0.5,
         note_density=0.5,
-        register_width=0.6,
-        timing_drift=0.06,
-        velocity_drift=12,
-        reverb_amount=80,
+        timing_drift=0.04,
+        velocity_drift=8,
+        reverb_amount=85,
         filter_cutoff=70,
-        active_layers=["pad", "texture", "harp", "ambient", "chord"],
+        active_roles=[Role.PAD],
     ),
     "Theme": SectionProfile(
         mood=Mood.INTIMATE,
         dynamics_range=0.7,
         brightness_ceiling=112,
-        relative_gain=0.9,
+        energy_target=0.7,
         note_density=0.8,
-        register_width=0.85,
-        timing_drift=0.03,
-        velocity_drift=6,
+        timing_drift=0.02,
+        velocity_drift=4,
         reverb_amount=45,
         filter_cutoff=100,
+        active_roles=[Role.PAD, Role.BASS],
     ),
     "Variation": SectionProfile(
         mood=Mood.EXPERIMENTAL,
         dynamics_range=0.9,
         brightness_ceiling=120,
-        relative_gain=0.95,
+        energy_target=0.85,
         note_density=0.9,
-        register_width=0.95,
-        timing_drift=0.05,
-        velocity_drift=10,
+        timing_drift=0.03,
+        velocity_drift=6,
         reverb_amount=50,
         filter_cutoff=110,
+        active_roles=[Role.PAD, Role.BASS, Role.LEAD],
     ),
     "Breakdown": SectionProfile(
         mood=Mood.AMBIENT,
         dynamics_range=0.8,
         brightness_ceiling=100,
-        relative_gain=0.6,
+        energy_target=0.4,
         note_density=0.4,
-        register_width=0.5,
-        timing_drift=0.07,
-        velocity_drift=14,
+        timing_drift=0.05,
+        velocity_drift=10,
         reverb_amount=95,
         filter_cutoff=60,
-        active_layers=["pad", "texture", "harp", "ambient", "solo"],
+        active_roles=[Role.PAD, Role.LEAD],
     ),
     "Climax": SectionProfile(
         mood=Mood.CINEMATIC,
         dynamics_range=0.5,
         brightness_ceiling=127,
-        relative_gain=1.1,
+        energy_target=1.1,
         note_density=1.0,
-        register_width=1.0,
         timing_drift=0.01,
-        velocity_drift=3,
+        velocity_drift=2,
         reverb_amount=25,
         filter_cutoff=127,
+        active_roles=[Role.PAD, Role.BASS, Role.LEAD, Role.PERC],
     ),
     "Fade": SectionProfile(
         mood=Mood.AMBIENT,
         dynamics_range=0.8,
         brightness_ceiling=90,
-        relative_gain=0.5,
+        energy_target=0.3,
         note_density=0.3,
-        register_width=0.6,
-        timing_drift=0.08,
-        velocity_drift=12,
+        timing_drift=0.05,
+        velocity_drift=10,
         reverb_amount=70,
         filter_cutoff=65,
-        active_layers=["pad", "texture", "ambient"],
+        active_roles=[Role.PAD],
     ),
 }
+
+
+def _detect_role_from_track_name(tname: str) -> Role:
+    name_lower = tname.lower()
+    if "bass" in name_lower:
+        return Role.BASS
+    if any(k in name_lower for k in ("drum", "kick", "snare", "perc", "hihat", "shaker")):
+        return Role.PERC
+    if any(k in name_lower for k in ("lead", "melody", "solo", "vocal", "strings", "viol", "arpeggio")):
+        return Role.LEAD
+    return Role.PAD
 
 
 def _apply_section_moods(
@@ -2194,7 +2201,9 @@ def _apply_section_moods(
             result[tname] = notes
             continue
 
+        role = _detect_role_from_track_name(tname)
         new_notes = []
+
         for n in notes:
             # Find which section this note belongs to
             section_key = sections[0][1]
@@ -2216,15 +2225,45 @@ def _apply_section_moods(
             if profile is None:
                 profile = SECTION_PROFILES["Theme"]
 
-            # 1. Micro-dynamics (velocity compression)
+            # 1. Layer Activation (Role-based active layers)
+            if profile.active_roles is not None:
+                has_any_match = False
+                for other_tname in tracks.keys():
+                    other_role = _detect_role_from_track_name(other_tname)
+                    if other_role in profile.active_roles:
+                        has_any_match = True
+                        break
+                if has_any_match and role not in profile.active_roles:
+                    continue
+
+            # 2. Musical Note Thinning (Rhythmically coherent density control)
+            if profile.note_density < 1.0:
+                beat_in_bar = n.start % 4.0
+                if role == Role.PERC:
+                    if profile.note_density <= 0.4:
+                        if abs(beat_in_bar - 0.0) > 0.05 and abs(beat_in_bar - 2.0) > 0.05:
+                            continue
+                    elif profile.note_density <= 0.7:
+                        if abs(beat_in_bar * 2 - round(beat_in_bar * 2)) > 0.05:
+                            continue
+                elif role in (Role.LEAD, Role.PAD):
+                    if profile.note_density <= 0.5:
+                        if abs(beat_in_bar - round(beat_in_bar)) > 0.05:
+                            continue
+                elif role == Role.BASS:
+                    if profile.note_density <= 0.5:
+                        if abs(beat_in_bar - 0.0) > 0.05 and abs(beat_in_bar - 2.0) > 0.05:
+                            continue
+
+            # 3. Micro-dynamics (velocity compression)
             center = 64
             offset = n.velocity - center
             vel = int(round(center + offset * profile.dynamics_range))
 
-            # 2. Relative Gain / Macro Loudness
-            vel = int(vel * profile.relative_gain)
+            # 4. Energy Target / Relative Loudness
+            vel = int(vel * profile.energy_target)
 
-            # 3. Velocity Drift (Humanization)
+            # 5. Velocity Drift (Humanization)
             if profile.velocity_drift > 0:
                 vel_offset = int(rng.uniform(-profile.velocity_drift, profile.velocity_drift))
                 vel += vel_offset
