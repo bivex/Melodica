@@ -541,7 +541,7 @@ class IdeaTool:
                     if first_mel.octave_shift:
                         seed_notes = [
                             NoteInfo(
-                                pitch=n.pitch + first_mel.octave_shift * 12,
+                                pitch=max(0, min(127, n.pitch + first_mel.octave_shift * 12)),
                                 start=n.start,
                                 duration=n.duration,
                                 velocity=n.velocity,
@@ -1305,7 +1305,7 @@ class IdeaTool:
                     for n in section_notes:
                         part_notes.append(
                             NoteInfo(
-                                pitch=n.pitch + cfg.octave_shift * 12,
+                                pitch=max(0, min(127, n.pitch + cfg.octave_shift * 12)),
                                 start=round(n.start + section_start, 6),
                                 duration=n.duration,
                                 velocity=n.velocity,
@@ -1664,7 +1664,7 @@ class IdeaTool:
             for n in section_notes:
                 part_notes.append(
                     NoteInfo(
-                        pitch=n.pitch + cfg.octave_shift * 12,
+                        pitch=max(0, min(127, n.pitch + cfg.octave_shift * 12)),
                         start=round(n.start + section_start, 6),
                         duration=n.duration,
                         velocity=n.velocity,
