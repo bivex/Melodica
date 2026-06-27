@@ -592,8 +592,8 @@ def _auto_mix(
     """Analyze tracks, assign gains by role + density, apply register shaping."""
     # Compute total duration from all tracks
     total_dur = 0.0
-    for notes in tracks.values():
-        if notes and not tracks.keys():
+    for name, notes in tracks.items():
+        if name.startswith("_") or not notes:
             continue
         for n in notes:
             total_dur = max(total_dur, n.start + n.duration)
@@ -1496,12 +1496,15 @@ def _stage_articulations(kw):
     engine = ArticulationEngine()
     total_dur = max(
         (n.start + n.duration)
-        for notes in kw["tracks"].values()
+        for tname, notes in kw["tracks"].items()
+        if not tname.startswith("_") and notes
         for n in notes
-        if notes
-    ) if any(kw["tracks"].values()) else 64.0
+    ) if any(not k.startswith("_") and v for k, v in kw["tracks"].items()) else 64.0
     result_tracks = {}
     for tname, notes in kw["tracks"].items():
+        if tname.startswith("_"):
+            result_tracks[tname] = notes
+            continue
         if notes:
             result_tracks[tname] = engine.apply(notes, instrument=tname.lower(),
                                                 total_beats=total_dur)
@@ -1567,10 +1570,10 @@ def _stage_texture(kw):
     from melodica.composer.tension_curve import TensionCurve
     total_dur = max(
         (n.start + n.duration)
-        for notes in kw["tracks"].values()
+        for tname, notes in kw["tracks"].items()
+        if not tname.startswith("_") and notes
         for n in notes
-        if notes
-    ) if any(kw["tracks"].values()) else 64.0
+    ) if any(not k.startswith("_") and v for k, v in kw["tracks"].items()) else 64.0
     tc = TensionCurve(
         total_beats=total_dur,
         curve_type="classical",
@@ -1631,11 +1634,12 @@ def _stage_sections(kw):
 
         # 2. Apply section-level CC automation (Reverb & Filter Cutoff)
         total_beats = 0.0
-        for notes in kw["tracks"].values():
-            if notes:
-                end = max(n.start + n.duration for n in notes)
-                if end > total_beats:
-                    total_beats = end
+        for tname, notes in kw["tracks"].items():
+            if tname.startswith("_") or not notes:
+                continue
+            end = max(n.start + n.duration for n in notes)
+            if end > total_beats:
+                total_beats = end
 
         # Generate CC automation for every track
         for tname in list(kw["tracks"].keys()):
@@ -1733,7 +1737,7 @@ def _stage_master(kw):
     )
     mastered, master_cc = master.apply_mastering(kw["tracks"])
     total_dur = max(
-        (n.start + n.duration for ns in mastered.values() for n in ns), default=0.0
+        (n.start + n.duration for name, ns in mastered.items() if not name.startswith("_") for n in ns), default=0.0
     )
     entry_cc = _generate_entry_fades(mastered, kw["_profiles"], total_dur)
     reverb_cc = _generate_reverb_sends(mastered, kw["_profiles"], kw["mood_profile"])

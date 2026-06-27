@@ -167,7 +167,7 @@ def detect_frequency_masking(
 ) -> list[PsychoEvent]:
     """Detect frequency masking across track pairs."""
     events = []
-    valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
+    valid = {k: v for k, v in tracks.items() if isinstance(v, list) and len(v) > 0 and isinstance(v[0], NoteInfo)}
     
     all_events = []
     for tname, notes in valid.items():
@@ -209,7 +209,7 @@ def detect_temporal_masking(
     """Detect temporal masking across track pairs."""
     _WINDOW = _PRE_MASKING + _POST_MASKING
     events = []
-    valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
+    valid = {k: v for k, v in tracks.items() if isinstance(v, list) and len(v) > 0 and isinstance(v[0], NoteInfo)}
     
     all_events = []
     for tname, notes in valid.items():
@@ -254,7 +254,7 @@ def detect_fusion(
 ) -> list[PsychoEvent]:
     """Detect harmonic fusion (octave/unison/fifth with same onset)."""
     events = []
-    valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
+    valid = {k: v for k, v in tracks.items() if isinstance(v, list) and len(v) > 0 and isinstance(v[0], NoteInfo)}
     
     all_events = []
     for tname, notes in valid.items():
@@ -320,7 +320,7 @@ def detect_register_masking(
     """Detect when bass and melody compete in the same low register."""
     import bisect
     events = []
-    valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
+    valid = {k: v for k, v in tracks.items() if isinstance(v, list) and len(v) > 0 and isinstance(v[0], NoteInfo)}
     names = list(valid.keys())
 
     for i in range(len(names)):
@@ -361,7 +361,7 @@ def detect_brightness_overload(
 ) -> list[PsychoEvent]:
     """Detect when too many high-register notes play simultaneously (harsh)."""
     events = []
-    valid = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
+    valid = {k: v for k, v in tracks.items() if isinstance(v, list) and len(v) > 0 and isinstance(v[0], NoteInfo)}
 
     # Build grid of high-register note counts
     grid: dict[int, list[tuple[str, NoteInfo]]] = {}
@@ -470,7 +470,7 @@ def psycho_verify(
     report = PsychoReport()
 
     # Filter to NoteInfo tracks only
-    note_tracks = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
+    note_tracks = {k: v for k, v in tracks.items() if isinstance(v, list) and len(v) > 0 and isinstance(v[0], NoteInfo)}
 
     # Phase 1: Detect all issues
     all_events = []

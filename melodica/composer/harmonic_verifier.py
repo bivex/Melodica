@@ -457,7 +457,7 @@ def verify_and_fix(
     report = VerifierReport()
 
     # Filter to only NoteInfo tracks (skip _chords, _metadata, etc.)
-    note_tracks = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
+    note_tracks = {k: v for k, v in tracks.items() if isinstance(v, list) and len(v) > 0 and isinstance(v[0], NoteInfo)}
 
     chords = tracks.get("_chords")
     clashes = detect_clashes(note_tracks, config, chords=chords)
@@ -541,6 +541,11 @@ def verify_and_fix(
     start_getter = attrgetter("start")
     for k in fixed:
         fixed[k].sort(key=start_getter)
+
+    # Restore metadata tracks starting with '_'
+    for k, v in tracks.items():
+        if k.startswith("_"):
+            fixed[k] = v
 
     return fixed, report
 

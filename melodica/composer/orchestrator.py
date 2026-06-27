@@ -211,7 +211,7 @@ def analyze_orchestration(
     # Deep analysis if tracks are provided
     if tracks:
         from melodica.types import NoteInfo
-        note_tracks = {k: v for k, v in tracks.items() if v and isinstance(v[0], NoteInfo)}
+        note_tracks = {k: v for k, v in tracks.items() if isinstance(v, list) and len(v) > 0 and isinstance(v[0], NoteInfo)}
         
         # 1. Conflict Ambitus (Orchestration Blur)
         sustained_ambitus = {}

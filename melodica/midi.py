@@ -393,6 +393,7 @@ def export_multitrack_midi(
     """
     from melodica.types import TICKS_PER_BEAT, MIDI_MAX
 
+    tracks_data = {k: v for k, v in tracks_data.items() if not k.startswith("_")}
     tpb = TICKS_PER_BEAT
     tempo = mido.bpm2tempo(bpm)
     mid = mido.MidiFile(type=1, ticks_per_beat=tpb)

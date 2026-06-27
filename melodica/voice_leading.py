@@ -119,7 +119,7 @@ def correct_parallels(
         name: list(notes) for name, notes in tracks_data.items()
     }
 
-    pitched_names = [n for n in result if not _is_percussion(n) and result[n]]
+    pitched_names = [n for n in result if not n.startswith("_") and not _is_percussion(n) and result[n]]
     if len(pitched_names) < 2:
         return result
 

@@ -112,7 +112,7 @@ class PhraseDynamicsShaper:
         tracks: dict[str, List[NoteInfo]],
     ) -> dict[str, List[NoteInfo]]:
         """Apply phrase shaping to all tracks in a dict."""
-        return {name: self.apply(notes, name) for name, notes in tracks.items()}
+        return {name: (self.apply(notes, name) if not name.startswith("_") else notes) for name, notes in tracks.items()}
 
     # ------------------------------------------------------------------
     # Internal
