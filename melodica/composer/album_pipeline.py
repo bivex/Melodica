@@ -2103,7 +2103,7 @@ SECTION_PROFILES = {
         brightness_ceiling=95,
         energy_target=0.5,
         note_density=0.5,
-        timing_drift=0.04,
+        timing_drift=0.0,
         velocity_drift=8,
         reverb_amount=85,
         filter_cutoff=70,
@@ -2115,7 +2115,7 @@ SECTION_PROFILES = {
         brightness_ceiling=112,
         energy_target=0.7,
         note_density=0.8,
-        timing_drift=0.02,
+        timing_drift=0.0,
         velocity_drift=4,
         reverb_amount=45,
         filter_cutoff=100,
@@ -2127,7 +2127,7 @@ SECTION_PROFILES = {
         brightness_ceiling=120,
         energy_target=0.85,
         note_density=0.9,
-        timing_drift=0.03,
+        timing_drift=0.0,
         velocity_drift=6,
         reverb_amount=50,
         filter_cutoff=110,
@@ -2139,7 +2139,7 @@ SECTION_PROFILES = {
         brightness_ceiling=100,
         energy_target=0.4,
         note_density=0.4,
-        timing_drift=0.05,
+        timing_drift=0.0,
         velocity_drift=10,
         reverb_amount=95,
         filter_cutoff=60,
@@ -2151,7 +2151,7 @@ SECTION_PROFILES = {
         brightness_ceiling=127,
         energy_target=1.1,
         note_density=1.0,
-        timing_drift=0.01,
+        timing_drift=0.0,
         velocity_drift=2,
         reverb_amount=25,
         filter_cutoff=127,
@@ -2163,7 +2163,7 @@ SECTION_PROFILES = {
         brightness_ceiling=90,
         energy_target=0.3,
         note_density=0.3,
-        timing_drift=0.05,
+        timing_drift=0.0,
         velocity_drift=10,
         reverb_amount=70,
         filter_cutoff=65,
@@ -2236,25 +2236,6 @@ def _apply_section_moods(
                 if has_any_match and role not in profile.active_roles:
                     continue
 
-            # 2. Musical Note Thinning (Rhythmically coherent density control)
-            if profile.note_density < 1.0:
-                beat_in_bar = n.start % 4.0
-                if role == Role.PERC:
-                    if profile.note_density <= 0.4:
-                        if abs(beat_in_bar - 0.0) > 0.05 and abs(beat_in_bar - 2.0) > 0.05:
-                            continue
-                    elif profile.note_density <= 0.7:
-                        if abs(beat_in_bar * 2 - round(beat_in_bar * 2)) > 0.05:
-                            continue
-                elif role in (Role.LEAD, Role.PAD):
-                    if profile.note_density <= 0.5:
-                        if abs(beat_in_bar - round(beat_in_bar)) > 0.05:
-                            continue
-                elif role == Role.BASS:
-                    if profile.note_density <= 0.5:
-                        if abs(beat_in_bar - 0.0) > 0.05 and abs(beat_in_bar - 2.0) > 0.05:
-                            continue
-
             # 3. Micro-dynamics (velocity compression)
             center = 64
             offset = n.velocity - center
@@ -2267,6 +2248,25 @@ def _apply_section_moods(
             if profile.velocity_drift > 0:
                 vel_offset = int(rng.uniform(-profile.velocity_drift, profile.velocity_drift))
                 vel += vel_offset
+
+            # 2. Musical Note Thinning (Velocity-based dynamic damping instead of deletion!)
+            if profile.note_density < 1.0:
+                beat_in_bar = n.start % 4.0
+                if role == Role.PERC:
+                    if profile.note_density <= 0.4:
+                        if abs(beat_in_bar - 0.0) > 0.05 and abs(beat_in_bar - 2.0) > 0.05:
+                            vel = int(vel * 0.2)
+                    elif profile.note_density <= 0.7:
+                        if abs(beat_in_bar * 2 - round(beat_in_bar * 2)) > 0.05:
+                            vel = int(vel * 0.4)
+                elif role in (Role.LEAD, Role.PAD):
+                    if profile.note_density <= 0.5:
+                        if abs(beat_in_bar - round(beat_in_bar)) > 0.05:
+                            vel = int(vel * 0.4)
+                elif role == Role.BASS:
+                    if profile.note_density <= 0.5:
+                        if abs(beat_in_bar - 0.0) > 0.05 and abs(beat_in_bar - 2.0) > 0.05:
+                            vel = int(vel * 0.3)
 
             # Clamp velocity within brightness ceiling and MIDI range
             vel = max(10, min(profile.brightness_ceiling, vel))
