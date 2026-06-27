@@ -223,6 +223,7 @@ def produce_command_awaken():
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.CINEMATIC), (16.0, Mood.CINEMATIC), (80.0, Mood.CINEMATIC)],
     )
 
 
@@ -360,6 +361,7 @@ def produce_protocol_reclaim():
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.CINEMATIC), (16.0, Mood.CINEMATIC), (80.0, Mood.CINEMATIC)],
     )
 
 
@@ -496,6 +498,7 @@ def produce_horizon_release():
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.CINEMATIC), (32.0, Mood.CINEMATIC), (96.0, Mood.CINEMATIC)],
     )
 
 

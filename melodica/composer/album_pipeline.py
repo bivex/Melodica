@@ -1866,6 +1866,25 @@ def produce_track(
     -------
     dict with keys: profiles, report
     """
+    if not sections:
+        raise ValueError(
+            "produce_track: sections parameter is mandatory and cannot be empty."
+        )
+
+    # Validate section ordering
+    last_beat = -1.0
+    for idx, sec in enumerate(sections):
+        if not isinstance(sec, (list, tuple)) or len(sec) < 2:
+            raise ValueError(
+                f"Section at index {idx} must be a tuple/list of (start_beat, mood)."
+            )
+        beat, sec_mood = sec
+        if beat < last_beat:
+            raise ValueError(
+                f"Sections are not in chronological order: section at index {idx} starts at beat {beat}, which is less than preceding beat {last_beat}."
+            )
+        last_beat = beat
+
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     mood_profile = _MOOD_PROFILES[mood]

@@ -117,6 +117,7 @@ def build_secret_correspondence() -> dict:
         "instruments": {"guitar": 24, "violin": 40, "pad": 89, "bass": 32},
         "cc_events":   cc_events,
         "key":         KEY_MINOR,
+        "sections":    [(0.0, Mood.CHAMBER)],
     }
 
 
@@ -174,6 +175,7 @@ def build_atrocity_at_gates() -> dict:
         "cc_events":     cc_events,
         "tempo_events":  tempo_events,
         "key":           KEY_MINOR,
+        "sections":      [(0.0, Mood.CHAMBER)],
     }
 
 
@@ -241,6 +243,7 @@ def build_draculas_vault() -> dict:
         "instruments": {"cello": 42, "organ": 19, "contrabass": 43, "choir_air": 52}, # 52: Choir Aahs
         "cc_events":   cc_events,
         "key":         KEY_PHRYGIAN,
+        "sections":    [(0.0, Mood.CHAMBER)],
     }
 
 
@@ -310,6 +313,7 @@ def build_shovels_strike() -> dict:
         "cc_events":    cc_events,
         "tempo_events": tempo_events,
         "key":          KEY_MINOR,
+        "sections":     [(0.0, Mood.CHAMBER)],
     }
 
 
@@ -358,6 +362,7 @@ def build_leap_into_abyss() -> dict:
         "instruments": {"flute": 73, "cello_waltz": 42, "pad": 92, "contrabass": 43},
         "cc_events":   cc_events,
         "key":         KEY_PHRYGIAN,
+        "sections":    [(0.0, Mood.CHAMBER)],
     }
 
 

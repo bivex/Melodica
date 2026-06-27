@@ -220,6 +220,7 @@ def produce_velvet_echoes():
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.CINEMATIC), (16.0, Mood.CINEMATIC), (80.0, Mood.CINEMATIC)],
     )
 
 
@@ -358,6 +359,7 @@ def produce_lost_in_the_static():
         mood=Mood.INTIMATE,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.INTIMATE), (16.0, Mood.INTIMATE), (80.0, Mood.INTIMATE)],
     )
 
 
@@ -494,6 +496,7 @@ def produce_cinematic_drift():
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.CINEMATIC), (32.0, Mood.CINEMATIC), (96.0, Mood.CINEMATIC)],
     )
 
 

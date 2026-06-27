@@ -227,6 +227,7 @@ def produce_morning_coffee():
         mood=Mood.INTIMATE,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.INTIMATE), (16.0, Mood.INTIMATE), (80.0, Mood.INTIMATE)],
     )
 
 
@@ -364,6 +365,7 @@ def produce_rainy_window():
         mood=Mood.INTIMATE,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.INTIMATE), (16.0, Mood.INTIMATE), (80.0, Mood.INTIMATE)],
     )
 
 
@@ -502,6 +504,7 @@ def produce_midnight_vinyl():
         mood=Mood.INTIMATE,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.INTIMATE), (32.0, Mood.INTIMATE), (96.0, Mood.INTIMATE)],
     )
 
 

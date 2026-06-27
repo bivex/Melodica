@@ -197,6 +197,7 @@ def produce_grid_theory():
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.CINEMATIC)],
     )
 
 
@@ -304,6 +305,7 @@ def produce_staggered_state():
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.CINEMATIC)],
     )
 
 
@@ -410,6 +412,7 @@ def produce_climax_protocol():
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
+        sections=[(0.0, Mood.CINEMATIC)],
     )
 
 
