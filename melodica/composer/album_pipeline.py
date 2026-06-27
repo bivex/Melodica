@@ -1621,8 +1621,60 @@ def _stage_diagnostics(kw):
 
 
 def _stage_sections(kw):
-    if kw.get("sections"):
-        kw["tracks"] = _apply_section_moods(kw["tracks"], kw["sections"], kw["_profiles"])
+    sections = kw.get("sections")
+    tracks = kw.get("tracks")
+    cc_events = kw.get("cc_events", {})
+
+    if sections and tracks:
+        # 1. Apply note-level profiles (velocity, register, density, humanization, active layers)
+        kw["tracks"] = _apply_section_moods(tracks, sections, kw["_profiles"])
+
+        # 2. Apply section-level CC automation (Reverb & Filter Cutoff)
+        total_beats = 0.0
+        for notes in kw["tracks"].values():
+            if notes:
+                end = max(n.start + n.duration for n in notes)
+                if end > total_beats:
+                    total_beats = end
+
+        # Generate CC automation for every track
+        for tname in list(kw["tracks"].keys()):
+            if tname.startswith("_"):
+                continue
+            if tname not in cc_events:
+                cc_events[tname] = []
+
+            # Clean existing reverb (CC 91) and filter (CC 74) events
+            cc_events[tname] = [evt for evt in cc_events[tname] if evt[1] not in (74, 91)]
+
+            for idx, (sec_start, sec_key) in enumerate(sections):
+                profile = None
+                if isinstance(sec_key, str):
+                    profile = SECTION_PROFILES.get(sec_key)
+                elif isinstance(sec_key, Mood):
+                    for name, p in SECTION_PROFILES.items():
+                        if p.mood == sec_key:
+                            profile = p
+                            break
+                if profile is None:
+                    profile = SECTION_PROFILES["Theme"]
+
+                cc_events[tname].append((sec_start, 91, profile.reverb_amount))
+                cc_events[tname].append((sec_start, 74, profile.filter_cutoff))
+
+                if idx < len(sections) - 1:
+                    next_start = sections[idx + 1][0]
+                    transition_time = max(sec_start, next_start - 1.0)
+                    cc_events[tname].append((transition_time, 91, profile.reverb_amount))
+                    cc_events[tname].append((transition_time, 74, profile.filter_cutoff))
+                else:
+                    cc_events[tname].append((total_beats, 91, profile.reverb_amount))
+                    cc_events[tname].append((total_beats, 74, profile.filter_cutoff))
+
+            cc_events[tname].sort(key=lambda x: x[0])
+
+        kw["cc_events"] = cc_events
+
     return kw
 
 
@@ -2030,13 +2082,97 @@ def produce_track(
 # ---------------------------------------------------------------------------
 
 
-SECTION_NAME_TO_MOOD = {
-    "Intro": Mood.AMBIENT,
-    "Theme": Mood.INTIMATE,
-    "Variation": Mood.EXPERIMENTAL,
-    "Breakdown": Mood.AMBIENT,
-    "Climax": Mood.CINEMATIC,
-    "Fade": Mood.AMBIENT,
+@dataclass
+class SectionProfile:
+    mood: Mood
+    dynamics_range: float
+    brightness_ceiling: int
+    relative_gain: float  # relative loudness scale (1.0 = normal)
+    note_density: float   # 1.0 = keep all notes, < 1.0 = thin out notes
+    register_width: float  # 1.0 = normal, < 1.0 = narrow register
+    timing_drift: float    # maximum jitter offset in beats (e.g., 0.05)
+    velocity_drift: float  # random velocity offset range (e.g., 10)
+    reverb_amount: int     # CC 91 value (0-127)
+    filter_cutoff: int     # CC 74 value (0-127)
+    active_layers: list[str] | None = None  # track name keywords allowed in this section
+
+
+SECTION_PROFILES = {
+    "Intro": SectionProfile(
+        mood=Mood.AMBIENT,
+        dynamics_range=0.8,
+        brightness_ceiling=95,
+        relative_gain=0.7,
+        note_density=0.5,
+        register_width=0.6,
+        timing_drift=0.06,
+        velocity_drift=12,
+        reverb_amount=80,
+        filter_cutoff=70,
+        active_layers=["pad", "texture", "harp", "ambient", "chord"],
+    ),
+    "Theme": SectionProfile(
+        mood=Mood.INTIMATE,
+        dynamics_range=0.7,
+        brightness_ceiling=112,
+        relative_gain=0.9,
+        note_density=0.8,
+        register_width=0.85,
+        timing_drift=0.03,
+        velocity_drift=6,
+        reverb_amount=45,
+        filter_cutoff=100,
+    ),
+    "Variation": SectionProfile(
+        mood=Mood.EXPERIMENTAL,
+        dynamics_range=0.9,
+        brightness_ceiling=120,
+        relative_gain=0.95,
+        note_density=0.9,
+        register_width=0.95,
+        timing_drift=0.05,
+        velocity_drift=10,
+        reverb_amount=50,
+        filter_cutoff=110,
+    ),
+    "Breakdown": SectionProfile(
+        mood=Mood.AMBIENT,
+        dynamics_range=0.8,
+        brightness_ceiling=100,
+        relative_gain=0.6,
+        note_density=0.4,
+        register_width=0.5,
+        timing_drift=0.07,
+        velocity_drift=14,
+        reverb_amount=95,
+        filter_cutoff=60,
+        active_layers=["pad", "texture", "harp", "ambient", "solo"],
+    ),
+    "Climax": SectionProfile(
+        mood=Mood.CINEMATIC,
+        dynamics_range=0.5,
+        brightness_ceiling=127,
+        relative_gain=1.1,
+        note_density=1.0,
+        register_width=1.0,
+        timing_drift=0.01,
+        velocity_drift=3,
+        reverb_amount=25,
+        filter_cutoff=127,
+    ),
+    "Fade": SectionProfile(
+        mood=Mood.AMBIENT,
+        dynamics_range=0.8,
+        brightness_ceiling=90,
+        relative_gain=0.5,
+        note_density=0.3,
+        register_width=0.6,
+        timing_drift=0.08,
+        velocity_drift=12,
+        reverb_amount=70,
+        filter_cutoff=65,
+        active_layers=["pad", "texture", "ambient"],
+    ),
 }
 
 
@@ -2045,9 +2181,12 @@ def _apply_section_moods(
     sections: List[Tuple[float, Mood | str]],
     profiles: Dict[str, _TrackProfile],
 ) -> Dict[str, List[NoteInfo]]:
-    """Apply per-section dynamics shaping based on mood changes."""
+    """Apply rich per-section orchestration shaping based on SectionProfile."""
     if not sections:
         return tracks
+
+    import random
+    rng = random.Random(42)
 
     result = {}
     for tname, notes in tracks.items():
@@ -2055,37 +2194,97 @@ def _apply_section_moods(
             result[tname] = notes
             continue
 
+        # Get average pitch of the track for register compression
+        pitches = [n.pitch for n in notes]
+        avg_pitch = sum(pitches) / len(pitches) if pitches else 60.0
+
         new_notes = []
         for n in notes:
             # Find which section this note belongs to
-            section_mood_or_str = sections[0][1]  # default to first mood
+            section_key = sections[0][1]
             for sec_start, sec_mood_or_str in sections:
                 if n.start >= sec_start:
-                    section_mood_or_str = sec_mood_or_str
+                    section_key = sec_mood_or_str
 
-            # Map section name string to Mood
-            if isinstance(section_mood_or_str, str):
-                section_mood = SECTION_NAME_TO_MOOD.get(section_mood_or_str, Mood.CINEMATIC)
-            else:
-                section_mood = section_mood_or_str
+            # Retrieve the profile (or map Mood to key)
+            profile = None
+            if isinstance(section_key, str):
+                profile = SECTION_PROFILES.get(section_key)
+            elif isinstance(section_key, Mood):
+                # Fallback mapping from Mood back to section key
+                for name, p in SECTION_PROFILES.items():
+                    if p.mood == section_key:
+                        profile = p
+                        break
 
-            mood_profile = _MOOD_PROFILES[section_mood]
-            # Apply dynamics compression based on section mood
+            if profile is None:
+                profile = SECTION_PROFILES["Theme"]
+
+            # 1. Active Layers Filter (Safeguarded to avoid complete muting)
+            if profile.active_layers is not None:
+                has_any_match = False
+                for other_tname in tracks.keys():
+                    for allowed_layer in profile.active_layers:
+                        if allowed_layer in other_tname.lower():
+                            has_any_match = True
+                            break
+                if has_any_match:
+                    is_allowed = False
+                    for allowed_layer in profile.active_layers:
+                        if allowed_layer in tname.lower():
+                            is_allowed = True
+                            break
+                    if not is_allowed:
+                        continue
+
+            # 2. Note Density (Thinning)
+            if profile.note_density < 1.0:
+                seed = int(float(n.start) * 1000) + int(n.pitch)
+                note_rng = random.Random(int(seed))
+                if note_rng.random() > profile.note_density:
+                    continue
+
+            # 3. Micro-dynamics (velocity compression)
             center = 64
             offset = n.velocity - center
-            new_vel = int(round(center + offset * mood_profile.dynamics_range))
-            new_vel = max(10, min(127, new_vel))
+            vel = int(round(center + offset * profile.dynamics_range))
+
+            # 4. Relative Gain / Macro Loudness
+            vel = int(vel * profile.relative_gain)
+
+            # 5. Velocity Drift (Humanization)
+            if profile.velocity_drift > 0:
+                vel_offset = int(rng.uniform(-profile.velocity_drift, profile.velocity_drift))
+                vel += vel_offset
+
+            # Clamp velocity within brightness ceiling and MIDI range
+            vel = max(10, min(profile.brightness_ceiling, vel))
+
+            # 6. Timing Drift (Jitter)
+            start_offset = 0.0
+            if profile.timing_drift > 0:
+                start_offset = rng.uniform(-profile.timing_drift, profile.timing_drift)
+            new_start = max(0.0, n.start + start_offset)
+
+            # 7. Register Spread (Pitch compression/expansion)
+            pitch = n.pitch
+            if profile.register_width < 1.0:
+                pitch_diff = n.pitch - avg_pitch
+                pitch = int(round(avg_pitch + pitch_diff * profile.register_width))
+                pitch = max(0, min(127, pitch))
 
             new_notes.append(
                 NoteInfo(
-                    pitch=n.pitch,
-                    start=n.start,
+                    pitch=pitch,
+                    start=new_start,
                     duration=n.duration,
-                    velocity=new_vel,
+                    velocity=vel,
                     articulation=n.articulation,
                     expression=n.expression,
                 )
             )
+
+        new_notes.sort(key=lambda x: x.start)
         result[tname] = new_notes
 
     return result
