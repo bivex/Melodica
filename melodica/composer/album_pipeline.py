@@ -2181,7 +2181,7 @@ def _apply_section_moods(
     sections: List[Tuple[float, Mood | str]],
     profiles: Dict[str, _TrackProfile],
 ) -> Dict[str, List[NoteInfo]]:
-    """Apply rich per-section orchestration shaping based on SectionProfile."""
+    """Apply rich per-section dynamics and velocity-based shaping based on SectionProfile."""
     if not sections:
         return tracks
 
@@ -2193,10 +2193,6 @@ def _apply_section_moods(
         if tname.startswith("_") or not notes:
             result[tname] = notes
             continue
-
-        # Get average pitch of the track for register compression
-        pitches = [n.pitch for n in notes]
-        avg_pitch = sum(pitches) / len(pitches) if pitches else 60.0
 
         new_notes = []
         for n in notes:
@@ -2220,39 +2216,15 @@ def _apply_section_moods(
             if profile is None:
                 profile = SECTION_PROFILES["Theme"]
 
-            # 1. Active Layers Filter (Safeguarded to avoid complete muting)
-            if profile.active_layers is not None:
-                has_any_match = False
-                for other_tname in tracks.keys():
-                    for allowed_layer in profile.active_layers:
-                        if allowed_layer in other_tname.lower():
-                            has_any_match = True
-                            break
-                if has_any_match:
-                    is_allowed = False
-                    for allowed_layer in profile.active_layers:
-                        if allowed_layer in tname.lower():
-                            is_allowed = True
-                            break
-                    if not is_allowed:
-                        continue
-
-            # 2. Note Density (Thinning)
-            if profile.note_density < 1.0:
-                seed = int(float(n.start) * 1000) + int(n.pitch)
-                note_rng = random.Random(int(seed))
-                if note_rng.random() > profile.note_density:
-                    continue
-
-            # 3. Micro-dynamics (velocity compression)
+            # 1. Micro-dynamics (velocity compression)
             center = 64
             offset = n.velocity - center
             vel = int(round(center + offset * profile.dynamics_range))
 
-            # 4. Relative Gain / Macro Loudness
+            # 2. Relative Gain / Macro Loudness
             vel = int(vel * profile.relative_gain)
 
-            # 5. Velocity Drift (Humanization)
+            # 3. Velocity Drift (Humanization)
             if profile.velocity_drift > 0:
                 vel_offset = int(rng.uniform(-profile.velocity_drift, profile.velocity_drift))
                 vel += vel_offset
@@ -2260,23 +2232,10 @@ def _apply_section_moods(
             # Clamp velocity within brightness ceiling and MIDI range
             vel = max(10, min(profile.brightness_ceiling, vel))
 
-            # 6. Timing Drift (Jitter)
-            start_offset = 0.0
-            if profile.timing_drift > 0:
-                start_offset = rng.uniform(-profile.timing_drift, profile.timing_drift)
-            new_start = max(0.0, n.start + start_offset)
-
-            # 7. Register Spread (Pitch compression/expansion)
-            pitch = n.pitch
-            if profile.register_width < 1.0:
-                pitch_diff = n.pitch - avg_pitch
-                pitch = int(round(avg_pitch + pitch_diff * profile.register_width))
-                pitch = max(0, min(127, pitch))
-
             new_notes.append(
                 NoteInfo(
-                    pitch=pitch,
-                    start=new_start,
+                    pitch=n.pitch,
+                    start=n.start,
                     duration=n.duration,
                     velocity=vel,
                     articulation=n.articulation,
