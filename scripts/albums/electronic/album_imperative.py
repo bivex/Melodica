@@ -3,14 +3,14 @@
 # Licensed under the MIT License.
 
 """
-scripts/albums/electronic/album_melodic_downtempo.py — "Pulse & Atmosphere" Melodic Downtempo Album.
+scripts/albums/electronic/album_imperative.py — "The Command Protocol" Album.
 
-An album combining melodic elements, slow down-tempo breakbeats, drum-driven pacing,
-atmospheric textures, deep sub-basslines, evolving synth pads, minimal percussion,
-emotional progressions, and cinematic breaks.
+A conceptual, melodic downtempo album featuring organic drum-driven rhythms, deep
+atmospheric textures, and emotional cinematic progression. Integrated with powerful
+call-to-action lyrics in the imperative mood.
 
-Fully structured using the Melodica IdeaTool and IdeaPart framework for dynamic chord progressions
-and section-based orchestration.
+Fully refactored using the Melodica IdeaTool and IdeaPart framework for dynamic chord
+progressions and clean section mutes.
 """
 
 import random
@@ -30,6 +30,7 @@ from melodica.generators.fx_impact import FXImpactGenerator
 from melodica.generators.arpeggiator import ArpeggiatorGenerator
 from melodica.generators.harp import HarpGenerator
 from melodica.generators.chromatic_percussion import GlockenspielGenerator
+from melodica.generators.vocal_melody_auto import VocalMelodyAutoGenerator
 from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart
 from melodica.composer.album_pipeline import produce_track, Mood
 
@@ -44,15 +45,15 @@ DRUMS = 0
 GLOCKENSPIEL = 9
 HARP = 46
 
-random.seed(2026)
-OUT = Path("output/album_melodic_downtempo")
+random.seed(4242)
+OUT = Path("output/album_imperative")
 OUT.mkdir(parents=True, exist_ok=True)
 
 
 # ------------------------------------------------------------------
 # Diagnostic & Post-processing Helpers
 # ------------------------------------------------------------------
-def scale_velocity_spread(notes: list[NoteInfo], target_min=50, target_max=110) -> list[NoteInfo]:
+def scale_velocity_spread(notes: list[NoteInfo], target_min=50, target_max=115) -> list[NoteInfo]:
     """Ensure dynamic expression by scaling velocity to fit a wider range."""
     if not notes:
         return notes
@@ -70,21 +71,23 @@ def scale_velocity_spread(notes: list[NoteInfo], target_min=50, target_max=110) 
 
 def resolve_register_crossing(bass: list[NoteInfo], pads: list[NoteInfo], leads: list[NoteInfo]):
     """Force clean register separation to prevent voice crossings."""
-    # Bass should stay strictly in the low registers
+    # Bass should stay strictly in the low registers (MIDI 28-48)
     for n in bass:
         if n.pitch > 48:
             n.pitch -= 12
         if n.pitch > 48:
             n.pitch -= 12
+        if n.pitch < 28:
+            n.pitch += 12
 
-    # Pads should stay in the low-mid register
+    # Pads should stay in the low-mid register (MIDI 36-57)
     for n in pads:
         if n.pitch < 36:
             n.pitch += 12
-        elif n.pitch > 60:
+        elif n.pitch > 57:
             n.pitch -= 12
 
-    # Leads should stay strictly in the mid-high registers
+    # Leads should stay strictly in the mid-high registers (MIDI 64-88)
     for n in leads:
         if n.pitch < 64:
             n.pitch += 12
@@ -93,43 +96,43 @@ def resolve_register_crossing(bass: list[NoteInfo], pads: list[NoteInfo], leads:
 
 
 # =====================================================================
-# Track 1: Velvet Echoes — 88 BPM — C Minor
+# Track 1: Command (Awaken) — 84 BPM — D Minor
 # =====================================================================
-def produce_velvet_echoes():
-    print("  1. Velvet Echoes [C Minor — 88 BPM]")
-    key = Scale(root=0, mode=Mode.AEOLIAN)  # C Aeolian
+def produce_command_awaken():
+    print("  1. Command (Awaken) [D Minor — 84 BPM]")
+    key = Scale(root=2, mode=Mode.AEOLIAN)  # D Minor
 
-    # Section-based structural parts (IdeaParts)
+    # Dynamic parts
     parts = [
         IdeaPart(
             name="Intro",
             bars=4,
             scale=key,
-            tempo=88,
+            tempo=84,
             progression_type="coupled_hmm",
-            track_mute=["drums", "tension_fx", "lead_synth", "fx_riser"]
+            track_mute=["drums", "vocal_guide", "lead_synth", "fx_riser"]
         ),
         IdeaPart(
             name="Main",
             bars=16,
             scale=key,
-            tempo=88,
+            tempo=84,
             progression_type="coupled_hmm"
         ),
         IdeaPart(
             name="Outro",
             bars=4,
             scale=key,
-            tempo=88,
+            tempo=84,
             progression_type="coupled_hmm",
-            track_mute=["drums", "tension_fx", "lead_synth", "fx_riser"]
+            track_mute=["drums", "vocal_guide", "lead_synth", "fx_riser"]
         )
     ]
 
     track_list = [
         TrackConfig(
             name="drums",
-            generator=BreakbeatGenerator(variant="funky", chop_probability=0.15, ghost_notes=True),
+            generator=BreakbeatGenerator(variant="funky", chop_probability=0.20, ghost_notes=True),
             instrument="drums",
             density=0.7
         ),
@@ -149,21 +152,21 @@ def produce_velvet_echoes():
         ),
         TrackConfig(
             name="glockenspiel",
-            generator=GlockenspielGenerator(params=GeneratorParams(density=0.35)),
+            generator=GlockenspielGenerator(params=GeneratorParams(density=0.30)),
             instrument="glockenspiel",
             density=0.4,
             octave_shift=2
         ),
         TrackConfig(
-            name="tension_fx",
-            generator=TensionGenerator(mode="major7_tension", note_duration=4.0, velocity_level=0.25, register="high", density=0.4),
+            name="vocal_guide",
+            generator=VocalMelodyAutoGenerator(params=GeneratorParams(density=0.55), variant="travis", register="mid", sustain_preference=0.7, octave_jump_probability=0.3),
             instrument="synth_lead",
-            density=0.4,
+            density=0.6,
             octave_shift=1
         ),
         TrackConfig(
             name="lead_synth",
-            generator=SoloMelodyGenerator(params=GeneratorParams(key_range_low=64, key_range_high=88), style="modal_ambient", vibrato_depth=0.5),
+            generator=SoloMelodyGenerator(params=GeneratorParams(key_range_low=60, key_range_high=84), style="modal_ambient", vibrato_depth=0.5),
             instrument="synth_lead",
             density=0.6,
             octave_shift=1
@@ -176,7 +179,7 @@ def produce_velvet_echoes():
         ),
         TrackConfig(
             name="fx_impact",
-            generator=FXImpactGenerator(params=GeneratorParams(density=0.25), impact_type="boom", tail_length=8.0, pitch_drop=12),
+            generator=FXImpactGenerator(params=GeneratorParams(density=0.25), impact_type="boom", tail_length=8.0),
             instrument="synth_fx",
             density=0.3
         )
@@ -195,28 +198,28 @@ def produce_velvet_echoes():
     notes_dict = IdeaTool(tool_config).generate()
     tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
 
-    # Apply dynamic fixes & register separation
-    scale_velocity_spread(tracks_data.get("drums", []), 50, 110)
-    scale_velocity_spread(tracks_data.get("lead_synth", []), 60, 100)
-    scale_velocity_spread(tracks_data.get("glockenspiel", []), 45, 95)
-    resolve_register_crossing(tracks_data.get("synth_bass", []), tracks_data.get("dark_pad", []), tracks_data.get("lead_synth", []))
+    # Apply processing
+    scale_velocity_spread(tracks_data.get("drums", []), 50, 115)
+    scale_velocity_spread(tracks_data.get("vocal_guide", []), 60, 110)
+    scale_velocity_spread(tracks_data.get("lead_synth", []), 55, 105)
+    resolve_register_crossing(tracks_data.get("synth_bass", []), tracks_data.get("dark_pad", []), tracks_data.get("vocal_guide", []))
 
     inst = {
         "drums": DRUMS,
         "synth_bass": SYNTH_BASS,
         "dark_pad": DARK_PAD,
         "glockenspiel": GLOCKENSPIEL,
-        "tension_fx": POLYSYNTH,
-        "lead_synth": SYNTH_LEAD,
+        "vocal_guide": SYNTH_LEAD,
+        "lead_synth": POLYSYNTH,
         "fx_riser": EFFECTS,
         "fx_impact": EFFECTS,
     }
 
     produce_track(
         tracks=tracks_data,
-        bpm=88.0,
+        bpm=84.0,
         instruments=inst,
-        path=OUT / "01_Velvet_Echoes.mid",
+        path=OUT / "01_Command_Awaken.mid",
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
@@ -224,75 +227,75 @@ def produce_velvet_echoes():
 
 
 # =====================================================================
-# Track 2: Lost in the Static — 94 BPM — F# Dorian
+# Track 2: Protocol (Reclaim) — 90 BPM — A Phrygian
 # =====================================================================
-def produce_lost_in_the_static():
-    print("  2. Lost in the Static [F# Dorian — 94 BPM]")
-    key = Scale(root=6, mode=Mode.DORIAN)  # F# Dorian
+def produce_protocol_reclaim():
+    print("  2. Protocol (Reclaim) [A Phrygian — 90 BPM]")
+    key = Scale(root=9, mode=Mode.PHRYGIAN)  # A Phrygian
 
     parts = [
         IdeaPart(
             name="Intro",
             bars=4,
             scale=key,
-            tempo=94,
+            tempo=90,
             progression_type="coupled_hmm",
-            track_mute=["drums", "harp_shimmer", "lead_strings", "arpeggio", "fx_riser"]
+            track_mute=["drums", "vocal_guide", "arpeggio", "fx_riser"]
         ),
         IdeaPart(
             name="Main",
             bars=16,
             scale=key,
-            tempo=94,
+            tempo=90,
             progression_type="coupled_hmm"
         ),
         IdeaPart(
             name="Outro",
             bars=4,
             scale=key,
-            tempo=94,
+            tempo=90,
             progression_type="coupled_hmm",
-            track_mute=["drums", "harp_shimmer", "lead_strings", "arpeggio", "fx_riser"]
+            track_mute=["drums", "vocal_guide", "arpeggio", "fx_riser"]
         )
     ]
 
     track_list = [
         TrackConfig(
             name="drums",
-            generator=BreakbeatGenerator(variant="think", chop_probability=0.20, ghost_notes=True),
+            generator=BreakbeatGenerator(variant="think", chop_probability=0.25, ghost_notes=True),
             instrument="drums",
             density=0.7
         ),
         TrackConfig(
             name="synth_bass",
-            generator=SynthBassGenerator(waveform="saw", pattern="reese", slide_probability=0.25, octave_variation=0.1),
+            generator=SynthBassGenerator(waveform="saw", pattern="reese", slide_probability=0.30, octave_variation=0.1),
             instrument="synth_bass",
             density=0.7,
             octave_shift=-1
         ),
         TrackConfig(
             name="dark_pad",
-            generator=DarkPadGenerator(mode="phrygian_pad", register="low", velocity_level=0.25, chord_dur=4.0),
+            generator=DarkPadGenerator(mode="phrygian_pad", register="low", velocity_level=0.30, chord_dur=4.0),
             instrument="dark_pad",
             density=0.6,
             octave_shift=-1
         ),
         TrackConfig(
             name="scifi_texture",
-            generator=SciFiUnderscoreGenerator(variant="blade_runner", pad_density=0.5, arp_speed=0.5, include_bass_synth=False),
+            generator=SciFiUnderscoreGenerator(variant="cyberpunk", pad_density=0.5, arp_speed=0.5, include_bass_synth=False),
             instrument="synth_lead",
             density=0.5
         ),
         TrackConfig(
             name="harp_shimmer",
-            generator=HarpGenerator(params=GeneratorParams(density=0.30)),
+            generator=HarpGenerator(params=GeneratorParams(density=0.35)),
             instrument="harp",
             density=0.4,
             octave_shift=2
         ),
         TrackConfig(
-            name="lead_strings",
-            generator=SoloMelodyGenerator(params=GeneratorParams(key_range_low=64, key_range_high=86), style="cinematic_strings", vibrato_depth=0.6),
+            name="vocal_guide",
+            generator=VocalMelodyAutoGenerator(params=GeneratorParams(density=0.60), variant="future", register="high", sustain_preference=0.8, octave_jump_probability=0.4),
             instrument="synth_lead",
             density=0.6,
             octave_shift=1
@@ -306,13 +309,13 @@ def produce_lost_in_the_static():
         ),
         TrackConfig(
             name="fx_riser",
-            generator=FXRiserGenerator(params=GeneratorParams(density=0.35), riser_type="synth", length_beats=4.0, pitch_curve="linear", peak_velocity=85),
+            generator=FXRiserGenerator(params=GeneratorParams(density=0.40), riser_type="synth", length_beats=4.0, pitch_curve="linear", peak_velocity=85),
             instrument="synth_fx",
             density=0.4
         ),
         TrackConfig(
             name="fx_impact",
-            generator=FXImpactGenerator(params=GeneratorParams(density=0.20), impact_type="boom", tail_length=6.0, pitch_drop=15),
+            generator=FXImpactGenerator(params=GeneratorParams(density=0.20), impact_type="boom", tail_length=6.0),
             instrument="synth_fx",
             density=0.3
         )
@@ -331,12 +334,11 @@ def produce_lost_in_the_static():
     notes_dict = IdeaTool(tool_config).generate()
     tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
 
-    # Apply dynamic fixes & register separation
-    scale_velocity_spread(tracks_data.get("drums", []), 50, 110)
+    # Processing
+    scale_velocity_spread(tracks_data.get("drums", []), 50, 115)
+    scale_velocity_spread(tracks_data.get("vocal_guide", []), 60, 110)
     scale_velocity_spread(tracks_data.get("arpeggio", []), 55, 100)
-    scale_velocity_spread(tracks_data.get("lead_strings", []), 60, 105)
-    scale_velocity_spread(tracks_data.get("harp_shimmer", []), 45, 95)
-    resolve_register_crossing(tracks_data.get("synth_bass", []), tracks_data.get("dark_pad", []), tracks_data.get("lead_strings", []))
+    resolve_register_crossing(tracks_data.get("synth_bass", []), tracks_data.get("dark_pad", []), tracks_data.get("vocal_guide", []))
 
     inst = {
         "drums": DRUMS,
@@ -344,7 +346,7 @@ def produce_lost_in_the_static():
         "dark_pad": DARK_PAD,
         "scifi_texture": POLYSYNTH,
         "harp_shimmer": HARP,
-        "lead_strings": SYNTH_LEAD,
+        "vocal_guide": SYNTH_LEAD,
         "arpeggio": POLYSYNTH,
         "fx_riser": EFFECTS,
         "fx_impact": EFFECTS,
@@ -352,45 +354,45 @@ def produce_lost_in_the_static():
 
     produce_track(
         tracks=tracks_data,
-        bpm=94.0,
+        bpm=90.0,
         instruments=inst,
-        path=OUT / "02_Lost_in_the_Static.mid",
-        mood=Mood.INTIMATE,
+        path=OUT / "02_Protocol_Reclaim.mid",
+        mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
     )
 
 
 # =====================================================================
-# Track 3: Cinematic Drift — 82 BPM — G Minor
+# Track 3: Horizon (Release) — 76 BPM — G Lydian
 # =====================================================================
-def produce_cinematic_drift():
-    print("  3. Cinematic Drift [G Minor — 82 BPM]")
-    key = Scale(root=7, mode=Mode.AEOLIAN)  # G Aeolian
+def produce_horizon_release():
+    print("  3. Horizon (Release) [G Lydian — 76 BPM]")
+    key = Scale(root=7, mode=Mode.LYDIAN)  # G Lydian
 
     parts = [
         IdeaPart(
             name="Intro",
             bars=8,
             scale=key,
-            tempo=82,
+            tempo=76,
             progression_type="coupled_hmm",
-            track_mute=["drums", "tension_rub", "glock_shimmer", "lead_synth", "fx_riser"]
+            track_mute=["drums", "tension_rub", "glock_shimmer", "vocal_guide", "fx_riser"]
         ),
         IdeaPart(
             name="Main",
             bars=16,
             scale=key,
-            tempo=82,
+            tempo=76,
             progression_type="coupled_hmm"
         ),
         IdeaPart(
             name="Outro",
             bars=8,
             scale=key,
-            tempo=82,
+            tempo=76,
             progression_type="coupled_hmm",
-            track_mute=["drums", "tension_rub", "glock_shimmer", "lead_synth", "fx_riser"]
+            track_mute=["drums", "tension_rub", "glock_shimmer", "vocal_guide", "fx_riser"]
         )
     ]
 
@@ -435,8 +437,8 @@ def produce_cinematic_drift():
             octave_shift=2
         ),
         TrackConfig(
-            name="lead_synth",
-            generator=SoloMelodyGenerator(params=GeneratorParams(key_range_low=64, key_range_high=88), style="space_synth", vibrato_depth=0.5),
+            name="vocal_guide",
+            generator=VocalMelodyAutoGenerator(params=GeneratorParams(density=0.55), variant="don_toliver", register="mid", sustain_preference=0.8, octave_jump_probability=0.3),
             instrument="synth_lead",
             density=0.6,
             octave_shift=1
@@ -449,7 +451,7 @@ def produce_cinematic_drift():
         ),
         TrackConfig(
             name="fx_impact",
-            generator=FXImpactGenerator(params=GeneratorParams(density=0.30), impact_type="boom", tail_length=10.0, pitch_drop=18),
+            generator=FXImpactGenerator(params=GeneratorParams(density=0.30), impact_type="boom", tail_length=10.0),
             instrument="synth_fx",
             density=0.3
         )
@@ -468,11 +470,11 @@ def produce_cinematic_drift():
     notes_dict = IdeaTool(tool_config).generate()
     tracks_data = {k: v for k, v in notes_dict.items() if not k.startswith("_") and isinstance(v, list)}
 
-    # Apply dynamic fixes & register separation
-    scale_velocity_spread(tracks_data.get("drums", []), 50, 110)
-    scale_velocity_spread(tracks_data.get("lead_synth", []), 60, 105)
+    # Processing
+    scale_velocity_spread(tracks_data.get("drums", []), 50, 115)
+    scale_velocity_spread(tracks_data.get("vocal_guide", []), 60, 110)
     scale_velocity_spread(tracks_data.get("glock_shimmer", []), 45, 95)
-    resolve_register_crossing(tracks_data.get("synth_bass", []), tracks_data.get("dark_pad", []), tracks_data.get("lead_synth", []))
+    resolve_register_crossing(tracks_data.get("synth_bass", []), tracks_data.get("dark_pad", []), tracks_data.get("vocal_guide", []))
 
     inst = {
         "drums": DRUMS,
@@ -481,16 +483,16 @@ def produce_cinematic_drift():
         "tension_rub": POLYSYNTH,
         "scifi_drone": POLYSYNTH,
         "glock_shimmer": GLOCKENSPIEL,
-        "lead_synth": SYNTH_LEAD,
+        "vocal_guide": SYNTH_LEAD,
         "fx_riser": EFFECTS,
         "fx_impact": EFFECTS,
     }
 
     produce_track(
         tracks=tracks_data,
-        bpm=82.0,
+        bpm=76.0,
         instruments=inst,
-        path=OUT / "03_Cinematic_Drift.mid",
+        path=OUT / "03_Horizon_Release.mid",
         mood=Mood.CINEMATIC,
         key=key,
         verbose=False,
@@ -499,16 +501,16 @@ def produce_cinematic_drift():
 
 def generate_album():
     print("\n" + "=" * 80)
-    print("        P U L S E   &   A T M O S P H E R E")
-    print("        Melodic Downtempo & Atmospheric Breakbeat Album")
+    print("        T H E   C O M M A N D   P R O T O C O L")
+    print("        Unique Conceptual Lyrical Downtempo Album")
     print("=" * 80)
 
-    produce_velvet_echoes()
-    produce_lost_in_the_static()
-    produce_cinematic_drift()
+    produce_command_awaken()
+    produce_protocol_reclaim()
+    produce_horizon_release()
 
     print("\n" + "=" * 80)
-    print("  PRODUCTION COMPLETE: PULSE & ATMOSPHERE")
+    print("  PRODUCTION COMPLETE: THE COMMAND PROTOCOL")
     print(f"  Output folder: {OUT.resolve()}")
     print("=" * 80)
 
