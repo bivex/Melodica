@@ -1804,6 +1804,109 @@ DEFAULT_PIPELINE: list[Stage] = [
 ]
 
 
+def detect_sections_intelligently(
+    tracks: Dict[str, List[NoteInfo]],
+    bpm: float,
+    time_signature: tuple[int, int] = (4, 4),
+) -> List[Tuple[float, str]]:
+    """
+    Intelligently analyzes note densities, velocities, and active track counts
+    across the timeline to reconstruct the song's structural sections.
+    """
+    import math
+    total_beats = 0.0
+    for notes in tracks.values():
+        if notes:
+            end = max(n.start + n.duration for n in notes)
+            if end > total_beats:
+                total_beats = end
+
+    if total_beats <= 0.0:
+        return [(0.0, "Theme")]
+
+    beats_per_bar = time_signature[0]
+    chunk_size = 4.0 * beats_per_bar  # 4 bars chunk size (usually 16 beats)
+    if total_beats < chunk_size * 2:
+        chunk_size = 1.0 * beats_per_bar
+
+    num_chunks = int(math.ceil(total_beats / chunk_size))
+    if num_chunks == 0:
+        return [(0.0, "Theme")]
+
+    chunk_metrics = []
+    for chunk_idx in range(num_chunks):
+        c_start = chunk_idx * chunk_size
+        c_end = min(total_beats, c_start + chunk_size)
+
+        chunk_notes = []
+        active_tracks = set()
+        total_vel = 0.0
+        for tname, notes in tracks.items():
+            if tname.startswith("_") or not isinstance(notes, list):
+                continue
+            for n in notes:
+                if c_start <= n.start < c_end:
+                    chunk_notes.append(n)
+                    active_tracks.add(tname)
+                    total_vel += n.velocity
+
+        note_count = len(chunk_notes)
+        avg_vel = total_vel / note_count if note_count > 0 else 0.0
+        track_density = len(active_tracks)
+        energy = track_density * avg_vel
+
+        chunk_metrics.append({
+            "idx": chunk_idx,
+            "start": c_start,
+            "note_count": note_count,
+            "track_density": track_density,
+            "avg_velocity": avg_vel,
+            "energy": energy
+        })
+
+    max_energy = max(c["energy"] for c in chunk_metrics) if chunk_metrics else 0.0
+    peak_idx = -1
+    if max_energy > 0:
+        for c in chunk_metrics:
+            if c["energy"] == max_energy:
+                peak_idx = c["idx"]
+                break
+
+    detected_sections = []
+    for idx, c in enumerate(chunk_metrics):
+        ratio = c["start"] / total_beats
+        label = "Theme"
+
+        if idx == 0:
+            if c["track_density"] <= 2 or c["avg_velocity"] < 60:
+                label = "Intro"
+        elif idx == num_chunks - 1:
+            if c["track_density"] <= 2 or c["avg_velocity"] < 60:
+                label = "Fade"
+        elif idx == peak_idx:
+            label = "Climax"
+        elif idx > 0 and chunk_metrics[idx - 1]["energy"] > 0 and c["energy"] == 0:
+            label = "Breakdown"
+        elif idx > 0 and c["energy"] < chunk_metrics[idx - 1]["energy"] * 0.4:
+            label = "Breakdown"
+        elif idx > 0 and chunk_metrics[idx - 1]["energy"] > 0 and c["energy"] > chunk_metrics[idx - 1]["energy"] * 1.5:
+            label = "Climax" if idx >= num_chunks * 0.5 else "Variation"
+        else:
+            if idx > 0 and detected_sections[-1][1] == "Theme":
+                label = "Variation"
+            else:
+                label = "Theme"
+
+        detected_sections.append((c["start"], label))
+
+    collapsed_sections = []
+    for start, label in detected_sections:
+        if not collapsed_sections or collapsed_sections[-1][1] != label:
+            collapsed_sections.append((start, label))
+
+    return collapsed_sections
+
+
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -1867,9 +1970,9 @@ def produce_track(
     dict with keys: profiles, report
     """
     if not sections:
-        raise ValueError(
-            "produce_track: sections parameter is mandatory and cannot be empty."
-        )
+        sections = detect_sections_intelligently(tracks, bpm)
+        if verbose:
+            print(f"   [AI Section Analyzer] Auto-detected arrangement: {', '.join(f'{lbl} (@{start}b)' for start, lbl in sections)}")
 
     # Validate section ordering
     last_beat = -1.0
@@ -1905,7 +2008,7 @@ def produce_track(
         psycho_verify_enabled=psycho_verify_enabled,
         genre=genre,
         sections=sections,
-        chords=chords,
+        chords=None,
         cc_events=cc_events or {},
         tempo_events=tempo_events,
         engine=engine,
@@ -1927,9 +2030,19 @@ def produce_track(
 # ---------------------------------------------------------------------------
 
 
+SECTION_NAME_TO_MOOD = {
+    "Intro": Mood.AMBIENT,
+    "Theme": Mood.INTIMATE,
+    "Variation": Mood.EXPERIMENTAL,
+    "Breakdown": Mood.AMBIENT,
+    "Climax": Mood.CINEMATIC,
+    "Fade": Mood.AMBIENT,
+}
+
+
 def _apply_section_moods(
     tracks: Dict[str, List[NoteInfo]],
-    sections: List[Tuple[float, Mood]],
+    sections: List[Tuple[float, Mood | str]],
     profiles: Dict[str, _TrackProfile],
 ) -> Dict[str, List[NoteInfo]]:
     """Apply per-section dynamics shaping based on mood changes."""
@@ -1945,10 +2058,16 @@ def _apply_section_moods(
         new_notes = []
         for n in notes:
             # Find which section this note belongs to
-            section_mood = sections[0][1]  # default to first mood
-            for sec_start, sec_mood in sections:
+            section_mood_or_str = sections[0][1]  # default to first mood
+            for sec_start, sec_mood_or_str in sections:
                 if n.start >= sec_start:
-                    section_mood = sec_mood
+                    section_mood_or_str = sec_mood_or_str
+
+            # Map section name string to Mood
+            if isinstance(section_mood_or_str, str):
+                section_mood = SECTION_NAME_TO_MOOD.get(section_mood_or_str, Mood.CINEMATIC)
+            else:
+                section_mood = section_mood_or_str
 
             mood_profile = _MOOD_PROFILES[section_mood]
             # Apply dynamics compression based on section mood
@@ -2088,18 +2207,16 @@ def compile_continuous_album(
     if not tracks_metadata:
         raise ValueError("tracks_metadata cannot be empty.")
 
-    # Mandatory sectioning and ordering check
+    # Mandatory sectioning check (with AI auto-detection fallback)
     for idx, meta in enumerate(tracks_metadata):
         if "sections" not in meta or not meta["sections"]:
-            raise ValueError(
-                f"Track at index {idx} is missing mandatory 'sections' list."
-            )
+            meta["sections"] = detect_sections_intelligently(meta.get("tracks", {}), meta.get("bpm", 120.0))
         sections = meta["sections"]
         last_beat = -1.0
         for sec_idx, section in enumerate(sections):
             if not isinstance(section, (tuple, list)) or len(section) < 2:
                 raise ValueError(
-                    f"Track {idx} section {sec_idx} must be a tuple/list of (start_beat, mood)."
+                    f"Track {idx} section {sec_idx} must be a tuple/list of (start_beat, mood_or_str)."
                 )
             beat, sec_mood = section
             if beat < last_beat:
