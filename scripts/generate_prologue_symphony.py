@@ -256,6 +256,24 @@ def generate_full_prologue_album():
         export_midi(sliced_tracks, dest_path)
         print(f" -> Exported movement {idx+1} [Clean Voicing & Solo Dialog]: {dest_path}")
 
+        # Integrate MIDI Doctor checks on the sliced tracks dict
+        try:
+            from melodica.composer.psychoacoustic import detect_frequency_masking, detect_temporal_masking, detect_fusion
+            from melodica.composer.harmonic_verifier import detect_clashes, VerifierConfig
+            
+            # Reconstruct temporary tracks dict for analysis functions
+            sliced_dict = {t.name: t.notes for t in sliced_tracks}
+            freq_mask = detect_frequency_masking(sliced_dict)
+            temp_mask = detect_temporal_masking(sliced_dict)
+            fusion = detect_fusion(sliced_dict)
+            clashes = detect_clashes(sliced_dict, VerifierConfig(dissonance_tolerance=0.5))
+            
+            print(f"    [MIDI Doctor Diagnostics] Freq Masking: {len(freq_mask)} | Temp Masking: {len(temp_mask)} | Fusion: {len(fusion)} | Clashes: {len(clashes)}")
+            if len(freq_mask) > 0 or len(clashes) > 50:
+                print(f"    WARNING: High density of anomalies detected in {filename}. Check voice-leading alignment.")
+        except Exception as e:
+            print(f"    [MIDI Doctor Diagnostics failed]: {e}")
+
         current_start = part_end
 
     print("\nAll movements with advanced arrangements exported successfully!")
