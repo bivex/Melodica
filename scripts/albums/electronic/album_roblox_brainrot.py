@@ -56,7 +56,7 @@ def produce_roblox_brainrot_album():
     ]
     tempos = [142.0, 130.0, 150.0, 138.0]
 
-    # 3. Track configurations
+    # 3. Track configurations (9 segments of 8 bars = 72 bars = 288 beats = ~2 minutes)
     track_configs = [
         # Track 1: Skibidi Toilet Rush
         [
@@ -66,7 +66,7 @@ def produce_roblox_brainrot_album():
                 generator_type="pad",
                 instrument="synth_voice",
                 density=0.45,
-                phrase_schedule=structure_to_schedule("A B A B C C' R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="bass_808",
@@ -75,7 +75,7 @@ def produce_roblox_brainrot_album():
                 instrument="synth_bass",
                 density=0.6,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("A B A B C C' R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="chiptune_arp",
@@ -84,7 +84,7 @@ def produce_roblox_brainrot_album():
                 instrument="celesta",
                 density=0.4,
                 octave_shift=2,
-                phrase_schedule=structure_to_schedule("A B A B C C' R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="skibidi_lead_melody",
@@ -93,7 +93,7 @@ def produce_roblox_brainrot_album():
                 instrument="synth_lead",
                 density=0.45,
                 octave_shift=1,
-                phrase_schedule=structure_to_schedule("R B R B C C' A R", 4)
+                phrase_schedule=structure_to_schedule("R B R B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="roblox_drums",
@@ -101,7 +101,7 @@ def produce_roblox_brainrot_album():
                 generator_type="drums",
                 instrument="drums",
                 density=0.7,
-                phrase_schedule=structure_to_schedule("R A A B C C' R R", 4)
+                phrase_schedule=structure_to_schedule("R R A B C C' D D' R", 8)
             )
         ],
         # Track 2: Sigma Grindset (Phonk Version)
@@ -112,7 +112,7 @@ def produce_roblox_brainrot_album():
                 generator_type="pad",
                 instrument="strings",
                 density=0.45,
-                phrase_schedule=structure_to_schedule("A B A B C R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="phonk_bass",
@@ -121,7 +121,7 @@ def produce_roblox_brainrot_album():
                 instrument="synth_bass",
                 density=0.65,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("A B A B C R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="cowbell_lead_solo",
@@ -130,7 +130,7 @@ def produce_roblox_brainrot_album():
                 instrument="glockenspiel",
                 density=0.5,
                 octave_shift=1,
-                phrase_schedule=structure_to_schedule("R A B B C R R", 4)
+                phrase_schedule=structure_to_schedule("R B R B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="phonk_drums",
@@ -138,7 +138,7 @@ def produce_roblox_brainrot_album():
                 generator_type="drums",
                 instrument="drums",
                 density=0.65,
-                phrase_schedule=structure_to_schedule("R A A B C R R", 4)
+                phrase_schedule=structure_to_schedule("R R A B C C' D D' R", 8)
             )
         ],
         # Track 3: Baby Gronk's Rizz
@@ -149,7 +149,7 @@ def produce_roblox_brainrot_album():
                 generator_type="pad",
                 instrument="synth_voice",
                 density=0.45,
-                phrase_schedule=structure_to_schedule("A B B C C R R R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="hyper_bass",
@@ -158,7 +158,7 @@ def produce_roblox_brainrot_album():
                 instrument="synth_bass",
                 density=0.6,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("A B B C C R R R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="laser_arp",
@@ -167,7 +167,7 @@ def produce_roblox_brainrot_album():
                 instrument="music_box",
                 density=0.4,
                 octave_shift=2,
-                phrase_schedule=structure_to_schedule("A B B C C R R R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="rizz_lead_melody",
@@ -176,7 +176,7 @@ def produce_roblox_brainrot_album():
                 instrument="synth_lead",
                 density=0.5,
                 octave_shift=1,
-                phrase_schedule=structure_to_schedule("R B R B C C A R R", 4)
+                phrase_schedule=structure_to_schedule("R B R B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="hyper_drums",
@@ -184,7 +184,7 @@ def produce_roblox_brainrot_album():
                 generator_type="drums",
                 instrument="drums",
                 density=0.7,
-                phrase_schedule=structure_to_schedule("A B B C C R R R R", 4)
+                phrase_schedule=structure_to_schedule("R R A B C C' D D' R", 8)
             )
         ],
         # Track 4: Gyatt Return
@@ -195,7 +195,7 @@ def produce_roblox_brainrot_album():
                 generator_type="pad",
                 instrument="strings",
                 density=0.4,
-                phrase_schedule=structure_to_schedule("A B C R R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="outro_bass",
@@ -204,7 +204,7 @@ def produce_roblox_brainrot_album():
                 instrument="synth_bass",
                 density=0.5,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("A B C R R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="chiptune_outro_arp",
@@ -213,7 +213,7 @@ def produce_roblox_brainrot_album():
                 instrument="celesta",
                 density=0.35,
                 octave_shift=2,
-                phrase_schedule=structure_to_schedule("A B C R R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="outro_lead_solo",
@@ -222,7 +222,7 @@ def produce_roblox_brainrot_album():
                 instrument="synth_lead",
                 density=0.45,
                 octave_shift=1,
-                phrase_schedule=structure_to_schedule("R B C A R R", 4)
+                phrase_schedule=structure_to_schedule("R B R B C C' D D' R", 8)
             ),
             TrackConfig(
                 name="outro_drums",
@@ -230,7 +230,7 @@ def produce_roblox_brainrot_album():
                 generator_type="drums",
                 instrument="drums",
                 density=0.6,
-                phrase_schedule=structure_to_schedule("A B C R R R", 4)
+                phrase_schedule=structure_to_schedule("R R A B C C' D D' R", 8)
             )
         ]
     ]
@@ -238,10 +238,10 @@ def produce_roblox_brainrot_album():
     transformations = ["original", "inversion", "stretched", "fragmented"]
 
     sections_list = [
-        [(0.0, "Emergence"), (16.0, "Expansion"), (32.0, "Tension"), (64.0, "Release"), (96.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Expansion"), (32.0, "Tension"), (64.0, "Release"), (96.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Expansion"), (48.0, "Tension"), (80.0, "Release"), (112.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Release"), (48.0, "Dissolve")]
+        [(0.0, "Emergence"), (64.0, "Expansion"), (128.0, "Tension"), (192.0, "Release"), (256.0, "Dissolve")],
+        [(0.0, "Emergence"), (64.0, "Expansion"), (128.0, "Tension"), (192.0, "Release"), (256.0, "Dissolve")],
+        [(0.0, "Emergence"), (64.0, "Expansion"), (128.0, "Tension"), (192.0, "Release"), (256.0, "Dissolve")],
+        [(0.0, "Emergence"), (64.0, "Expansion"), (128.0, "Release"), (224.0, "Dissolve")]
     ]
 
     instruments_maps = [
