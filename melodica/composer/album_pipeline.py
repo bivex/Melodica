@@ -1985,6 +1985,7 @@ def produce_track(
     engine: str = "hmm",
     style: str = "academic",
     section_breaks: List[Tuple[float, str]] | None = None,
+    return_state: bool = False,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -2078,6 +2079,17 @@ def produce_track(
             continue
         kw = stage.fn(kw)
 
+    if return_state:
+        return {
+            "tracks": kw["tracks"],
+            "bpm": kw["bpm"],
+            "instruments": kw["instruments"],
+            "cc_events": kw.get("_all_cc", {}),
+            "tempo_events": kw.get("tempo_events", []),
+            "key": kw.get("key"),
+            "sections": kw.get("sections", []),
+            "_report": kw.get("_report", {})
+        }
     return kw.get("_report", {})
 
 
@@ -2098,6 +2110,7 @@ class SectionProfile:
     reverb_amount: int         # CC 91 value (0-127)
     filter_cutoff: int         # CC 74 value (0-127)
     active_roles: list[Role] | None = None  # If specified, only tracks with these roles play
+    entropy: float = 0.0       # dynamic entropy level (0.0 = low/stable, 1.0 = high/unstable)
 
 
 SECTION_PROFILES = {
@@ -2172,6 +2185,71 @@ SECTION_PROFILES = {
         reverb_amount=70,
         filter_cutoff=65,
         active_roles=[Role.PAD],
+    ),
+    "Emergence": SectionProfile(
+        mood=Mood.AMBIENT,
+        dynamics_range=0.8,
+        brightness_ceiling=90,
+        energy_target=0.4,
+        note_density=0.4,
+        timing_drift=0.0,
+        velocity_drift=8,
+        reverb_amount=95,
+        filter_cutoff=55,
+        active_roles=[Role.PAD],
+        entropy=0.1,
+    ),
+    "Expansion": SectionProfile(
+        mood=Mood.INTIMATE,
+        dynamics_range=0.7,
+        brightness_ceiling=105,
+        energy_target=0.65,
+        note_density=0.7,
+        timing_drift=0.0,
+        velocity_drift=5,
+        reverb_amount=60,
+        filter_cutoff=85,
+        active_roles=[Role.PAD, Role.BASS],
+        entropy=0.2,
+    ),
+    "Tension": SectionProfile(
+        mood=Mood.EXPERIMENTAL,
+        dynamics_range=0.9,
+        brightness_ceiling=118,
+        energy_target=0.85,
+        note_density=0.9,
+        timing_drift=0.0,
+        velocity_drift=7,
+        reverb_amount=50,
+        filter_cutoff=110,
+        active_roles=[Role.PAD, Role.BASS, Role.LEAD],
+        entropy=0.6,
+    ),
+    "Release": SectionProfile(
+        mood=Mood.CINEMATIC,
+        dynamics_range=0.5,
+        brightness_ceiling=127,
+        energy_target=1.15,
+        note_density=1.0,
+        timing_drift=0.0,
+        velocity_drift=3,
+        reverb_amount=30,
+        filter_cutoff=127,
+        active_roles=[Role.PAD, Role.BASS, Role.LEAD, Role.PERC],
+        entropy=0.3,
+    ),
+    "Dissolve": SectionProfile(
+        mood=Mood.AMBIENT,
+        dynamics_range=0.8,
+        brightness_ceiling=85,
+        energy_target=0.35,
+        note_density=0.3,
+        timing_drift=0.0,
+        velocity_drift=12,
+        reverb_amount=80,
+        filter_cutoff=60,
+        active_roles=[Role.PAD],
+        entropy=0.8,
     ),
 }
 
@@ -2272,14 +2350,34 @@ def _apply_section_moods(
                         if abs(beat_in_bar - 0.0) > 0.05 and abs(beat_in_bar - 2.0) > 0.05:
                             vel = int(vel * 0.3)
 
+            # 6. Dynamic Entropy (Micro-variations, velocity/duration deviations based on section entropy)
+            duration = n.duration
+            n_start = n.start
+            if hasattr(profile, "entropy") and profile.entropy > 0.0:
+                entropy = profile.entropy
+                seed = int(float(n.start) * 100) + int(n.pitch)
+                note_rng = random.Random(seed)
+
+                # Randomize velocity offset
+                vel_change = int(note_rng.uniform(-20 * entropy, 20 * entropy))
+                vel = max(10, min(127, vel + vel_change))
+
+                # Randomize duration offset slightly (e.g. +/- 15% of duration * entropy)
+                dur_change = note_rng.uniform(-0.15 * n.duration * entropy, 0.15 * n.duration * entropy)
+                duration = max(0.05, n.duration + dur_change)
+
+                # Randomize start time micro-jitter (entropy-driven)
+                start_change = note_rng.uniform(-0.04 * entropy, 0.04 * entropy)
+                n_start = max(0.0, n.start + start_change)
+
             # Clamp velocity within brightness ceiling and MIDI range
             vel = max(10, min(profile.brightness_ceiling, vel))
 
             new_notes.append(
                 NoteInfo(
                     pitch=n.pitch,
-                    start=n.start,
-                    duration=n.duration,
+                    start=n_start,
+                    duration=duration,
                     velocity=vel,
                     articulation=n.articulation,
                     expression=n.expression,
@@ -2438,7 +2536,7 @@ def compile_continuous_album(
     first_key = tracks_metadata[0].get("key", None) if tracks_metadata else None
 
     for i, meta in enumerate(tracks_metadata):
-        track_dict = meta.get("tracks", {})
+        track_dict = {k: v for k, v in meta.get("tracks", {}).items() if not k.startswith("_")}
         bpm = meta.get("bpm", 120.0)
         inst_dict = meta.get("instruments", {})
         cc_events = meta.get("cc_events", {})
@@ -2596,3 +2694,215 @@ def compile_continuous_album(
         tempo_events=combined_tempo_events,
         sections=combined_sections,
     )
+
+
+def clamp_to_scale(pitch: int, scale: Scale) -> int:
+    """Clamps a MIDI pitch to the nearest scale degree."""
+    degrees = scale.degrees()
+    pc = pitch % 12
+    # Find scale degree with minimum distance to pc (wrapping around octave)
+    nearest_pc = min(degrees, key=lambda d: min(abs(pc - d), 12 - abs(pc - d)))
+    diff = nearest_pc - pc
+    if diff > 6:
+        diff -= 12
+    elif diff < -6:
+        diff += 12
+    return max(0, min(127, int(round(pitch + diff))))
+
+
+def generate_narrative_motif(
+    motif_notes: list[NoteInfo],
+    scale: Scale,
+    transformation: str,
+    offset_beats: float = 16.0,
+    duration_beats: float = 64.0,
+) -> list[NoteInfo]:
+    """Apply narrative transformations (inversion, stretched, fragmented, retrograde, original) to a motif and snap to scale."""
+    if not motif_notes:
+        return []
+
+    transformed = []
+    first_pitch = motif_notes[0].pitch
+    total_dur = max(x.start + x.duration for x in motif_notes) if motif_notes else 8.0
+
+    for n in motif_notes:
+        pitch = n.pitch
+        start = n.start
+        duration = n.duration
+        velocity = n.velocity
+
+        if transformation == "inversion":
+            diff = pitch - first_pitch
+            pitch = first_pitch - diff
+        elif transformation == "stretched":
+            start = start * 2.0
+            duration = duration * 2.0
+        elif transformation == "fragmented":
+            # Deterministic gating: drop notes starting at odd integer beats
+            if int(round(start)) % 2 == 1:
+                continue
+            velocity = int(velocity * 0.7)
+        elif transformation == "retrograde":
+            start = total_dur - (start + duration)
+
+        pitch = clamp_to_scale(pitch, scale)
+
+        transformed.append(
+            NoteInfo(
+                pitch=pitch,
+                start=start,
+                duration=duration,
+                velocity=velocity,
+                articulation=n.articulation,
+                expression=dict(n.expression),
+            )
+        )
+
+    transformed.sort(key=lambda x: x.start)
+    if not transformed:
+        return []
+
+    motif_len = max(x.start + x.duration for x in transformed)
+    if motif_len <= 0:
+        motif_len = 8.0
+
+    looped_notes = []
+    current_time = offset_beats
+    end_time = offset_beats + duration_beats
+
+    while current_time < end_time:
+        for n in transformed:
+            note_start = current_time + n.start
+            if note_start + n.duration <= end_time:
+                looped_notes.append(
+                    NoteInfo(
+                        pitch=n.pitch,
+                        start=note_start,
+                        duration=n.duration,
+                        velocity=n.velocity,
+                        articulation=n.articulation,
+                        expression=dict(n.expression),
+                    )
+                )
+        current_time += motif_len
+
+    return looped_notes
+
+
+@dataclass
+class AlbumNarrative:
+    """
+    Core engine for AI-directed long-form listening experiences.
+    Manages global emotional curves, motif memory evolution, harmonic continuity,
+    and cross-track transitions.
+    """
+    output_dir: Path | str
+    seed_motif: list[NoteInfo]
+    harmonic_journey: list[Scale]
+    tempos: list[float]
+    track_configs: list[list[TrackConfig]]
+    transformations: list[str]  # e.g. ["original", "inversion", "stretched", "fragmented", "retrograde"]
+    sections_list: list[list[tuple[float, str]]]
+    instruments_maps: list[dict[str, int]]
+    moods: list[Mood]
+    names: list[str]
+
+    def generate(self) -> dict:
+        """Generates all tracks and compiles them into a single continuous album."""
+        import shutil
+        from melodica.idea_tool import IdeaTool, IdeaToolConfig, IdeaPart
+        out_path = Path(self.output_dir)
+        out_path.mkdir(parents=True, exist_ok=True)
+
+        tracks_metadata = []
+
+        for i in range(len(self.harmonic_journey)):
+            key = self.harmonic_journey[i]
+            tempo = self.tempos[i]
+            configs = self.track_configs[i]
+            transform = self.transformations[i]
+            sections = self.sections_list[i]
+            instr_map = self.instruments_maps[i]
+            mood = self.moods[i]
+            name = self.names[i]
+
+            print(f"  Generating narrative track {i+1}: {name} [{key.mode.value} — {tempo} BPM] with motif: {transform}")
+
+            # 1. Setup IdeaParts
+            max_beat = max(sec[0] for sec in sections)
+            total_beats = max_beat + 16.0
+            dur_bars = int(total_beats / 4)
+
+            parts = [
+                IdeaPart(
+                    name=f"Part_{i}",
+                    bars=dur_bars,
+                    scale=key,
+                    tempo=tempo,
+                    progression_type="coupled_hmm"
+                )
+            ]
+
+            # Setup tool and config
+            config = IdeaToolConfig(
+                parts=parts,
+                tracks=configs,
+                scale=key,
+                tempo=tempo,
+                use_tension_curve=True
+            )
+
+            tool = IdeaTool(config)
+            tracks_dict = tool.generate()
+
+            # 2. Motif Memory Engine Integration
+            lead_track_name = None
+            for cfg in configs:
+                if any(x in cfg.name for x in ("lead", "solo", "pluck", "melody")):
+                    lead_track_name = cfg.name
+                    break
+
+            if lead_track_name:
+                print(f"    -> Weaving motif {transform!r} into track {lead_track_name!r}")
+                motif_notes = generate_narrative_motif(
+                    self.seed_motif,
+                    scale=key,
+                    transformation=transform,
+                    offset_beats=0.0,
+                    duration_beats=total_beats
+                )
+                tracks_dict[lead_track_name] = motif_notes
+
+            # 3. Produce and register metadata
+            meta = produce_track(
+                tracks_dict,
+                bpm=tempo,
+                instruments=instr_map,
+                path=out_path / f"temp_{i}.mid",
+                mood=mood,
+                key=key,
+                verbose=False,
+                sections=sections,
+                return_state=True,
+            )
+
+            tracks_metadata.append(meta)
+
+        print("\n  Stitching tracks into a continuous narrative continuum...")
+        # 4. Compile continuous album with 4-bar (16-beat) tail overlaps and modulation
+        compiled_result = compile_continuous_album(
+            tracks_metadata=tracks_metadata,
+            output_path=out_path / "continuous_album.mid",
+            overlap_beats=16.0,
+            mood=Mood.CINEMATIC,
+            modulation_strategy="pivot"
+        )
+
+        # Move individual tracks to their final home
+        for i, name in enumerate(self.names):
+            clean_filename = f"{i+1:02d}_{name.replace(' ', '_')}.mid"
+            shutil.move(str(out_path / f"temp_{i}.mid"), str(out_path / clean_filename))
+
+        print(f"  Narrative album compilation successful! Output at: {out_path / 'continuous_album.mid'}")
+        return compiled_result
+
