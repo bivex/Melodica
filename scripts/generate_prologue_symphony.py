@@ -27,6 +27,11 @@ def generate_full_prologue_album():
         scale=minor_scale,
         bars=192,  # 6 parts * 32 bars each
         tempo=64,  # Slow dream pop tempo (64 BPM)
+        use_tempo_modulation=True,
+        ritardando_beats=4.0,
+        ritardando_factor=0.85,
+        use_tension_tempo=True,
+        tension_tempo_range=10.0,
         tracks=[
             # --- Movement 1: The Muted Hall (1802) ---
             TrackConfig(
@@ -192,13 +197,14 @@ def generate_full_prologue_album():
         ],
         parts=[
             # Act I: England, 1802
-            IdeaPart(name="MutedHall", bars=32, scale=minor_scale, tempo=64),
-            IdeaPart(name="HorseBlanket", bars=32, scale=minor_scale, tempo=64),
+            IdeaPart(name="MutedHall", bars=32, scale=minor_scale, tempo=64, time_signature=(4, 4)),
+            IdeaPart(name="HorseBlanket", bars=32, scale=minor_scale, tempo=60, time_signature=(4, 4)),
             # Act II: London, 1816
-            IdeaPart(name="EmeraldPort", bars=32, scale=major_scale, tempo=64),
-            IdeaPart(name="MidnightWindow", bars=32, scale=minor_scale, tempo=64),
-            IdeaPart(name="NorahsRing", bars=32, scale=minor_scale, tempo=64),
-            IdeaPart(name="AleWhiplash", bars=32, scale=minor_scale, tempo=64),
+            IdeaPart(name="EmeraldPort", bars=32, scale=major_scale, tempo=68, time_signature=(4, 4)),
+            # nocturnal waltz
+            IdeaPart(name="MidnightWindow", bars=32, scale=minor_scale, tempo=64, time_signature=(3, 4)),
+            IdeaPart(name="NorahsRing", bars=32, scale=minor_scale, tempo=60, time_signature=(4, 4)),
+            IdeaPart(name="AleWhiplash", bars=32, scale=minor_scale, tempo=70, time_signature=(4, 4)),
         ]
     )
 
@@ -277,10 +283,26 @@ def generate_full_prologue_album():
 
     for idx, part in enumerate(config.parts):
         sliced_tracks = sliced_tracks_by_part[idx]
+        part_start = boundaries[idx]
+        part_end = boundaries[idx + 1]
+
+        # Slice tempo events for this specific part
+        sliced_tempo_events = []
+        if tool.tempo_events:
+            for beat, bpm in tool.tempo_events:
+                if part_start <= beat < part_end:
+                    sliced_tempo_events.append((beat - part_start, bpm))
+
         filename = f"{idx+1:02d}_{part.name.lower()}.mid"
         dest_path = output_dir / filename
-        export_midi(sliced_tracks, dest_path)
-        print(f" -> Exported movement {idx+1} [Dream Pop Style]: {dest_path}")
+        export_midi(
+            sliced_tracks,
+            dest_path,
+            bpm=part.tempo,
+            time_sig=part.time_signature,
+            tempo_events=sliced_tempo_events if sliced_tempo_events else None
+        )
+        print(f" -> Exported movement {idx+1} [Dream Pop Style] - Tempo: {part.tempo} BPM, Time Sig: {part.time_signature[0]}/{part.time_signature[1]}: {dest_path}")
 
         # Integrate MIDI Doctor checks on the sliced tracks dict
         try:

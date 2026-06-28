@@ -909,6 +909,7 @@ def export_midi(
     bpm: float = 120.0,
     timeline: MusicTimeline | None = None,
     humanize: bool = True,
+    tempo_events: list[tuple[float, float]] | None = None,
 ) -> None:
     """
     Write a list of high-level Track objects to a MIDI file.
@@ -923,20 +924,20 @@ def export_midi(
     # 1. Global Meta Track
     meta_track = mido.MidiTrack()
     mid.tracks.append(meta_track)
-    meta_track.append(mido.MetaMessage("set_tempo", tempo=tempo, time=0))
-    meta_track.append(mido.MetaMessage("track_name", name="Global", time=0))
+
+    # Collect all meta events as (abs_tick, MetaMessage)
+    meta_events: list[tuple[int, mido.MetaMessage]] = []
+    meta_events.append((0, mido.MetaMessage("set_tempo", tempo=tempo, time=0)))
+    meta_events.append((0, mido.MetaMessage("track_name", name="Global", time=0)))
 
     if timeline:
-        # Collect all meta events as (abs_tick, MetaMessage)
-        meta_events: list[tuple[int, mido.MetaMessage]] = []
-
-        # 1a. Key Signatures — one per key region
+        # Key Signatures — one per key region
         for kl in timeline.keys:
             tick = round(kl.start * tpb)
             key_str = _scale_to_key_sig(kl.scale)
             meta_events.append((tick, mido.MetaMessage("key_signature", key=key_str, time=0)))
 
-        # 1b. Time Signatures
+        # Time Signatures
         for ts in timeline.time_signatures:
             tick = round(ts.start * tpb)
             meta_events.append(
@@ -951,18 +952,31 @@ def export_midi(
                 )
             )
 
-        # 1c. Section Markers
+        # Section Markers
         for m in timeline.markers:
             tick = round(m.start * tpb)
             meta_events.append((tick, mido.MetaMessage("marker", text=m.text, time=0)))
 
-        # Sort by absolute tick, then write with delta times
-        meta_events.sort(key=lambda x: x[0])
-        last_tick = 0
-        for tick, msg in meta_events:
-            msg.time = max(0, tick - last_tick)
-            meta_track.append(msg)
-            last_tick = tick
+    # Additional tempo events
+    if tempo_events:
+        for beat, event_bpm in tempo_events:
+            tick = round(beat * tpb)
+            if tick == 0:
+                # Update the initial set_tempo event
+                for idx, (t, msg) in enumerate(meta_events):
+                    if t == 0 and msg.type == "set_tempo":
+                        meta_events[idx] = (0, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(event_bpm), time=0))
+                        break
+            else:
+                meta_events.append((tick, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(event_bpm), time=0)))
+
+    # Sort by absolute tick, then write with delta times
+    meta_events.sort(key=lambda x: x[0])
+    last_tick = 0
+    for tick, msg in meta_events:
+        msg.time = max(0, tick - last_tick)
+        meta_track.append(msg)
+        last_tick = tick
 
     # 2. Dynamic voice channel pool allocation to prevent polyphonic pitch bend overlap.
     # Pre-assigned channels in the Track objects
