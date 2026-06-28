@@ -537,6 +537,14 @@ class TestStructureToSchedule:
         sched = structure_to_schedule("AA'BB", 4)
         assert sched.slots[1].label == "A:var"
 
+    def test_compact_with_suffixes(self):
+        sched = structure_to_schedule("AB_fastCD", 4)
+        assert len(sched.slots) == 4
+        assert sched.slots[0].label == "A"
+        assert sched.slots[1].label == "B:fast"
+        assert sched.slots[2].label == "C"
+        assert sched.slots[3].label == "D"
+
     def test_custom_bars(self):
         sched = structure_to_schedule("AB", 8)
         assert sched.slots[0].bars == 8

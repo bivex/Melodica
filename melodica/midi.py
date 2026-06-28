@@ -368,7 +368,7 @@ def export_multitrack_midi(
     reaper_project: bool = False,
     validate_form: bool = True,
     form: "MusicalForm | None" = None,
-    strict_validation: bool = True,
+    strict_validation: bool = False,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.

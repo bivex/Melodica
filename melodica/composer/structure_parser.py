@@ -154,6 +154,11 @@ def _split_compact(token: str) -> list[str]:
             # Collect primes
             while i < len(token) and token[i] == "'":
                 i += 1
+            # Collect optional suffix starting with '_'
+            if i < len(token) and token[i] == "_":
+                i += 1
+                while i < len(token) and (token[i].islower() or token[i] == "_"):
+                    i += 1
             parts.append(token[start:i])
         else:
             i += 1
