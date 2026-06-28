@@ -939,7 +939,6 @@ class IdeaTool:
             t_curve = None
             if self.config.use_tension_curve:
                 total_arrangement_beats = sum(p.bars * p.time_signature[0] for p in parts)
-                from melodica.composer.tension_curve import TensionCurve
                 t_curve = TensionCurve(total_beats=total_arrangement_beats, curve_type="classical")
             modulator = TempoModulator(
                 default_tempo=self.config.tempo,
