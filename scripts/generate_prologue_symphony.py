@@ -3,9 +3,9 @@
 
 """
 generate_prologue_symphony.py
-Renders the complete 6-track Symphonic Album representing the Prologue and Chapter 1
-of the romance novel "The Vow of St. James". Combines Chord Layout voicings
-for harmonic backing tracks and solo instruments for clean, clash-free arrangements.
+Renders the complete 6-track Dream Pop / Slowcore Album (style: Cigarettes After Sex)
+representing the Prologue and Chapter 1 of the romance novel "The Vow of St. James".
+Uses slow tempos, ambient pads, warm bass, arpeggios, and minimalist drum beats.
 """
 
 from __future__ import annotations
@@ -18,162 +18,187 @@ from melodica.midi import Track
 
 
 def generate_full_prologue_album():
-    # Define minor scale for the heavy emotional/dramatic sections
+    # Define minor scale for the emotional sections and major scale for port scene
     minor_scale = Scale(0, Mode.NATURAL_MINOR)  # C Minor
-    major_scale = Scale(7, Mode.MAJOR)          # G Major for Emerald Shipping Co.
+    major_scale = Scale(7, Mode.MAJOR)          # G Major
 
-    # Configuration using ChordVoicingLayout for clean harmony and solo woodwinds/brass for melody
+    # Configuration for the Dream Pop / Slowcore arrangement
     config = IdeaToolConfig(
         scale=minor_scale,
         bars=192,  # 6 parts * 32 bars each
+        tempo=64,  # Slow dream pop tempo (64 BPM)
         tracks=[
-            # --- Movement 1: The Hostile Hall (1802) ---
+            # --- Movement 1: The Muted Hall (1802) ---
             TrackConfig(
-                name="m1_contrabass",
+                name="m1_pad",
+                generator_type="ambient",
+                instrument="choir_ahhs",
+                params={"voicing": "spread", "overlap": 0.8}
+            ),
+            TrackConfig(
+                name="m1_bass",
                 generator_type="chord_layout",
                 instrument="contrabass",
-                params={"instrument_name": "double_bass", "instruments": ["double_bass", "cello", "violin"]}
+                params={"instrument_name": "double_bass", "instruments": ["double_bass"]}
             ),
             TrackConfig(
-                name="m1_cello",
-                generator_type="chord_layout",
-                instrument="cello",
-                params={"instrument_name": "cello", "instruments": ["double_bass", "cello", "violin"]}
+                name="m1_guitar_arp",
+                generator_type="arpeggiator",
+                instrument="guitar",
+                params={"pattern": "up", "note_duration": 0.5}
             ),
             TrackConfig(
-                name="m1_violin",
-                generator_type="chord_layout",
-                instrument="violin",
-                params={"instrument_name": "violin", "instruments": ["double_bass", "cello", "violin"]}
-            ),
-            TrackConfig(
-                name="m1_oboe_solo",
-                generator_type="melody",  # Solo melody line
-                instrument="oboe",
-                density=0.4,
-                params={"harmony_note_probability": 0.85}
-            ),
-
-            # --- Movement 2: Sarah's Lullaby (1802) ---
-            TrackConfig(
-                name="m2_harp",
-                generator_type="chord_layout",
-                instrument="harp",
-                params={"instrument_name": "harp", "instruments": ["double_bass", "cello", "violin", "harp"]}
-            ),
-            TrackConfig(
-                name="m2_glock",
-                generator_type="chord_layout",
-                instrument="glockenspiel",
-                params={"instrument_name": "glockenspiel", "instruments": ["double_bass", "cello", "violin", "glockenspiel"]}
-            ),
-            TrackConfig(
-                name="m2_violin_solo",
-                generator_type="melody",  # Pizzicato solo
-                instrument="violin",
-                density=0.3,
-                params={"articulation": "pizzicato", "harmony_note_probability": 0.85}
-            ),
-
-            # --- Movement 3: Emerald Shipping Co. (1816) ---
-            TrackConfig(
-                name="m3_violin_spic",
-                generator_type="chord_layout",
-                instrument="violin",
-                params={"instrument_name": "violin", "instruments": ["cello", "violin"]}
-            ),
-            TrackConfig(
-                name="m3_cello_pizz",
-                generator_type="chord_layout",
-                instrument="cello",
-                params={"instrument_name": "cello", "instruments": ["cello", "violin"]}
-            ),
-            TrackConfig(
-                name="m3_flute_solo",
+                name="m1_vocals",
                 generator_type="melody",
                 instrument="flute",
-                density=0.4,
-                params={"harmony_note_probability": 0.85}
+                density=0.3,
+                params={"harmony_note_probability": 0.9}
             ),
 
-            # --- Movement 4: Escape from Winchester House (1816) ---
+            # --- Movement 2: The Horse Blanket (1802) ---
             TrackConfig(
-                name="m4_violin_dux",
-                generator_type="melody",  # Dux melody
-                instrument="violin",
-                density=0.5,
-                params={"harmony_note_probability": 0.85}
+                name="m2_pad",
+                generator_type="ambient",
+                instrument="piano",
+                params={"voicing": "close", "overlap": 0.5}
             ),
             TrackConfig(
-                name="m4_viola_canon",
+                name="m2_bass",
+                generator_type="chord_layout",
+                instrument="contrabass",
+                params={"instrument_name": "double_bass", "instruments": ["double_bass"]}
+            ),
+            TrackConfig(
+                name="m2_harp_arp",
+                generator_type="harp",
+                instrument="harp",
+                params={"pattern": "arpeggio", "direction": "up"}
+            ),
+            TrackConfig(
+                name="m2_vocals",
+                generator_type="melody",
+                instrument="flute",
+                density=0.25,
+                params={"harmony_note_probability": 0.9}
+            ),
+
+            # --- Movement 3: Emerald Port (1816) ---
+            TrackConfig(
+                name="m3_drums",
+                generator_type="drum_kit_pattern",
+                instrument="drums",
+                params={"style": "hiphop"}
+            ),
+            TrackConfig(
+                name="m3_bass",
+                generator_type="chord_layout",
+                instrument="contrabass",
+                params={"instrument_name": "double_bass", "instruments": ["double_bass"]}
+            ),
+            TrackConfig(
+                name="m3_guitar_arp",
+                generator_type="arpeggiator",
+                instrument="guitar",
+                params={"pattern": "up_down", "note_duration": 0.5}
+            ),
+            TrackConfig(
+                name="m3_vocals",
+                generator_type="melody",
+                instrument="oboe",
+                density=0.35,
+                params={"harmony_note_probability": 0.95}
+            ),
+
+            # --- Movement 4: The Midnight Cardboard Window (1816) ---
+            TrackConfig(
+                name="m4_drums",
+                generator_type="drum_kit_pattern",
+                instrument="drums",
+                params={"style": "hiphop"}
+            ),
+            TrackConfig(
+                name="m4_bass",
+                generator_type="chord_layout",
+                instrument="contrabass",
+                params={"instrument_name": "double_bass", "instruments": ["double_bass"]}
+            ),
+            TrackConfig(
+                name="m4_guitar_dux",
+                generator_type="melody",
+                instrument="guitar",
+                density=0.4,
+                params={"harmony_note_probability": 0.9}
+            ),
+            TrackConfig(
+                name="m4_guitar_canon",
                 generator_type="canon",
-                instrument="viola",
+                instrument="guitar",
                 params={"delay_beats": 4.0, "interval": 12}
             ),
 
-            # --- Movement 5: Rescuing Norah (1816) ---
+            # --- Movement 5: Norah's Ring (1816) ---
             TrackConfig(
-                name="m5_contrabass",
+                name="m5_pad",
+                generator_type="ambient",
+                instrument="organ",
+                params={"voicing": "spread", "overlap": 0.9}
+            ),
+            TrackConfig(
+                name="m5_bass",
                 generator_type="chord_layout",
                 instrument="contrabass",
-                params={"instrument_name": "double_bass", "instruments": ["double_bass", "cello", "viola"]}
+                params={"instrument_name": "double_bass", "instruments": ["double_bass"]}
             ),
             TrackConfig(
-                name="m5_cello",
-                generator_type="chord_layout",
-                instrument="cello",
-                params={"instrument_name": "cello", "instruments": ["double_bass", "cello", "viola"]}
+                name="m5_guitar_arp",
+                generator_type="arpeggiator",
+                instrument="guitar",
+                params={"pattern": "up", "note_duration": 0.5}
             ),
             TrackConfig(
-                name="m5_viola",
-                generator_type="chord_layout",
-                instrument="viola",
-                params={"instrument_name": "viola", "instruments": ["double_bass", "cello", "viola"]}
-            ),
-            TrackConfig(
-                name="m5_violin_solo",
+                name="m5_vocals",
                 generator_type="melody",
-                instrument="violin",
-                density=0.35,
-                params={"articulation": "tremolo", "harmony_note_probability": 0.85}
+                instrument="cello",
+                density=0.3,
+                params={"harmony_note_probability": 0.9}
             ),
 
-            # --- Movement 6: Storm in the Harbor Tavern (1816) ---
+            # --- Movement 6: Ale & Whiplash (1816) ---
             TrackConfig(
-                name="m6_contrabass",
+                name="m6_drums",
+                generator_type="drum_kit_pattern",
+                instrument="drums",
+                params={"style": "hiphop"}
+            ),
+            TrackConfig(
+                name="m6_bass",
                 generator_type="chord_layout",
                 instrument="contrabass",
-                params={"instrument_name": "double_bass", "instruments": ["double_bass", "cello", "french_horn"]}
+                params={"instrument_name": "double_bass", "instruments": ["double_bass"]}
             ),
             TrackConfig(
-                name="m6_cello",
-                generator_type="chord_layout",
-                instrument="cello",
-                params={"instrument_name": "cello", "instruments": ["double_bass", "cello", "french_horn"]}
+                name="m6_guitar_arp",
+                generator_type="arpeggiator",
+                instrument="guitar",
+                params={"pattern": "up_down", "note_duration": 0.5}
             ),
             TrackConfig(
-                name="m6_horn",
-                generator_type="chord_layout",
-                instrument="french_horn",
-                params={"instrument_name": "french_horn", "instruments": ["double_bass", "cello", "french_horn"]}
-            ),
-            TrackConfig(
-                name="m6_trumpet_solo",
+                name="m6_vocals",
                 generator_type="melody",
                 instrument="trumpet",
-                density=0.45,
-                params={"fanfare_mode": True, "harmony_note_probability": 0.85}
+                density=0.4,
+                params={"harmony_note_probability": 0.9}
             ),
         ],
         parts=[
             # Act I: England, 1802
-            IdeaPart(name="HostileHall", bars=32, scale=minor_scale),
-            IdeaPart(name="SarahsLullaby", bars=32, scale=minor_scale),
+            IdeaPart(name="MutedHall", bars=32, scale=minor_scale, tempo=64),
+            IdeaPart(name="HorseBlanket", bars=32, scale=minor_scale, tempo=64),
             # Act II: London, 1816
-            IdeaPart(name="EmeraldShipping", bars=32, scale=major_scale),
-            IdeaPart(name="EscapeWinchester", bars=32, scale=minor_scale),
-            IdeaPart(name="RescuingNorah", bars=32, scale=minor_scale),
-            IdeaPart(name="TavernStorm", bars=32, scale=minor_scale),
+            IdeaPart(name="EmeraldPort", bars=32, scale=major_scale, tempo=64),
+            IdeaPart(name="MidnightWindow", bars=32, scale=minor_scale, tempo=64),
+            IdeaPart(name="NorahsRing", bars=32, scale=minor_scale, tempo=64),
+            IdeaPart(name="AleWhiplash", bars=32, scale=minor_scale, tempo=64),
         ]
     )
 
@@ -183,37 +208,37 @@ def generate_full_prologue_album():
         prefix = f"m{idx+1}_"
         part.track_mute = [name for name in all_track_names if not name.startswith(prefix)]
 
-    # Configure conversational antiphony (call-and-response) to prevent overlapping/masking
+    # Configure conversational antiphony to prevent overlapping/masking in dream pop texture
     config.parts[0].antiphony = {
-        "group_a": ["m1_violin", "m1_cello", "m1_contrabass"],
-        "group_b": ["m1_oboe_solo"],
+        "group_a": ["m1_vocals"],
+        "group_b": ["m1_guitar_arp"],
         "bars_a": 2.0,
         "bars_b": 2.0,
-        "overlap_beats": 0.5
+        "overlap_beats": 1.0
     }
     config.parts[2].antiphony = {
-        "group_a": ["m3_flute_solo"],
-        "group_b": ["m3_violin_spic", "m3_cello_pizz"],
+        "group_a": ["m3_vocals"],
+        "group_b": ["m3_guitar_arp"],
         "bars_a": 2.0,
         "bars_b": 2.0,
-        "overlap_beats": 0.5
+        "overlap_beats": 1.0
     }
     config.parts[4].antiphony = {
-        "group_a": ["m5_violin_solo"],
-        "group_b": ["m5_viola", "m5_cello", "m5_contrabass"],
-        "bars_a": 4.0,
-        "bars_b": 4.0,
+        "group_a": ["m5_vocals"],
+        "group_b": ["m5_guitar_arp"],
+        "bars_a": 2.0,
+        "bars_b": 2.0,
         "overlap_beats": 1.0
     }
     config.parts[5].antiphony = {
-        "group_a": ["m6_trumpet_solo"],
-        "group_b": ["m6_horn", "m6_cello", "m6_contrabass"],
+        "group_a": ["m6_vocals"],
+        "group_b": ["m6_guitar_arp"],
         "bars_a": 2.0,
         "bars_b": 2.0,
-        "overlap_beats": 0.0
+        "overlap_beats": 1.0
     }
 
-    print("Generating pro-level orchestral concept album using Melodica...")
+    print("Generating Dream Pop / Slowcore concept album (style: Cigarettes After Sex)...")
     tool = IdeaTool(config)
     tracks_dict = tool.render_tracks()
 
@@ -254,14 +279,13 @@ def generate_full_prologue_album():
         filename = f"{idx+1:02d}_{part.name.lower()}.mid"
         dest_path = output_dir / filename
         export_midi(sliced_tracks, dest_path)
-        print(f" -> Exported movement {idx+1} [Clean Voicing & Solo Dialog]: {dest_path}")
+        print(f" -> Exported movement {idx+1} [Dream Pop Style]: {dest_path}")
 
         # Integrate MIDI Doctor checks on the sliced tracks dict
         try:
             from melodica.composer.psychoacoustic import detect_frequency_masking, detect_temporal_masking, detect_fusion
             from melodica.composer.harmonic_verifier import detect_clashes, VerifierConfig
             
-            # Reconstruct temporary tracks dict for analysis functions
             sliced_dict = {t.name: t.notes for t in sliced_tracks}
             freq_mask = detect_frequency_masking(sliced_dict)
             temp_mask = detect_temporal_masking(sliced_dict)
@@ -276,7 +300,7 @@ def generate_full_prologue_album():
 
         current_start = part_end
 
-    print("\nAll movements with advanced arrangements exported successfully!")
+    print("\nAll movements in Dream Pop style exported successfully!")
 
 
 if __name__ == "__main__":
