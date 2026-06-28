@@ -131,3 +131,52 @@ def test_antiphony_integration_in_idea_tool():
     # We should have notes in both tracks
     assert "strings_track" in result
     assert "winds_track" in result
+
+
+def test_antiphony_spill_and_fade():
+    # 2 bars of A, 2 bars of B. Time signature = 4/4 (cycle = 16 beats, A = 8 beats, B = 8 beats)
+    builder = AntiphonySectionBuilder(
+        group_a=["strings"],
+        group_b=["winds"],
+        bars_a=2.0,
+        bars_b=2.0,
+        overlap_beats=0.0,
+        inactive_velocity_factor=0.25,
+        fade_overlap_notes=True
+    )
+
+    tracks_notes = {
+        "violin_track": [
+            # Active note, starts at 6.0 (before A ends at 8.0) and lasts 4.0 beats (extends to 10.0)
+            # Should be truncated to 2.0 duration (8.0 - 6.0 = 2.0)
+            NoteInfo(pitch=60, start=6.0, duration=4.0, velocity=100),
+            
+            # Inactive note, starts at 10.0 (in Group B phase)
+            # Should not be deleted, but velocity scaled: 100 * 0.25 = 25
+            NoteInfo(pitch=62, start=10.0, duration=1.0, velocity=100),
+        ]
+    }
+    tracks_instruments = {
+        "violin_track": "violin",
+    }
+
+    processed = builder.process(
+        tracks_notes,
+        tracks_instruments,
+        start_beat=0.0,
+        duration_beats=16.0,
+        time_sig_numerator=4,
+    )
+
+    notes = processed["violin_track"]
+    assert len(notes) == 2
+    
+    # Check truncated note
+    assert notes[0].pitch == 60
+    assert notes[0].duration == 2.0  # truncated!
+    assert notes[0].velocity == 100
+    
+    # Check spillover note
+    assert notes[1].pitch == 62
+    assert notes[1].velocity == 25   # scaled!
+

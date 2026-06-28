@@ -43,6 +43,8 @@ class AntiphonySectionBuilder:
         echo_delay_beats: float = 0.0,
         echo_velocity_factor: float = 0.5,
         echo_transpose: int = 12,
+        inactive_velocity_factor: float = 0.0,  # > 0.0 to keep inactive notes as quiet background pad
+        fade_overlap_notes: bool = True,       # True to truncate active notes crossing phase boundaries
     ) -> None:
         self.group_a = group_a or ["strings"]
         self.group_b = group_b or ["winds", "brass"]
@@ -52,6 +54,8 @@ class AntiphonySectionBuilder:
         self.echo_delay_beats = echo_delay_beats
         self.echo_velocity_factor = echo_velocity_factor
         self.echo_transpose = echo_transpose
+        self.inactive_velocity_factor = inactive_velocity_factor
+        self.fade_overlap_notes = fade_overlap_notes
 
     def _resolve_track_group(self, track_name: str, instrument: str) -> str:
         """Resolve which group ('A', 'B', or 'none') a track belongs to."""
@@ -129,6 +133,10 @@ class AntiphonySectionBuilder:
                     is_active = t_cycle >= (beats_a - self.overlap_beats)
 
                 if is_active:
+                    if self.fade_overlap_notes:
+                        active_limit = (beats_a + self.overlap_beats) if group == "A" else cycle_beats
+                        if t_cycle + n.duration > active_limit:
+                            n.duration = max(0.125, active_limit - t_cycle)
                     kept_notes.append(n)
                     # Generate echo copy if requested
                     if self.echo_delay_beats > 0:
@@ -140,6 +148,11 @@ class AntiphonySectionBuilder:
                             echo_n.pitch = max(0, min(127, n.pitch + self.echo_transpose))
                             echo_n.velocity = max(1, min(127, int(n.velocity * self.echo_velocity_factor)))
                             echo_notes.append(echo_n)
+                elif self.inactive_velocity_factor > 0.0:
+                    # Keep as soft/spillover background note
+                    spill_n = copy.copy(n)
+                    spill_n.velocity = max(1, min(127, int(n.velocity * self.inactive_velocity_factor)))
+                    kept_notes.append(spill_n)
 
             # Combine outside notes, kept notes, and echoes
             combined = outside_notes + kept_notes + echo_notes
