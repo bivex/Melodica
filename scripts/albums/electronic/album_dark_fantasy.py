@@ -69,7 +69,7 @@ def produce_dark_fantasy_album():
             ),
             TrackConfig(
                 name="cathedral_organ",
-                generator=DarkPadGenerator(mode="phrygian_pad", register="mid", velocity_level=0.28, chord_dur=4.0),
+                generator=DarkPadGenerator(mode="phrygian_pad", register="high", velocity_level=0.28, chord_dur=4.0),
                 generator_type="pad",
                 instrument="organ",
                 density=0.4,
@@ -153,7 +153,7 @@ def produce_dark_fantasy_album():
             ),
             TrackConfig(
                 name="doomsday_organ",
-                generator=DarkPadGenerator(mode="minor_pad", register="mid", velocity_level=0.35, chord_dur=4.0),
+                generator=DarkPadGenerator(mode="minor_pad", register="high", velocity_level=0.35, chord_dur=4.0),
                 generator_type="pad",
                 instrument="organ",
                 density=0.45,

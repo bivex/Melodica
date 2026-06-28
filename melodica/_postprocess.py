@@ -132,7 +132,7 @@ def apply_velocity_shaping(
                     pitch=n.pitch,
                     start=n.start,
                     duration=n.duration,
-                    velocity=max(1, min(127, int(n.velocity * scale_factor))),
+                    velocity=max(25, min(127, int(n.velocity * scale_factor))),
                     articulation=n.articulation,
                     expression=n.expression,
                 )
