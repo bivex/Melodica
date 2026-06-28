@@ -95,10 +95,15 @@ class ChordVoicingLayout:
             pcs = [0, 4, 7]  # default to C major if empty
 
         root_pc = chord.root % 12
-        qual_str = chord.quality.name.lower() if hasattr(chord.quality, "name") else str(chord.quality).lower()
-        is_minor = "min" in qual_str or "dim" in qual_str or "half" in qual_str
-        is_diminished = "dim" in qual_str
-        is_augmented = "aug" in qual_str
+        if hasattr(chord.quality, "is_minor"):
+            is_minor = chord.quality.is_minor
+            is_diminished = chord.quality.is_diminished
+            is_augmented = chord.quality.is_augmented
+        else:
+            qual_str = str(chord.quality).lower()
+            is_minor = "min" in qual_str or "dim" in qual_str or "half" in qual_str
+            is_diminished = "dim" in qual_str
+            is_augmented = "aug" in qual_str
 
         third_pc = (root_pc + (3 if is_minor else 4)) % 12
         fifth_pc = (root_pc + (6 if is_diminished else (8 if is_augmented else 7))) % 12

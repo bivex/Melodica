@@ -16,6 +16,24 @@ from enum import IntEnum
 
 class Quality(IntEnum):
     """Chord quality. Modeled after the chord-quality integer."""
+    
+    @property
+    def is_minor(self) -> bool:
+        name_l = self.name.lower()
+        return "minor" in name_l or "dim" in name_l or "half" in name_l
+
+    @property
+    def is_diminished(self) -> bool:
+        return "dim" in self.name.lower()
+
+    @property
+    def is_augmented(self) -> bool:
+        return "aug" in self.name.lower()
+
+    @property
+    def is_major(self) -> bool:
+        return not (self.is_minor or self.is_diminished or self.is_augmented)
+
     MAJOR = 0
     MINOR = 1
     DIMINISHED = 2

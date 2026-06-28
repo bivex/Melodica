@@ -101,3 +101,18 @@ def test_chord_layout_generator_integration():
     assert "cello_track" in result
     assert len(result["violin_track"]) > 0
     assert len(result["cello_track"]) > 0
+
+
+def test_quality_properties():
+    assert Quality.MINOR.is_minor
+    assert Quality.MINOR7.is_minor
+    assert Quality.HALF_DIM7.is_minor
+    assert Quality.HALF_DIM7.is_diminished
+    
+    assert Quality.MAJOR.is_major
+    assert not Quality.MAJOR.is_minor
+    assert not Quality.MINOR.is_major
+    
+    assert Quality.AUGMENTED.is_augmented
+    assert not Quality.MAJOR.is_augmented
+
