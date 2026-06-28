@@ -52,6 +52,11 @@ class PhraseTransform(str, Enum):
     DIMINUTION = "diminution"
     VAR = "var"
     FAST = "fast"
+    DIATONIC_INVERSION = "diatonic_inversion"
+    DIATONIC_RETROGRADE = "diatonic_retrograde"
+    DIATONIC_RETROGRADE_INVERSION = "diatonic_retrograde_inversion"
+    DIATONIC_AUGMENTATION = "diatonic_augmentation"
+    DIATONIC_DIMINUTION = "diatonic_diminution"
 
 
 _SUFFIX_MAP: dict[str, PhraseTransform] = {
@@ -62,6 +67,11 @@ _SUFFIX_MAP: dict[str, PhraseTransform] = {
     "fast": PhraseTransform.FAST,
     "aug": PhraseTransform.AUGMENTATION,
     "dim": PhraseTransform.DIMINUTION,
+    "dinv": PhraseTransform.DIATONIC_INVERSION,
+    "dretro": PhraseTransform.DIATONIC_RETROGRADE,
+    "dretro_inv": PhraseTransform.DIATONIC_RETROGRADE_INVERSION,
+    "daug": PhraseTransform.DIATONIC_AUGMENTATION,
+    "ddim": PhraseTransform.DIATONIC_DIMINUTION,
 }
 
 
@@ -251,11 +261,13 @@ def parse_slot_label(label: str) -> tuple[str, PhraseTransform]:
 def apply_phrase_transform(
     notes: list[Any],
     transform: PhraseTransform,
+    scale: Scale | None = None,
 ) -> list[Any]:
     if transform == PhraseTransform.ORIGINAL or not notes:
         return list(notes)
 
-    from melodica.types import NoteInfo
+    from melodica.types import NoteInfo, Scale, Mode
+    _scale = scale or Scale(0, Mode.MAJOR)
 
     if transform == PhraseTransform.INVERSION:
         return _invert_notes(notes)
@@ -271,6 +283,23 @@ def apply_phrase_transform(
         return _diminish_notes(notes, factor=2.0)
     if transform == PhraseTransform.VAR:
         return _auto_vary(notes)
+
+    # Diatonic variants
+    if transform == PhraseTransform.DIATONIC_INVERSION:
+        from melodica.composer.melodic_transforms import diatonic_inversion
+        return diatonic_inversion(notes, _scale)
+    if transform == PhraseTransform.DIATONIC_RETROGRADE:
+        from melodica.composer.melodic_transforms import diatonic_retrograde
+        return diatonic_retrograde(notes)
+    if transform == PhraseTransform.DIATONIC_RETROGRADE_INVERSION:
+        from melodica.composer.melodic_transforms import diatonic_retrograde_inversion
+        return diatonic_retrograde_inversion(notes, _scale)
+    if transform == PhraseTransform.DIATONIC_AUGMENTATION:
+        from melodica.composer.melodic_transforms import diatonic_augmentation
+        return diatonic_augmentation(notes, factor=2.0)
+    if transform == PhraseTransform.DIATONIC_DIMINUTION:
+        from melodica.composer.melodic_transforms import diatonic_diminution
+        return diatonic_diminution(notes, factor=2.0)
 
     return list(notes)
 

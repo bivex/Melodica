@@ -250,3 +250,103 @@ def sequence(
         current_offset += fragment_duration + gap_beats
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Strict diatonic-degree contrapuntal transformations
+# ---------------------------------------------------------------------------
+
+def _get_degree_index(pitch: int, degs: list[int]) -> int:
+    """Map a MIDI pitch to a continuous scale degree index across octaves."""
+    octave = pitch // 12
+    pc = pitch % 12
+    # Find nearest scale degree index
+    best_idx = min(range(len(degs)), key=lambda i: min(abs(degs[i] - pc), 12 - abs(degs[i] - pc)))
+    return octave * len(degs) + best_idx
+
+
+def _get_pitch_from_degree(degree_idx: int, degs: list[int]) -> int:
+    """Reconstruct a MIDI pitch from a continuous scale degree index."""
+    n_degs = len(degs)
+    octave = degree_idx // n_degs
+    pc_idx = degree_idx % n_degs
+    pc = degs[pc_idx]
+    return max(0, min(127, octave * 12 + pc))
+
+
+def melodic_inversion(
+    notes: list[NoteInfo],
+    scale: Scale,
+    pivot_pitch: int | None = None,
+) -> list[NoteInfo]:
+    """Mirror intervals of a melody around a pivot note, staying strictly in-key.
+
+    Unlike chromatic inversion, intervals are measured in scale degrees rather than semitones.
+    """
+    if not notes:
+        return []
+
+    # Get scale degrees relative to scale root
+    ivs = _MODE_INTERVALS.get(scale.mode, _MODE_INTERVALS[Mode.MAJOR])
+    degs = [(scale.root + i) % 12 for i in ivs]
+    pivot = pivot_pitch if pivot_pitch is not None else notes[0].pitch
+    pivot_idx = _get_degree_index(pivot, degs)
+
+    result = []
+    for n in notes:
+        idx = _get_degree_index(n.pitch, degs)
+        diff = idx - pivot_idx
+        new_idx = pivot_idx - diff
+        new_pitch = _get_pitch_from_degree(new_idx, degs)
+
+        c = copy.copy(n)
+        c.pitch = new_pitch
+        result.append(c)
+    return result
+
+
+def melodic_retrograde(notes: list[NoteInfo]) -> list[NoteInfo]:
+    """Reverse the order of notes while preserving absolute duration and relative timing."""
+    if not notes:
+        return []
+    total_end = max(n.start + n.duration for n in notes)
+    result = []
+    for n in reversed(notes):
+        c = copy.copy(n)
+        c.start = total_end - (n.start + n.duration)
+        result.append(c)
+    return sorted(result, key=lambda x: x.start)
+
+
+def melodic_augmentation(notes: list[NoteInfo], factor: float = 2.0) -> list[NoteInfo]:
+    """Swell/multiply note durations and start times by a constant factor."""
+    result = []
+    for n in notes:
+        c = copy.copy(n)
+        c.start = n.start * factor
+        c.duration = n.duration * factor
+        result.append(c)
+    return result
+
+
+def melodic_diminution(notes: list[NoteInfo], factor: float = 2.0) -> list[NoteInfo]:
+    """Compress/divide note durations and start times by a constant factor."""
+    return melodic_augmentation(notes, 1.0 / factor)
+
+
+def melodic_retrograde_inversion(
+    notes: list[NoteInfo],
+    scale: Scale,
+    pivot_pitch: int | None = None,
+) -> list[NoteInfo]:
+    """Diatonically invert the melody and then reverse its direction in time."""
+    return melodic_retrograde(melodic_inversion(notes, scale, pivot_pitch))
+
+
+# Aliases for diatonic transformations
+diatonic_inversion = melodic_inversion
+diatonic_retrograde = melodic_retrograde
+diatonic_augmentation = melodic_augmentation
+diatonic_diminution = melodic_diminution
+diatonic_retrograde_inversion = melodic_retrograde_inversion
+

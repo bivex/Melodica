@@ -1617,7 +1617,7 @@ class IdeaTool:
             if pool is not None and pool.has(cfg.name, base_label):
                 stored = pool.get(cfg.name, base_label)
                 if stored is not None:
-                    section_notes = _apply_transform(stored, transform)
+                    section_notes = _apply_transform(stored, transform, scale=scale)
                     # Re-time notes to fit this slot's duration
                     if section_notes:
                         stored_dur = max(n.start + n.duration for n in stored) - min(
@@ -1658,7 +1658,7 @@ class IdeaTool:
                 if transform != PhraseTransform.ORIGINAL:
                     if pool is not None and not pool.has(cfg.name, base_label):
                         pool.store(cfg.name, base_label, section_notes)
-                    section_notes = _apply_transform(section_notes, transform)
+                    section_notes = _apply_transform(section_notes, transform, scale=scale)
 
             # Register preservation: keep transformed pitches in the same register/bounds as the original phrase
             if transform != PhraseTransform.ORIGINAL and section_notes and pool is not None:

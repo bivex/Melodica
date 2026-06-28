@@ -545,6 +545,15 @@ class TestStructureToSchedule:
         assert sched.slots[2].label == "C"
         assert sched.slots[3].label == "D"
 
+    def test_diatonic_transforms_suffixes(self):
+        sched = structure_to_schedule("A_dinv B_dretro C_dretro_inv D_daug E_ddim", 4)
+        assert len(sched.slots) == 5
+        assert sched.slots[0].label == "A:diatonic_inversion"
+        assert sched.slots[1].label == "B:diatonic_retrograde"
+        assert sched.slots[2].label == "C:diatonic_retrograde_inversion"
+        assert sched.slots[3].label == "D:diatonic_augmentation"
+        assert sched.slots[4].label == "E:diatonic_diminution"
+
     def test_custom_bars(self):
         sched = structure_to_schedule("AB", 8)
         assert sched.slots[0].bars == 8
