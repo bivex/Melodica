@@ -128,3 +128,44 @@ def test_chords_to_midi(tmp_path: Path):
     
     with pytest.raises(ValueError, match="voicing must be one of"):
         chords_to_midi(chords, out_file, voicing="invalid_voicing")
+
+
+def test_slice_notes_with_tying():
+    from melodica.midi import slice_notes_with_tying
+    
+    notes = [
+        NoteInfo(pitch=60, start=0.0, duration=8.0),   # starts at 0, ends at 8. boundary is 16. should be fully inside slice 0.
+        NoteInfo(pitch=64, start=12.0, duration=8.0),  # starts at 12, ends at 20. boundary is 16. should split into:
+                                                       # - note in slice 0: start=12, duration=4, legato
+                                                       # - note in slice 1: start=0, duration=4
+    ]
+    boundaries = [0.0, 16.0, 32.0]
+    
+    slices = slice_notes_with_tying(notes, boundaries)
+    assert len(slices) == 2
+    
+    # Slice 0
+    slice_0 = slices[0]
+    assert len(slice_0) == 2
+    
+    # note 1
+    assert slice_0[0].pitch == 60
+    assert slice_0[0].start == 0.0
+    assert slice_0[0].duration == 8.0
+    assert slice_0[0].articulation is None
+    
+    # note 2 split (first half)
+    assert slice_0[1].pitch == 64
+    assert slice_0[1].start == 12.0
+    assert slice_0[1].duration == 4.0
+    assert slice_0[1].articulation == "legato"
+    
+    # Slice 1
+    slice_1 = slices[1]
+    assert len(slice_1) == 1
+    
+    # note 2 split (second half)
+    assert slice_1[0].pitch == 64
+    assert slice_1[0].start == 0.0
+    assert slice_1[0].duration == 4.0
+

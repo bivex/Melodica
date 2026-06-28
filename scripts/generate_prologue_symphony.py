@@ -246,36 +246,37 @@ def generate_full_prologue_album():
     output_dir = Path("output/prologue_symphony")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Slice notes by movement boundaries and export to MIDI
-    from melodica.midi import export_midi
-
-    current_start = 0.0
-    for idx, part in enumerate(config.parts):
+    # Build boundaries list
+    boundaries = [0.0]
+    for part in config.parts:
         ts = part.time_signature or (4, 4)
         duration_beats = part.bars * ts[0]
-        part_end = current_start + duration_beats
+        boundaries.append(boundaries[-1] + duration_beats)
 
-        sliced_tracks = []
-        for name, track in tracks_dict.items():
-            sliced_notes = []
-            for note in track.notes:
-                if current_start <= note.start < part_end:
-                    new_note = copy.deepcopy(note)
-                    new_note.start -= current_start
-                    sliced_notes.append(new_note)
+    # Slice notes by movement boundaries with tying and export to MIDI
+    from melodica.midi import export_midi, slice_notes_with_tying
 
-            if sliced_notes:
+    # Pre-slice all track notes
+    sliced_tracks_by_part = [[] for _ in range(len(config.parts))]
+    
+    for name, track in tracks_dict.items():
+        track_slices = slice_notes_with_tying(track.notes, boundaries)
+        for idx in range(len(config.parts)):
+            part_notes = track_slices[idx]
+            if part_notes:
                 sliced_track = Track(
                     name=track.name,
-                    notes=sliced_notes,
+                    notes=part_notes,
                     channel=track.channel,
                     program=track.program,
                     volume=track.volume,
                     pan=track.pan,
                     instrument_name=track.instrument_name,
                 )
-                sliced_tracks.append(sliced_track)
+                sliced_tracks_by_part[idx].append(sliced_track)
 
+    for idx, part in enumerate(config.parts):
+        sliced_tracks = sliced_tracks_by_part[idx]
         filename = f"{idx+1:02d}_{part.name.lower()}.mid"
         dest_path = output_dir / filename
         export_midi(sliced_tracks, dest_path)
@@ -297,8 +298,6 @@ def generate_full_prologue_album():
                 print(f"    WARNING: High density of anomalies detected in {filename}. Check voice-leading alignment.")
         except Exception as e:
             print(f"    [MIDI Doctor Diagnostics failed]: {e}")
-
-        current_start = part_end
 
     print("\nAll movements in Dream Pop style exported successfully!")
 

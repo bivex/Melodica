@@ -1301,3 +1301,71 @@ def chords_to_midi(
             )
 
     notes_to_midi(note_infos, path, bpm=bpm, humanize=humanize)
+
+
+def slice_notes_with_tying(notes: list[NoteInfo], boundaries: list[float]) -> list[list[NoteInfo]]:
+    """
+    Slice a list of notes by time boundaries, splitting notes that cross boundaries with ties.
+    
+    boundaries: sorted list of boundary timestamps (e.g. [0.0, 16.0, 32.0, 48.0])
+    Returns: list of NoteInfo lists, one for each boundary interval.
+    """
+    if not boundaries or len(boundaries) < 2:
+        return [[NoteInfo(
+            pitch=n.pitch,
+            start=n.start,
+            duration=n.duration,
+            velocity=n.velocity,
+            absolute=n.absolute,
+            articulation=n.articulation,
+            expression=dict(n.expression) if n.expression else None
+        ) for n in notes]]
+
+    result = [[] for _ in range(len(boundaries) - 1)]
+    
+    for note in notes:
+        start_idx = -1
+        for i in range(len(boundaries) - 1):
+            if boundaries[i] <= note.start < boundaries[i+1]:
+                start_idx = i
+                break
+        
+        if start_idx == -1:
+            continue
+            
+        note_end = note.start + note.duration
+        current_idx = start_idx
+        current_start = note.start
+        
+        while current_idx < len(boundaries) - 1 and current_start < note_end:
+            boundary_end = boundaries[current_idx + 1]
+            if note_end <= boundary_end:
+                sliced_note = NoteInfo(
+                    pitch=note.pitch,
+                    start=current_start - boundaries[current_idx],
+                    duration=note_end - current_start,
+                    velocity=note.velocity,
+                    absolute=note.absolute,
+                    articulation=note.articulation,
+                    expression=dict(note.expression) if note.expression else None
+                )
+                result[current_idx].append(sliced_note)
+                break
+            else:
+                # Note crosses the boundary! Split it with tie
+                duration_in_slice = boundary_end - current_start
+                sliced_note = NoteInfo(
+                    pitch=note.pitch,
+                    start=current_start - boundaries[current_idx],
+                    duration=duration_in_slice,
+                    velocity=note.velocity,
+                    absolute=note.absolute,
+                    articulation="legato",
+                    expression=dict(note.expression) if note.expression else None
+                )
+                result[current_idx].append(sliced_note)
+                
+                current_start = boundary_end
+                current_idx += 1
+                
+    return result
