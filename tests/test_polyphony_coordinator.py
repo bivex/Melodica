@@ -35,3 +35,30 @@ def test_polyphony_coordinator_clash_resolution():
     # Pitch difference should not be 0, 1, 2, or 6
     diff = abs(new_pitch - 60) % 12
     assert diff not in (0, 1, 2, 6)
+
+
+def test_polyphony_coordinator_integration_in_idea_tool():
+    from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart
+    
+    config = IdeaToolConfig(
+        scale=Scale(0, Mode.MAJOR),
+        bars=4,
+        use_polyphony_coordinator=True,
+        tracks=[
+            # A solo melody and a pad track that are likely to have clashes
+            TrackConfig(name="solo_melody", generator_type="melody", instrument="violin"),
+            TrackConfig(name="backing_pad", generator_type="melody", instrument="piano"),
+        ],
+        parts=[
+            IdeaPart(name="Verse", bars=4)
+        ]
+    )
+    
+    tool = IdeaTool(config)
+    result = tool.generate()
+    
+    assert "solo_melody" in result
+    assert "backing_pad" in result
+    assert len(result["solo_melody"]) > 0
+    assert len(result["backing_pad"]) > 0
+

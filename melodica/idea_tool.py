@@ -361,6 +361,9 @@ class IdeaToolConfig:
     use_mastering: bool = True
     target_lufs: float = -14.0
 
+    # Polyphonic Voice Coordinator
+    use_polyphony_coordinator: bool = False
+
     # For "harmonize_melody" workflow: caller-supplied melody to harmonize
     seed_melody: list[NoteInfo] | None = None
 
@@ -846,6 +849,15 @@ class IdeaTool:
         mpe_track_names = {tc.name for tc in self.config.tracks if getattr(tc, "mpe", False)}
         if mpe_track_names:
             result["_mpe_tracks"] = mpe_track_names
+
+        # ---- Polyphonic Voice Coordinator ----
+        if self.config.use_polyphony_coordinator:
+            from melodica.composer.polyphony_coordinator import PolyphonicVoiceCoordinator
+            track_notes = {k: v for k, v in result.items() if not k.startswith("_") and isinstance(v, list)}
+            coordinator = PolyphonicVoiceCoordinator(self.config.scale)
+            coordinated_notes = coordinator.coordinate(track_notes)
+            for k, v in coordinated_notes.items():
+                result[k] = v
 
         # ---- Mastering Desk (LUFS target, Multiband Comp, Imaging, Limiter) ----
         if self.config.use_mastering:
