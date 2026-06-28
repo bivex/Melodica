@@ -411,3 +411,39 @@ class TestQuickCompose:
             "Cinematic_Pad generated 0 notes - likely due to polyphony limit dropping "
             "all pad notes when 6 tracks exceeded 16 simultaneous voices"
         )
+
+
+class TestCoverageEdgeCases:
+    def test_empty_parts_fallback(self):
+        config = IdeaToolConfig(
+            scale=Scale(0, Mode.MAJOR),
+            bars=4,
+            parts=[],  # Empty parts
+            tracks=[TrackConfig(name="melody", generator_type="melody")]
+        )
+        tool = IdeaTool(config)
+        result = tool.generate()
+        assert "melody" in result
+        assert len(result["melody"]) > 0
+
+    def test_broken_modifier_does_not_crash(self):
+        class BrokenModifier:
+            def modify(self, notes, ctx):
+                raise ValueError("This modifier is intentionally broken")
+
+        config = IdeaToolConfig(
+            scale=Scale(0, Mode.MAJOR),
+            bars=4,
+            tracks=[
+                TrackConfig(
+                    name="melody",
+                    generator_type="melody",
+                    modifiers=[BrokenModifier()]
+                )
+            ]
+        )
+        tool = IdeaTool(config)
+        # Should not raise exception
+        result = tool.generate()
+        assert "melody" in result
+
