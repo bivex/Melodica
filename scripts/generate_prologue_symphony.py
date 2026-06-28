@@ -26,7 +26,7 @@ def generate_full_prologue_album():
     # 1. Configuration with pro orchestral tracks matching each movement
     config = IdeaToolConfig(
         scale=minor_scale,
-        bars=24,  # 6 parts * 4 bars each
+        bars=192,  # 6 parts * 32 bars each
         tracks=[
             # --- Movement 1: The Hostile Hall (1802) ---
             TrackConfig(
@@ -174,13 +174,13 @@ def generate_full_prologue_album():
         ],
         parts=[
             # Act I: England, 1802
-            IdeaPart(name="HostileHall", bars=4, scale=minor_scale),
-            IdeaPart(name="SarahsLullaby", bars=4, scale=minor_scale),
+            IdeaPart(name="HostileHall", bars=32, scale=minor_scale),
+            IdeaPart(name="SarahsLullaby", bars=32, scale=minor_scale),
             # Act II: London, 1816
-            IdeaPart(name="EmeraldShipping", bars=4, scale=major_scale),
-            IdeaPart(name="EscapeWinchester", bars=4, scale=minor_scale),
-            IdeaPart(name="RescuingNorah", bars=4, scale=minor_scale),
-            IdeaPart(name="TavernStorm", bars=4, scale=minor_scale),
+            IdeaPart(name="EmeraldShipping", bars=32, scale=major_scale),
+            IdeaPart(name="EscapeWinchester", bars=32, scale=minor_scale),
+            IdeaPart(name="RescuingNorah", bars=32, scale=minor_scale),
+            IdeaPart(name="TavernStorm", bars=32, scale=minor_scale),
         ]
     )
 
