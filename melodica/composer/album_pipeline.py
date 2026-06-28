@@ -1483,25 +1483,77 @@ def _resolve_rhythm(rhythm):
     )
 
 
-def _stage_rhythm(kw):
-    """Impose a shared rhythm grid onto every non-meta track.
+def _quantize_onsets(notes, snap_points, entry, max_snap=0.6):
+    """Snap each note's onset to the nearest rhythm grid point.
 
-    Runs first so all downstream stages (mix, dynamics, humanize, pan) operate
-    on the rhythmized notes. Each track is rhythmized within its own sounding
-    span — the rhythm is generated for [0, span] and shifted to the track's
-    entry beat, preserving entry structure while locking the internal grid.
+    ``snap_points`` are local-grid onsets in [0, span]; ``entry`` is the track's
+    first beat, so the absolute grid is ``p + entry`` for each ``p``. Only onsets
+    within ``max_snap`` beats of a grid point are moved (loose notes far from any
+    slot keep their timing rather than jumping). Pitch, duration, velocity and
+    the number of notes are preserved.
     """
-    from melodica.rhythm import apply_rhythm_events
+    import bisect
 
+    out = []
+    for n in notes:
+        # Distance of this note from the local grid origin.
+        local = n.start - entry
+        # Nearest grid point via binary search.
+        idx = bisect.bisect_left(snap_points, local)
+        candidates = []
+        if idx > 0:
+            candidates.append(snap_points[idx - 1])
+        if idx < len(snap_points):
+            candidates.append(snap_points[idx])
+        nearest = min(candidates, key=lambda p: abs(p - local))
+        if abs(nearest - local) <= max_snap:
+            new_start = round(nearest + entry, 6)
+        else:
+            new_start = n.start
+        out.append(
+            NoteInfo(
+                pitch=n.pitch,
+                start=new_start,
+                duration=n.duration,
+                velocity=n.velocity,
+                articulation=n.articulation,
+                expression=dict(n.expression) if n.expression else {},
+            )
+        )
+    return out
+
+
+def _stage_rhythm(kw):
+    """Impose a master rhythm onto the rhythm section only, by quantization.
+
+    Only rhythmic roles (PERC, BASS, LEAD) are snapped onto the shared grid —
+    their existing note onsets move to the nearest rhythm slot. Sustained layers
+    (PAD / CHOIR / STRINGS / FX / drones) keep their free timing: a pad or choir
+    should not pulse like a drum, and forcing them onto the grid flattens the
+    arrangement and homogenises every movement.
+
+    This stage *quantizes* rather than *replaces*: it never changes pitch,
+    duration, velocity or the number of notes — it only snaps onsets, so the
+    generated melodic contour is preserved while the groove locks.
+    """
     rhythm = kw.get("rhythm")
     if rhythm is None:
         raise ValueError("rhythm is required for album production.")
 
     gen = _resolve_rhythm(rhythm)
 
+    # Rhythm-section roles that should lock to the master groove.
+    rhythm_roles = {Role.PERC, Role.BASS, Role.LEAD}
+
     result = {}
     for tname, notes in kw["tracks"].items():
         if tname.startswith("_") or not notes:
+            result[tname] = notes
+            continue
+
+        role = _detect_role_from_track_name(tname)
+        if role not in rhythm_roles:
+            # Sustained / textural layer — leave its timing intact.
             result[tname] = notes
             continue
 
@@ -1510,15 +1562,12 @@ def _stage_rhythm(kw):
         span = max(0.5, end - entry)
 
         events = gen.generate(span)
-        # Shift local-grid events onto the track's actual entry beat.
-        from melodica.rhythm import RhythmEvent
-        shifted = [
-            RhythmEvent(onset=round(e.onset + entry, 6),
-                        duration=e.duration,
-                        velocity_factor=e.velocity_factor)
-            for e in events
-        ]
-        result[tname] = apply_rhythm_events(notes, shifted)
+        snap_points = sorted({round(e.onset, 4) for e in events})
+        if not snap_points:
+            result[tname] = notes
+            continue
+
+        result[tname] = _quantize_onsets(notes, snap_points, entry)
 
     kw["tracks"] = result
     return kw
