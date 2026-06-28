@@ -165,7 +165,8 @@ def test_compile_continuous_album(tmp_path):
         [t1_meta, t2_meta],
         output_path=out_file,
         overlap_beats=2.0,
-        mood=Mood.CHAMBER
+        mood=Mood.CHAMBER,
+        rhythm="straight_quarters",
     )
 
     assert out_file.exists()
@@ -271,6 +272,7 @@ def test_compile_continuous_album_modulation(tmp_path):
         mood=Mood.CHAMBER,
         modulation_strategy="dominant",
         transition_instrument=89,
+        rhythm="straight_quarters",
     )
 
     assert out_file.exists()

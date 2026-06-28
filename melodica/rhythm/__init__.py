@@ -182,6 +182,45 @@ class RhythmCoordinator:
         self._cache.clear()
 
 
+def apply_rhythm_events(notes: list, events: list[RhythmEvent]) -> list:
+    """Re-rhythmize an existing note list onto a new onset/duration grid.
+
+    For each ``RhythmEvent`` the closest-in-time source note is picked and its
+    pitch/articulation/expression are reused; velocity is scaled by the event's
+    ``velocity_factor``. This mirrors :class:`FollowRhythmModifier` but consumes
+    ``RhythmEvent`` objects directly instead of another track's notes.
+
+    Returns a fresh, start-sorted ``list[NoteInfo]``. Empty/missing input is
+    passed through unchanged.
+    """
+    if not notes or not events:
+        return notes
+
+    from melodica.types import NoteInfo  # local import keeps rhythm/pitch decoupled
+
+    # Pre-sort once for the repeated nearest-onset lookups below.
+    sorted_notes = sorted(notes, key=lambda n: n.start)
+
+    result: list[NoteInfo] = []
+    for ev in events:
+        # Nearest source note by start time.
+        best = min(sorted_notes, key=lambda n: abs(n.start - ev.onset))
+        new_vel = max(1, min(127, int(round(best.velocity * ev.velocity_factor))))
+        result.append(
+            NoteInfo(
+                pitch=best.pitch,
+                start=ev.onset,
+                duration=max(0.05, ev.duration),
+                velocity=new_vel,
+                articulation=best.articulation,
+                expression=dict(best.expression) if best.expression else {},
+            )
+        )
+
+    result.sort(key=lambda n: n.start)
+    return result
+
+
 from melodica.rhythm.euclidean import EuclideanRhythmGenerator
 from melodica.rhythm.probabilistic import ProbabilisticRhythmGenerator
 from melodica.rhythm.subdivision import SubdivisionGenerator
@@ -212,6 +251,7 @@ __all__ = [
     "TRIPLET",
     "RhythmGenerator",
     "RhythmCoordinator",
+    "apply_rhythm_events",
     "EuclideanRhythmGenerator",
     "ProbabilisticRhythmGenerator",
     "SubdivisionGenerator",

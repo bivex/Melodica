@@ -1455,6 +1455,71 @@ def _merge_cc_events(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_rhythm(rhythm):
+    """Resolve a rhythm spec (name or generator) into a RhythmGenerator.
+
+    ``str`` is looked up in the rhythm library / dynamic registry; an unknown
+    name raises ``ValueError``. Any object exposing a ``generate(duration_beats)``
+    method (the :class:`~melodica.rhythm.RhythmGenerator` protocol) is returned
+    as-is.
+    """
+    from melodica.rhythm.library import RHYTHM_LIBRARY, DYNAMIC_RHYTHM_REGISTRY, get_rhythm
+
+    if isinstance(rhythm, str):
+        if rhythm not in RHYTHM_LIBRARY and rhythm not in DYNAMIC_RHYTHM_REGISTRY:
+            raise ValueError(
+                f"Unknown rhythm name {rhythm!r}. Use a name from RHYTHM_LIBRARY/"
+                f"DYNAMIC_RHYTHM_REGISTRY or pass a RhythmGenerator instance."
+            )
+        return get_rhythm(rhythm)
+    if callable(getattr(rhythm, "generate", None)):
+        return rhythm
+    raise ValueError(
+        f"rhythm must be a name (str) or RhythmGenerator; got {type(rhythm).__name__}."
+    )
+
+
+def _stage_rhythm(kw):
+    """Impose a shared rhythm grid onto every non-meta track.
+
+    Runs first so all downstream stages (mix, dynamics, humanize, pan) operate
+    on the rhythmized notes. Each track is rhythmized within its own sounding
+    span — the rhythm is generated for [0, span] and shifted to the track's
+    entry beat, preserving entry structure while locking the internal grid.
+    """
+    from melodica.rhythm import apply_rhythm_events
+
+    rhythm = kw.get("rhythm")
+    if rhythm is None:
+        raise ValueError("rhythm is required for album production.")
+
+    gen = _resolve_rhythm(rhythm)
+
+    result = {}
+    for tname, notes in kw["tracks"].items():
+        if tname.startswith("_") or not notes:
+            result[tname] = notes
+            continue
+
+        entry = min(n.start for n in notes)
+        end = max(n.start + n.duration for n in notes)
+        span = max(0.5, end - entry)
+
+        events = gen.generate(span)
+        # Shift local-grid events onto the track's actual entry beat.
+        from melodica.rhythm import RhythmEvent
+        shifted = [
+            RhythmEvent(onset=round(e.onset + entry, 6),
+                        duration=e.duration,
+                        velocity_factor=e.velocity_factor)
+            for e in events
+        ]
+        result[tname] = apply_rhythm_events(notes, shifted)
+
+    kw["tracks"] = result
+    return kw
+
+
 def _stage_auto_mix(kw):
     mixed, profiles, role_pan_map = _auto_mix(
         kw["tracks"], kw["mood_profile"],
@@ -1838,6 +1903,7 @@ def _stage_report(kw):
 
 
 DEFAULT_PIPELINE: list[Stage] = [
+    Stage("rhythm", _stage_rhythm),
     Stage("auto_mix", _stage_auto_mix),
     Stage("pan_spread", _stage_pan_spread),
     Stage("dynamics", _stage_dynamics),
@@ -1993,6 +2059,7 @@ def produce_track(
     section_breaks: List[Tuple[float, str]] | None = None,
     return_state: bool = False,
     strict_validation: bool = False,
+    rhythm: str | object | None = None,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -2033,6 +2100,12 @@ def produce_track(
     -------
     dict with keys: profiles, report
     """
+    if rhythm is None:
+        raise ValueError(
+            "rhythm is required for produce_track. Pass a rhythm name (str from "
+            "RHYTHM_LIBRARY/DYNAMIC_RHYTHM_REGISTRY) or a RhythmGenerator instance."
+        )
+
     if not sections:
         sections = detect_sections_intelligently(tracks, bpm)
         if verbose:
@@ -2079,6 +2152,7 @@ def produce_track(
         style=style,
         section_breaks=section_breaks,
         strict_validation=strict_validation,
+        rhythm=rhythm,
     )
 
     # Run stages sequentially
@@ -2427,6 +2501,7 @@ def produce_album(
     key: Scale | None = None,
     album_name: str = "Album",
     output_dir: str = "output/album",
+    rhythm: str | object | None = None,
 ) -> List[dict]:
     """
     Produce multiple tracks as an album.
@@ -2445,6 +2520,12 @@ def produce_album(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
+    if rhythm is None:
+        raise ValueError(
+            "rhythm is required for produce_album. Pass a rhythm name (str) or "
+            "RhythmGenerator instance."
+        )
+
     print("=" * 60)
     print(f"   {album_name}")
     print("=" * 60)
@@ -2459,6 +2540,7 @@ def produce_album(
             path=out / filename,
             mood=mood,
             key=key,
+            rhythm=rhythm,
         )
         reports.append(report)
 
@@ -2476,6 +2558,7 @@ def compile_continuous_album(
     mood: Mood = Mood.CINEMATIC,
     modulation_strategy: str | None = None,
     transition_instrument: int = 89,
+    rhythm: str | object | None = None,
 ) -> dict:
     """
     Stitches multiple tracks into a single continuous arrangement with crossfades
@@ -2513,6 +2596,12 @@ def compile_continuous_album(
 
     if not tracks_metadata:
         raise ValueError("tracks_metadata cannot be empty.")
+
+    if rhythm is None:
+        raise ValueError(
+            "rhythm is required for compile_continuous_album. Pass a rhythm name "
+            "(str) or RhythmGenerator instance."
+        )
 
     # Mandatory sectioning check (with AI auto-detection fallback)
     for idx, meta in enumerate(tracks_metadata):
@@ -2701,6 +2790,7 @@ def compile_continuous_album(
         cc_events=combined_cc_events,
         tempo_events=combined_tempo_events,
         sections=combined_sections,
+        rhythm=rhythm,
     )
 
 
@@ -2817,6 +2907,9 @@ class AlbumNarrative:
     instruments_maps: list[dict[str, int]]
     moods: list[Mood]
     names: list[str]
+    # Rhythm is mandatory for all album production. Pass a rhythm name (str)
+    # from RHYTHM_LIBRARY/DYNAMIC_RHYTHM_REGISTRY or a RhythmGenerator instance.
+    rhythm: str | object
     strict_validation: bool = True
 
     def generate(self) -> dict:
@@ -2902,6 +2995,7 @@ class AlbumNarrative:
                 sections=sections,
                 return_state=True,
                 strict_validation=self.strict_validation,
+                rhythm=self.rhythm,
             )
 
             tracks_metadata.append(meta)
@@ -2913,7 +3007,8 @@ class AlbumNarrative:
             output_path=out_path / "continuous_album.mid",
             overlap_beats=16.0,
             mood=Mood.CINEMATIC,
-            modulation_strategy="pivot"
+            modulation_strategy="pivot",
+            rhythm=self.rhythm,
         )
 
         # Move individual tracks to their final home
