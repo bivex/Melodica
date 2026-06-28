@@ -4,8 +4,9 @@
 """
 generate_prologue_symphony.py
 Renders the complete 6-track Symphonic Album representing the Prologue and Chapter 1
-of the romance novel "The Vow of St. James". Saves each movement as a separate,
-correctly structured MIDI file inside output/prologue_symphony/.
+of the romance novel "The Vow of St. James". Uses advanced, high-level general-midi
+orchestral generators (strings, woodwinds, brass, timpani, harp) with specific
+articulations for every movement.
 """
 
 from __future__ import annotations
@@ -22,64 +23,154 @@ def generate_full_prologue_album():
     minor_scale = Scale(0, Mode.NATURAL_MINOR)  # C Minor
     major_scale = Scale(7, Mode.MAJOR)          # G Major for Emerald Shipping Co.
 
-    # 1. Configuration with tracks representing all instruments
+    # 1. Configuration with pro orchestral tracks matching each movement
     config = IdeaToolConfig(
         scale=minor_scale,
         bars=24,  # 6 parts * 4 bars each
         tracks=[
-            # String section tracks
+            # --- Movement 1: The Hostile Hall (1802) ---
             TrackConfig(
-                name="double_bass",
-                generator_type="chord_layout",
-                instrument="double_bass",
-                params={
-                    "instrument_name": "double_bass",
-                    "instruments": ["double_bass", "cello", "viola", "violin"]
-                }
+                name="m1_contrabass",
+                generator_type="contrabass",
+                instrument="contrabass",
+                params={"articulation": "sustained", "bass_voice": True}
             ),
             TrackConfig(
-                name="cello",
-                generator_type="chord_layout",
+                name="m1_cello",
+                generator_type="cello",
                 instrument="cello",
-                params={
-                    "instrument_name": "cello",
-                    "instruments": ["double_bass", "cello", "viola", "violin"]
-                }
+                params={"articulation": "sustained"}
             ),
             TrackConfig(
-                name="violin",
-                generator_type="chord_layout",
+                name="m1_violin",
+                generator_type="violin",
                 instrument="violin",
-                params={
-                    "instrument_name": "violin",
-                    "instruments": ["double_bass", "cello", "viola", "violin"]
-                }
+                params={"articulation": "sustained", "con_sordino": True}
             ),
             TrackConfig(
-                name="glockenspiel",
+                name="m1_french_horn",
+                generator_type="french_horn",
+                instrument="french_horn",
+                params={"articulation": "sustained"}
+            ),
+            TrackConfig(
+                name="m1_oboe",
+                generator_type="oboe",
+                instrument="oboe",
+                params={"articulation": "sustained", "vibrato": True}
+            ),
+
+            # --- Movement 2: Sarah's Lullaby (1802) ---
+            TrackConfig(
+                name="m2_violin_pizz",
+                generator_type="violin",
+                instrument="violin",
+                params={"articulation": "pizzicato", "position": 3}
+            ),
+            TrackConfig(
+                name="m2_glock",
                 generator_type="chord_layout",
                 instrument="glockenspiel",
-                params={
-                    "instrument_name": "glockenspiel",
-                    "instruments": ["double_bass", "cello", "viola", "violin"]
-                }
+                params={"instrument_name": "glockenspiel"}
             ),
-            # Canon track for Track 4 (Escape from Winchester House)
             TrackConfig(
-                name="canon_voice",
-                generator_type="canon",
+                name="m2_harp",
+                generator_type="harp",
+                instrument="harp",
+                params={"pattern": "arpeggio", "direction": "up"}
+            ),
+
+            # --- Movement 3: Emerald Shipping Co. (1816) ---
+            TrackConfig(
+                name="m3_flute",
+                generator_type="flute",
+                instrument="flute",
+                params={"articulation": "legato", "vibrato": True}
+            ),
+            TrackConfig(
+                name="m3_clarinet",
+                generator_type="clarinet",
+                instrument="clarinet",
+                params={"articulation": "legato", "vibrato": False}
+            ),
+            TrackConfig(
+                name="m3_violin_spic",
+                generator_type="violin",
                 instrument="violin",
-                params={
-                    "delay_beats": 4.0,
-                    "interval": 12  # octave canon
-                }
+                params={"articulation": "spiccato"}
             ),
-            # Woodwind track for Track 3 (Emerald Shipping Co.)
             TrackConfig(
-                name="flute",
-                generator_type="generic",
-                instrument="flute"
-            )
+                name="m3_cello_pizz",
+                generator_type="cello",
+                instrument="cello",
+                params={"articulation": "pizzicato"}
+            ),
+
+            # --- Movement 4: Escape from Winchester House (1816) ---
+            TrackConfig(
+                name="m4_violin_dux",
+                generator_type="violin",
+                instrument="violin",
+                params={"articulation": "legato"}
+            ),
+            TrackConfig(
+                name="m4_viola_canon",
+                generator_type="canon",
+                instrument="viola",
+                params={"delay_beats": 4.0, "interval": 12}
+            ),
+
+            # --- Movement 5: Rescuing Norah (1816) ---
+            TrackConfig(
+                name="m5_violin_trem",
+                generator_type="violin",
+                instrument="violin",
+                params={"articulation": "tremolo", "con_sordino": True}
+            ),
+            TrackConfig(
+                name="m5_viola_trem",
+                generator_type="viola",
+                instrument="viola",
+                params={"articulation": "tremolo", "con_sordino": True}
+            ),
+            TrackConfig(
+                name="m5_cello_legato",
+                generator_type="cello",
+                instrument="cello",
+                params={"articulation": "legato", "position": 2}
+            ),
+            TrackConfig(
+                name="m5_contrabass",
+                generator_type="contrabass",
+                instrument="contrabass",
+                params={"articulation": "sustained"}
+            ),
+
+            # --- Movement 6: Storm in the Harbor Tavern (1816) ---
+            TrackConfig(
+                name="m6_violin_stac",
+                generator_type="violin",
+                instrument="violin",
+                params={"articulation": "staccato", "double_stops": True}
+            ),
+            TrackConfig(
+                name="m6_french_horn",
+                generator_type="french_horn",
+                instrument="french_horn",
+                params={"articulation": "staccato"}
+            ),
+            TrackConfig(
+                name="m6_trumpet_fanfare",
+                generator_type="trumpet",
+                instrument="trumpet",
+                params={"articulation": "staccato", "fanfare_mode": True}
+            ),
+            TrackConfig(
+                name="m6_timpani",
+                generator_type="timpani",
+                instrument="timpani",
+                params={"stroke_pattern": "roll"}
+            ),
         ],
         parts=[
             # Act I: England, 1802
@@ -93,25 +184,21 @@ def generate_full_prologue_album():
         ]
     )
 
-    # Apply track mutes to ensure instruments only play in their corresponding movements
-    config.parts[0].track_mute = ["glockenspiel", "canon_voice"]
-    config.parts[1].track_mute = ["double_bass", "cello", "flute", "canon_voice"]
-    config.parts[2].track_mute = ["double_bass", "glockenspiel", "canon_voice"]
-    config.parts[3].track_mute = ["double_bass", "cello", "flute", "glockenspiel"]
-    config.parts[4].track_mute = ["flute", "glockenspiel", "canon_voice"]
-    config.parts[5].track_mute = ["flute", "canon_voice"]
+    # Automatically compute track mutes based on the movement prefix
+    all_track_names = [tc.name for tc in config.tracks]
+    for idx, part in enumerate(config.parts):
+        prefix = f"m{idx+1}_"
+        part.track_mute = [name for name in all_track_names if not name.startswith(prefix)]
 
-    print("Generating full concept album tracks using Melodica IdeaEngine...")
+    print("Generating pro-level orchestral concept album using Melodica...")
     tool = IdeaTool(config)
-    
-    # Generate all fully-wired Track objects
     tracks_dict = tool.render_tracks()
 
     # Create output directory
     output_dir = Path("output/prologue_symphony")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Slice notes by movement boundaries
+    # Slice notes by movement boundaries and export to MIDI
     from melodica.midi import export_midi
 
     current_start = 0.0
@@ -120,18 +207,15 @@ def generate_full_prologue_album():
         duration_beats = part.bars * ts[0]
         part_end = current_start + duration_beats
 
-        # Create sliced Track objects for this part
         sliced_tracks = []
         for name, track in tracks_dict.items():
             sliced_notes = []
             for note in track.notes:
                 if current_start <= note.start < part_end:
-                    # Deep copy and shift time to start at 0.0
                     new_note = copy.deepcopy(note)
                     new_note.start -= current_start
                     sliced_notes.append(new_note)
 
-            # Only export track if it has notes in this movement
             if sliced_notes:
                 sliced_track = Track(
                     name=track.name,
@@ -144,15 +228,14 @@ def generate_full_prologue_album():
                 )
                 sliced_tracks.append(sliced_track)
 
-        # Export movement MIDI
         filename = f"{idx+1:02d}_{part.name.lower()}.mid"
         dest_path = output_dir / filename
         export_midi(sliced_tracks, dest_path)
-        print(f" -> Exported movement {idx+1}: {dest_path}")
+        print(f" -> Exported movement {idx+1} [Pro Orchestration]: {dest_path}")
 
         current_start = part_end
 
-    print("\nAll movements exported successfully into output/prologue_symphony/!")
+    print("\nAll movements with advanced arrangements exported successfully!")
 
 
 if __name__ == "__main__":
