@@ -31,6 +31,14 @@
 
 ---
 
+## P7 — ВЫПОЛНЕНО ✓
+
+### 22. Dynamic Tempo Modulations & Time Signature Changes ✓
+- Плавное замедление (ritardando) на переходах или ускорение (accelerando) по кривой TensionCurve.
+- Поддержка смены размеров и экспорта глобальной MusicTimeline в MIDI.
+
+---
+
 ## P1 — ВЫПОЛНЕНО ✓
 
 ### 1. Модуляция между секциями ✓
