@@ -364,6 +364,13 @@ class IdeaToolConfig:
     # Polyphonic Voice Coordinator
     use_polyphony_coordinator: bool = False
 
+    # Tempo Modulation
+    use_tempo_modulation: bool = False
+    ritardando_beats: float = 4.0
+    ritardando_factor: float = 0.85
+    use_tension_tempo: bool = False
+    tension_tempo_range: float = 15.0
+
     # For "harmonize_melody" workflow: caller-supplied melody to harmonize
     seed_melody: list[NoteInfo] | None = None
 
@@ -400,6 +407,11 @@ class IdeaTool:
         # Phrase memory: stores generated phrases for recall in later sections
         self._phrase_memory = PhraseMemory()
         self._pan_cc_events: dict[str, list[tuple[float, int, int]]] = {}
+        
+        # Expose MIDI metadata
+        self.tempo_events = None
+        self.cc_events = None
+        self.mpe_tracks = None
         # Phrase pool: RC-style shared phrase storage (Letter Rule)
         self._phrase_pool: PhrasePool | None = None
 
@@ -919,6 +931,28 @@ class IdeaTool:
                     psycho_total,
                     len(harmonic_clashes),
                 )
+
+        # ---- Tempo Modulation ----
+        if self.config.use_tempo_modulation:
+            from melodica.composer.tempo_modulator import TempoModulator
+            t_curve = None
+            if self.config.use_tension_curve:
+                total_arrangement_beats = sum(p.bars * p.time_signature[0] for p in parts)
+                from melodica.composer.tension_curve import TensionCurve
+                t_curve = TensionCurve(total_beats=total_arrangement_beats, curve_type="classical")
+            modulator = TempoModulator(
+                default_tempo=self.config.tempo,
+                ritardando_beats=self.config.ritardando_beats,
+                ritardando_factor=self.config.ritardando_factor,
+                use_tension_tempo=self.config.use_tension_tempo,
+                tension_tempo_range=self.config.tension_tempo_range
+            )
+            result["_tempo_events"] = modulator.generate_events(parts, tension_curve=t_curve)
+
+        # Expose metadata on the IdeaTool instance
+        self.tempo_events = result.get("_tempo_events")
+        self.cc_events = result.get("_cc_events")
+        self.mpe_tracks = result.get("_mpe_tracks")
 
         return result
 

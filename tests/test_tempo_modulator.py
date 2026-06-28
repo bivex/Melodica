@@ -61,3 +61,34 @@ def test_tempo_modulator_tension():
     # Verify tempo values change according to tension
     bpms = [e[1] for e in tension_events]
     assert len(set(bpms)) > 1  # should not be all the same tempo
+
+
+def test_tempo_modulator_integration_in_idea_tool():
+    from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart
+    
+    config = IdeaToolConfig(
+        scale=Scale(0, Mode.MAJOR),
+        bars=4,
+        tempo=100,
+        use_tempo_modulation=True,
+        ritardando_beats=2.0,
+        ritardando_factor=0.9,
+        tracks=[
+            TrackConfig(name="melody", generator_type="melody", instrument="piano")
+        ],
+        parts=[
+            IdeaPart(name="Verse", bars=4, tempo=100),
+            IdeaPart(name="Chorus", bars=4, tempo=120)
+        ]
+    )
+    
+    tool = IdeaTool(config)
+    result = tool.generate()
+    
+    assert "_tempo_events" in result
+    assert len(result["_tempo_events"]) > 0
+    
+    # Exposed public attribute should be populated
+    assert tool.tempo_events is not None
+    assert len(tool.tempo_events) > 0
+
