@@ -22,20 +22,12 @@
 
 ---
 
-## P6 — Системные доработки ядра (Core Enhancements)
+## P6 — ВЫПОЛНЕНО ✓
 
-### 18. Polyphonic Voice Coordinator
-- Координация произвольных мелодических генераторов по вертикали.
-- Предотвращение гармонических столкновений (диссонансов) и частотного перекрытия.
-
-### 19. Articulation-Aware Release Envelopes в Antiphony
-- Плавное затухание громкости (CC7/CC11) для неактивных групп в Antiphony вместо жесткого обрезания нот.
-
-### 20. Chord/Quality Type Standardization
-- Унификация типов качества аккорда (`chord.quality`) во всем коде движка (строго `Quality` enum с поддержкой свойств `is_minor`, `is_diminished`, `is_augmented`).
-
-### 21. Part Slicing Guards & Tying
-- Умная нарезка нот по границам частей с соединением лигой (ties) пересекающих границ нот.
+### 18. Polyphonic Voice Coordinator ✓
+### 19. Articulation-Aware Release Envelopes в Antiphony ✓
+### 20. Chord/Quality Type Standardization ✓
+### 21. Part Slicing Guards & Tying ✓
 
 ---
 
