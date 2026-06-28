@@ -293,13 +293,24 @@ def generate_full_prologue_album():
                 if part_start <= beat < part_end:
                     sliced_tempo_events.append((beat - part_start, bpm))
 
+        from melodica.types import MusicTimeline, TimeSignatureLabel
+        slice_timeline = MusicTimeline(
+            time_signatures=[
+                TimeSignatureLabel(
+                    numerator=part.time_signature[0],
+                    denominator=part.time_signature[1],
+                    start=0.0
+                )
+            ]
+        )
+
         filename = f"{idx+1:02d}_{part.name.lower()}.mid"
         dest_path = output_dir / filename
         export_midi(
             sliced_tracks,
             dest_path,
             bpm=part.tempo,
-            time_sig=part.time_signature,
+            timeline=slice_timeline,
             tempo_events=sliced_tempo_events if sliced_tempo_events else None
         )
         print(f" -> Exported movement {idx+1} [Dream Pop Style] - Tempo: {part.tempo} BPM, Time Sig: {part.time_signature[0]}/{part.time_signature[1]}: {dest_path}")
