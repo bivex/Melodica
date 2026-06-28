@@ -92,3 +92,40 @@ def test_tempo_modulator_integration_in_idea_tool():
     assert tool.tempo_events is not None
     assert len(tool.tempo_events) > 0
 
+
+def test_global_timeline_generation():
+    from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart
+    
+    config = IdeaToolConfig(
+        scale=Scale(0, Mode.MAJOR),
+        bars=4,
+        tracks=[
+            TrackConfig(name="melody", generator_type="melody", instrument="piano")
+        ],
+        parts=[
+            # Verse in 4/4
+            IdeaPart(name="Verse", bars=4, time_signature=(4, 4)),
+            # Chorus in 3/4
+            IdeaPart(name="Chorus", bars=4, time_signature=(3, 4))
+        ]
+    )
+    
+    tool = IdeaTool(config)
+    tool.generate()
+    
+    assert tool.timeline is not None
+    assert len(tool.timeline.time_signatures) == 2
+    
+    # Check Verse time sig (start=0.0)
+    ts0 = tool.timeline.time_signatures[0]
+    assert ts0.start == 0.0
+    assert ts0.numerator == 4
+    assert ts0.denominator == 4
+    
+    # Check Chorus time sig (start=16.0 beats, since 4 bars * 4/4 = 16 beats)
+    ts1 = tool.timeline.time_signatures[1]
+    assert ts1.start == 16.0
+    assert ts1.numerator == 3
+    assert ts1.denominator == 4
+
+

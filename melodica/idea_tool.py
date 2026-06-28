@@ -412,6 +412,7 @@ class IdeaTool:
         self.tempo_events = None
         self.cc_events = None
         self.mpe_tracks = None
+        self.timeline = None
         # Phrase pool: RC-style shared phrase storage (Letter Rule)
         self._phrase_pool: PhrasePool | None = None
 
@@ -953,6 +954,34 @@ class IdeaTool:
         self.tempo_events = result.get("_tempo_events")
         self.cc_events = result.get("_cc_events")
         self.mpe_tracks = result.get("_mpe_tracks")
+
+        # Build global MusicTimeline for time signature / key / marker metadata
+        from melodica.types import MusicTimeline, KeyLabel, TimeSignatureLabel, MarkerLabel
+        timeline_chords = result.get("_chords", []) if isinstance(result.get("_chords"), list) else self._chords
+        timeline_keys = []
+        timeline_time_sigs = []
+        timeline_markers = []
+        
+        beat_cursor = 0.0
+        for part in parts:
+            part_beats = part.bars * part.time_signature[0]
+            timeline_keys.append(KeyLabel(scale=part.scale, start=beat_cursor, duration=part_beats))
+            timeline_time_sigs.append(
+                TimeSignatureLabel(
+                    numerator=part.time_signature[0],
+                    denominator=part.time_signature[1],
+                    start=beat_cursor
+                )
+            )
+            timeline_markers.append(MarkerLabel(text=part.name, start=beat_cursor))
+            beat_cursor += part_beats
+            
+        self.timeline = MusicTimeline(
+            chords=timeline_chords,
+            keys=timeline_keys,
+            time_signatures=timeline_time_sigs,
+            markers=timeline_markers
+        )
 
         return result
 
