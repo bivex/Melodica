@@ -87,7 +87,8 @@ _TEXTURAL = ("ostinato", "tremolo", "pizz", "pizzicato", "arpeggio",
              "pedal", "harp", "glock", "bell", "mallet", "timp",
              "strings", "cello", "viola", "bass", "bass2",
              "pad", "texture", "chords", "keys", "rhodes", "synth", "wash",
-             "riser", "impact", "sweep", "swell", "noise", "effects")
+             "riser", "impact", "sweep", "swell", "noise", "effects",
+             "choir", "organ")
 
 
 def _is_textural(name: str) -> bool:
