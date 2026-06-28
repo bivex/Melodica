@@ -10,8 +10,18 @@ in Melodica.
 import pytest
 from pathlib import Path
 
-from melodica.types import NoteInfo, Scale, Mode
+from melodica.types import NoteInfo, Scale, Mode, parse_progression
 from melodica.composer.album_pipeline import compile_continuous_album, Mood, detect_sections_intelligently
+
+# Production fixtures — rhythm/key/chords/genre/time_signature are mandatory.
+_KEY = Scale(root=0, mode=Mode.MAJOR)
+_CHORDS = parse_progression("I - V - vi - IV", _KEY)
+_REQUIRED = dict(
+    rhythm="straight_quarters",
+    chords=_CHORDS,
+    genre="lofi",
+    time_signature=(4, 4),
+)
 
 
 def test_intelligent_section_fallback(tmp_path):
@@ -23,12 +33,14 @@ def test_intelligent_section_fallback(tmp_path):
         "tracks": t1_notes,
         "bpm": 100.0,
         "instruments": {"lead": 73},
+        "key": _KEY,
     }
     t2_meta = {
         "tracks": t2_notes,
         "bpm": 120.0,
         "instruments": {"lead": 73},
         "sections": [],  # empty list
+        "key": _KEY,
     }
 
     out_file = tmp_path / "continuous_album_auto.mid"
@@ -38,7 +50,8 @@ def test_intelligent_section_fallback(tmp_path):
         [t1_meta, t2_meta],
         output_path=out_file,
         overlap_beats=2.0,
-        mood=Mood.CHAMBER
+        mood=Mood.CHAMBER,
+        **_REQUIRED,
     )
 
     assert out_file.exists()
@@ -71,7 +84,8 @@ def test_sections_not_in_order(tmp_path):
             [t1_meta, t2_meta],
             output_path=out_file,
             overlap_beats=2.0,
-            mood=Mood.CHAMBER
+            mood=Mood.CHAMBER,
+            **_REQUIRED,
         )
 
 
@@ -85,12 +99,14 @@ def test_valid_sections_and_compilation(tmp_path):
         "bpm": 100.0,
         "instruments": {"lead": 73},
         "sections": [(0.0, "Intro"), (2.0, "Theme")],
+        "key": _KEY,
     }
     t2_meta = {
         "tracks": t2_notes,
         "bpm": 120.0,
         "instruments": {"lead": 73},
         "sections": [(0.0, "Intro")],
+        "key": _KEY,
     }
 
     out_file = tmp_path / "continuous_album_success.mid"
@@ -99,7 +115,8 @@ def test_valid_sections_and_compilation(tmp_path):
         [t1_meta, t2_meta],
         output_path=out_file,
         overlap_beats=2.0,
-        mood=Mood.CHAMBER
+        mood=Mood.CHAMBER,
+        **_REQUIRED,
     )
 
     assert out_file.exists()

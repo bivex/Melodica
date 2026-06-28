@@ -12,10 +12,15 @@ from melodica.types import (
     ChordLabel,
     ModulationEngine,
     Quality,
+    parse_progression,
 )
 from melodica.composer.transition_coordinator import TransitionCoordinator
 from melodica.composer.album_pipeline import compile_continuous_album, Mood
 from melodica.types import Mode
+
+# Production fixtures — key/chords/genre/time_signature are now mandatory.
+_KEY = Scale(root=0, mode=Mode.MAJOR)
+_CHORDS = parse_progression("I - V - vi - IV", _KEY)
 
 
 def test_transition_coordinator_ducking():
@@ -149,6 +154,7 @@ def test_compile_continuous_album(tmp_path):
         "instruments": {"lead": 73},
         "cc_events": {"lead": [(0.0, 74, 64)]},
         "sections": [(0.0, Mood.CHAMBER)],
+        "key": _KEY,
     }
     t2_meta = {
         "tracks": t2_notes,
@@ -156,6 +162,7 @@ def test_compile_continuous_album(tmp_path):
         "instruments": {"lead": 73},
         "cc_events": {"lead": [(0.0, 74, 80)]},
         "sections": [(0.0, Mood.CHAMBER)],
+        "key": _KEY,
     }
 
     out_file = tmp_path / "continuous_album.mid"
@@ -167,6 +174,9 @@ def test_compile_continuous_album(tmp_path):
         overlap_beats=2.0,
         mood=Mood.CHAMBER,
         rhythm="straight_quarters",
+        chords=_CHORDS,
+        genre="lofi",
+        time_signature=(4, 4),
     )
 
     assert out_file.exists()
@@ -273,6 +283,9 @@ def test_compile_continuous_album_modulation(tmp_path):
         modulation_strategy="dominant",
         transition_instrument=89,
         rhythm="straight_quarters",
+        chords=_CHORDS,
+        genre="lofi",
+        time_signature=(4, 4),
     )
 
     assert out_file.exists()

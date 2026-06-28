@@ -14,7 +14,7 @@ Covers:
 
 import pytest
 
-from melodica.types import NoteInfo, Scale, Mode
+from melodica.types import NoteInfo, Scale, Mode, parse_progression
 from melodica.rhythm import RhythmEvent, apply_rhythm_events
 from melodica.rhythm.library import RHYTHM_LIBRARY, DYNAMIC_RHYTHM_REGISTRY
 from melodica.composer.album_pipeline import (
@@ -25,6 +25,14 @@ from melodica.composer.album_pipeline import (
     Mood,
     _resolve_rhythm,
 )
+
+
+# Shared production fixtures (key/chords/genre/time_signature are now mandatory
+# alongside rhythm — see test_album_required_fields.py for their contract).
+KEY = Scale(root=0, mode=Mode.MAJOR)
+CHORDS = parse_progression("I - V - vi - IV", KEY)
+GENRE = "lofi"
+TIME_SIG = (4, 4)
 
 
 # A grid that is robust to loop filling: every 2 beats, dur 1.
@@ -155,6 +163,10 @@ class TestProduceTrackRhythm:
                 path=tmp_path / "out.mid",
                 verbose=False,
                 rhythm="not_a_real_rhythm",
+                key=KEY,
+                chords=CHORDS,
+                genre=GENRE,
+                time_signature=TIME_SIG,
             )
 
     def test_named_rhythm_runs_pipeline(self, tmp_path):
@@ -166,26 +178,30 @@ class TestProduceTrackRhythm:
             mood=Mood.AMBIENT,
             verbose=False,
             rhythm="straight_quarters",
+            key=KEY,
+            chords=CHORDS,
+            genre=GENRE,
+            time_signature=TIME_SIG,
         )
         # Report dict is returned on success (non-return_state path).
         assert isinstance(report, dict)
         assert "profiles" in report or "mood" in report
 
-    def test_lays_notes_onto_grid_via_return_state(self, tmp_path):
-        state = produce_track(
-            tracks=_track_dict(),
-            bpm=120,
-            instruments={"lead": 0},
-            path=tmp_path / "out.mid",
-            mood=Mood.AMBIENT,
-            verbose=False,
-            rhythm="straight_quarters",
-            return_state=True,
-        )
-        notes = state["tracks"]["lead"]
+    def test_lays_notes_onto_grid(self):
+        # Exercise the rhythm stage in isolation — downstream stages (humanize,
+        # entropy) deliberately add micro-timing, so we verify the grid is
+        # imposed HERE rather than asserting the full pipeline stays on-grid.
+        from melodica.composer.album_pipeline import _stage_rhythm
+
+        kw = {
+            "tracks": _track_dict(),
+            "rhythm": "straight_quarters",
+        }
+        out = _stage_rhythm(kw)
+        notes = out["tracks"]["lead"]
         assert notes, "rhythm stage should keep at least one note"
-        # straight_quarters is onsets at integer beats; after rhythm stage every
-        # note onset should be very close to an integer beat.
+        # straight_quarters is onsets at integer beats; after the rhythm stage
+        # every note onset must be very close to an integer beat.
         for n in notes:
             frac = n.start - round(n.start)
             assert abs(frac) < 0.05, f"note onset {n.start} off the integer grid"
@@ -225,12 +241,16 @@ class TestAlbumAndContinuousRhythm:
             "tracks": _track_dict(),
             "bpm": 120.0,
             "instruments": {"lead": 0},
+            "key": KEY,
         }
         report = compile_continuous_album(
             tracks_metadata=[meta],
             output_path=tmp_path / "out.mid",
             mood=Mood.AMBIENT,
             rhythm="straight_quarters",
+            chords=CHORDS,
+            genre=GENRE,
+            time_signature=TIME_SIG,
         )
         assert isinstance(report, dict)
 

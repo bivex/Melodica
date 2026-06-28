@@ -220,6 +220,8 @@ def test_dynamic_tempo_export(tmp_path):
     ]
     tracks = {"lead": notes}
     instruments = {"lead": 0}
+    _key = Scale(root=0, mode=Mode.MAJOR)
+    _chords = parse_progression("I - V - vi - IV", _key)
 
     # Generate custom tempo events representing dynamic accelerando
     # Beat 0: 70 BPM, Beat 2: 120 BPM
@@ -235,6 +237,11 @@ def test_dynamic_tempo_export(tmp_path):
         tempo_events=tempo_events,
         verbose=False,
         sections=[(0.0, Mood.CHAMBER)],
+        rhythm="straight_quarters",
+        key=_key,
+        chords=_chords,
+        genre="lofi",
+        time_signature=(4, 4),
     )
 
     # Read back MIDI file and inspect set_tempo events

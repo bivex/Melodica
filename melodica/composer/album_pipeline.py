@@ -277,10 +277,14 @@ _ROLE_PAN_PROFILES: Dict[str, Dict[Role, float]] = {
 # Fallback default (kept separate from profiles so every entry stays in one place)
 _ROLE_PAN: Dict[Role, float] = _ROLE_PAN_PROFILES["techno"]
 
+# Neutral default genre: 'lofi' has the most centred pan profile (smallest
+# deviations), so it is the safest fallback when a caller omits `genre`.
+DEFAULT_GENRE = "lofi"
+
 
 def _get_role_pan_map(genre: str | None = None) -> Dict[Role, float]:
-    """Return the pan map for a given genre, falling back to 'techno'."""
-    return _ROLE_PAN_PROFILES.get(genre or "techno", _ROLE_PAN_PROFILES["techno"])
+    """Return the pan map for a given genre, falling back to DEFAULT_GENRE."""
+    return _ROLE_PAN_PROFILES.get(genre or DEFAULT_GENRE, _ROLE_PAN_PROFILES[DEFAULT_GENRE])
 
 
 def _get_pan_for_role(role: Role, genre: str | None = None) -> float:
@@ -1841,6 +1845,7 @@ def _stage_export(kw):
         str(kw["path"]),
         bpm=kw["bpm"],
         key=kw.get("key"),
+        time_sig=kw.get("time_signature", (4, 4)),
         instruments=kw["instruments"],
         cc_events=kw["_all_cc"],
         tempo_events=kw.get("tempo_events"),
@@ -2048,7 +2053,7 @@ def produce_track(
     key: Scale | None = None,
     psycho_verify_enabled: bool = True,
     verbose: bool = True,
-    genre: str | None = None,
+    genre: str = DEFAULT_GENRE,
     sections: List[Tuple[float, Mood | str]] | None = None,
     chords: List | None = None,
     cc_events: Dict[str, List[Tuple[float, int, int]]] | None = None,
@@ -2060,6 +2065,7 @@ def produce_track(
     return_state: bool = False,
     strict_validation: bool = False,
     rhythm: str | object | None = None,
+    time_signature: tuple[int, int] | None = None,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -2105,9 +2111,37 @@ def produce_track(
             "rhythm is required for produce_track. Pass a rhythm name (str from "
             "RHYTHM_LIBRARY/DYNAMIC_RHYTHM_REGISTRY) or a RhythmGenerator instance."
         )
+    if key is None:
+        raise ValueError(
+            "key is required for produce_track. Pass a Scale instance."
+        )
+    if chords is None:
+        raise ValueError(
+            "chords is required for produce_track. Pass a chord progression "
+            "(list[ChordLabel]); without it the harmonic stages (texture, "
+            "non_chord_tones, tension) are silently skipped."
+        )
+    if genre not in _ROLE_PAN_PROFILES:
+        raise ValueError(
+            f"Unknown genre {genre!r}; must be one of {sorted(_ROLE_PAN_PROFILES)}."
+        )
+    if time_signature is None:
+        raise ValueError("time_signature is required for produce_track, e.g. (4, 4).")
+    if (
+        not isinstance(time_signature, (tuple, list))
+        or len(time_signature) != 2
+        or not isinstance(time_signature[0], int)
+        or not isinstance(time_signature[1], int)
+        or time_signature[0] <= 0
+        or time_signature[1] not in (1, 2, 4, 8, 16)
+    ):
+        raise ValueError(
+            f"time_signature must be (numerator>0, denominator in {{1,2,4,8,16}}); "
+            f"got {time_signature!r}."
+        )
 
     if not sections:
-        sections = detect_sections_intelligently(tracks, bpm)
+        sections = detect_sections_intelligently(tracks, bpm, time_signature)
         if verbose:
             print(f"   [AI Section Analyzer] Auto-detected arrangement: {', '.join(f'{lbl} (@{start}b)' for start, lbl in sections)}")
 
@@ -2145,7 +2179,7 @@ def produce_track(
         psycho_verify_enabled=psycho_verify_enabled,
         genre=genre,
         sections=sections,
-        chords=None,
+        chords=chords,
         cc_events=cc_events or {},
         tempo_events=tempo_events,
         engine=engine,
@@ -2153,6 +2187,7 @@ def produce_track(
         section_breaks=section_breaks,
         strict_validation=strict_validation,
         rhythm=rhythm,
+        time_signature=time_signature,
     )
 
     # Run stages sequentially
@@ -2169,6 +2204,8 @@ def produce_track(
             "cc_events": kw.get("_all_cc", {}),
             "tempo_events": kw.get("tempo_events", []),
             "key": kw.get("key"),
+            "genre": kw.get("genre"),
+            "time_signature": kw.get("time_signature"),
             "sections": kw.get("sections", []),
             "_report": kw.get("_report", {})
         }
@@ -2502,6 +2539,9 @@ def produce_album(
     album_name: str = "Album",
     output_dir: str = "output/album",
     rhythm: str | object | None = None,
+    chords: List | None = None,
+    genre: str = DEFAULT_GENRE,
+    time_signature: tuple[int, int] | None = None,
 ) -> List[dict]:
     """
     Produce multiple tracks as an album.
@@ -2525,6 +2565,14 @@ def produce_album(
             "rhythm is required for produce_album. Pass a rhythm name (str) or "
             "RhythmGenerator instance."
         )
+    if key is None:
+        raise ValueError("key is required for produce_album. Pass a Scale instance.")
+    if chords is None:
+        raise ValueError(
+            "chords is required for produce_album. Pass a chord progression (list[ChordLabel])."
+        )
+    if time_signature is None:
+        raise ValueError("time_signature is required for produce_album, e.g. (4, 4).")
 
     print("=" * 60)
     print(f"   {album_name}")
@@ -2541,6 +2589,9 @@ def produce_album(
             mood=mood,
             key=key,
             rhythm=rhythm,
+            chords=chords,
+            genre=genre,
+            time_signature=time_signature,
         )
         reports.append(report)
 
@@ -2559,6 +2610,9 @@ def compile_continuous_album(
     modulation_strategy: str | None = None,
     transition_instrument: int = 89,
     rhythm: str | object | None = None,
+    chords: List | None = None,
+    genre: str = DEFAULT_GENRE,
+    time_signature: tuple[int, int] | None = None,
 ) -> dict:
     """
     Stitches multiple tracks into a single continuous arrangement with crossfades
@@ -2602,11 +2656,19 @@ def compile_continuous_album(
             "rhythm is required for compile_continuous_album. Pass a rhythm name "
             "(str) or RhythmGenerator instance."
         )
+    if chords is None:
+        raise ValueError(
+            "chords is required for compile_continuous_album. Pass a chord progression (list[ChordLabel])."
+        )
+    if time_signature is None:
+        raise ValueError("time_signature is required for compile_continuous_album, e.g. (4, 4).")
 
     # Mandatory sectioning check (with AI auto-detection fallback)
     for idx, meta in enumerate(tracks_metadata):
         if "sections" not in meta or not meta["sections"]:
-            meta["sections"] = detect_sections_intelligently(meta.get("tracks", {}), meta.get("bpm", 120.0))
+            meta["sections"] = detect_sections_intelligently(
+                meta.get("tracks", {}), meta.get("bpm", 120.0), time_signature
+            )
         sections = meta["sections"]
         last_beat = -1.0
         for sec_idx, section in enumerate(sections):
@@ -2791,6 +2853,9 @@ def compile_continuous_album(
         tempo_events=combined_tempo_events,
         sections=combined_sections,
         rhythm=rhythm,
+        chords=chords,
+        genre=genre,
+        time_signature=time_signature,
     )
 
 
@@ -2910,6 +2975,11 @@ class AlbumNarrative:
     # Rhythm is mandatory for all album production. Pass a rhythm name (str)
     # from RHYTHM_LIBRARY/DYNAMIC_RHYTHM_REGISTRY or a RhythmGenerator instance.
     rhythm: str | object
+    # Time signature shared across the album, e.g. (4, 4) or (3, 4).
+    time_signature: tuple[int, int]
+    # Optional genre override selecting the pan profile; defaults to
+    # DEFAULT_GENRE ('lofi'). Must be a key of _ROLE_PAN_PROFILES if set.
+    genre: str = DEFAULT_GENRE
     strict_validation: bool = True
 
     def generate(self) -> dict:
@@ -2920,6 +2990,7 @@ class AlbumNarrative:
         out_path.mkdir(parents=True, exist_ok=True)
 
         tracks_metadata = []
+        per_track_chords = []  # chord progression of each track (for the compiled album)
 
         for i in range(len(self.harmonic_journey)):
             key = self.harmonic_journey[i]
@@ -2958,7 +3029,12 @@ class AlbumNarrative:
             )
 
             tool = IdeaTool(config)
-            tracks_dict = tool.generate()
+            result = tool.generate()
+            tracks_dict = {k: v for k, v in result.items() if not k.startswith("_")}
+            # Chord progression generated for this track — required by the
+            # harmonic pipeline stages (texture / non_chord_tones / tension).
+            part_chords = result.get("_chords") or tool.get_chords()
+            per_track_chords.append(part_chords)
 
             # 2. Motif Memory Engine Integration
             lead_track_name = None
@@ -2996,6 +3072,9 @@ class AlbumNarrative:
                 return_state=True,
                 strict_validation=self.strict_validation,
                 rhythm=self.rhythm,
+                chords=part_chords,
+                genre=self.genre,
+                time_signature=self.time_signature,
             )
 
             tracks_metadata.append(meta)
@@ -3009,6 +3088,9 @@ class AlbumNarrative:
             mood=Mood.CINEMATIC,
             modulation_strategy="pivot",
             rhythm=self.rhythm,
+            chords=per_track_chords[0] if per_track_chords else [],
+            genre=self.genre,
+            time_signature=self.time_signature,
         )
 
         # Move individual tracks to their final home

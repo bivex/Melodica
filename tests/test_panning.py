@@ -10,6 +10,7 @@ from melodica.composer.album_pipeline import (
     _auto_spread_panning,
     _get_role_pan_map,
     _ROLE_PAN_PROFILES,
+    DEFAULT_GENRE,
     _TrackProfile,
     Role,
     _get_pan_for_role,
@@ -39,9 +40,12 @@ class TestGenrePanProfiles:
             assert Role.STRINGS in rp, "STRINGS missing in techno"
             assert Role.CHOIR  in rp, "CHOIR missing in techno"
 
-    def test_fallback_is_techno(self):
-        assert _get_role_pan_map(None) == _get_role_pan_map("techno")
-        assert _get_role_pan_map("unknown_genre") == _get_role_pan_map("techno")
+    def test_fallback_is_default_genre(self):
+        # Omitted / unknown genre falls back to DEFAULT_GENRE ('lofi'), which
+        # has the most centred pan profile.
+        assert DEFAULT_GENRE in _ROLE_PAN_PROFILES
+        assert _get_role_pan_map(None) == _get_role_pan_map(DEFAULT_GENRE)
+        assert _get_role_pan_map("unknown_genre") == _get_role_pan_map(DEFAULT_GENRE)
 
     @pytest.mark.parametrize("genre,pad_range", [
         ("techno", (-0.30,  0.00)),   # default: -0.30

@@ -16,7 +16,7 @@ Fix 6: bisect-based O(N log N) psychoacoustic detection
 import math
 import pytest
 
-from melodica.types import NoteInfo, Scale, Mode, Track
+from melodica.types import NoteInfo, Scale, Mode, Track, parse_progression
 from melodica.composer.psychoacoustic import (
     psycho_verify,
     detect_blur,
@@ -36,6 +36,10 @@ from melodica.composer.album_pipeline import (
     _MoodProfile,
     _MOOD_PROFILES,
 )
+
+# Production fixtures — key/chords/genre/time_signature/rhythm are mandatory.
+_KEY = Scale(root=0, mode=Mode.MAJOR)
+_CHORDS = parse_progression("I - V - vi - IV", _KEY)
 
 
 # ---------------------------------------------------------------------------
@@ -57,6 +61,11 @@ def test_no_double_velocity_compression():
             psycho_verify_enabled=False,
             verbose=False,
             sections=[(0.0, Mood.CHAMBER)],
+            rhythm="straight_quarters",
+            key=_KEY,
+            chords=_CHORDS,
+            genre="lofi",
+            time_signature=(4, 4),
         )
     # Profile RMS should not be suspiciously low (double-compress would halve it)
     rms = report["profiles"]["lead"]["rms"]

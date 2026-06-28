@@ -152,6 +152,9 @@ def run_demo():
         key=KEY,
         chords=full_chords,
         sections=[(0.0, Mood.CINEMATIC)],
+        rhythm="straight_quarters",
+        genre="techno",
+        time_signature=(4, 4),
     )
     
     print("Coverage Demo completed successfully!")
