@@ -13,34 +13,29 @@
 
 ---
 
-## P5 — Новые задачи (из анализа контрапункта и оркестровки)
+## P5 — ВЫПОЛНЕНО ✓
 
-### 14. CanonGenerator — имитативный контрапункт
-Источник: Wikipedia/Counterpoint — canon at the fifth/octave, N beats delay.
-- Взять мелодию, сдвинуть на N beats, транспонировать на квинту/октаву вверх
-- Поддержка 2-4 голосов (canon 2-in-1, 3-in-1)
-- Интеграция с `voice_leading.py` — проверка параллельных квинт/октав
+### 14. CanonGenerator — имитативный контрапункт ✓
+### 15. melodic_transforms() — диатонические трансформации мелодии ✓
+### 16. AntiphonySectionBuilder — call-and-response координация ✓
+### 17. ChordVoicingLayout — авто-раскладка аккорда по оркестровым группам ✓
 
-### 15. melodic_transforms() — диатонические трансформации мелодии
-Источник: Wikipedia/Counterpoint — inversion, retrograde, augmentation, diminution.
-- `melodic_inversion(notes, scale)` — зеркало интервалов в диатонике
-- `melodic_retrograde(notes)` — обратный порядок нот
-- `melodic_augmentation(notes, factor)` — умножить длительности
-- `melodic_diminution(notes, factor)` — разделить длительности
-- ToneRow (P/I/R/RI) уже есть для 12-tone — это диатоническая версия
+---
 
-### 16. AntiphonySectionBuilder — call-and-response координация
-Источник: Wikipedia/Orchestration — antiphony between orchestral groups.
-- Разделить IdeaToolConfig треки на группы (strings, winds, brass, perc)
-- Генерировать чередующиеся фразы: group A играет bars 1-2, group B отвечает bars 3-4
-- Поддержка перекрытия (overlap) и эха (echo delay)
+## P6 — Системные доработки ядра (Core Enhancements)
 
-### 17. ChordVoicingLayout — авто-раскладка аккорда по оркестровым группам
-Источник: Wikipedia/Orchestration — cellos=root, violas=fifth, violins=third.
-- `voice_chord(chord, instruments)` → dict[instrument → MIDI pitch]
-- Правила: bass=root, inner voices=fifths/thirds, top=melody note
-- Doubling hints: violins+glockenspiel=sparkling, piccolo+celesta=bright
-- Интеграция с `functional_hmm.py` chord output
+### 18. Polyphonic Voice Coordinator
+- Координация произвольных мелодических генераторов по вертикали.
+- Предотвращение гармонических столкновений (диссонансов) и частотного перекрытия.
+
+### 19. Articulation-Aware Release Envelopes в Antiphony
+- Плавное затухание громкости (CC7/CC11) для неактивных групп в Antiphony вместо жесткого обрезания нот.
+
+### 20. Chord/Quality Type Standardization
+- Унификация типов качества аккорда (`chord.quality`) во всем коде движка (строго `Quality` enum с поддержкой свойств `is_minor`, `is_diminished`, `is_augmented`).
+
+### 21. Part Slicing Guards & Tying
+- Умная нарезка нот по границам частей с соединением лигой (ties) пересекающих границ нот.
 
 ---
 
