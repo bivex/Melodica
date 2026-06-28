@@ -296,6 +296,8 @@ class IdeaPart:
     # Variation type hint (used by VariationPlan):
     # "melodic", "rhythmic", "harmonic", "modal", "reductive", "contrapuntal"
     variation_type: str | None = None
+    # Antiphonic call-and-response settings for this part.
+    antiphony: dict[str, Any] | None = None
 
     @property
     def section_role(self) -> SectionRole | None:
@@ -628,6 +630,30 @@ class IdeaTool:
             result["_chords"] = chords
 
             self._generate_all_tracks(chords, tension_curve, result, parts)
+
+        # ---- Antiphonal Call-and-Response post-processing ----
+        has_antiphony = any(p.antiphony is not None for p in parts)
+        if has_antiphony:
+            from melodica.composer.antiphony import AntiphonySectionBuilder
+            offset_beats = 0.0
+            tracks_instruments = {t.name: t.instrument for t in self.config.tracks}
+            note_tracks = {k: v for k, v in result.items() if not k.startswith("_")}
+            
+            for part in parts:
+                part_beats = part.bars * part.time_signature[0]
+                if part.antiphony:
+                    builder = AntiphonySectionBuilder(**part.antiphony)
+                    note_tracks = builder.process(
+                        note_tracks,
+                        tracks_instruments,
+                        offset_beats,
+                        part_beats,
+                        time_sig_numerator=part.time_signature[0],
+                    )
+                offset_beats += part_beats
+                
+            for k, v in note_tracks.items():
+                result[k] = v
 
         # ---- Post-processing (all workflows) ----
         from melodica._postprocess import apply_texture_control, apply_velocity_shaping
