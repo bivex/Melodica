@@ -64,7 +64,7 @@ def produce_soft_machines_continuous():
         [
             TrackConfig(
                 name="rhodes_texture",
-                generator=LoFiHipHopGenerator(),
+                generator=LoFiHipHopGenerator(include_drums=False, include_bass=False),
                 instrument="rhodes",
                 density=0.55,
                 phrase_schedule=structure_to_schedule("A B A B C C' R R", 4)
@@ -149,7 +149,7 @@ def produce_soft_machines_continuous():
             ),
             TrackConfig(
                 name="rhodes_chords",
-                generator=LoFiHipHopGenerator(),
+                generator=LoFiHipHopGenerator(include_drums=False, include_bass=False),
                 instrument="rhodes",
                 density=0.55,
                 phrase_schedule=structure_to_schedule("A A B B C C R R R", 4)
@@ -188,7 +188,7 @@ def produce_soft_machines_continuous():
         [
             TrackConfig(
                 name="rhodes_texture",
-                generator=LoFiHipHopGenerator(),
+                generator=LoFiHipHopGenerator(include_drums=False, include_bass=False),
                 instrument="rhodes",
                 density=0.45,
                 phrase_schedule=structure_to_schedule("A B C R R R", 4)
