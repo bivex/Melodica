@@ -8,6 +8,7 @@ from melodica.generators.phrase_container import PhraseContainer
 from melodica.generators.phrase_morpher import PhraseMorpher
 from melodica.generators.random_note import RandomNoteGenerator
 from melodica.generators.motive import MotiveGenerator
+from melodica.generators.chord_layout import ChordLayoutGenerator
 
 UTILITY_GENERATORS = {
     "rest": lambda p, cfg: RestGenerator(),
@@ -53,5 +54,11 @@ UTILITY_GENERATORS = {
         development=cfg.get("development", "repeat"),
         scale_steps=cfg.get("scale_steps", True),
         interval_seed=cfg.get("interval_seed"),
+    ),
+    "chord_layout": lambda p, cfg: ChordLayoutGenerator(
+        params=p,
+        instrument_name=cfg.get("instrument_name", "violin"),
+        instruments=cfg.get("instruments"),
+        primary_melody=cfg.get("primary_melody"),
     ),
 }
