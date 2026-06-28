@@ -122,6 +122,25 @@ class TestCanonGenerator:
         # First note should be at t=0, later notes at t>=2.0
         assert notes[0].start == 0.0
 
+    def test_avoid_parallels(self):
+        dux = [
+            NoteInfo(pitch=60, start=0.0, duration=1.0, velocity=80),
+            NoteInfo(pitch=62, start=1.0, duration=1.0, velocity=80),
+            NoteInfo(pitch=64, start=2.0, duration=1.0, velocity=80),
+        ]
+        # With avoid_parallels=False, the pitches are:
+        # Dux: 60, 62, 64
+        # Comes: 67 (at 1.0), 69 (at 2.0), 71 (at 3.0)
+        # Vertical intervals at t=1.0 and t=2.0 are both 5 semitones (parallel fourths).
+        gen_strict = CanonGenerator(delay_beats=1.0, interval_semitones=7, avoid_parallels=False)
+        voices_strict = gen_strict.generate(dux)
+        assert voices_strict[1][1].pitch == 69  # Unchanged
+        
+        # With avoid_parallels=True, the parallel fifth/fourth at t=2.0 is resolved
+        gen_clean = CanonGenerator(delay_beats=1.0, interval_semitones=7, avoid_parallels=True)
+        voices_clean = gen_clean.generate(dux)
+        assert voices_clean[1][1].pitch != 69  # Pitch was adjusted to break the parallel!
+
 
 class TestCallResponse:
     def test_produces_notes(self):

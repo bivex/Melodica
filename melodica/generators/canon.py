@@ -174,6 +174,7 @@ class CanonGenerator(PhraseGenerator):
     n_voices: int = 2
     canon_type: CanonType = "fifth"
     velocity_decay: float = 0.88
+    avoid_parallels: bool = True
 
     def __init__(
         self,
@@ -185,6 +186,7 @@ class CanonGenerator(PhraseGenerator):
         canon_type: CanonType = "fifth",
         velocity_decay: float = 0.88,
         interval: int | None = None,
+        avoid_parallels: bool = True,
     ) -> None:
         super().__init__(params)
         self.delay_beats = delay_beats
@@ -192,6 +194,7 @@ class CanonGenerator(PhraseGenerator):
         self.n_voices = n_voices
         self.canon_type = canon_type
         self.velocity_decay = velocity_decay
+        self.avoid_parallels = avoid_parallels
 
     def render(
         self,
@@ -296,7 +299,54 @@ class CanonGenerator(PhraseGenerator):
             comes = _scale_velocity(comes, vel_factor)
             voices.append(comes)
 
+        if self.avoid_parallels:
+            voices = self._resolve_parallels(voices, _scale)
+
         return voices
+
+    def _resolve_parallels(
+        self,
+        voices: list[list[NoteInfo]],
+        scale: Scale,
+    ) -> list[list[NoteInfo]]:
+        """Scan comes voices and adjust pitches to resolve parallel fifths/octaves against prior voices."""
+        resolved_voices = [list(copy.copy(n) for n in v) for v in voices]
+        scale_pcs = _scale_degrees(scale)
+        
+        for i in range(1, len(resolved_voices)):
+            comes = resolved_voices[i]
+            for j in range(i):
+                prior = resolved_voices[j]
+                
+                for p_idx in range(len(prior) - 1):
+                    p1, p2 = prior[p_idx], prior[p_idx + 1]
+                    
+                    for c_idx in range(len(comes) - 1):
+                        c1, c2 = comes[c_idx], comes[c_idx + 1]
+                        
+                        if abs(p1.start - c1.start) < 0.15 and abs(p2.start - c2.start) < 0.15:
+                            iv1 = (p1.pitch - c1.pitch) % 12
+                            iv2 = (p2.pitch - c2.pitch) % 12
+                            
+                            if iv1 in (0, 5, 7) and iv1 == iv2:
+                                dir_p = 1 if p2.pitch > p1.pitch else (-1 if p2.pitch < p1.pitch else 0)
+                                dir_c = 1 if c2.pitch > c1.pitch else (-1 if c2.pitch < c1.pitch else 0)
+                                
+                                if dir_p == dir_c and dir_p != 0:
+                                    original_pitch = c2.pitch
+                                    best_pitch = original_pitch
+                                    
+                                    alternatives = [original_pitch + 1, original_pitch - 1, original_pitch + 2, original_pitch - 2]
+                                    for alt in alternatives:
+                                        alt_snapped = _nearest_scale_pitch(max(0, min(127, alt)), scale_pcs)
+                                        alt_iv2 = (p2.pitch - alt_snapped) % 12
+                                        if alt_iv2 != iv1:
+                                            best_pitch = alt_snapped
+                                            break
+                                    
+                                    c2.pitch = best_pitch
+                                    
+        return resolved_voices
 
     def total_duration(self, dux: list[NoteInfo]) -> float:
         """Return the total duration of all voices combined."""
