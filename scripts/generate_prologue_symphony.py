@@ -4,13 +4,17 @@
 """
 generate_prologue_symphony.py
 Renders the complete 6-track Symphonic Album representing the Prologue and Chapter 1
-of the romance novel "The Vow of St. James".
+of the romance novel "The Vow of St. James". Saves each movement as a separate,
+correctly structured MIDI file inside output/prologue_symphony/.
 """
 
 from __future__ import annotations
 
-from melodica.types import Scale, Mode, ChordLabel, Quality
+import copy
+from pathlib import Path
+from melodica.types import Scale, Mode, ChordLabel, Quality, NoteInfo
 from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart
+from melodica.midi import Track
 
 
 def generate_full_prologue_album():
@@ -18,8 +22,7 @@ def generate_full_prologue_album():
     minor_scale = Scale(0, Mode.NATURAL_MINOR)  # C Minor
     major_scale = Scale(7, Mode.MAJOR)          # G Major for Emerald Shipping Co.
 
-    # 1. We will construct a configuration with tracks representing all instruments
-    # and parts representing each of the 6 movements/tracks of our album.
+    # 1. Configuration with tracks representing all instruments
     config = IdeaToolConfig(
         scale=minor_scale,
         bars=24,  # 6 parts * 4 bars each
@@ -80,41 +83,76 @@ def generate_full_prologue_album():
         ],
         parts=[
             # Act I: England, 1802
-            IdeaPart(name="Mvt1_HostileHall", bars=4, scale=minor_scale),
-            IdeaPart(name="Mvt2_SarahsLullaby", bars=4, scale=minor_scale),
+            IdeaPart(name="HostileHall", bars=4, scale=minor_scale),
+            IdeaPart(name="SarahsLullaby", bars=4, scale=minor_scale),
             # Act II: London, 1816
-            IdeaPart(name="Mvt3_EmeraldShipping", bars=4, scale=major_scale),
-            IdeaPart(name="Mvt4_EscapeWinchester", bars=4, scale=minor_scale),
-            IdeaPart(name="Mvt5_RescuingNorah", bars=4, scale=minor_scale),
-            IdeaPart(name="Mvt6_TavernStorm", bars=4, scale=minor_scale),
+            IdeaPart(name="EmeraldShipping", bars=4, scale=major_scale),
+            IdeaPart(name="EscapeWinchester", bars=4, scale=minor_scale),
+            IdeaPart(name="RescuingNorah", bars=4, scale=minor_scale),
+            IdeaPart(name="TavernStorm", bars=4, scale=minor_scale),
         ]
     )
 
-    # 2. Add custom mutes to make sure instruments only play in their corresponding movements:
-    # - Mvt 1 (Hostile Hall): double_bass, cello, violin, flute
-    # - Mvt 2 (Sarah's Lullaby): violin, glockenspiel (silent double_bass/cello/flute)
-    # - Mvt 3 (Emerald Shipping): flute, cello, violin
-    # - Mvt 4 (Escape): violin, canon_voice (canon counterpoint)
-    # - Mvt 5 (Rescuing Norah): cello, violin, double_bass
-    # - Mvt 6 (Tavern Storm): double_bass, cello, violin, glockenspiel
-    
-    # We apply this by configuring the track_mute dictionary per part
-    config.parts[0].track_mute = {"glockenspiel", "canon_voice"}
-    config.parts[1].track_mute = {"double_bass", "cello", "flute", "canon_voice"}
-    config.parts[2].track_mute = {"double_bass", "glockenspiel", "canon_voice"}
-    config.parts[3].track_mute = {"double_bass", "cello", "flute", "glockenspiel"}
-    config.parts[4].track_mute = {"flute", "glockenspiel", "canon_voice"}
-    config.parts[5].track_mute = {"flute", "canon_voice"}
+    # Apply track mutes to ensure instruments only play in their corresponding movements
+    config.parts[0].track_mute = ["glockenspiel", "canon_voice"]
+    config.parts[1].track_mute = ["double_bass", "cello", "flute", "canon_voice"]
+    config.parts[2].track_mute = ["double_bass", "glockenspiel", "canon_voice"]
+    config.parts[3].track_mute = ["double_bass", "cello", "flute", "glockenspiel"]
+    config.parts[4].track_mute = ["flute", "glockenspiel", "canon_voice"]
+    config.parts[5].track_mute = ["flute", "canon_voice"]
 
     print("Generating full concept album tracks using Melodica IdeaEngine...")
     tool = IdeaTool(config)
-    tracks = list(tool.render_tracks().values())
+    
+    # Generate all fully-wired Track objects
+    tracks_dict = tool.render_tracks()
 
+    # Create output directory
+    output_dir = Path("output/prologue_symphony")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Slice notes by movement boundaries
     from melodica.midi import export_midi
-    output_path = "output/prologue_symphony.mid"
-    export_midi(tracks, output_path)
-    print("Symphony generated successfully!")
-    print(f"MIDI file containing all 6 movements exported to: {output_path}")
+
+    current_start = 0.0
+    for idx, part in enumerate(config.parts):
+        ts = part.time_signature or (4, 4)
+        duration_beats = part.bars * ts[0]
+        part_end = current_start + duration_beats
+
+        # Create sliced Track objects for this part
+        sliced_tracks = []
+        for name, track in tracks_dict.items():
+            sliced_notes = []
+            for note in track.notes:
+                if current_start <= note.start < part_end:
+                    # Deep copy and shift time to start at 0.0
+                    new_note = copy.deepcopy(note)
+                    new_note.start -= current_start
+                    sliced_notes.append(new_note)
+
+            # Only export track if it has notes in this movement
+            if sliced_notes:
+                sliced_track = Track(
+                    name=track.name,
+                    notes=sliced_notes,
+                    channel=track.channel,
+                    program=track.program,
+                    volume=track.volume,
+                    pan=track.pan,
+                    instrument_name=track.instrument_name,
+                )
+                sliced_tracks.append(sliced_track)
+
+        # Export movement MIDI
+        filename = f"{idx+1:02d}_{part.name.lower()}.mid"
+        dest_path = output_dir / filename
+        export_midi(sliced_tracks, dest_path)
+        print(f" -> Exported movement {idx+1}: {dest_path}")
+
+        current_start = part_end
+
+    print("\nAll movements exported successfully into output/prologue_symphony/!")
 
 
 if __name__ == "__main__":
