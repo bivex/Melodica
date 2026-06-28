@@ -190,6 +190,36 @@ def generate_full_prologue_album():
         prefix = f"m{idx+1}_"
         part.track_mute = [name for name in all_track_names if not name.startswith(prefix)]
 
+    # Configure conversational antiphony (call-and-response) to prevent overlapping/masking
+    config.parts[0].antiphony = {
+        "group_a": ["m1_violin", "m1_cello", "m1_contrabass"],
+        "group_b": ["m1_french_horn", "m1_oboe"],
+        "bars_a": 2.0,
+        "bars_b": 2.0,
+        "overlap_beats": 1.0
+    }
+    config.parts[2].antiphony = {
+        "group_a": ["m3_flute", "m3_clarinet"],
+        "group_b": ["m3_violin_spic", "m3_cello_pizz"],
+        "bars_a": 2.0,
+        "bars_b": 2.0,
+        "overlap_beats": 0.5
+    }
+    config.parts[4].antiphony = {
+        "group_a": ["m5_violin_trem", "m5_viola_trem"],
+        "group_b": ["m5_cello_legato", "m5_contrabass"],
+        "bars_a": 4.0,
+        "bars_b": 4.0,
+        "overlap_beats": 2.0
+    }
+    config.parts[5].antiphony = {
+        "group_a": ["m6_violin_stac"],
+        "group_b": ["m6_french_horn", "m6_trumpet_fanfare", "m6_timpani"],
+        "bars_a": 2.0,
+        "bars_b": 2.0,
+        "overlap_beats": 0.0
+    }
+
     print("Generating pro-level orchestral concept album using Melodica...")
     tool = IdeaTool(config)
     tracks_dict = tool.render_tracks()
