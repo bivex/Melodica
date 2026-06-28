@@ -1780,7 +1780,7 @@ def _stage_export(kw):
         cc_events=kw["_all_cc"],
         tempo_events=kw.get("tempo_events"),
         diagnose=kw.get("verbose", True),
-        strict_validation=kw.get("strict_validation", False),
+        strict_validation=kw.get("strict_validation", True),
     )
     return kw
 
@@ -1992,7 +1992,7 @@ def produce_track(
     style: str = "academic",
     section_breaks: List[Tuple[float, str]] | None = None,
     return_state: bool = False,
-    strict_validation: bool = False,
+    strict_validation: bool = True,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -2817,7 +2817,7 @@ class AlbumNarrative:
     instruments_maps: list[dict[str, int]]
     moods: list[Mood]
     names: list[str]
-    strict_validation: bool = False
+    strict_validation: bool = True
 
     def generate(self) -> dict:
         """Generates all tracks and compiles them into a single continuous album."""
