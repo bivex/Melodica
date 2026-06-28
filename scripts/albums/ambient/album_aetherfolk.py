@@ -99,7 +99,7 @@ def produce_aetherfolk():
                 instrument="bass",
                 density=0.6,
                 octave_shift=0,
-                phrase_schedule=_schedule("A A B B C R", 4),
+                phrase_schedule=_schedule("A A B A B C R", 4),
             ),
             TrackConfig(
                 name="nebula_wash",
@@ -108,7 +108,7 @@ def produce_aetherfolk():
                                           overlap=0.6),
                 instrument="pad",
                 density=0.5,
-                phrase_schedule=_schedule("A B A B C R", 4),
+                phrase_schedule=_schedule("A B A B A C R", 4),
             ),
             TrackConfig(
                 name="glass_harp",
@@ -116,7 +116,7 @@ def produce_aetherfolk():
                 instrument="lead",
                 density=0.5,
                 octave_shift=1,
-                phrase_schedule=_schedule("R A R B C R", 4),
+                phrase_schedule=_schedule("R A R B A C R", 4),
             ),
             TrackConfig(
                 name="tonic_drone_pad",
@@ -124,7 +124,7 @@ def produce_aetherfolk():
                 instrument="pad",
                 density=0.9,
                 octave_shift=-1,
-                phrase_schedule=_schedule("A A B B C R", 4),
+                phrase_schedule=_schedule("A A B A B C R", 4),
             ),
         ],
         # ── II. Glass Forest (C# Phrygian) — shadowed sparkle ──────────
@@ -138,7 +138,7 @@ def produce_aetherfolk():
                 instrument="bass",
                 density=0.6,
                 octave_shift=0,
-                phrase_schedule=_schedule("A A B B C R", 4),
+                phrase_schedule=_schedule("A B C A B R R", 4),
             ),
             TrackConfig(
                 name="music_box_mallet",
@@ -146,14 +146,14 @@ def produce_aetherfolk():
                 instrument="glockenspiel",
                 density=0.55,
                 octave_shift=1,
-                phrase_schedule=_schedule("A B A B C R", 4),
+                phrase_schedule=_schedule("A B A C A R R", 4),
             ),
             TrackConfig(
                 name="celesta_haze_pad",
                 generator=CelestaGenerator(note_density=0.5),
                 instrument="celesta",
                 density=0.4,
-                phrase_schedule=_schedule("R A R B C R", 4),
+                phrase_schedule=_schedule("R A B A C R R", 4),
             ),
             TrackConfig(
                 name="minor_pad",
@@ -162,7 +162,7 @@ def produce_aetherfolk():
                 generator_type="pad",
                 instrument="synth_pad",
                 density=0.45,
-                phrase_schedule=_schedule("A B B C C R", 4),
+                phrase_schedule=_schedule("A B B C A R R", 4),
             ),
             TrackConfig(
                 name="harp_gliss",
@@ -183,7 +183,7 @@ def produce_aetherfolk():
                 instrument="bass",
                 density=0.5,
                 octave_shift=0,
-                phrase_schedule=_schedule("A A A B C R", 4),
+                phrase_schedule=_schedule("A A A A B C R", 4),
             ),
             TrackConfig(
                 name="choir_aahs",
@@ -191,7 +191,7 @@ def produce_aetherfolk():
                                              vibrato=0.4, syllable="aah"),
                 instrument="choir",
                 density=0.5,
-                phrase_schedule=_schedule("A B A B C R", 4),
+                phrase_schedule=_schedule("A A A A B C R", 4),
             ),
             TrackConfig(
                 name="pad_bed",
@@ -200,7 +200,7 @@ def produce_aetherfolk():
                 generator_type="pad",
                 instrument="synth_pad",
                 density=0.4,
-                phrase_schedule=_schedule("A A B B C R", 4),
+                phrase_schedule=_schedule("A A B A B C R", 4),
             ),
             TrackConfig(
                 name="sacred_drone_pad",
@@ -208,7 +208,7 @@ def produce_aetherfolk():
                 instrument="pad",
                 density=0.85,
                 octave_shift=-1,
-                phrase_schedule=_schedule("A A A B C R", 4),
+                phrase_schedule=_schedule("A A A A A C R", 4),
             ),
             TrackConfig(
                 name="bell_toll",
@@ -216,7 +216,7 @@ def produce_aetherfolk():
                 instrument="tubular_bells",
                 density=0.25,
                 octave_shift=0,
-                phrase_schedule=_schedule("R R A R B C R", 4),
+                phrase_schedule=_schedule("R R R A R C R", 4),
             ),
         ],
         # ── IV. The Crystalline Waltz (G Lydian) — dancing light ───────
@@ -230,7 +230,7 @@ def produce_aetherfolk():
                 instrument="bass",
                 density=0.65,
                 octave_shift=0,
-                phrase_schedule=_schedule("A B A B C R", 4),
+                phrase_schedule=_schedule("A B A C A B R", 4),
             ),
             TrackConfig(
                 name="glass_lead",
@@ -242,7 +242,7 @@ def produce_aetherfolk():
                 instrument="lead",
                 density=0.5,
                 octave_shift=0,
-                phrase_schedule=_schedule("A B A B C R", 4),
+                phrase_schedule=_schedule("A B A C A B R", 4),
             ),
             TrackConfig(
                 name="celesta_run_mallet",
@@ -250,7 +250,7 @@ def produce_aetherfolk():
                 instrument="celesta",
                 density=0.55,
                 octave_shift=1,
-                phrase_schedule=_schedule("R A R B C R", 4),
+                phrase_schedule=_schedule("A B C A B A R", 4),
             ),
             TrackConfig(
                 name="lydian_cloud_pad",
@@ -259,14 +259,14 @@ def produce_aetherfolk():
                                           overlap=0.4),
                 instrument="synth_pad",
                 density=0.45,
-                phrase_schedule=_schedule("A B A B C R", 4),
+                phrase_schedule=_schedule("A A B A C B R", 4),
             ),
             TrackConfig(
                 name="harp_arpeggio",
                 generator=HarpGenerator(pattern="arpeggio"),
                 instrument="harp",
                 density=0.5,
-                phrase_schedule=_schedule("R A A B C R", 4),
+                phrase_schedule=_schedule("A B A B C A R", 4),
             ),
         ],
         # ── V. Dissolve into Starlight (B Lydian) — fading return ──────
@@ -280,7 +280,7 @@ def produce_aetherfolk():
                 instrument="bass",
                 density=0.45,
                 octave_shift=0,
-                phrase_schedule=_schedule("A B C R R", 4),
+                phrase_schedule=_schedule("A B C A R R R", 4),
             ),
             TrackConfig(
                 name="nebula_drift_wash",
@@ -289,7 +289,7 @@ def produce_aetherfolk():
                                           overlap=0.7),
                 instrument="pad",
                 density=0.4,
-                phrase_schedule=_schedule("A B C R R", 4),
+                phrase_schedule=_schedule("A B C R R R R", 4),
             ),
             TrackConfig(
                 name="glass_harp",
@@ -297,7 +297,7 @@ def produce_aetherfolk():
                 instrument="lead",
                 density=0.4,
                 octave_shift=1,
-                phrase_schedule=_schedule("R B C R R", 4),
+                phrase_schedule=_schedule("R B C R R R R", 4),
             ),
             TrackConfig(
                 name="choir_aahs",
@@ -305,7 +305,7 @@ def produce_aetherfolk():
                                              vibrato=0.45, syllable="aah"),
                 instrument="choir",
                 density=0.4,
-                phrase_schedule=_schedule("A R C R R", 4),
+                phrase_schedule=_schedule("A R C R R R R", 4),
             ),
             TrackConfig(
                 name="tonic_drone_pad",
@@ -313,7 +313,7 @@ def produce_aetherfolk():
                 instrument="pad",
                 density=0.8,
                 octave_shift=-1,
-                phrase_schedule=_schedule("A B C R R", 4),
+                phrase_schedule=_schedule("A B C R R R R", 4),
             ),
         ],
     ]
@@ -321,13 +321,25 @@ def produce_aetherfolk():
     # Motif transformations across the pilgrimage.
     transformations = ["original", "stretched", "inversion", "fragmented", "retrograde"]
 
-    # Dramaturgical arcs — magical pieces breathe through Emergence→Dissolve.
+    # Dramaturgical arcs — each movement has a DISTINCT shape, so the album
+    # does not feel like the same wave replayed in five keys. Energy/density
+    # targets come from SECTION_PROFILES (Emergence≈0.4, Expansion≈0.65,
+    # Variation≈0.85, Tension≈0.85, Release≈1.15, Breakdown≈0.4, Theme≈0.7,
+    # Fade≈0.3, Dissolve≈0.35).
     sections_list = [
-        [(0.0, "Emergence"), (16.0, "Expansion"), (48.0, "Release"), (80.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Tension"),   (48.0, "Release"), (80.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Expansion"), (64.0, "Release"), (96.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Expansion"), (48.0, "Release"), (80.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Release"),   (48.0, "Dissolve")],
+        # I. The Hollow Star — long, slow bloom with no hard climax (meditative shimmer).
+        [(0.0, "Emergence"), (24.0, "Expansion"), (60.0, "Theme"),
+         (84.0, "Expansion"), (108.0, "Fade")],
+        # II. Glass Forest — two nervous swells (flicker, recede, flare, crumble).
+        [(0.0, "Emergence"), (18.0, "Variation"), (42.0, "Breakdown"),
+         (60.0, "Tension"), (90.0, "Dissolve")],
+        # III. Choir of the Pale Moons — flat sustained hymn, climax at the very end.
+        [(0.0, "Theme"), (36.0, "Theme"), (72.0, "Release"), (96.0, "Fade")],
+        # IV. The Crystalline Waltz — early peak then a long mirage-like dissolve.
+        [(0.0, "Expansion"), (24.0, "Release"), (48.0, "Breakdown"),
+         (66.0, "Variation"), (90.0, "Fade")],
+        # V. Dissolve into Starlight — fading from the start, the shortest movement.
+        [(0.0, "Emergence"), (18.0, "Fade"), (42.0, "Dissolve")],
     ]
 
     instruments_maps = [
