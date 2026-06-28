@@ -143,6 +143,11 @@ _NAME_HINTS: Dict[str, Role] = {
     "perc": Role.PERC,
     "drum": Role.PERC,
     "pad": Role.PAD,
+    "wash": Role.PAD,
+    "texture": Role.PAD,
+    "chords": Role.PAD,
+    "keys": Role.PAD,
+    "rhodes": Role.PAD,
     "choir": Role.CHOIR,
     "voice": Role.CHOIR,
     "string": Role.STRINGS,
@@ -1775,6 +1780,7 @@ def _stage_export(kw):
         cc_events=kw["_all_cc"],
         tempo_events=kw.get("tempo_events"),
         diagnose=kw.get("verbose", True),
+        strict_validation=kw.get("strict_validation", False),
     )
     return kw
 
@@ -1986,6 +1992,7 @@ def produce_track(
     style: str = "academic",
     section_breaks: List[Tuple[float, str]] | None = None,
     return_state: bool = False,
+    strict_validation: bool = False,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -2071,6 +2078,7 @@ def produce_track(
         engine=engine,
         style=style,
         section_breaks=section_breaks,
+        strict_validation=strict_validation,
     )
 
     # Run stages sequentially
@@ -2765,6 +2773,9 @@ def generate_narrative_motif(
     motif_len = max(x.start + x.duration for x in transformed)
     if motif_len <= 0:
         motif_len = 8.0
+    # Add a rest period: pad the loop length to avoid continuous monotony
+    padded_len = max(motif_len + 4.0, 16.0)
+    motif_len = float(int((padded_len + 7) / 8) * 8)
 
     looped_notes = []
     current_time = offset_beats
@@ -2806,6 +2817,7 @@ class AlbumNarrative:
     instruments_maps: list[dict[str, int]]
     moods: list[Mood]
     names: list[str]
+    strict_validation: bool = False
 
     def generate(self) -> dict:
         """Generates all tracks and compiles them into a single continuous album."""
@@ -2871,6 +2883,11 @@ class AlbumNarrative:
                     offset_beats=0.0,
                     duration_beats=total_beats
                 )
+                # Apply octave shift from TrackConfig if any
+                target_cfg = next((c for c in configs if c.name == lead_track_name), None)
+                if target_cfg and target_cfg.octave_shift:
+                    for n in motif_notes:
+                        n.pitch = max(0, min(127, n.pitch + target_cfg.octave_shift * 12))
                 tracks_dict[lead_track_name] = motif_notes
 
             # 3. Produce and register metadata
@@ -2884,6 +2901,7 @@ class AlbumNarrative:
                 verbose=False,
                 sections=sections,
                 return_state=True,
+                strict_validation=self.strict_validation,
             )
 
             tracks_metadata.append(meta)

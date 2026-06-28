@@ -368,6 +368,7 @@ def export_multitrack_midi(
     reaper_project: bool = False,
     validate_form: bool = True,
     form: "MusicalForm | None" = None,
+    strict_validation: bool = False,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -885,7 +886,7 @@ def export_multitrack_midi(
     if validate_form:
         from melodica.form_validator import validate as _validate_form
         _label = str(path) if isinstance(path, (str, Path)) else None
-        _validate_form(tracks_data, bpm=bpm, form=form, label=_label)
+        _validate_form(tracks_data, bpm=bpm, form=form, label=_label, strict=strict_validation)
 
     # Optional: generate a REAPER .RPP project file next to the .mid
     if reaper_project and isinstance(path, (str, Path)):

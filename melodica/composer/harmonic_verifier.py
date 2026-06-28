@@ -394,7 +394,7 @@ def _get_consonant_pcs(current_pc: int, other_pc: int) -> list[int]:
     _TRANSPOSE_LOOKUP[key] = res
     return res
 
-def _try_transpose(note: NoteInfo, other_pitch: int) -> NoteInfo:
+def _try_transpose(note: NoteInfo, other_pitch: int, track_name: str = "") -> NoteInfo:
     """Transpose note to nearest pitch that avoids clash with other_pitch."""
     current_pc = note.pitch % 12
     other_pc = other_pitch % 12
@@ -404,13 +404,17 @@ def _try_transpose(note: NoteInfo, other_pitch: int) -> NoteInfo:
     best_pitch = note.pitch
     best_dist = 999
 
+    is_bass = "bass" in track_name.lower()
+
     # Try only valid pitch classes
     for new_pc in consonant_pcs:
         # Optimization: if the closest possible note with this PC is already worse than best_dist, skip
-        # Try staying in same octave first, then shift
-        for oct_shift in [0, -12, 12, -24, 24]:
+        # Try staying in same octave first, then shift slightly
+        for oct_shift in [0, -12, 12]:
             candidate = (note.pitch // 12) * 12 + new_pc + oct_shift
-            if 0 <= candidate <= 127 and candidate != note.pitch:
+            min_bound = 20 if is_bass else 45
+            max_bound = 110 if note.pitch <= 110 else 127
+            if min_bound <= candidate <= max_bound and candidate != note.pitch:
                 dist = abs(candidate - note.pitch)
                 if dist < best_dist:
                     best_dist = dist
@@ -492,7 +496,7 @@ def verify_and_fix(
         # Strategy 1: Transpose the lower-velocity note
         if config.fix_transpose:
             if na.velocity <= nb.velocity:
-                new_na = _try_transpose(na, nb.pitch)
+                new_na = _try_transpose(na, nb.pitch, track_name=ta)
                 if new_na.pitch != na.pitch:
                     fixed[ta][idx_a] = new_na
                     report.notes_transposed += 1
@@ -500,7 +504,7 @@ def verify_and_fix(
                     note_index[(ta, id(new_na))] = idx_a
                     continue
             else:
-                new_nb = _try_transpose(nb, na.pitch)
+                new_nb = _try_transpose(nb, na.pitch, track_name=tb)
                 if new_nb.pitch != nb.pitch:
                     fixed[tb][idx_b] = new_nb
                     report.notes_transposed += 1

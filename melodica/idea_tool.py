@@ -1660,6 +1660,35 @@ class IdeaTool:
                         pool.store(cfg.name, base_label, section_notes)
                     section_notes = _apply_transform(section_notes, transform)
 
+            # Register preservation: keep transformed pitches in the same register/bounds as the original phrase
+            if transform != PhraseTransform.ORIGINAL and section_notes and pool is not None:
+                orig = pool.get(cfg.name, base_label)
+                if orig:
+                    orig_pitches = [x.pitch for x in orig]
+                    if orig_pitches:
+                        min_orig = min(orig_pitches)
+                        max_orig = max(orig_pitches)
+                        clamped_notes = []
+                        for n in section_notes:
+                            p = n.pitch
+                            while p < min_orig - 2:
+                                p += 12
+                            while p > max_orig + 2:
+                                p -= 12
+                            clamped_notes.append(
+                                NoteInfo(
+                                    pitch=max(0, min(127, p)),
+                                    start=n.start,
+                                    duration=n.duration,
+                                    velocity=n.velocity,
+                                    articulation=n.articulation,
+                                    expression=dict(n.expression),
+                                )
+                            )
+                        section_notes = clamped_notes
+
+
+
             # Offset to global time + octave shift
             for n in section_notes:
                 part_notes.append(

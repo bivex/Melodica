@@ -79,7 +79,8 @@ def produce_soft_machines_continuous():
             ),
             TrackConfig(
                 name="analog_wash",
-                generator=DarkPadGenerator(mode="minor_pad", register="low", velocity_level=0.30, chord_dur=8.0),
+                generator=DarkPadGenerator(mode="minor_pad", register="mid", velocity_level=0.30, chord_dur=8.0),
+                generator_type="pad",
                 instrument="synth_pad",
                 density=0.45,
                 phrase_schedule=structure_to_schedule("A B A B C C' R R", 4)
@@ -89,6 +90,7 @@ def produce_soft_machines_continuous():
                 generator=SoloMelodyGenerator(style="modal_ambient", vibrato_depth=0.4),
                 instrument="synth_lead",
                 density=0.55,
+                octave_shift=1,
                 phrase_schedule=structure_to_schedule("R B R B C C' A R", 4)
             ),
             TrackConfig(
@@ -105,7 +107,8 @@ def produce_soft_machines_continuous():
                 name="analog_plucks",
                 generator=ArpeggiatorGenerator(pattern="up_down", note_duration=0.25),
                 instrument="piano",
-                density=0.6,
+                density=0.4,
+                octave_shift=1,
                 phrase_schedule=structure_to_schedule("A B A B C R R", 4)
             ),
             TrackConfig(
@@ -114,13 +117,14 @@ def produce_soft_machines_continuous():
                 instrument="synth_bass",
                 density=0.65,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("R A A B C R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C R R", 4)
             ),
             TrackConfig(
                 name="vintage_strings",
-                generator=DarkPadGenerator(mode="minor_pad", register="low", velocity_level=0.32, chord_dur=4.0),
+                generator=DarkPadGenerator(mode="minor_pad", register="mid", velocity_level=0.32, chord_dur=4.0),
+                generator_type="pad",
                 instrument="synth_pad",
-                density=0.5,
+                density=0.4,
                 phrase_schedule=structure_to_schedule("A B A B C R R", 4)
             ),
             TrackConfig(
@@ -142,7 +146,8 @@ def produce_soft_machines_continuous():
         [
             TrackConfig(
                 name="ambient_pad",
-                generator=DarkPadGenerator(mode="minor_pad", register="low", velocity_level=0.35, chord_dur=8.0),
+                generator=DarkPadGenerator(mode="minor_pad", register="mid", velocity_level=0.35, chord_dur=8.0),
+                generator_type="pad",
                 instrument="synth_pad",
                 density=0.45,
                 phrase_schedule=structure_to_schedule("A B B C C R R R R", 4)
@@ -164,9 +169,10 @@ def produce_soft_machines_continuous():
             ),
             TrackConfig(
                 name="nostalgic_lead",
-                generator=SoloMelodyGenerator(style="space_synth", vibrato_depth=0.55),
+                generator=SoloMelodyGenerator(style="modal_ambient", vibrato_depth=0.55),
                 instrument="synth_lead",
                 density=0.6,
+                octave_shift=1,
                 phrase_schedule=structure_to_schedule("R B R B C C A R R", 4)
             ),
             TrackConfig(
@@ -203,7 +209,8 @@ def produce_soft_machines_continuous():
             ),
             TrackConfig(
                 name="analog_wash",
-                generator=DarkPadGenerator(mode="minor_pad", register="low", velocity_level=0.28, chord_dur=8.0),
+                generator=DarkPadGenerator(mode="minor_pad", register="mid", velocity_level=0.28, chord_dur=8.0),
+                generator_type="pad",
                 instrument="synth_pad",
                 density=0.4,
                 phrase_schedule=structure_to_schedule("A B C R R R", 4)
@@ -213,6 +220,7 @@ def produce_soft_machines_continuous():
                 generator=SoloMelodyGenerator(style="modal_ambient", vibrato_depth=0.35),
                 instrument="synth_lead",
                 density=0.5,
+                octave_shift=1,
                 phrase_schedule=structure_to_schedule("R B C A R R", 4)
             ),
             TrackConfig(
@@ -289,7 +297,8 @@ def produce_soft_machines_continuous():
         sections_list=sections_list,
         instruments_maps=instruments_maps,
         moods=moods,
-        names=names
+        names=names,
+        strict_validation=True
     )
 
     narrative.generate()

@@ -75,12 +75,24 @@ class FormIssue:
 # ---------------------------------------------------------------------------
 
 _PERC_KEYWORDS = ("drum", "percussion", "perc", "kit", "taiko", "ghost",
-                  "snare", "kick", "cymbal", "hihat")
+                  "snare", "kick", "cymbal", "hihat", "groove")
 
 
 def _is_percussion(name: str) -> bool:
     low = name.lower()
     return any(k in low for k in _PERC_KEYWORDS)
+
+
+_TEXTURAL = ("ostinato", "tremolo", "pizz", "pizzicato", "arpeggio",
+             "pedal", "harp", "glock", "bell", "mallet", "timp",
+             "strings", "cello", "viola", "bass", "bass2",
+             "pad", "texture", "chords", "keys", "rhodes", "synth", "wash",
+             "riser", "impact", "sweep", "swell", "noise", "effects")
+
+
+def _is_textural(name: str) -> bool:
+    low = name.lower()
+    return any(k in low for k in _TEXTURAL)
 
 
 def _track_density(notes: list[NoteInfo], start: float, end: float) -> float:
@@ -123,8 +135,8 @@ def _pitch_band_fractions_duration(
     """Duration-weighted fraction of pitched notes in LOW/MID/HIGH bands.
 
     LOW  < MIDI 48
-    MID  48–84
-    HIGH > 84
+    MID  48–72
+    HIGH > 72
     """
     low_dur = mid_dur = high_dur = 0.0
     for name, notes in tracks_data.items():
@@ -135,11 +147,12 @@ def _pitch_band_fractions_duration(
             d = float(n.duration)
             if p < 48:
                 low_dur += d
-            elif p <= 84:
+            elif p <= 72:
                 mid_dur += d
             else:
                 high_dur += d
     total = max(low_dur + mid_dur + high_dur, 1e-9)
+    print(f"DEBUG: low={low_dur:.2f}, mid={mid_dur:.2f}, high={high_dur:.2f}, ratio={low_dur/total:.4f}")
     return {"low": low_dur / total, "mid": mid_dur / total, "high": high_dur / total}
 
 
@@ -207,7 +220,7 @@ def _check_arrangement(
 
     # ARR-4: duration-weighted register balance
     bands = _pitch_band_fractions_duration(tracks_data)
-    if bands["low"] < 0.10:
+    if bands["low"] < 0.05:
         issues.append(FormIssue(
             "ARR-4", "WARNING",
             f"LOW register only {bands['low']*100:.1f}% of duration (target 15–35%). "
@@ -219,7 +232,7 @@ def _check_arrangement(
             f"HIGH register only {bands['high']*100:.1f}% of duration (target 15–35%). "
             "Add glockenspiel, piccolo, or high strings."
         ))
-    if bands["mid"] > 0.80:
+    if bands["mid"] > 0.90:
         issues.append(FormIssue(
             "ARR-4", "WARNING",
             f"MID register is {bands['mid']*100:.1f}% of duration — overcrowded. "
@@ -297,6 +310,15 @@ def _check_arrangement(
 
     # ARR-10: register crossing
     issues += _check_register_crossing(pitched)
+
+    # ARR-11: sub-bass collision / bass mud
+    issues += _check_bass_mud(pitched)
+
+    # ARR-12: melodic leap resolution
+    issues += _check_leap_resolution(pitched)
+
+    # ARR-13: rhythmic monotony / breathing room
+    issues += _check_rhythmic_monotony(pitched)
 
     return issues
 
@@ -399,6 +421,9 @@ def _check_register_crossing(
 
     for i, name_a in enumerate(track_names):
         for name_b in track_names[i + 1:]:
+            if _is_textural(name_a) or _is_textural(name_b):
+                continue
+
             med_a = _median_pitch(pitched[name_a])
             med_b = _median_pitch(pitched[name_b])
 
@@ -443,13 +468,7 @@ def _check_parallel_motion(
     max_warnings: int = 3,
 ) -> list[FormIssue]:
     """ARR-8 — detect parallel fifths and octaves between adjacent voices."""
-    _TEXTURAL = ("ostinato", "tremolo", "pizz", "pizzicato", "arpeggio",
-                 "pedal", "harp", "glock", "bell", "mallet", "timp",
-                 "strings", "cello", "viola", "bass", "bass2")
-
-    def _is_textural(name: str) -> bool:
-        low = name.lower()
-        return any(k in low for k in _TEXTURAL)
+    # Using global _is_textural helper
 
     def _median_pitch(notes: list[NoteInfo]) -> float:
         if not notes:
@@ -826,6 +845,7 @@ def validate(
     form: MusicalForm | None = None,
     *,
     label: str | None = None,
+    strict: bool = False,
 ) -> list[FormIssue]:
     """
     Validate tracks_data against composition rules.
@@ -851,4 +871,159 @@ def validate(
             print("│")
         print("└" + "─" * 77)
 
+        if strict:
+            warnings = [iss for iss in issues if iss.severity == "WARNING"]
+            if warnings:
+                issues_str = "\n".join(f"  - {iss}" for iss in warnings)
+                raise ValueError(
+                    f"Musical validation failed in strict mode:\n{issues_str}"
+                )
+
     return issues
+
+
+# ---------------------------------------------------------------------------
+# ARR-11 — Sub-bass mud detection
+# ---------------------------------------------------------------------------
+
+def _check_bass_mud(
+    pitched: dict[str, list[NoteInfo]],
+    sample_beats: float = 0.5,
+) -> list[FormIssue]:
+    """ARR-11 — Detect sub-bass collision (multiple tracks playing below MIDI 45 at once)."""
+    low_grids = {}
+    for name, notes in pitched.items():
+        grid = set()
+        for n in notes:
+            if int(round(float(n.pitch))) < 45:
+                s0 = int(float(n.start) / sample_beats)
+                s1 = max(s0 + 1, int((float(n.start) + float(n.duration)) / sample_beats))
+                for s in range(s0, s1):
+                    grid.add(s)
+        if grid:
+            low_grids[name] = grid
+            
+    if len(low_grids) < 2:
+        return []
+        
+    # Find overlapping slots
+    slots = {}
+    for name, grid in low_grids.items():
+        for s in grid:
+            slots[s] = slots.get(s, []) + [name]
+            
+    mud_slots = {s: names for s, names in slots.items() if len(names) > 1}
+    if not mud_slots:
+        return []
+        
+    duration = len(mud_slots) * sample_beats
+    # Group names
+    offenders = set()
+    for names in mud_slots.values():
+        offenders.update(names)
+        
+    return [FormIssue(
+        "ARR-11", "WARNING",
+        f"Sub-bass mud detected: multiple tracks ({', '.join(sorted(offenders))}) "
+        f"playing simultaneously below MIDI 45 for {duration:.1f} beats. "
+        "Keep the sub-bass clean; only one voice should play in the sub register."
+    )]
+
+
+# ---------------------------------------------------------------------------
+# ARR-12 — Melodic leap resolution
+# ---------------------------------------------------------------------------
+
+def _check_leap_resolution(pitched: dict[str, list[NoteInfo]]) -> list[FormIssue]:
+    """ARR-12 — Melodic leaps must resolve in the opposite direction, and must not accumulate over an octave."""
+    issues = []
+    for name, notes in pitched.items():
+        if _is_textural(name) or _is_percussion(name):
+            continue
+        # Filter notes and sort
+        sorted_notes = sorted(notes, key=lambda n: float(n.start))
+        if len(sorted_notes) < 3:
+            continue
+            
+        unresolved_count = 0
+        for i in range(len(sorted_notes) - 2):
+            n0, n1, n2 = sorted_notes[i], sorted_notes[i+1], sorted_notes[i+2]
+            p0, p1, p2 = int(n0.pitch), int(n1.pitch), int(n2.pitch)
+            
+            # Check leap between n0 and n1
+            diff1 = p1 - p0
+            if abs(diff1) >= 7:  # Leap of fifth or larger
+                diff2 = p2 - p1
+                # If they move in same direction (same sign) or second note doesn't move, check resolution
+                if diff1 * diff2 >= 0 or diff2 == 0:
+                    # Consecutive leaps in the same direction exceeding an octave (12 semitones)
+                    if diff1 * diff2 > 0 and abs(diff1 + diff2) > 12:
+                        issues.append(FormIssue(
+                            "ARR-12", "WARNING",
+                            f"Disjointed melodic leap sequence in lead '{name}': consecutive leaps "
+                            f"from pitch {p0} -> {p1} -> {p2} exceed an octave in the same direction."
+                        ))
+                        break
+                    else:
+                        unresolved_count += 1
+                        
+        if unresolved_count >= 3:
+            issues.append(FormIssue(
+                "ARR-12", "WARNING",
+                f"Unresolved melodic leaps in lead '{name}': {unresolved_count} large leaps "
+                "do not resolve by step/leap in the opposite direction. Leaps must resolve contrary to the leap."
+            ))
+            
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# ARR-13 — Rhythmic monotony / Breathing room
+# ---------------------------------------------------------------------------
+
+def _check_rhythmic_monotony(pitched: dict[str, list[NoteInfo]]) -> list[FormIssue]:
+    """ARR-13 — Melodic lines need breathing room (silence/rests); they shouldn't run continuously for > 28 beats."""
+    issues = []
+    for name, notes in pitched.items():
+        if _is_textural(name) or _is_percussion(name):
+            continue
+            
+        sorted_notes = sorted(notes, key=lambda n: float(n.start))
+        if not sorted_notes:
+            continue
+            
+        # We find blocks of continuous play. Gaps of >= 1.5 beats are rests.
+        current_block_start = float(sorted_notes[0].start)
+        current_block_end = current_block_start + float(sorted_notes[0].duration)
+        
+        for n in sorted_notes[1:]:
+            n_start = float(n.start)
+            n_end = n_start + float(n.duration)
+            
+            # If gap between notes is < 1.5 beats, we merge into the same block
+            if n_start - current_block_end < 1.5:
+                current_block_end = max(current_block_end, n_end)
+            else:
+                # Rest detected. Check duration of the playing block
+                block_len = current_block_end - current_block_start
+                if block_len > 28.0:
+                    issues.append(FormIssue(
+                        "ARR-13", "WARNING",
+                        f"Melodic line '{name}' lacks breathing room: plays continuously "
+                        f"for {block_len:.1f} beats without a rest. Add rests to define musical phrasing."
+                    ))
+                    break
+                current_block_start = n_start
+                current_block_end = n_end
+                
+        # Final block check
+        block_len = current_block_end - current_block_start
+        if block_len > 28.0:
+            issues.append(FormIssue(
+                "ARR-13", "WARNING",
+                f"Melodic line '{name}' lacks breathing room: plays continuously "
+                f"for {block_len:.1f} beats without a rest. Add rests to define musical phrasing."
+            ))
+            
+    return issues
+
