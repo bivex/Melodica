@@ -111,6 +111,7 @@ from melodica.types_pkg._theory import (
 from melodica.types_pkg._timeline import (
     KeyLabel,
     TimeSignatureLabel,
+    TempoLabel,
     MarkerLabel,
     MusicTimeline,
 )
@@ -160,6 +161,7 @@ __all__ = [
     "ChordLabel",
     "KeyLabel",
     "TimeSignatureLabel",
+    "TempoLabel",
     "MarkerLabel",
     "MusicTimeline",
     "StaticPhrase",

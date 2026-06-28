@@ -957,6 +957,18 @@ def export_midi(
             tick = round(m.start * tpb)
             meta_events.append((tick, mido.MetaMessage("marker", text=m.text, time=0)))
 
+        # Tempos from timeline
+        if hasattr(timeline, "tempos") and timeline.tempos:
+            for t in timeline.tempos:
+                tick = round(t.start * tpb)
+                if tick == 0:
+                    for idx, (mt_t, mt_msg) in enumerate(meta_events):
+                        if mt_t == 0 and mt_msg.type == "set_tempo":
+                            meta_events[idx] = (0, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(t.bpm), time=0))
+                            break
+                else:
+                    meta_events.append((tick, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(t.bpm), time=0)))
+
     # Additional tempo events
     if tempo_events:
         for beat, event_bpm in tempo_events:

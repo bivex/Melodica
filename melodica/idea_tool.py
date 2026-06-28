@@ -956,11 +956,17 @@ class IdeaTool:
         self.mpe_tracks = result.get("_mpe_tracks")
 
         # Build global MusicTimeline for time signature / key / marker metadata
-        from melodica.types import MusicTimeline, KeyLabel, TimeSignatureLabel, MarkerLabel
+        from melodica.types import MusicTimeline, KeyLabel, TimeSignatureLabel, TempoLabel, MarkerLabel
         timeline_chords = result.get("_chords", []) if isinstance(result.get("_chords"), list) else self._chords
         timeline_keys = []
         timeline_time_sigs = []
+        timeline_tempos = []
         timeline_markers = []
+        
+        # Populate tempos from result["_tempo_events"]
+        if result.get("_tempo_events"):
+            for beat, bpm in result["_tempo_events"]:
+                timeline_tempos.append(TempoLabel(bpm=bpm, start=beat))
         
         beat_cursor = 0.0
         for part in parts:
@@ -973,6 +979,10 @@ class IdeaTool:
                     start=beat_cursor
                 )
             )
+            # If tempos weren't populated dynamically, add baseline part tempo
+            if not result.get("_tempo_events"):
+                part_tempo = part.tempo if part.tempo is not None else self.config.tempo
+                timeline_tempos.append(TempoLabel(bpm=float(part_tempo), start=beat_cursor))
             timeline_markers.append(MarkerLabel(text=part.name, start=beat_cursor))
             beat_cursor += part_beats
             
@@ -980,6 +990,7 @@ class IdeaTool:
             chords=timeline_chords,
             keys=timeline_keys,
             time_signatures=timeline_time_sigs,
+            tempos=timeline_tempos,
             markers=timeline_markers
         )
 

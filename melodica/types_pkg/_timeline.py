@@ -42,6 +42,11 @@ class TimeSignatureLabel:
     start: float
 
 @dataclass
+class TempoLabel:
+    bpm: float
+    start: float
+
+@dataclass
 class MarkerLabel:
     text: str
     start: float
@@ -52,6 +57,7 @@ class MusicTimeline:
     chords: list[ChordLabel] = field(default_factory=list)
     keys: list[KeyLabel] = field(default_factory=list)
     time_signatures: list[TimeSignatureLabel] = field(default_factory=list)
+    tempos: list[TempoLabel] = field(default_factory=list)
     markers: list[MarkerLabel] = field(default_factory=list)
 
     def get_key_at(self, time: float) -> Scale:
