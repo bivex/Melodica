@@ -14,6 +14,7 @@ import time
 from tqdm import tqdm
 import os
 import argparse
+import signal
 
 N_TONES = 12
 N_TYPES = 12  # Cinematic Expanded (Maj, Min, Dim, Aug, sus2, sus4, Maj7, Min7, Dom7, Maj9, Min9, Add9)
@@ -83,6 +84,73 @@ def load_ntc_songs(data_dir: Path, songlist_file: str = "songlist.txt"):
 
     return songs, weights
 
+
+def _checkpoint_path(out_dir: Path, suffix: str) -> Path:
+    """Checkpoint filename is bound to the weight suffix so concurrent/alternate
+    runs (e.g. _full vs _synth_gold) never clobber each other."""
+    name = "hmm_checkpoint"
+    if suffix and not suffix.startswith("_"):
+        suffix = f"_{suffix}"
+    if suffix:
+        name = f"{name}{suffix}"
+    return Path(out_dir) / f"{name}.npz"
+
+
+def save_checkpoint(
+    out_dir: Path,
+    suffix: str,
+    *,
+    pnote: torch.Tensor,
+    pchange: torch.Tensor,
+    pchord: torch.Tensor,
+    best_pnote: torch.Tensor,
+    best_pchange: torch.Tensor,
+    best_ll: float,
+    next_iter: int,
+    stagnation: int,
+) -> Path:
+    """Atomically write the full training state so a resume picks up exactly
+    where training left off. Writes to a temp file then renames, so a crash
+    mid-write never leaves a truncated/half-written checkpoint."""
+    ckpt = _checkpoint_path(out_dir, suffix)
+    tmp = ckpt.with_name(ckpt.name + ".tmp")
+    # Pass an open file handle: np.savez appends ".npz" to string filenames
+    # that don't already end in ".npz", which would break the atomic rename.
+    with open(tmp, "wb") as fh:
+        np.savez(
+            fh,
+            pnote=pnote.cpu().numpy(),
+            pchange=pchange.cpu().numpy(),
+            pchord=pchord.cpu().numpy(),
+            best_pnote=best_pnote.cpu().numpy(),
+            best_pchange=best_pchange.cpu().numpy(),
+            best_ll=np.array(best_ll, dtype=np.float64),
+            next_iter=np.array(next_iter, dtype=np.int64),
+            stagnation=np.array(stagnation, dtype=np.int64),
+        )
+    tmp.replace(ckpt)  # atomic on same filesystem
+    return ckpt
+
+
+def load_checkpoint(out_dir: Path, suffix: str) -> dict:
+    """Load a checkpoint and return its arrays as torch tensors on the given
+    state. Raises FileNotFoundError if missing."""
+    ckpt = _checkpoint_path(out_dir, suffix)
+    if not ckpt.exists():
+        raise FileNotFoundError(f"No checkpoint at {ckpt}")
+    d = np.load(ckpt, allow_pickle=False)
+    return {
+        "pnote": torch.tensor(d["pnote"], dtype=torch.float32),
+        "pchange": torch.tensor(d["pchange"], dtype=torch.float32),
+        "pchord": torch.tensor(d["pchord"], dtype=torch.float32),
+        "best_pnote": torch.tensor(d["best_pnote"], dtype=torch.float32),
+        "best_pchange": torch.tensor(d["best_pchange"], dtype=torch.float32),
+        "best_ll": float(d["best_ll"]),
+        "next_iter": int(d["next_iter"]),
+        "stagnation": int(d["stagnation"]),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Turbo HMM Training with Optimized Hyperparameters.")
     parser.add_argument(
@@ -132,6 +200,17 @@ def main():
         type=int,
         default=None,
         help="Limit the number of loaded songs for training (default: None, trains on all)"
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from checkpoint file (hmm_checkpoint<suffix>.npz) if it exists"
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=25,
+        help="Save checkpoint every N iterations in addition to on every LL improvement (default: 25)"
     )
     args = parser.parse_args()
 
@@ -211,17 +290,56 @@ def main():
         pchange[t, 0, t] = 2.0
     pchange /= pchange.sum(dim=(1, 2), keepdim=True)
 
-    print(f"\n  Turbo Training: {n_songs} songs, {max_t} max steps, {args.max_iter} iters, planned {len(batches)} batches (budget={args.batch_budget})")
-    start_time = time.time()
-    eps = 1e-8
-
+    # --- Resume from checkpoint if requested ---------------------------------
+    start_iter = 0
     best_ll = -float("inf")
     best_pnote = pnote.clone()
     best_pchange = pchange.clone()
     stagnation = 0
 
-    pbar = tqdm(range(args.max_iter), desc="Training")
-    for iter_idx in pbar:
+    if args.resume:
+        try:
+            state = load_checkpoint(args.out_dir, args.suffix)
+            # Move loaded tensors to the active device
+            pnote = state["pnote"].to(device)
+            pchange = state["pchange"].to(device)
+            pchord = state["pchord"].to(device)
+            best_pnote = state["best_pnote"].to(device)
+            best_pchange = state["best_pchange"].to(device)
+            best_ll = state["best_ll"]
+            start_iter = state["next_iter"]
+            stagnation = state["stagnation"]
+            print(f"  [resume] Restored from {_checkpoint_path(Path(args.out_dir), args.suffix)}")
+            print(f"    starting at iter {start_iter}, best_ll={best_ll:.1f}, stagnation={stagnation}")
+        except FileNotFoundError as e:
+            print(f"  [resume] {e} — starting fresh instead")
+            args.resume = False
+
+    print(f"\n  Turbo Training: {n_songs} songs, {max_t} max steps, {args.max_iter} iters, planned {len(batches)} batches (budget={args.batch_budget})")
+    start_time = time.time()
+    eps = 1e-8
+
+    # Holder so the Ctrl+C handler can flush a checkpoint before exit. Populated
+    # inside the loop via a closure; the handler is a no-op until then.
+    training_state = {"active": False}
+
+    def _on_sigint(signum, frame):
+        if training_state["active"]:
+            ckpt = save_checkpoint(
+                Path(args.out_dir), args.suffix,
+                pnote=pnote, pchange=pchange, pchord=pchord,
+                best_pnote=best_pnote, best_pchange=best_pchange,
+                best_ll=best_ll, next_iter=iter_idx + 1, stagnation=stagnation,
+            )
+            print(f"\n  [interrupt] Checkpoint saved to {ckpt} (iter {iter_idx + 1}). Re-run with --resume to continue.")
+        raise KeyboardInterrupt
+
+    prev_sigint = signal.signal(signal.SIGINT, _on_sigint)
+
+    training_state["active"] = True
+    pbar = tqdm(range(start_iter, args.max_iter), desc="Training", initial=start_iter, total=args.max_iter)
+    try:
+      for iter_idx in pbar:
         # Accumulators for expected statistics
         chord_hist_total = torch.zeros(N_TYPES, device=device)
         note_hist_total = torch.zeros(N_TONES, N_TYPES, device=device)
@@ -318,35 +436,49 @@ def main():
                     pchange[t, 0, t] = MAX_SELF_LOOP
         pchange /= pchange.sum(dim=(1, 2), keepdim=True)
 
+        improved = False
         if total_ll > best_ll + MIN_LL_DELTA:
             best_ll = total_ll
             best_pnote = pnote.clone()
             best_pchange = pchange.clone()
             stagnation = 0
+            improved = True
         else:
             stagnation += 1
 
         delta = torch.abs(pnote - old_pnote).max().item()
         pbar.set_postfix({"LL": f"{total_ll:.1f}", "Best": f"{best_ll:.1f}"})
 
+        # Checkpoint: on every LL improvement, and periodically as a safety net.
+        if improved or (args.checkpoint_every > 0 and (iter_idx + 1) % args.checkpoint_every == 0):
+            save_checkpoint(
+                Path(args.out_dir), args.suffix,
+                pnote=pnote, pchange=pchange, pchord=pchord,
+                best_pnote=best_pnote, best_pchange=best_pchange,
+                best_ll=best_ll, next_iter=iter_idx + 1, stagnation=stagnation,
+            )
+
         if delta < TARGET_DELTA and iter_idx > 50:
             break
         if stagnation >= args.patience:
             break
+    finally:
+        training_state["active"] = False
+        signal.signal(signal.SIGINT, prev_sigint)
 
     # Save to Melodica format
     out_dir = Path(args.out_dir)
     out_dir.mkdir(exist_ok=True, parents=True)
-    
+
     # Save as text files for the engine
     np.savetxt(out_dir / f"pnote{args.suffix}.txt", best_pnote.cpu().numpy())
-    
+
     # pchange is 3D, we save it as flattened 2D for txt or just as .npy (preferred by engine)
     # But if you need .txt, we'll flatten it:
     pchange_np = best_pchange.cpu().numpy()
     np.savetxt(out_dir / f"pchange{args.suffix}.txt", pchange_np.reshape(-1, N_TYPES))
     np.save(out_dir / f"pchange{args.suffix}.npy", pchange_np)
-    
+
     print(f"\n  Final weights saved to {out_dir.absolute()}")
 
 if __name__ == "__main__":
