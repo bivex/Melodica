@@ -305,6 +305,19 @@ class IdeaPart:
         return self.section_type
 
 
+# Config flags declared on IdeaToolConfig but with NO effect anywhere in
+# melodica — not read by IdeaTool.generate() nor by any produce_track stage.
+# Kept for backward compatibility (many album scripts set them), but enabling
+# one raises a UserWarning so callers know it is a placebo. If you implement a
+# flag, remove its name here and wire it to a stage.
+_DEAD_IDEA_FLAGS: tuple[str, ...] = (
+    "use_voice_leading",
+    "use_tempo_modulation",
+    "use_tension_tempo",
+    "run_doctor",
+)
+
+
 @dataclass
 class IdeaToolConfig:
     """Full Idea Tool configuration."""
@@ -381,6 +394,19 @@ class IdeaToolConfig:
     # per-phrase RNG seeds so identical letters still repeat within a single
     # composition (Letter Rule) but different keys / different runs diverge.
     seed: int | None = None
+
+    def __post_init__(self) -> None:
+        import warnings
+        for flag in _DEAD_IDEA_FLAGS:
+            if getattr(self, flag, False):
+                warnings.warn(
+                    f"IdeaToolConfig.{flag}=True has no effect — this flag is "
+                    f"declared but not implemented anywhere in melodica. The "
+                    f"setting is ignored. (Remove it from the config, or wire "
+                    f"it to a pipeline stage.)",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
 
 # ---------------------------------------------------------------------------

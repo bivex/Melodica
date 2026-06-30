@@ -58,11 +58,43 @@ class TrackState:
 
 @dataclass
 class Stage:
-    """A single pipeline stage."""
+    """A single pipeline stage.
+
+    A stage's *effective* activation is the AND of three independent gates:
+
+      - ``enabled``                — explicit on/off (the manual override).
+      - ``requires_keys``          — data gate: list of ``kw`` keys that must be
+                                     present/truthy, otherwise the stage is a
+                                     no-op for this run (e.g. ``texture`` needs
+                                     ``chords``). Replaces the silent "if not
+                                     chords: return" pattern scattered inside
+                                     each stage fn.
+      - ``config_flag``            — config gate: name of an ``IdeaToolConfig``
+                                     boolean that gates this stage, so the
+                                     declarative flags and the pipeline agree.
+
+    Separating these makes activation *observable*: the runner can report WHY a
+    stage was skipped ("no chords", "use_mastering=False") instead of it
+    silently doing nothing.
+
+    ``requires_stages`` declares ordering invariants — stages that must appear
+    earlier in the pipeline. The runner validates this on startup so a
+    reordered list fails loudly instead of producing musically-wrong output
+    (e.g. ``non_chord_tones`` before ``harmonic_verify`` would add ornaments to
+    un-cleaned clashes).
+    """
 
     name: str
     fn: "callable"
     enabled: bool = True
+    # Data gate: kw keys that must be present and truthy for the stage to run.
+    requires_keys: tuple[str, ...] = ()
+    # Config gate: name of the IdeaToolConfig bool that enables this stage.
+    # None means the stage is not gated by any config flag.
+    config_flag: str | None = None
+    # Ordering invariant: stage names that must precede this one in the
+    # pipeline. Validated once at startup.
+    requires_stages: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -2036,9 +2068,9 @@ def _stage_report(kw):
 
 
 DEFAULT_PIPELINE: list[Stage] = [
-    Stage("rhythm", _stage_rhythm),
-    Stage("auto_mix", _stage_auto_mix),
-    Stage("pan_spread", _stage_pan_spread),
+    Stage("rhythm", _stage_rhythm, requires_keys=("rhythm",)),
+    Stage("auto_mix", _stage_auto_mix, config_flag="use_mixing"),
+    Stage("pan_spread", _stage_pan_spread, requires_stages=("auto_mix",)),
     Stage("dynamics", _stage_dynamics),
     Stage("sidechain", _stage_sidechain),
     Stage("humanize", _stage_humanize),
@@ -2048,26 +2080,75 @@ DEFAULT_PIPELINE: list[Stage] = [
     # clashes from the base harmony, then ornamentation (passing/neighbor/
     # suspension tones) is added on top. The old order (non_chord_tones then
     # harmonic_verify) caused the verifier to delete exactly the ornamentation
-    # it had just inserted.
-    Stage("harmonic_verify", _stage_harmonic_verify),
-    Stage("non_chord_tones", _stage_non_chord_tones),
-    Stage("sections", _stage_sections),
-    Stage("tension", _stage_tension),
-    Stage("texture", _stage_texture),
-    Stage("transitions", _stage_transitions),
+    # it had just inserted. The ordering invariant is now declared via
+    # requires_stages and validated on startup.
+    Stage("harmonic_verify", _stage_harmonic_verify, config_flag="use_harmonic_verifier"),
+    Stage("non_chord_tones", _stage_non_chord_tones,
+          requires_keys=("chords", "key"),
+          requires_stages=("harmonic_verify",)),
+    Stage("sections", _stage_sections, requires_keys=("sections",)),
+    Stage("tension", _stage_tension, requires_keys=("chords",)),
+    Stage("texture", _stage_texture, requires_keys=("chords",)),
+    Stage("transitions", _stage_transitions, requires_keys=("section_breaks",)),
     # leap_resolve / breathing_room run AFTER texture & transitions, which add
     # notes and modify density: placing them last means their ARR-12/ARR-13
     # fixes survive to the export/validate step.
-    Stage("leap_resolve", _stage_leap_resolve),
-    Stage("breathing_room", _stage_breathing_room),
+    Stage("leap_resolve", _stage_leap_resolve,
+          requires_stages=("texture",)),
+    Stage("breathing_room", _stage_breathing_room,
+          requires_stages=("texture",)),
     Stage("polyphony", _stage_polyphony),
     Stage("psycho", _stage_psycho),
     Stage("sparse_safeguard", _stage_sparse_safeguard),
-    Stage("master", _stage_master),
-    Stage("export", _stage_export),
+    Stage("master", _stage_master, config_flag="use_mastering"),
+    Stage("export", _stage_export, requires_stages=("master",)),
     Stage("report", _stage_report),
     Stage("diagnostics", _stage_diagnostics),
 ]
+
+
+def validate_pipeline_order(stages: list[Stage]) -> None:
+    """Assert that every ``requires_stages`` dependency precedes its stage.
+
+    Called once at the start of ``produce_track`` so a reordered/custom
+    pipeline fails loudly instead of producing musically-wrong output (e.g.
+    ``non_chord_tones`` before ``harmonic_verify`` would ornament un-cleaned
+    clashes).
+
+    Only dependencies that are actually present in this pipeline are checked:
+    if a stage's dependency was intentionally removed (e.g. ``texture`` dropped
+    via ``disable_texture``), that is not an ordering violation.
+    """
+    present = {s.name for s in stages}
+    seen: set[str] = set()
+    for stage in stages:
+        for dep in stage.requires_stages:
+            if dep not in present:
+                continue  # dependency intentionally absent — not our concern
+            if dep not in seen:
+                raise ValueError(
+                    f"Pipeline ordering invariant violated: stage {stage.name!r} "
+                    f"requires {dep!r} to run before it, but {dep!r} appears "
+                    f"later (or equals it) in the pipeline."
+                )
+        seen.add(stage.name)
+
+
+def _stage_skip_reason(stage: Stage, kw: dict, feature_flags: dict) -> str | None:
+    """Return why a stage should be skipped, or None if it should run.
+
+    Unifies the three activation gates (enabled / data / config) in one place
+    so skipping is observable and the reason is machine-readable.
+    """
+    if not stage.enabled:
+        return "disabled"
+    if stage.config_flag is not None:
+        if not feature_flags.get(stage.config_flag, False):
+            return f"config {stage.config_flag}=False"
+    for key in stage.requires_keys:
+        if not kw.get(key):
+            return f"no {key!r}"
+    return None
 
 
 def detect_sections_intelligently(
@@ -2199,6 +2280,7 @@ def produce_track(
     strict_validation: bool = False,
     rhythm: str | object | None = None,
     time_signature: tuple[int, int] | None = None,
+    feature_flags: dict | None = None,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -2299,6 +2381,26 @@ def produce_track(
     # Build pipeline
     stages = pipeline if pipeline is not None else DEFAULT_PIPELINE
 
+    # Resolve the feature-flag view that gates stages (config_flag). Callers may
+    # pass an IdeaToolConfig-derived dict; otherwise we fall back to the config
+    # defaults so existing callers that don't pass flags keep working — every
+    # gated stage defaults to ON (matching IdeaToolConfig defaults).
+    if feature_flags is None:
+        try:
+            from melodica.idea_tool import IdeaToolConfig
+            _cfg = IdeaToolConfig()
+            feature_flags = {
+                "use_mixing": _cfg.use_mixing,
+                "use_mastering": _cfg.use_mastering,
+                "use_harmonic_verifier": _cfg.use_harmonic_verifier,
+            }
+        except Exception:
+            feature_flags = {"use_mixing": True, "use_mastering": True,
+                             "use_harmonic_verifier": True}
+
+    # Validate ordering invariants once, loudly.
+    validate_pipeline_order(stages)
+
     # Common kwargs passed to every stage
     kw = dict(
         tracks=tracks,
@@ -2323,11 +2425,21 @@ def produce_track(
         time_signature=time_signature,
     )
 
-    # Run stages sequentially
+    # Run stages sequentially. Activation is the AND of three gates (enabled /
+    # requires_keys / config_flag); the unified check makes skips observable
+    # and reports WHY a stage was skipped, instead of it silently doing nothing.
+    skipped: list[tuple[str, str]] = []
     for stage in stages:
-        if not stage.enabled:
+        reason = _stage_skip_reason(stage, kw, feature_flags)
+        if reason is not None:
+            skipped.append((stage.name, reason))
             continue
         kw = stage.fn(kw)
+
+    if verbose and skipped:
+        print("  Stage activation report:")
+        for name, reason in skipped:
+            print(f"    - {name:<18} skipped: {reason}")
 
     if return_state:
         return {
