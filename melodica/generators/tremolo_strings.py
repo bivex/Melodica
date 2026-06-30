@@ -40,6 +40,16 @@ from melodica.types import ChordLabel, NoteInfo, Scale
 from melodica.utils import nearest_pitch, chord_at, chord_pitches_closed, snap_to_scale
 
 
+_TREMOLO_SPEED_MAP: dict[str, float] = {
+    "slow":   0.25,
+    "medium": 0.125,
+    "fast":   0.0625,
+}
+_DYNAMIC_CURVE_OPTIONS: frozenset[str] = frozenset(
+    {"flat", "crescendo", "fortissimo", "diminuendo"}
+)
+
+
 @dataclass
 class TremoloStringsGenerator(PhraseGenerator):
     """
@@ -74,14 +84,6 @@ class TremoloStringsGenerator(PhraseGenerator):
     rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
-    _TREMOLO_SPEED_MAP: dict[str, float] = {
-        "slow":   0.25,
-        "medium": 0.125,
-        "fast":   0.0625,
-    }
-    _DYNAMIC_CURVE_OPTIONS: frozenset[str] = frozenset(
-        {"flat", "crescendo", "fortissimo", "diminuendo"}
-    )
 
     def __init__(
         self,
@@ -100,19 +102,19 @@ class TremoloStringsGenerator(PhraseGenerator):
         self.variant = variant
         # tremolo_speed overrides bow_speed when provided
         if tremolo_speed is not None:
-            if tremolo_speed not in self._TREMOLO_SPEED_MAP:
+            if tremolo_speed not in _TREMOLO_SPEED_MAP:
                 raise ValueError(
                     f"tremolo_speed must be one of "
-                    f"{sorted(self._TREMOLO_SPEED_MAP)}; got {tremolo_speed!r}"
+                    f"{sorted(_TREMOLO_SPEED_MAP)}; got {tremolo_speed!r}"
                 )
-            bow_speed = self._TREMOLO_SPEED_MAP[tremolo_speed]
+            bow_speed = _TREMOLO_SPEED_MAP[tremolo_speed]
         self.bow_speed = max(0.02, min(0.2, bow_speed))
         self.tremolo_speed = tremolo_speed
         self.dynamic_swell = dynamic_swell
-        if dynamic_curve not in self._DYNAMIC_CURVE_OPTIONS:
+        if dynamic_curve not in _DYNAMIC_CURVE_OPTIONS:
             raise ValueError(
                 f"dynamic_curve must be one of "
-                f"{sorted(self._DYNAMIC_CURVE_OPTIONS)}; got {dynamic_curve!r}"
+                f"{sorted(_DYNAMIC_CURVE_OPTIONS)}; got {dynamic_curve!r}"
             )
         self.dynamic_curve = dynamic_curve
         self.attack_time = max(0.0, attack_time)

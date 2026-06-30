@@ -27,7 +27,7 @@ scripts/albums/other/album_midnight_veil.py
          Центральный конфликт цикла.
 
     III. The Witching Hour — Апогей.  92 BPM, 4/4, 40 тактов.
-         AABB, высокая плотность, строки тремоло заменяют легато-пад.
+         AABB, высокая плотность, тремоло вместо легато.
          Драматическая вершина — fortissimo, register climb.
 
     IV.  Before Dawn   — Истощение.   58 BPM, 4/4, 32 такта.
@@ -56,7 +56,6 @@ from melodica.generators.counterpoint import CounterpointGenerator
 from melodica.generators.strings_legato import StringsLegatoGenerator
 from melodica.generators.tremolo_strings import TremoloStringsGenerator
 from melodica.generators.bass import BassGenerator
-from melodica.generators.orchestral_strings import ViolinGenerator, CelloGenerator
 
 
 # ---------------------------------------------------------------------------
@@ -72,52 +71,51 @@ A_MINOR = Scale(root=9, mode=Mode.NATURAL_MINOR)
 def _tracks_dusk():
     """I. Dusk — Сумерки. Скрипка + виолончель-контрапункт + легато + бас."""
     return [
-        # Основная мелодия: нисходящий контур, арочная фраза, motif development.
-        # Вступает одна, pp; форма AABA = скрипка «задаёт вопрос» три раза.
+        # Основная мелодия: нисходящий контур (новый параметр!), тихое начало.
         TrackConfig(
             name="Lead_Violin",
             generator=MelodyGenerator(
-                direction_bias=-0.25,          # тяготеет вниз
-                phrase_contour="arch",
+                direction_bias=-0.25,
+                phrase_contour="descent",          # ← новый контур
                 phrase_length=8.0,
-                drama_shape="diminuendo",
+                drama_shape="swell",               # ← новая форма
                 motif_probability=0.55,
                 after_leap="step_opposite",
-                note_range_low=64,             # E4 — D6
+                note_range_low=64,
                 note_range_high=86,
                 ornament_probability=0.08,
-                penultimate_step_above=True,   # полутоновое ведение к тонике
+                penultimate_step_above=True,
             ),
             instrument="violin",
             density=0.48,
             mpe=True,
             phrase_schedule=structure_to_schedule("A A B A", 8),
         ),
-        # Контрапункт: движется против Lead, нижний голос.
-        # Появляется только на B-части благодаря density=0.25 в intro.
+        # Контрапункт: contrary motion, предпочтение терциям и секстам.
         TrackConfig(
             name="Counter_Cello",
             generator=CounterpointGenerator(
-                interval_preference="thirds_sixths",
-                motion="contrary",
-                voice_crossing=False,
+                species=3,
+                interval_preference="thirds_sixths",  # ← новый параметр
+                motion="contrary",                    # ← новый параметр
+                voice_crossing=False,                 # ← новый параметр
             ),
             instrument="cello",
             depends_on="Lead_Violin",
             density=0.30,
             mpe=True,
         ),
-        # Harmonic bed: мягкие легато-струнные, очень тихо.
+        # Harmonic bed: тихий pad, pianissimo через dynamic_base.
         TrackConfig(
             name="Strings_Pad",
             generator=StringsLegatoGenerator(
-                articulation="legato",
-                dynamic_base=40,              # piano
+                dynamic_curve="crescendo",     # ← новый параметр
+                dynamic_base=38,               # ← новый параметр: pp
             ),
             instrument="strings",
             density=0.35,
         ),
-        # Бас: только корневые ноты, дышит.
+        # Бас: только корень.
         TrackConfig(
             name="Bass_CB",
             generator=BassGenerator(style="root_only"),
@@ -129,33 +127,33 @@ def _tracks_dusk():
 
 
 def _tracks_restless():
-    """II. Restless — Беспокойство. 3/4, синкопы, контрдвижение."""
+    """II. Restless — Беспокойство. 3/4, zigzag, bass walking."""
     return [
         TrackConfig(
             name="Lead_Violin",
             generator=MelodyGenerator(
-                direction_bias=0.0,            # нейтральный, хаотичный
-                phrase_contour="zigzag",
-                phrase_length=6.0,             # нечётная фраза под 3/4
+                direction_bias=0.0,
+                phrase_contour="zigzag",       # ← новый контур
+                phrase_length=6.0,
                 syncopation=0.30,
                 rhythm_variety=0.55,
-                drama_shape="crescendo",
+                drama_shape="tension_release",
                 motif_probability=0.40,
                 after_leap="step_opposite",
                 note_range_low=65,
                 note_range_high=88,
-                allow_2nd=True,               # хроматические шаги
+                allow_2nd=True,
             ),
             instrument="violin",
             density=0.55,
             mpe=True,
-            phrase_schedule=structure_to_schedule("A B A B", 9),  # 9 тактов × 4 = 36
+            phrase_schedule=structure_to_schedule("A B A B", 9),
         ),
-        # Виолончель в 3/4 делает чёткое kontrdvizhenie — создаёт трение.
         TrackConfig(
             name="Counter_Cello",
             generator=CounterpointGenerator(
-                interval_preference="thirds_sixths",
+                species=3,
+                interval_preference="sixths",  # ← открытые сексты
                 motion="contrary",
                 voice_crossing=False,
             ),
@@ -166,11 +164,14 @@ def _tracks_restless():
         ),
         TrackConfig(
             name="Strings_Pad",
-            generator=StringsLegatoGenerator(articulation="sustained"),
+            generator=StringsLegatoGenerator(
+                dynamic_curve="cresc_dim",
+                dynamic_base=48,
+            ),
             instrument="strings",
             density=0.40,
         ),
-        # Ходячий бас — главный носитель ритма в этом движении.
+        # Walking bass — главный носитель ритма в этом движении.
         TrackConfig(
             name="Bass_CB",
             generator=BassGenerator(style="walking"),
@@ -182,12 +183,12 @@ def _tracks_restless():
 
 
 def _tracks_witching_hour():
-    """III. The Witching Hour — Апогей. Тремоло заменяет легато, fortissimo."""
+    """III. The Witching Hour — Апогей. Тремоло fortissimo, педальный бас."""
     return [
         TrackConfig(
             name="Lead_Violin",
             generator=MelodyGenerator(
-                direction_bias=0.40,           # восходящий устремлённый
+                direction_bias=0.40,
                 phrase_contour="rise",
                 phrase_length=8.0,
                 climax="up_5th",
@@ -195,18 +196,18 @@ def _tracks_witching_hour():
                 motif_probability=0.50,
                 after_leap="step_opposite",
                 note_range_low=67,
-                note_range_high=91,            # до верхнего G6
+                note_range_high=91,
                 ornament_probability=0.12,
             ),
             instrument="violin",
             density=0.65,
             mpe=True,
-            phrase_schedule=structure_to_schedule("A A B B", 10),  # 40 тактов
+            phrase_schedule=structure_to_schedule("A A B B", 10),
         ),
-        # Контрапункт напряжённее — меньше терций, больше трения.
         TrackConfig(
             name="Counter_Cello",
             generator=CounterpointGenerator(
+                species=3,
                 interval_preference="sixths",
                 motion="contrary",
                 voice_crossing=False,
@@ -220,16 +221,18 @@ def _tracks_witching_hour():
         TrackConfig(
             name="Tremolo_Pad",
             generator=TremoloStringsGenerator(
-                tremolo_speed="fast",
-                dynamic_curve="fortissimo",
+                variant="chord",
+                tremolo_speed="fast",          # ← новый параметр
+                dynamic_curve="fortissimo",    # ← новый параметр
+                dynamic_swell=True,
             ),
             instrument="strings",
             density=0.70,
         ),
-        # Бас педальный — держит тонику под всей бурей.
+        # Педальный бас — держит тонику под всей бурей.
         TrackConfig(
             name="Bass_CB",
-            generator=BassGenerator(style="pedal_tone"),
+            generator=BassGenerator(style="pedal_tone"),  # ← новый стиль
             instrument="contrabass",
             density=0.75,
             octave_shift=-1,
@@ -238,32 +241,32 @@ def _tracks_witching_hour():
 
 
 def _tracks_before_dawn():
-    """IV. Before Dawn — Истощение. Разреженно, нисходяще, пианиссимо."""
+    """IV. Before Dawn — Истощение. Descent, diminuendo, root_only."""
     return [
         TrackConfig(
             name="Lead_Violin",
             generator=MelodyGenerator(
-                direction_bias=-0.40,          # устало нисходит
-                phrase_contour="descent",
-                phrase_length=12.0,            # долгие фразы, мало нот
-                drama_shape="diminuendo",
+                direction_bias=-0.40,
+                phrase_contour="descent",      # ← новый контур
+                phrase_length=12.0,
+                drama_shape="diminuendo",      # ← новая форма
                 motif_probability=0.25,
                 after_leap="step_opposite",
                 note_range_low=60,
-                note_range_high=79,            # суженный регистр — ночная усталость
+                note_range_high=79,
                 ornament_probability=0.03,
             ),
             instrument="violin",
             density=0.28,
             mpe=True,
-            phrase_schedule=structure_to_schedule("A A' A", 10),  # вариация в середине
+            phrase_schedule=structure_to_schedule("A A' A", 10),
         ),
-        # Виолончель очень тихая, почти тень.
         TrackConfig(
             name="Counter_Cello",
             generator=CounterpointGenerator(
+                species=2,
                 interval_preference="thirds_sixths",
-                motion="oblique",              # параллельно, не спорит
+                motion="oblique",              # ← один голос неподвижен
                 voice_crossing=False,
             ),
             instrument="cello",
@@ -274,13 +277,12 @@ def _tracks_before_dawn():
         TrackConfig(
             name="Strings_Pad",
             generator=StringsLegatoGenerator(
-                articulation="legato",
-                dynamic_base=30,              # pianissimo
+                dynamic_curve="diminuendo",    # ← синоним для dynamic_shape
+                dynamic_base=30,               # ← явный pianissimo
             ),
             instrument="strings",
             density=0.28,
         ),
-        # Бас только на корне — минимальный пульс.
         TrackConfig(
             name="Bass_CB",
             generator=BassGenerator(style="root_only"),
@@ -292,12 +294,12 @@ def _tracks_before_dawn():
 
 
 def _tracks_first_light():
-    """V. First Light — Разрешение. Рондо ABACA, восходящий контур, катарсис."""
+    """V. First Light — Разрешение. Рондо, восходящий контур, chord_tone bass."""
     return [
         TrackConfig(
             name="Lead_Violin",
             generator=MelodyGenerator(
-                direction_bias=0.35,           # светло, восходит
+                direction_bias=0.35,
                 phrase_contour="rise",
                 phrase_length=8.0,
                 climax="up_5th",
@@ -312,14 +314,15 @@ def _tracks_first_light():
             instrument="violin",
             density=0.55,
             mpe=True,
-            phrase_schedule=structure_to_schedule("A B A C A", 8),  # 40 тактов рондо
+            phrase_schedule=structure_to_schedule("A B A C A", 8),
         ),
-        # Виолончель в унисоне-терцию — финальное слияние голосов.
+        # Параллельное движение = единство голосов в финале.
         TrackConfig(
             name="Counter_Cello",
             generator=CounterpointGenerator(
+                species=3,
                 interval_preference="thirds_sixths",
-                motion="parallel",             # параллельное движение = единство
+                motion="parallel",             # ← унисон/терции = катарсис
                 voice_crossing=False,
             ),
             instrument="cello",
@@ -327,21 +330,19 @@ def _tracks_first_light():
             density=0.50,
             mpe=True,
         ),
-        # Легато-струнные возвращаются — тепло, полнота.
         TrackConfig(
             name="Strings_Pad",
             generator=StringsLegatoGenerator(
-                articulation="legato",
                 dynamic_curve="crescendo",
                 dynamic_base=55,
             ),
             instrument="strings",
             density=0.55,
         ),
-        # Бас наконец «breathing» style — пульсирует, живёт.
+        # Chord-tone bass — гармонически богатый финал.
         TrackConfig(
             name="Bass_CB",
-            generator=BassGenerator(style="chord_tone"),
+            generator=BassGenerator(style="chord_tone"),  # ← новый стиль
             instrument="contrabass",
             density=0.50,
             octave_shift=-1,
@@ -354,12 +355,12 @@ def _tracks_first_light():
 # ---------------------------------------------------------------------------
 
 MOVEMENTS = [
-    # (name,              bpm, ts,   bars, section_title,       build_fn)
-    ("01_Dusk",           54,  (4,4), 32,  "Сумерки",           _tracks_dusk),
-    ("02_Restless",       80,  (3,4), 36,  "Беспокойство",      _tracks_restless),
-    ("03_Witching_Hour",  92,  (4,4), 40,  "Полночь",           _tracks_witching_hour),
-    ("04_Before_Dawn",    58,  (4,4), 32,  "Перед рассветом",   _tracks_before_dawn),
-    ("05_First_Light",    66,  (4,4), 40,  "Первый свет",       _tracks_first_light),
+    # (name,              bpm, ts,   bars, section_title,        build_fn)
+    ("01_Dusk",           54,  (4,4), 32,  "Сумерки",            _tracks_dusk),
+    ("02_Restless",       80,  (3,4), 36,  "Беспокойство",       _tracks_restless),
+    ("03_Witching_Hour",  92,  (4,4), 40,  "Полночь",            _tracks_witching_hour),
+    ("04_Before_Dawn",    58,  (4,4), 32,  "Перед рассветом",    _tracks_before_dawn),
+    ("05_First_Light",    66,  (4,4), 40,  "Первый свет",        _tracks_first_light),
 ]
 
 
@@ -430,7 +431,6 @@ def generate_midnight_veil():
         n = sum(len(v) for v in tracks_data.values())
         total_notes += n
 
-        # Показываем сгенерированную прогрессию
         chords = notes_dict.get("_chords") or []
         if chords:
             NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']

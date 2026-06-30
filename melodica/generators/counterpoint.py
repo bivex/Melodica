@@ -44,6 +44,19 @@ from melodica.types import ChordLabel, NoteInfo, Scale
 from melodica.utils import nearest_pitch, chord_at
 
 
+_CONSONANT_INTERVALS: frozenset[int] = frozenset({0, 3, 4, 5, 7, 8, 9, 12})
+
+_INTERVAL_PREF: dict[str, frozenset[int]] = {
+    "thirds_sixths": frozenset({3, 4, 8, 9}),   # m3, M3, m6, M6
+    "sixths":        frozenset({8, 9}),           # m6, M6
+    "unison":        frozenset({0, 12}),          # unison, octave
+    "mixed":         frozenset(),                 # no restriction
+}
+_MOTION_OPTIONS: frozenset[str] = frozenset(
+    {"contrary", "parallel", "oblique", "similar", "free"}
+)
+
+
 @dataclass
 class CounterpointGenerator(PhraseGenerator):
     """
@@ -86,17 +99,6 @@ class CounterpointGenerator(PhraseGenerator):
     rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
-    _CONSONANT_INTERVALS: frozenset[int] = frozenset({0, 3, 4, 5, 7, 8, 9, 12})
-
-    _INTERVAL_PREF: dict[str, frozenset[int]] = {
-        "thirds_sixths": frozenset({3, 4, 8, 9}),   # m3, M3, m6, M6
-        "sixths":        frozenset({8, 9}),           # m6, M6
-        "unison":        frozenset({0, 12}),          # unison, octave
-        "mixed":         frozenset(),                 # no restriction
-    }
-    _MOTION_OPTIONS: frozenset[str] = frozenset(
-        {"contrary", "parallel", "oblique", "similar", "free"}
-    )
 
     def __init__(
         self,
@@ -118,15 +120,15 @@ class CounterpointGenerator(PhraseGenerator):
             raise ValueError(f"cantus_position must be 'below' or 'above'; got {cantus_position!r}")
         self.cantus_position = cantus_position
         self.dissonance_rules = dissonance_rules
-        if interval_preference not in self._INTERVAL_PREF:
+        if interval_preference not in _INTERVAL_PREF:
             raise ValueError(
                 f"interval_preference must be one of "
-                f"{sorted(self._INTERVAL_PREF)}; got {interval_preference!r}"
+                f"{sorted(_INTERVAL_PREF)}; got {interval_preference!r}"
             )
         self.interval_preference = interval_preference
-        if motion not in self._MOTION_OPTIONS:
+        if motion not in _MOTION_OPTIONS:
             raise ValueError(
-                f"motion must be one of {sorted(self._MOTION_OPTIONS)}; got {motion!r}"
+                f"motion must be one of {sorted(_MOTION_OPTIONS)}; got {motion!r}"
             )
         self.motion = motion
         self.voice_crossing = voice_crossing
@@ -274,7 +276,7 @@ class CounterpointGenerator(PhraseGenerator):
             if self.dissonance_rules and is_strong:
                 for active_p in other_active_pitches:
                     interval = abs(p - active_p) % 12
-                    if interval not in self._CONSONANT_INTERVALS:
+                    if interval not in _CONSONANT_INTERVALS:
                         is_valid = False
                         break
             if is_valid:
@@ -285,7 +287,7 @@ class CounterpointGenerator(PhraseGenerator):
             candidates = [max(low, min(high, p))]
 
         # interval_preference filter: prefer candidates whose interval with cantus matches
-        pref_intervals = self._INTERVAL_PREF.get(self.interval_preference, frozenset())
+        pref_intervals = _INTERVAL_PREF.get(self.interval_preference, frozenset())
         if pref_intervals and cantus_pitch is not None:
             preferred = [
                 c for c in candidates
