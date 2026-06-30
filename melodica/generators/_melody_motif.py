@@ -68,6 +68,21 @@ class MotifManager:
         self._stored_intervals.clear()
         self._stored_rhythm.clear()
 
+    def set_variation(self, variation: str) -> None:
+        """Force the next motif application to use a specific variation.
+
+        Maps a variation name to the index used by ``apply``. Used by the
+        drama-arc strategy in MelodyGenerator. Resets after one use.
+        """
+        _VARIATIONS = ["transpose", "invert", "retrograde", "sequence", "fragment"]
+        if variation not in _VARIATIONS:
+            return
+        self._variation_idx = _VARIATIONS.index(variation)
+
+    def boost_probability(self, amount: float) -> None:
+        """Temporarily increase the motif trigger probability for the next use."""
+        self._motif_probability_boost = max(0.0, amount)
+
     def apply(
         self, prev_pitch: int, low: int, high: int, key: Scale, motif_idx: int
     ) -> int:
