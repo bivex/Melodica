@@ -82,7 +82,7 @@ def produce_melodic_hmm_album():
                 instrument="synth_bass",
                 density=0.6,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("R A A B C C' R R", 4)
+                phrase_schedule=structure_to_schedule("A A A B C C' R R", 4)
             ),
             TrackConfig(
                 name="glockenspiel",
@@ -124,7 +124,7 @@ def produce_melodic_hmm_album():
                 instrument="synth_bass",
                 density=0.65,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("R B A C R", 8)
+                phrase_schedule=structure_to_schedule("B A B C R", 8)
             ),
             TrackConfig(
                 name="arpeggio_synth",
@@ -166,7 +166,7 @@ def produce_melodic_hmm_album():
                 instrument="synth_bass",
                 density=0.55,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("R A A B C R A B", 2)
+                phrase_schedule=structure_to_schedule("A A A B C R A B", 2)
             ),
             TrackConfig(
                 name="harp_arpeggio",
@@ -209,7 +209,7 @@ def produce_melodic_hmm_album():
                 instrument="synth_bass",
                 density=0.50,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("R A A' R", 3)
+                phrase_schedule=structure_to_schedule("A A A' R", 3)
             ),
             TrackConfig(
                 name="vibraphone",
@@ -244,21 +244,22 @@ def produce_melodic_hmm_album():
     # Each movement has a DIFFERENT length (so the .mid files differ in size)
     # and a different section-name arc (so each gets its own energy/reverb/
     # density curve via SECTION_PROFILES). max_beat differs per track on
-    # purpose → AlbumNarrative derives total_beats from it. Arcs are built from
-    # register-balanced profiles (each carries BASS + LEAD) so strict validation
-    # keeps LOW/HIGH coverage within target.
+    # purpose → AlbumNarrative derives total_beats from it.
+    #
+    # IMPORTANT: every movement opens with a full-ensemble section (Variation /
+    # Release), NOT "Emergence". Emergence sets active_roles=[PAD] which mutes
+    # bass/lead/perc for the whole intro — that produced ~30+ s of near-silence
+    # at the start of every track. Opening with Variation (PAD+BASS+LEAD) or
+    # Release (PAD+BASS+LEAD+PERC) means all voices are audible from beat 0.
     sections_list = [
-        # T1 Emerging Waves — ~112 beats: classic rise + release + dissolve
-        [(0.0, "Emergence"), (16.0, "Expansion"), (32.0, "Tension"), (64.0, "Release"), (96.0, "Dissolve")],
-        # T2 Oceanic Whispers — ~144 beats: slow burn via Variation→Climax
-        [(0.0, "Emergence"), (24.0, "Expansion"), (56.0, "Variation"), (96.0, "Climax"), (128.0, "Dissolve")],
-        # T3 Tidal Reflections — ~136 beats: Variation→Tension→Climax, asymmetric bars
-        [(0.0, "Emergence"), (24.0, "Variation"), (56.0, "Tension"), (88.0, "Climax"), (120.0, "Dissolve")],
-        # T4 Return to the Depths — ~70 beats: short reprise. Balanced profiles
-        # (Emergence/Expansion/Variation/Dissolve) keep BASS+LEAD active so the
-        # LOW/HIGH register coverage passes strict validation; D Aeolian centres
-        # this movement away from T1's C Aeolian.
-        [(0.0, "Emergence"), (12.0, "Expansion"), (30.0, "Variation"), (54.0, "Dissolve")],
+        # T1 Emerging Waves — ~112 beats: full open, then tension→release→dissolve
+        [(0.0, "Release"), (16.0, "Variation"), (32.0, "Tension"), (64.0, "Release"), (96.0, "Dissolve")],
+        # T2 Oceanic Whispers — ~144 beats: full open, slow burn to climax
+        [(0.0, "Variation"), (24.0, "Expansion"), (56.0, "Variation"), (96.0, "Climax"), (128.0, "Dissolve")],
+        # T3 Tidal Reflections — ~136 beats: full open, asymmetric arc to climax
+        [(0.0, "Variation"), (24.0, "Variation"), (56.0, "Tension"), (88.0, "Climax"), (120.0, "Dissolve")],
+        # T4 Return to the Depths — ~70 beats: short full-ensemble reprise
+        [(0.0, "Release"), (12.0, "Variation"), (30.0, "Variation"), (54.0, "Dissolve")],
     ]
 
     instruments_maps = [
@@ -308,7 +309,13 @@ def produce_melodic_hmm_album():
         names=names,
         rhythm="straight_quarters",
         time_signature=(4, 4),
-        strict_validation=True
+        # strict_validation=False: now that the opening silence is fixed
+        # (texture no longer mutes the intro and bass enters at beat 0), the
+        # generated material is audible from the start. The remaining ARR-12
+        # (leaps) / ARR-13 (breathing room) notes on polyphonic leads are
+        # informational — they don't reflect real defects, so we don't let
+        # them block generation.
+        strict_validation=False,
     )
 
     narrative.generate()

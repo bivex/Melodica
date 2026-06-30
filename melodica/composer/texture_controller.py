@@ -104,9 +104,16 @@ class TextureController:
         return result
 
     def _tension_to_texture(self, tension: float) -> TextureLevel:
-        """Map tension value to texture level."""
+        """Map tension value to texture level.
+
+        Note: SILENCE is intentionally never returned. The classical tension
+        curve starts near zero, so mapping the lowest tension to SILENCE muted
+        every voice (including the bass) for the first ~30+ s of each track —
+        a long opening gap. Low tension now resolves to BASS_ONLY so the bass
+        anchors the intro audibly while upper voices enter as tension rises.
+        """
         if tension < 0.15:
-            return TextureLevel.SILENCE
+            return TextureLevel.BASS_ONLY
         elif tension < 0.3:
             return TextureLevel.BASS_ONLY
         elif tension < 0.5:

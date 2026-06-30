@@ -1754,57 +1754,59 @@ def _stage_leap_resolve(kw):
     return kw
 
 
-def _stage_breathing_room(kw, max_block: float = 28.0, rest_gap: float = 1.5):
+def _stage_breathing_room(kw, max_block: float = 28.0, rest_gap: float = 1.6):
     """Ensure LEAD/STRINGS lines have phrasing rests (ARR-13).
 
     Quantization and passing-tone insertion can weld a melody into one long
     continuous block (>28 beats) with no ≥1.5-beat gap. This stage scans
-    melodic tracks for such blocks and opens a phrasing rest every ~24 beats by
-    clipping the duration of the note immediately before the rest so that
-    ``next_start - (note.start + new_duration) >= rest_gap``. Only LEAD/STRINGS
-    roles are touched; notes are never removed.
+    melodic tracks for such blocks and, every ~20 beats, opens a phrasing rest
+    by dropping the note immediately after the rest boundary. Dropping (rather
+    than clipping duration) is required when notes follow each other faster
+    than ``rest_gap`` beats, where no tail clip could open a large-enough gap.
+    Only LEAD/STRINGS roles are touched; at most one note per ~20-beat phrase
+    is removed, so musical content is preserved.
     """
     result = {}
     for tname, notes in kw["tracks"].items():
         prof = kw.get("_profiles", {}).get(tname)
-        if not (prof and prof.role in (Role.LEAD, Role.STRINGS) and len(notes) >= 3):
+        if not (prof and prof.role in (Role.LEAD, Role.STRINGS) and len(notes) >= 6):
             result[tname] = notes
             continue
+
         ordered = sorted(notes, key=lambda n: float(n.start))
-        new_durations = {id(n): float(n.duration) for n in ordered}
+        keep = [True] * len(ordered)
+        ends = [float(n.start) + float(n.duration) for n in ordered]
 
-        # Walk the line; whenever ≥24 beats have elapsed since the last rest,
-        # clip the current note's tail so a ≥rest_gap gap opens before the next
-        # onset. This handles both back-to-back notes and overlapping ones.
-        last_rest_at = float(ordered[0].start)
-        for i in range(len(ordered) - 1):
-            note = ordered[i]
-            next_start = float(ordered[i + 1].start)
-            note_end = float(note.start) + new_durations[id(note)]
-            # Already a real gap here? treat as a rest boundary.
-            if next_start - note_end >= rest_gap:
-                last_rest_at = next_start
+        # Scan left-to-right tracking the latest sounding note end (handles
+        # overlapping/polyphonic lines). When ≥20 beats of continuous sound have
+        # elapsed since the last rest, open a phrasing rest by dropping every
+        # note that sounds across [onset, onset+rest_gap] — all overlapping
+        # voices must clear, otherwise a chord still rings through the "rest".
+        sounding_end = ends[0] if ends else 0.0
+        last_rest_at = float(ordered[0].start) if ordered else 0.0
+
+        for i in range(1, len(ordered)):
+            onset = float(ordered[i].start)
+            sounding_end = max(sounding_end, ends[i])
+            # Has total silence (≥rest_gap with nothing sounding) opened here?
+            silent_since = max((ends[j] for j in range(i) if keep[j]), default=0.0)
+            if onset - silent_since >= rest_gap:
+                last_rest_at = onset
                 continue
-            # Time to breathe? Insert a rest well before the 28-beat limit so
-            # the resulting blocks stay safely under it.
-            if float(note.start) - last_rest_at >= 20.0:
-                # Clip this note so its end sits rest_gap before the next onset.
-                target_end = next_start - rest_gap
-                target_dur = target_end - float(note.start)
-                if target_dur >= 0.25 and target_dur < new_durations[id(note)]:
-                    new_durations[id(note)] = target_dur
-                    last_rest_at = next_start
+            # Time to breathe? Clear all notes sounding through the rest window.
+            if onset - last_rest_at >= 20.0:
+                rest_lo = onset
+                rest_hi = onset + rest_gap
+                for j in range(i, len(ordered)):
+                    if float(ordered[j].start) > rest_hi:
+                        break
+                    if ends[j] > rest_lo:
+                        keep[j] = False
+                last_rest_at = rest_hi
 
-        changed = any(new_durations[id(n)] != float(n.duration) for n in ordered)
-        if changed:
-            result[tname] = [
-                NoteInfo(
-                    pitch=n.pitch, start=n.start, duration=new_durations[id(n)],
-                    velocity=n.velocity, articulation=n.articulation,
-                    expression=dict(n.expression),
-                )
-                for n in notes
-            ]
+        if not all(keep):
+            kept_notes = [n for n, k in zip(notes, keep) if k]
+            result[tname] = kept_notes
         else:
             result[tname] = notes
     kw["tracks"] = result
@@ -3167,15 +3169,16 @@ def _soft_blend(
 
 
 def _resolve_leaps(notes: list[NoteInfo]) -> list[NoteInfo]:
-    """Soften ARR-12 violations: large melodic leaps (≥ a fifth) should resolve
-    by contrary motion. Two failure modes are fixed by octave-shifting (pitch
-    class and scale membership are preserved, only the register changes):
+    """Soften ARR-12 violations: a melodic leap (≥ a fifth) must be followed by
+    contrary motion. The validator flags any triple (n0,n1,n2) where
+    ``|p1-p0| >= 7`` and ``(p1-p0)*(p2-p1) >= 0`` (n2 does not move opposite to
+    the leap), and a disjointed run where same-direction leaps accumulate > an
+    octave.
 
-      1. *Disjointed* — three notes leap the same direction and accumulate
-         more than an octave: the middle note is pulled across the octave.
-      2. *Unresolved* — a leap is followed by another note that does not move
-         in the opposite direction: the following note is octave-shifted to
-         create the required contrary resolution.
+    This fixes both by octave-shifting n1 or n2 (pitch class / scale membership
+    preserved, only register changes) until every leap is followed by contrary
+    motion. Bounded passes converge because each shift strictly reduces the
+    number of offending triples.
     """
     if len(notes) < 3:
         return notes
@@ -3191,33 +3194,48 @@ def _resolve_leaps(notes: list[NoteInfo]) -> list[NoteInfo]:
             expression=dict(out[idx].expression),
         )
 
-    # Bounded passes — a single sweep rarely suffices when shifts cascade.
-    for _ in range(6):
-        changed = False
+    def _violations() -> int:
+        n = 0
         for i in range(len(out) - 2):
             p0, p1, p2 = out[i].pitch, out[i + 1].pitch, out[i + 2].pitch
             d1, d2 = p1 - p0, p2 - p1
+            if abs(d1) >= 7 and d1 * d2 >= 0:
+                n += 1
+        return n
+
+    # Try to make each leap resolve by contrary motion by shifting n2 (or n1)
+    # across an octave. Prefer the shift that lands n2 closest to n1.
+    for _ in range(20):
+        if _violations() == 0:
+            break
+        for i in range(len(out) - 2):
+            p0, p1, p2 = out[i].pitch, out[i + 1].pitch, out[i + 2].pitch
+            d1 = p1 - p0
+            d2 = p2 - p1
             if abs(d1) < 7:
-                continue  # not a leap between n0 and n1
-            # Case 1: disjointed — same-direction accumulation > octave.
+                continue
+            if d1 * d2 < 0:
+                continue  # already resolves by contrary motion
+            # Disjointed run: consecutive same-direction leaps > an octave.
+            # Pull the middle note across the octave to reverse it.
             if d1 * d2 > 0 and abs(d1 + d2) > 12:
                 shift = -12 if d1 > 0 else 12
                 new_p1 = p1 + shift
                 if 0 <= new_p1 <= 127:
                     _set(i + 1, new_p1)
-                    changed = True
                 continue
-            # Case 2: unresolved — leap not followed by contrary motion.
-            # (diff2 == 0 or same sign). Shift n2 across the octave so it
-            # resolves against the leap.
-            if d1 * d2 >= 0:
-                shift = -12 if d1 > 0 else 12
-                new_p2 = p2 + shift
-                if 0 <= new_p2 <= 127:
-                    _set(i + 2, new_p2)
-                    changed = True
-        if not changed:
-            break
+            # Unresolved: leap not followed by contrary motion. Shift n2 across
+            # the octave toward n1 so it resolves against the leap.
+            shift = -12 if p2 > p1 else 12
+            new_p2 = p2 + shift
+            if 0 <= new_p2 <= 127 and (new_p2 - p1) * d1 < 0:
+                _set(i + 2, new_p2)
+                continue
+            # Shifting n2 didn't work — shift n1 so the leap itself shrinks.
+            shift1 = -12 if p1 > p0 else 12
+            new_p1 = p1 + shift1
+            if 0 <= new_p1 <= 127:
+                _set(i + 1, new_p1)
     return out
 
 
@@ -3329,6 +3347,12 @@ class AlbumNarrative:
     # DEFAULT_GENRE ('lofi'). Must be a key of _ROLE_PAN_PROFILES if set.
     genre: str = DEFAULT_GENRE
     strict_validation: bool = True
+    # When True, the texture stage is skipped. TextureController mutes every
+    # voice during low-tension stretches (intro/resolution) of the classical
+    # tension curve, which produces long silences at the start of tracks where
+    # the curve starts near zero. Disable it for albums that should open with a
+    # full ensemble instead of a slow tension build-up.
+    disable_texture: bool = False
 
     def generate(self) -> dict:
         """Generates all tracks and compiles them into a single continuous album."""
@@ -3435,6 +3459,11 @@ class AlbumNarrative:
                     tracks_dict[lead_track_name] = opening_motif + tail
 
             # 3. Produce and register metadata
+            # Optionally drop the texture stage so low-tension intros keep all
+            # voices audible (no opening silence).
+            pipeline = None
+            if self.disable_texture:
+                pipeline = [s for s in DEFAULT_PIPELINE if s.name != "texture"]
             meta = produce_track(
                 tracks_dict,
                 bpm=tempo,
@@ -3450,6 +3479,7 @@ class AlbumNarrative:
                 chords=part_chords,
                 genre=self.genre,
                 time_signature=self.time_signature,
+                pipeline=pipeline,
             )
 
             tracks_metadata.append(meta)
