@@ -16,6 +16,7 @@ import math
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
+from melodica.generators._options import OptionSpec, validate_options
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
 from melodica.utils import nearest_pitch, chord_at, snap_to_scale
@@ -35,6 +36,12 @@ class TubularBellsGenerator(PhraseGenerator):
     """
 
     name: str = "Tubular Bells Generator"
+    OPTION_SCHEMA = (
+        OptionSpec("stroke_pattern",
+                   choices=frozenset({"single", "roll", "chime"}),
+                   default="single",
+                   description="bell striking pattern"),
+    )
 
     def __init__(
         self,
@@ -46,6 +53,8 @@ class TubularBellsGenerator(PhraseGenerator):
         if params is None:
             params = GeneratorParams(key_range_low=53, key_range_high=79)
         super().__init__(params)
+        validate_options(self.OPTION_SCHEMA, {"stroke_pattern": stroke_pattern},
+                         owner=type(self).__name__)
         self.stroke_pattern = stroke_pattern
         self.dampen = dampen
         

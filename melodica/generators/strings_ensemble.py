@@ -34,6 +34,7 @@ import random
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
+from melodica.generators._options import OptionSpec, validate_options
 from melodica.rhythm import RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
@@ -48,10 +49,22 @@ SECTION_VOICE_COUNTS: dict[str, int] = {
 
 ARTICULATION_CONF: dict[str, dict] = {
     "sustained": {"dur_factor": 0.95, "vel_mod": 0, "tremolo": False},
-    "staccato": {"dur_factor": 0.25, "vel_mod": 12, "tremolo": False},
-    "tremolo": {"dur_factor": 0.95, "vel_mod": 5, "tremolo": True},
-    "pizz": {"dur_factor": 0.15, "vel_mod": 8, "tremolo": False},
+    "legato":    {"dur_factor": 1.0,  "vel_mod": -3, "tremolo": False},
+    "staccato":  {"dur_factor": 0.25, "vel_mod": 12, "tremolo": False},
+    "tremolo":   {"dur_factor": 0.95, "vel_mod": 5,  "tremolo": True},
+    "pizz":      {"dur_factor": 0.15, "vel_mod": 8,  "tremolo": False},
 }
+
+# Declarative option schema. Replaces silent dict.get(key, default) coercion
+# (a typo silently swapped the default) with strict construction-time checks.
+_STRINGS_OPTION_SCHEMA = (
+    OptionSpec("section_size", choices=frozenset(SECTION_VOICE_COUNTS.keys()),
+               default="full", description="ensemble size"),
+    OptionSpec("articulation", choices=frozenset(ARTICULATION_CONF.keys()),
+               default="sustained", description="bowing style"),
+    OptionSpec("dynamic_curve", choices=frozenset({"crescendo", "flat", "swell"}),
+               default="flat", description="phrase-level loudness shape"),
+)
 
 
 @dataclass
@@ -70,6 +83,7 @@ class StringsEnsembleGenerator(PhraseGenerator):
     """
 
     name: str = "Strings Ensemble Generator"
+    OPTION_SCHEMA = _STRINGS_OPTION_SCHEMA
     section_size: str = "full"
     articulation: str = "sustained"
     divisi: int = 4
@@ -88,6 +102,10 @@ class StringsEnsembleGenerator(PhraseGenerator):
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
+        validate_options(self.OPTION_SCHEMA,
+                         {"section_size": section_size, "articulation": articulation,
+                          "dynamic_curve": dynamic_curve},
+                         owner=type(self).__name__)
         self.section_size = section_size
         self.articulation = articulation
         self.divisi = max(1, min(6, divisi))

@@ -33,6 +33,7 @@ from melodica.types import (
     StaticPhrase,
 )
 from melodica.render_context import RenderContext
+from melodica.generators._options import OptionSpec
 
 
 # ---------------------------------------------------------------------------
@@ -101,10 +102,25 @@ class PhraseGenerator(ABC):
     """
     Abstract phrase generator.
     Subclasses implement render() and set the `name` class attribute.
+
+    Option contract: subclasses MAY declare ``OPTION_SCHEMA`` — a tuple of
+    :class:`~melodica.generators._options.OptionSpec` describing their
+    string-valued options. Doing so (a) publishes the valid choices for
+    introspection (``valid_options``/``describe``), and (b) lets the subclass
+    validate them in one call via ``validate_options`` instead of copying the
+    ``if x not in SET: raise`` boilerplate. Validation is strict: an invalid
+    value raises at construction time.
+
+    Generators that have not migrated yet leave ``OPTION_SCHEMA`` empty (the
+    default) and keep validating their own kwargs inline — this is backward
+    compatible and does not change behaviour.
     """
 
     name: str
     params: GeneratorParams
+    # Declared string-option schema. Empty by default so the ~200 unmigrated
+    # generators are unaffected. Migrated generators set this at module level.
+    OPTION_SCHEMA: tuple[OptionSpec, ...] = ()
 
     def __init__(self, params: GeneratorParams | None = None) -> None:
         super().__init__()
@@ -125,6 +141,30 @@ class PhraseGenerator(ABC):
             v_min, v_max = self.params.velocity_range
             return (v_min + v_max) // 2
         return int(70 + self.params.density * 30)
+
+    # -- Option introspection ------------------------------------------------
+
+    @classmethod
+    def valid_options(cls) -> dict[str, list[str]]:
+        """Return ``{option_name: sorted_choices}`` for this generator.
+
+        Empty for unmigrated generators. Used by tooling/docs/future
+        pre-render config validation.
+        """
+        return {spec.name: sorted(spec.choices) for spec in cls.OPTION_SCHEMA}
+
+    @classmethod
+    def describe(cls) -> str:
+        """Human-readable listing of the option schema (one line per option)."""
+        if not cls.OPTION_SCHEMA:
+            return f"{cls.__name__}: no OPTION_SCHEMA declared"
+        lines = [f"{cls.__name__} options:"]
+        for spec in cls.OPTION_SCHEMA:
+            doc = f"  — {spec.description}" if spec.description else ""
+            lines.append(
+                f"  {spec.name}: {sorted(spec.choices)} (default {spec.default!r}){doc}"
+            )
+        return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

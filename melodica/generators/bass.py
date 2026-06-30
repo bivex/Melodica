@@ -32,6 +32,7 @@ import random
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
+from melodica.generators._options import OptionSpec, validate_options
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica import types
@@ -50,6 +51,18 @@ ALLOWED_NOTE_TYPES = {"root", "fourth", "sixth", "lower_octave"}
 GLOBAL_MOVEMENTS = {"up", "down", "up_down", "none"}
 NOTE_MOVEMENTS = {"none", "alternating"}
 
+# Declarative option schema. Published via OPTION_SCHEMA so callers/tooling can
+# introspect valid choices, and validated centrally by validate_options().
+_BASS_OPTION_SCHEMA = (
+    OptionSpec("style", choices=frozenset(STYLES), default="root_only",
+               description="bass movement style"),
+    OptionSpec("global_movement", choices=frozenset(GLOBAL_MOVEMENTS), default="none",
+               description="overall melodic direction across the phrase"),
+    OptionSpec("note_movement", choices=frozenset(NOTE_MOVEMENTS), default="alternating",
+               description="per-note motion between adjacent chords"),
+)
+# allowed_notes is a list, not a single choice; validated separately below.
+
 
 @dataclass
 class BassGenerator(PhraseGenerator):
@@ -67,6 +80,7 @@ class BassGenerator(PhraseGenerator):
     """
 
     name: str = "Bass Generator"
+    OPTION_SCHEMA = _BASS_OPTION_SCHEMA
     style: str = "root_only"
     allowed_notes: list[str] = field(default_factory=lambda: ["root"])
     global_movement: str = "none"
@@ -88,24 +102,21 @@ class BassGenerator(PhraseGenerator):
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
-        if style not in STYLES:
-            raise ValueError(f"style must be one of {sorted(STYLES)}; got {style}")
+        validate_options(
+            self.OPTION_SCHEMA,
+            {"style": style, "global_movement": global_movement,
+             "note_movement": note_movement},
+            owner=type(self).__name__,
+        )
         self.style = style
         self.allowed_notes = allowed_notes if allowed_notes is not None else ["root"]
         for note in self.allowed_notes:
             if note not in ALLOWED_NOTE_TYPES:
                 raise ValueError(
-                    f"allowed note must be one of {sorted(ALLOWED_NOTE_TYPES)}; got {note!r}"
+                    f"BassGenerator.allowed_notes entry must be one of "
+                    f"{sorted(ALLOWED_NOTE_TYPES)}; got {note!r}"
                 )
-        if global_movement not in GLOBAL_MOVEMENTS:
-            raise ValueError(
-                f"global_movement must be one of {sorted(GLOBAL_MOVEMENTS)}; got {global_movement!r}"
-            )
         self.global_movement = global_movement
-        if note_movement not in NOTE_MOVEMENTS:
-            raise ValueError(
-                f"note_movement must be one of {sorted(NOTE_MOVEMENTS)}; got {note_movement!r}"
-            )
         self.note_movement = note_movement
         self.transpose_octaves = max(-2, min(2, transpose_octaves))
         self.rhythm = rhythm

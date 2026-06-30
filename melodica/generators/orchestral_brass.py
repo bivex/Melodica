@@ -59,6 +59,22 @@ _REGISTER_VEL_OFFSET = {
     3: 10,   # high register: brilliant, powerful
 }
 
+# Declarative option schema shared by all brass generators. Replaces the silent
+# dict.get(key, default) coercion in render() (a typo silently swapped the
+# default) with strict construction-time validation.
+from melodica.generators._options import OptionSpec, validate_options
+
+_BRASS_OPTION_SCHEMA = (
+    OptionSpec("articulation",
+               choices=frozenset(BRASS_ARTICULATIONS.keys()),
+               default="sustained",
+               description="bowing/tonguing style"),
+    OptionSpec("dynamic_curve",
+               choices=frozenset({_CURVE_FLAT, _CURVE_CRESC, _CURVE_DECRESC, _CURVE_SWELL, _CURVE_DIM}),
+               default="flat",
+               description="phrase-level loudness shape"),
+)
+
 
 def _apply_dynamic_curve(vel: int, progress: float, curve: str, base: int) -> int:
     if curve == _CURVE_CRESC:
@@ -79,6 +95,7 @@ def _apply_dynamic_curve(vel: int, progress: float, curve: str, base: int) -> in
 class _OrchestralBrassBase(PhraseGenerator):
     """Base class shared by all orchestral brass generators."""
     note_density: float = 1.0
+    OPTION_SCHEMA = _BRASS_OPTION_SCHEMA
 
     def _apply_note_density(self, chords: list[ChordLabel]) -> list[ChordLabel]:
         note_density = getattr(self, "note_density", 1.0)
@@ -275,6 +292,9 @@ class TrumpetGenerator(_OrchestralBrassBase):
     ) -> None:
         super().__init__(params)
         self.instrument = "trumpet"
+        validate_options(self.OPTION_SCHEMA,
+                         {"articulation": articulation, "dynamic_curve": dynamic_curve},
+                         owner=type(self).__name__)
         self.articulation = articulation
         self.dynamic_curve = dynamic_curve
         self.con_sordino = con_sordino
@@ -425,6 +445,9 @@ class TromboneGenerator(_OrchestralBrassBase):
         super().__init__(params)
         self.bass_voice = bass_voice
         self.instrument = "bass_trombone" if bass_voice else "trombone"
+        validate_options(self.OPTION_SCHEMA,
+                         {"articulation": articulation, "dynamic_curve": dynamic_curve},
+                         owner=type(self).__name__)
         self.articulation = articulation
         self.dynamic_curve = dynamic_curve
         self.con_sordino = con_sordino
@@ -575,6 +598,9 @@ class FrenchHornGenerator(_OrchestralBrassBase):
     ) -> None:
         super().__init__(params)
         self.instrument = "french_horn"
+        validate_options(self.OPTION_SCHEMA,
+                         {"articulation": articulation, "dynamic_curve": dynamic_curve},
+                         owner=type(self).__name__)
         self.articulation = articulation
         self.dynamic_curve = dynamic_curve
         self.con_sordino = con_sordino

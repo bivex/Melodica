@@ -34,6 +34,7 @@ import random
 from dataclasses import dataclass, field
 
 from melodica.generators import GeneratorParams, PhraseGenerator
+from melodica.generators._options import OptionSpec, validate_options
 from melodica.rhythm import RhythmEvent, RhythmGenerator
 from melodica.render_context import RenderContext
 from melodica.types import ChordLabel, NoteInfo, Scale
@@ -60,6 +61,10 @@ class NebulaGenerator(PhraseGenerator):
     """
 
     name: str = "Nebula Generator"
+    OPTION_SCHEMA = (
+        OptionSpec("variant", choices=frozenset({"cloud", "cascade", "swell", "granular", "stasis"}),
+                   default="cloud", description="texture type"),
+    )
     variant: str = "cloud"
     density_notes: int = 5
     pitch_spread: int = 12
@@ -82,6 +87,7 @@ class NebulaGenerator(PhraseGenerator):
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
+        validate_options(self.OPTION_SCHEMA, {"variant": variant}, owner=type(self).__name__)
         self.variant = variant
         self.density_notes = max(2, min(12, density_notes))
         self.pitch_spread = max(3, min(24, pitch_spread))
@@ -115,7 +121,9 @@ class NebulaGenerator(PhraseGenerator):
         elif self.variant == "stasis":
             notes = self._stasis(chords, key, duration_beats, mid)
         else:
-            raise ValueError(f"Unknown NebulaGenerator variant: {self.variant!r}. Valid: cloud, cascade, swell, granular, stasis")
+            # Unreachable: variant is validated at construction time. Defensive
+            # fallback keeps render() total even if a subclass bypasses it.
+            notes = self._cloud(chords, key, duration_beats, mid)
 
         if chords:
             last_chord = chords[-1]

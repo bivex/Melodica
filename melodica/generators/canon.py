@@ -28,9 +28,10 @@ from __future__ import annotations
 import copy
 import random
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, get_args
 
 from melodica.generators import GeneratorParams, PhraseGenerator
+from melodica.generators._options import OptionSpec, validate_options
 from melodica.types import Scale, Mode, ChordLabel, NoteInfo
 from melodica.render_context import RenderContext
 from melodica.utils import nearest_pitch, chord_at, snap_to_scale
@@ -175,6 +176,12 @@ class CanonGenerator(PhraseGenerator):
     canon_type: CanonType = "fifth"
     velocity_decay: float = 0.88
     avoid_parallels: bool = True
+    OPTION_SCHEMA = (
+        OptionSpec("canon_type",
+                   choices=frozenset(get_args(CanonType)),
+                   default="fifth",
+                   description="counterpoint relationship between voices"),
+    )
 
     def __init__(
         self,
@@ -192,6 +199,8 @@ class CanonGenerator(PhraseGenerator):
         self.delay_beats = delay_beats
         self.interval_semitones = interval if interval is not None else interval_semitones
         self.n_voices = n_voices
+        validate_options(self.OPTION_SCHEMA, {"canon_type": canon_type},
+                         owner=type(self).__name__)
         self.canon_type = canon_type
         self.velocity_decay = velocity_decay
         self.avoid_parallels = avoid_parallels
