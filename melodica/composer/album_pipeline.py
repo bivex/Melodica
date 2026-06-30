@@ -1734,6 +1734,83 @@ def _stage_non_chord_tones(kw):
     return kw
 
 
+def _stage_leap_resolve(kw):
+    """Soften ARR-12 melodic-leap violations on LEAD/STRINGS tracks.
+
+    Passing tones, motif weaving, and texture stages can introduce consecutive
+    same-direction leaps exceeding an octave, which the strict form validator
+    rejects. This stage octave-shifts the middle note of such runs so they
+    resolve by contrary motion. Only melodic roles are touched; pitch class
+    (scale membership) is preserved.
+    """
+    result = {}
+    for tname, notes in kw["tracks"].items():
+        prof = kw.get("_profiles", {}).get(tname)
+        if prof and prof.role in (Role.LEAD, Role.STRINGS) and notes and len(notes) >= 3:
+            result[tname] = _resolve_leaps(notes)
+        else:
+            result[tname] = notes
+    kw["tracks"] = result
+    return kw
+
+
+def _stage_breathing_room(kw, max_block: float = 28.0, rest_gap: float = 1.5):
+    """Ensure LEAD/STRINGS lines have phrasing rests (ARR-13).
+
+    Quantization and passing-tone insertion can weld a melody into one long
+    continuous block (>28 beats) with no ≥1.5-beat gap. This stage scans
+    melodic tracks for such blocks and opens a phrasing rest every ~24 beats by
+    clipping the duration of the note immediately before the rest so that
+    ``next_start - (note.start + new_duration) >= rest_gap``. Only LEAD/STRINGS
+    roles are touched; notes are never removed.
+    """
+    result = {}
+    for tname, notes in kw["tracks"].items():
+        prof = kw.get("_profiles", {}).get(tname)
+        if not (prof and prof.role in (Role.LEAD, Role.STRINGS) and len(notes) >= 3):
+            result[tname] = notes
+            continue
+        ordered = sorted(notes, key=lambda n: float(n.start))
+        new_durations = {id(n): float(n.duration) for n in ordered}
+
+        # Walk the line; whenever ≥24 beats have elapsed since the last rest,
+        # clip the current note's tail so a ≥rest_gap gap opens before the next
+        # onset. This handles both back-to-back notes and overlapping ones.
+        last_rest_at = float(ordered[0].start)
+        for i in range(len(ordered) - 1):
+            note = ordered[i]
+            next_start = float(ordered[i + 1].start)
+            note_end = float(note.start) + new_durations[id(note)]
+            # Already a real gap here? treat as a rest boundary.
+            if next_start - note_end >= rest_gap:
+                last_rest_at = next_start
+                continue
+            # Time to breathe? Insert a rest well before the 28-beat limit so
+            # the resulting blocks stay safely under it.
+            if float(note.start) - last_rest_at >= 20.0:
+                # Clip this note so its end sits rest_gap before the next onset.
+                target_end = next_start - rest_gap
+                target_dur = target_end - float(note.start)
+                if target_dur >= 0.25 and target_dur < new_durations[id(note)]:
+                    new_durations[id(note)] = target_dur
+                    last_rest_at = next_start
+
+        changed = any(new_durations[id(n)] != float(n.duration) for n in ordered)
+        if changed:
+            result[tname] = [
+                NoteInfo(
+                    pitch=n.pitch, start=n.start, duration=new_durations[id(n)],
+                    velocity=n.velocity, articulation=n.articulation,
+                    expression=dict(n.expression),
+                )
+                for n in notes
+            ]
+        else:
+            result[tname] = notes
+    kw["tracks"] = result
+    return kw
+
+
 def _stage_diagnostics(kw):
     """Post-export diagnostics report."""
     if not kw.get("verbose"):
@@ -1976,6 +2053,11 @@ DEFAULT_PIPELINE: list[Stage] = [
     Stage("tension", _stage_tension),
     Stage("texture", _stage_texture),
     Stage("transitions", _stage_transitions),
+    # leap_resolve / breathing_room run AFTER texture & transitions, which add
+    # notes and modify density: placing them last means their ARR-12/ARR-13
+    # fixes survive to the export/validate step.
+    Stage("leap_resolve", _stage_leap_resolve),
+    Stage("breathing_room", _stage_breathing_room),
     Stage("polyphony", _stage_polyphony),
     Stage("psycho", _stage_psycho),
     Stage("sparse_safeguard", _stage_sparse_safeguard),
@@ -2922,6 +3004,223 @@ def clamp_to_scale(pitch: int, scale: Scale) -> int:
     return max(0, min(127, int(round(pitch + diff))))
 
 
+def _weave_narrative_motif(
+    motif_notes: list[NoteInfo],
+    scale: Scale,
+    transformation: str,
+    total_beats: float,
+    track_index: int = 0,
+    num_tracks: int = 1,
+    opening_only: bool = False,
+) -> list[NoteInfo]:
+    """Declare the seed motif at a few strategic points rather than looping it.
+
+    Unlike ``generate_narrative_motif`` (which tiles the motif across the whole
+    track every ~16 beats), this returns the motif *only* at a small number of
+    anchor positions — entry, mid-climax, and resolution — so the generated
+    lead melody fills the spaces between. The anchor positions shift with
+    ``track_index`` so each movement's motif entries land at different times,
+    breaking the "every track sounds like the same loop" effect.
+
+    When ``opening_only`` is set, a single statement is emitted at the very
+    start of the track — used so the motif opens the movement and the generated
+    lead takes over afterwards (avoids disrupting the lead's phrasing).
+    """
+    if not motif_notes:
+        return []
+
+    # Build the single (transformed, scale-snapped) motif statement.
+    transformed = []
+    first_pitch = motif_notes[0].pitch
+    total_dur = max(x.start + x.duration for x in motif_notes)
+
+    for n in motif_notes:
+        pitch = n.pitch
+        start = n.start
+        duration = n.duration
+        velocity = n.velocity
+
+        if transformation == "inversion":
+            diff = pitch - first_pitch
+            pitch = first_pitch - diff
+        elif transformation == "stretched":
+            start = start * 2.0
+            duration = duration * 2.0
+        elif transformation == "fragmented":
+            if int(round(start)) % 2 == 1:
+                continue
+            velocity = int(velocity * 0.7)
+        elif transformation == "retrograde":
+            start = total_dur - (start + duration)
+
+        pitch = clamp_to_scale(pitch, scale)
+        transformed.append(
+            NoteInfo(
+                pitch=pitch,
+                start=start,
+                duration=duration,
+                velocity=velocity,
+                articulation=n.articulation,
+                expression=dict(n.expression),
+            )
+        )
+
+    if not transformed:
+        return []
+
+    motif_len = max(x.start + x.duration for x in transformed)
+    if motif_len <= 0:
+        motif_len = 8.0
+
+    if opening_only:
+        # A single clean statement at the head of the track.
+        return [
+            NoteInfo(
+                pitch=n.pitch, start=round(n.start, 6), duration=n.duration,
+                velocity=n.velocity, articulation=n.articulation,
+                expression=dict(n.expression),
+            )
+            for n in transformed
+            if n.start + n.duration <= total_beats + 0.5
+        ]
+
+    # Number of statements: more for longer tracks, fewer for short reprises.
+    # Cap so the motif never tiles the whole track (leave room for the lead).
+    n_statements = max(2, min(4, int(total_beats // (motif_len * 3))))
+    if total_beats < motif_len * 4:
+        n_statements = 2
+
+    # Anchor positions as fractions of the track, rotated by track index so
+    # movements differ. Base anchors: entry, mid-climax (~0.6), resolution.
+    base_anchors = [0.04, 0.6, 0.92]
+    # Rotate the inner anchors per movement; clip to valid range.
+    shift = (track_index % num_tracks) * 0.08
+    anchors = [
+        min(0.95, max(0.02, base_anchors[0])),
+        min(0.95, max(0.02, base_anchors[1] + shift - 0.08)),
+        min(0.95, max(0.02, base_anchors[2] - shift * 0.5)),
+    ]
+    if n_statements >= 4:
+        anchors.append(0.3 + shift)
+    anchors = sorted(set(round(a * total_beats, 6) for a in anchors))[:n_statements]
+
+    placed: list[NoteInfo] = []
+    for anchor in anchors:
+        for n in transformed:
+            note_start = anchor + n.start
+            if note_start + n.duration <= total_beats + 0.5:
+                placed.append(
+                    NoteInfo(
+                        pitch=n.pitch,
+                        start=round(note_start, 6),
+                        duration=n.duration,
+                        velocity=n.velocity,
+                        articulation=n.articulation,
+                        expression=dict(n.expression),
+                    )
+                )
+    return placed
+
+
+def _soft_blend(
+    lead_notes: list[NoteInfo],
+    motif_notes: list[NoteInfo],
+    total_beats: float,
+    window: float = 1.5,
+) -> list[NoteInfo]:
+    """Layer motif statements over the generated lead, only in local windows.
+
+    Lead notes whose onsets fall within ``window`` beats of a motif note are
+    dropped (so the motif is heard cleanly at its entries); all other lead
+    notes are kept. The motif notes are then appended. Result is sorted by
+    onset. This produces a melody that is mostly the IdeaTool-generated line,
+    punctuated by recognisable motif statements — instead of the motif
+    replacing the lead entirely.
+    """
+    if not motif_notes:
+        return list(lead_notes)
+    if not lead_notes:
+        return list(motif_notes)
+
+    motif_starts = sorted(n.start for n in motif_notes)
+
+    import bisect
+
+    kept_lead: list[NoteInfo] = []
+    for n in lead_notes:
+        # Is this lead note near a motif statement?
+        idx = bisect.bisect_left(motif_starts, n.start)
+        near = False
+        for j in (idx - 1, idx):
+            if 0 <= j < len(motif_starts) and abs(motif_starts[j] - n.start) <= window:
+                near = True
+                break
+        if not near:
+            kept_lead.append(n)
+
+    blended = kept_lead + [NoteInfo(
+        pitch=n.pitch, start=n.start, duration=n.duration, velocity=n.velocity,
+        articulation=n.articulation, expression=dict(n.expression),
+    ) for n in motif_notes]
+    blended.sort(key=lambda x: (x.start, -x.pitch))
+    return _resolve_leaps(blended)
+
+
+def _resolve_leaps(notes: list[NoteInfo]) -> list[NoteInfo]:
+    """Soften ARR-12 violations: large melodic leaps (≥ a fifth) should resolve
+    by contrary motion. Two failure modes are fixed by octave-shifting (pitch
+    class and scale membership are preserved, only the register changes):
+
+      1. *Disjointed* — three notes leap the same direction and accumulate
+         more than an octave: the middle note is pulled across the octave.
+      2. *Unresolved* — a leap is followed by another note that does not move
+         in the opposite direction: the following note is octave-shifted to
+         create the required contrary resolution.
+    """
+    if len(notes) < 3:
+        return notes
+    out = [NoteInfo(
+        pitch=n.pitch, start=n.start, duration=n.duration, velocity=n.velocity,
+        articulation=n.articulation, expression=dict(n.expression),
+    ) for n in notes]
+
+    def _set(idx: int, new_pitch: int) -> None:
+        out[idx] = NoteInfo(
+            pitch=new_pitch, start=out[idx].start, duration=out[idx].duration,
+            velocity=out[idx].velocity, articulation=out[idx].articulation,
+            expression=dict(out[idx].expression),
+        )
+
+    # Bounded passes — a single sweep rarely suffices when shifts cascade.
+    for _ in range(6):
+        changed = False
+        for i in range(len(out) - 2):
+            p0, p1, p2 = out[i].pitch, out[i + 1].pitch, out[i + 2].pitch
+            d1, d2 = p1 - p0, p2 - p1
+            if abs(d1) < 7:
+                continue  # not a leap between n0 and n1
+            # Case 1: disjointed — same-direction accumulation > octave.
+            if d1 * d2 > 0 and abs(d1 + d2) > 12:
+                shift = -12 if d1 > 0 else 12
+                new_p1 = p1 + shift
+                if 0 <= new_p1 <= 127:
+                    _set(i + 1, new_p1)
+                    changed = True
+                continue
+            # Case 2: unresolved — leap not followed by contrary motion.
+            # (diff2 == 0 or same sign). Shift n2 across the octave so it
+            # resolves against the leap.
+            if d1 * d2 >= 0:
+                shift = -12 if d1 > 0 else 12
+                new_p2 = p2 + shift
+                if 0 <= new_p2 <= 127:
+                    _set(i + 2, new_p2)
+                    changed = True
+        if not changed:
+            break
+    return out
+
+
 def generate_narrative_motif(
     motif_notes: list[NoteInfo],
     scale: Scale,
@@ -3085,7 +3384,14 @@ class AlbumNarrative:
             part_chords = result.get("_chords") or tool.get_chords()
             per_track_chords.append(part_chords)
 
-            # 2. Motif Memory Engine Integration
+            # 2. Motif Memory Engine Integration — OPENING STATEMENT.
+            # The seed motif is declared once as the *opening* melodic phrase of
+            # the lead, then the IdeaTool-generated melody takes over for the
+            # rest of the movement. This keeps a recognisable thematic thread
+            # (transformed per movement) at each entry without looping the same
+            # cell across the whole track — and without disrupting the lead's
+            # natural phrasing/voice-leading, which layering the motif on top
+            # would do (filling its rests, creating unresolved leaps).
             lead_track_name = None
             for cfg in configs:
                 if any(x in cfg.name for x in ("lead", "solo", "pluck", "melody")):
@@ -3094,19 +3400,39 @@ class AlbumNarrative:
 
             if lead_track_name:
                 print(f"    -> Weaving motif {transform!r} into track {lead_track_name!r}")
-                motif_notes = generate_narrative_motif(
+                # One motif statement, scale-snapped and (optionally) transformed.
+                opening_motif = _weave_narrative_motif(
                     self.seed_motif,
                     scale=key,
                     transformation=transform,
-                    offset_beats=0.0,
-                    duration_beats=total_beats
+                    total_beats=total_beats,
+                    track_index=i,
+                    num_tracks=len(self.harmonic_journey),
+                    opening_only=True,
                 )
                 # Apply octave shift from TrackConfig if any
                 target_cfg = next((c for c in configs if c.name == lead_track_name), None)
                 if target_cfg and target_cfg.octave_shift:
-                    for n in motif_notes:
+                    for n in opening_motif:
                         n.pitch = max(0, min(127, n.pitch + target_cfg.octave_shift * 12))
-                tracks_dict[lead_track_name] = motif_notes
+
+                lead_existing = list(tracks_dict.get(lead_track_name, []))
+                # Keep the motif in the lead's register so the handoff from the
+                # opening motif to the generated lead is smooth (no octave jump).
+                if lead_existing and opening_motif:
+                    lo = min(n.pitch for n in lead_existing)
+                    hi = max(n.pitch for n in lead_existing)
+                    for n in opening_motif:
+                        while n.pitch < lo - 3:
+                            n.pitch = min(127, n.pitch + 12)
+                        while n.pitch > hi + 3:
+                            n.pitch = max(0, n.pitch - 12)
+                    # Remove generated lead notes that overlap the opening motif,
+                    # so the motif phrase is heard cleanly at the start; keep the
+                    # rest of the generated melody intact (with its own rests).
+                    motif_end = max(n.start + n.duration for n in opening_motif)
+                    tail = [n for n in lead_existing if n.start >= motif_end - 0.01]
+                    tracks_dict[lead_track_name] = opening_motif + tail
 
             # 3. Produce and register metadata
             meta = produce_track(

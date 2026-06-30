@@ -18,7 +18,7 @@ from melodica.generators.solo_melody import SoloMelodyGenerator
 from melodica.generators.arpeggiator import ArpeggiatorGenerator
 from melodica.generators.harp import HarpGenerator
 from melodica.generators.breakbeat import BreakbeatGenerator
-from melodica.generators.chromatic_percussion import GlockenspielGenerator
+from melodica.generators.chromatic_percussion import GlockenspielGenerator, VibraphoneGenerator
 from melodica.generators.electronic_drums import ElectronicDrumsGenerator
 
 # GM Programs mapping
@@ -30,6 +30,7 @@ POLYSYNTH = 90
 EFFECTS = 96
 DRUMS = 0
 GLOCKENSPIEL = 9
+VIBRAPHONE = 11
 HARP = 46
 
 
@@ -51,12 +52,13 @@ def produce_melodic_hmm_album():
         NoteInfo(pitch=72, start=6.0, duration=2.0, velocity=100),  # C5
     ]
 
-    # 2. Harmonic Journey
+    # 2. Harmonic Journey — all four roots are distinct so each movement
+    # lives in its own tonal centre (no two tracks share a key).
     harmonic_journey = [
         Scale(root=0, mode=Mode.AEOLIAN),   # Track 1: C minor
         Scale(root=7, mode=Mode.DORIAN),    # Track 2: G Dorian
         Scale(root=5, mode=Mode.PHRYGIAN),  # Track 3: F Phrygian
-        Scale(root=0, mode=Mode.AEOLIAN),   # Track 4: C minor Return
+        Scale(root=2, mode=Mode.AEOLIAN),   # Track 4: D minor Return
     ]
 
     # Tempos are spread apart so each movement has a distinct pulse.
@@ -189,50 +191,54 @@ def produce_melodic_hmm_album():
                 phrase_schedule=structure_to_schedule("R R A B C R R B", 2)
             )
         ],
-        # Track 4: Return to the Depths (C Aeolian) — sparse 8-bar A A' A'' reprise
+        # Track 4: Return to the Depths (D Aeolian) — distinct palette from T1:
+        # warm supersaw pad, wobble bass, vibraphone color, neo-soul lead, lofi
+        # drums. Sparse 8-bar A A' A'' reprise with 3-bar phrase segments.
         [
             TrackConfig(
-                name="ambient_pad",
-                generator=DarkPadGenerator(mode="minor_pad", register="mid", velocity_level=0.28, chord_dur=8.0),
+                name="warm_pad",
+                generator=DarkPadGenerator(mode="minor_pad", register="mid", velocity_level=0.26, chord_dur=4.0),
                 generator_type="pad",
                 instrument="synth_pad",
-                density=0.45,
-                phrase_schedule=structure_to_schedule("A A' A'' R", 8)
+                density=0.40,
+                phrase_schedule=structure_to_schedule("A A' A'' R", 3)
             ),
             TrackConfig(
-                name="sub_bass",
-                generator=SynthBassGenerator(waveform="sine", pattern="sub_kick"),
+                name="wobble_bass",
+                generator=SynthBassGenerator(waveform="square", pattern="wobble"),
                 instrument="synth_bass",
-                density=0.5,
+                density=0.50,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("R A A' R", 8)
+                phrase_schedule=structure_to_schedule("R A A' R", 3)
             ),
             TrackConfig(
-                name="glockenspiel",
-                generator=GlockenspielGenerator(params=None),
-                instrument="glockenspiel",
+                name="vibraphone",
+                generator=VibraphoneGenerator(params=None),
+                instrument="vibraphone",
                 density=0.35,
-                octave_shift=2,
-                phrase_schedule=structure_to_schedule("A R A'' R", 8)
+                octave_shift=1,
+                phrase_schedule=structure_to_schedule("A R A'' R", 3)
             ),
             TrackConfig(
-                name="lead_synth",
-                generator=SoloMelodyGenerator(style="modal_ambient", vibrato_depth=0.4),
+                name="neo_soul_lead",
+                generator=SoloMelodyGenerator(style="neo_soul_keys", vibrato_depth=0.35),
                 instrument="synth_lead",
                 density=0.55,
                 octave_shift=1,
-                phrase_schedule=structure_to_schedule("R A' A R", 8)
+                phrase_schedule=structure_to_schedule("R A' A R", 3)
             ),
             TrackConfig(
-                name="breakbeat_drum",
+                name="lofi_drum",
                 generator=ElectronicDrumsGenerator(kit="lofi"),
                 instrument="drums",
-                density=0.55,
-                phrase_schedule=structure_to_schedule("R R A' R", 8)
+                density=0.50,
+                phrase_schedule=structure_to_schedule("R R A' R", 3)
             )
         ]
     ]
 
+    # Each movement weaves the seed motif in a different transformation so the
+    # thematic core is recognisable yet sounds different on every track.
     transformations = ["original", "inversion", "retrograde", "fragmented"]
 
     # Each movement has a DIFFERENT length (so the .mid files differ in size)
@@ -248,8 +254,11 @@ def produce_melodic_hmm_album():
         [(0.0, "Emergence"), (24.0, "Expansion"), (56.0, "Variation"), (96.0, "Climax"), (128.0, "Dissolve")],
         # T3 Tidal Reflections — ~136 beats: Variation→Tension→Climax, asymmetric bars
         [(0.0, "Emergence"), (24.0, "Variation"), (56.0, "Tension"), (88.0, "Climax"), (120.0, "Dissolve")],
-        # T4 Return to the Depths — ~64 beats: short reprise
-        [(0.0, "Emergence"), (16.0, "Release"), (48.0, "Dissolve")],
+        # T4 Return to the Depths — ~70 beats: short reprise. Balanced profiles
+        # (Emergence/Expansion/Variation/Dissolve) keep BASS+LEAD active so the
+        # LOW/HIGH register coverage passes strict validation; D Aeolian centres
+        # this movement away from T1's C Aeolian.
+        [(0.0, "Emergence"), (12.0, "Expansion"), (30.0, "Variation"), (54.0, "Dissolve")],
     ]
 
     instruments_maps = [
@@ -275,11 +284,11 @@ def produce_melodic_hmm_album():
             "breakbeat_drum": DRUMS
         },
         {
-            "ambient_pad": POLYSYNTH,
-            "sub_bass": SYNTH_BASS,
-            "glockenspiel": GLOCKENSPIEL,
-            "lead_synth": SYNTH_LEAD,
-            "breakbeat_drum": DRUMS
+            "warm_pad": POLYSYNTH,
+            "wobble_bass": SYNTH_BASS,
+            "vibraphone": VIBRAPHONE,
+            "neo_soul_lead": SYNTH_LEAD,
+            "lofi_drum": DRUMS
         }
     ]
 
