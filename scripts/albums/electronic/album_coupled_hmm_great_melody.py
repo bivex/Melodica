@@ -59,11 +59,12 @@ def produce_melodic_hmm_album():
         Scale(root=0, mode=Mode.AEOLIAN),   # Track 4: C minor Return
     ]
 
-    tempos = [80.0, 86.0, 75.0, 82.0]
+    # Tempos are spread apart so each movement has a distinct pulse.
+    tempos = [80.0, 92.0, 66.0, 84.0]
 
     # 3. Track Configurations
     track_configs = [
-        # Track 1: Emerging Waves (C Aeolian)
+        # Track 1: Emerging Waves (C Aeolian) — 4-bar phrases, classic ABAB arc
         [
             TrackConfig(
                 name="ambient_pad",
@@ -105,7 +106,7 @@ def produce_melodic_hmm_album():
                 phrase_schedule=structure_to_schedule("R R A B C C' R R", 4)
             )
         ],
-        # Track 2: Oceanic Whispers (G Dorian)
+        # Track 2: Oceanic Whispers (G Dorian) — 8-bar phrases, slow ABA climax arc
         [
             TrackConfig(
                 name="vintage_strings",
@@ -113,7 +114,7 @@ def produce_melodic_hmm_album():
                 generator_type="pad",
                 instrument="synth_pad",
                 density=0.4,
-                phrase_schedule=structure_to_schedule("A B A B C R R", 4)
+                phrase_schedule=structure_to_schedule("A B A C R", 8)
             ),
             TrackConfig(
                 name="reese_bass",
@@ -121,7 +122,7 @@ def produce_melodic_hmm_album():
                 instrument="synth_bass",
                 density=0.65,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("A B A B C R R", 4)
+                phrase_schedule=structure_to_schedule("R B A C R", 8)
             ),
             TrackConfig(
                 name="arpeggio_synth",
@@ -129,7 +130,7 @@ def produce_melodic_hmm_album():
                 instrument="piano",
                 density=0.45,
                 octave_shift=1,
-                phrase_schedule=structure_to_schedule("A B R B C R R", 4)
+                phrase_schedule=structure_to_schedule("A R A C R", 8)
             ),
             TrackConfig(
                 name="lead_synth",
@@ -137,25 +138,25 @@ def produce_melodic_hmm_album():
                 instrument="synth_lead",
                 density=0.6,
                 octave_shift=1,
-                phrase_schedule=structure_to_schedule("R A B B C R R", 4)
+                phrase_schedule=structure_to_schedule("R A B C R", 8)
             ),
             TrackConfig(
                 name="swung_groove_drum",
                 generator=BreakbeatGenerator(variant="think", chop_probability=0.12, ghost_notes=True),
                 instrument="drums",
                 density=0.7,
-                phrase_schedule=structure_to_schedule("R A A B C R R", 4)
+                phrase_schedule=structure_to_schedule("R R B C C", 8)
             )
         ],
-        # Track 3: Tidal Reflections (F Phrygian)
+        # Track 3: Tidal Reflections (F Phrygian) — 2-bar phrases, asymmetric ABABC drift
         [
             TrackConfig(
-                name="space_drone",
+                name="space_pad",
                 generator=DarkPadGenerator(mode="phrygian_pad", register="low", velocity_level=0.35, chord_dur=8.0),
                 generator_type="pad",
                 instrument="synth_pad",
                 density=0.4,
-                phrase_schedule=structure_to_schedule("A B B C C R R R", 4)
+                phrase_schedule=structure_to_schedule("A B A B C R A B", 2)
             ),
             TrackConfig(
                 name="sub_bass",
@@ -163,14 +164,14 @@ def produce_melodic_hmm_album():
                 instrument="synth_bass",
                 density=0.55,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("R A A B B C C R R", 4)
+                phrase_schedule=structure_to_schedule("R A A B C R A B", 2)
             ),
             TrackConfig(
                 name="harp_arpeggio",
                 generator=HarpGenerator(pattern="cascade"),
                 instrument="harp",
                 density=0.45,
-                phrase_schedule=structure_to_schedule("A B R B C C R R R", 4)
+                phrase_schedule=structure_to_schedule("A B R B C R A R", 2)
             ),
             TrackConfig(
                 name="cinematic_lead",
@@ -178,17 +179,17 @@ def produce_melodic_hmm_album():
                 instrument="synth_lead",
                 density=0.55,
                 octave_shift=1,
-                phrase_schedule=structure_to_schedule("R B R B C C A R R", 4)
+                phrase_schedule=structure_to_schedule("R B A B C A B R", 2)
             ),
             TrackConfig(
                 name="breakbeat_drum",
                 generator=BreakbeatGenerator(variant="think", chop_probability=0.08, ghost_notes=True),
                 instrument="drums",
                 density=0.65,
-                phrase_schedule=structure_to_schedule("R R A B C C R R R", 4)
+                phrase_schedule=structure_to_schedule("R R A B C R R B", 2)
             )
         ],
-        # Track 4: Return to the Depths (C Aeolian)
+        # Track 4: Return to the Depths (C Aeolian) — sparse 8-bar A A' A'' reprise
         [
             TrackConfig(
                 name="ambient_pad",
@@ -196,7 +197,7 @@ def produce_melodic_hmm_album():
                 generator_type="pad",
                 instrument="synth_pad",
                 density=0.45,
-                phrase_schedule=structure_to_schedule("A B C R R R", 4)
+                phrase_schedule=structure_to_schedule("A A' A'' R", 8)
             ),
             TrackConfig(
                 name="sub_bass",
@@ -204,7 +205,7 @@ def produce_melodic_hmm_album():
                 instrument="synth_bass",
                 density=0.5,
                 octave_shift=-1,
-                phrase_schedule=structure_to_schedule("R A C R R R", 4)
+                phrase_schedule=structure_to_schedule("R A A' R", 8)
             ),
             TrackConfig(
                 name="glockenspiel",
@@ -212,7 +213,7 @@ def produce_melodic_hmm_album():
                 instrument="glockenspiel",
                 density=0.35,
                 octave_shift=2,
-                phrase_schedule=structure_to_schedule("A B R R R R", 4)
+                phrase_schedule=structure_to_schedule("A R A'' R", 8)
             ),
             TrackConfig(
                 name="lead_synth",
@@ -220,25 +221,35 @@ def produce_melodic_hmm_album():
                 instrument="synth_lead",
                 density=0.55,
                 octave_shift=1,
-                phrase_schedule=structure_to_schedule("R B C A R R", 4)
+                phrase_schedule=structure_to_schedule("R A' A R", 8)
             ),
             TrackConfig(
                 name="breakbeat_drum",
                 generator=ElectronicDrumsGenerator(kit="lofi"),
                 instrument="drums",
                 density=0.55,
-                phrase_schedule=structure_to_schedule("R R C R R R", 4)
+                phrase_schedule=structure_to_schedule("R R A' R", 8)
             )
         ]
     ]
 
     transformations = ["original", "inversion", "retrograde", "fragmented"]
 
+    # Each movement has a DIFFERENT length (so the .mid files differ in size)
+    # and a different section-name arc (so each gets its own energy/reverb/
+    # density curve via SECTION_PROFILES). max_beat differs per track on
+    # purpose → AlbumNarrative derives total_beats from it. Arcs are built from
+    # register-balanced profiles (each carries BASS + LEAD) so strict validation
+    # keeps LOW/HIGH coverage within target.
     sections_list = [
+        # T1 Emerging Waves — ~112 beats: classic rise + release + dissolve
         [(0.0, "Emergence"), (16.0, "Expansion"), (32.0, "Tension"), (64.0, "Release"), (96.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Expansion"), (32.0, "Tension"), (64.0, "Release"), (96.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Expansion"), (48.0, "Tension"), (80.0, "Release"), (112.0, "Dissolve")],
-        [(0.0, "Emergence"), (16.0, "Release"), (48.0, "Dissolve")]
+        # T2 Oceanic Whispers — ~144 beats: slow burn via Variation→Climax
+        [(0.0, "Emergence"), (24.0, "Expansion"), (56.0, "Variation"), (96.0, "Climax"), (128.0, "Dissolve")],
+        # T3 Tidal Reflections — ~136 beats: Variation→Tension→Climax, asymmetric bars
+        [(0.0, "Emergence"), (24.0, "Variation"), (56.0, "Tension"), (88.0, "Climax"), (120.0, "Dissolve")],
+        # T4 Return to the Depths — ~64 beats: short reprise
+        [(0.0, "Emergence"), (16.0, "Release"), (48.0, "Dissolve")],
     ]
 
     instruments_maps = [
@@ -257,7 +268,7 @@ def produce_melodic_hmm_album():
             "swung_groove_drum": DRUMS
         },
         {
-            "space_drone": POLYSYNTH,
+            "space_pad": POLYSYNTH,
             "sub_bass": SYNTH_BASS,
             "harp_arpeggio": HARP,
             "cinematic_lead": SYNTH_LEAD,

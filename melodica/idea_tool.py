@@ -374,6 +374,14 @@ class IdeaToolConfig:
     # For "harmonize_melody" workflow: caller-supplied melody to harmonize
     seed_melody: list[NoteInfo] | None = None
 
+    # Composition seed. When None, a fresh random seed is drawn per generate()
+    # call so repeated runs (e.g. regenerating an album) produce different
+    # material. When set to an int, generation is fully reproducible — the same
+    # config + seed yields the same output. This seed is folded into the
+    # per-phrase RNG seeds so identical letters still repeat within a single
+    # composition (Letter Rule) but different keys / different runs diverge.
+    seed: int | None = None
+
 
 # ---------------------------------------------------------------------------
 # Idea Tool Engine
@@ -415,6 +423,9 @@ class IdeaTool:
         self.timeline = None
         # Phrase pool: RC-style shared phrase storage (Letter Rule)
         self._phrase_pool: PhrasePool | None = None
+        # Composition seed — resolved at the start of each generate() call from
+        # config.seed (reproducible) or a fresh random draw (non-reproducible).
+        self._composition_seed: int = 0
 
     def _get_resolved_parts(self) -> list[IdeaPart]:
         if self.config.parts:
@@ -496,6 +507,22 @@ class IdeaTool:
             total_beats += p.bars * p.time_signature[0]
         scale = self.config.scale
         result: dict[str, Any] = {}
+
+        # Resolve the composition seed. None → fresh random seed each run so
+        # regenerating an album produces different material; an explicit int →
+        # fully reproducible generation. Folded into every per-phrase RNG seed.
+        import random as _random
+        if self.config.seed is not None:
+            self._composition_seed = int(self.config.seed) & 0xFFFFFFFF
+        else:
+            self._composition_seed = _random.randrange(2 ** 32)
+
+        # Seed the global RNG from the composition seed. Several generation
+        # paths draw from the module-level `random` (melody contour, progression
+        # selection, non-chord tones). Seeding once at the start of generate()
+        # makes the whole composition reproducible under a fixed seed and keeps
+        # it varied (across keys / runs) otherwise.
+        random.seed(self._composition_seed)
 
         # Initialize phrase pool for this generation run
         from melodica.composer.structure_parser import PhrasePool
@@ -1395,10 +1422,16 @@ class IdeaTool:
 
                     # Seed the random generator to ensure that repeating sections (e.g., A, A)
                     # generate the exact same rhythmic and melodic contours, but perfectly
-                    # adapted to the current underlying chords.
+                    # adapted to the current underlying chords. The composition seed and the
+                    # part's key are folded in so (a) different runs differ and (b) the same
+                    # letter in different keys produces different material — while identical
+                    # (letter, track, key) within one composition still repeats (Letter Rule).
                     import hashlib
 
-                    seed_str = f"{cfg.name}:{part.name}:{section}"
+                    seed_str = (
+                        f"{self._composition_seed}:{cfg.name}:{part.name}:{section}:"
+                        f"{scale.root}:{scale.mode.value}"
+                    )
                     seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
                     random.seed(seed_val)
 
@@ -1459,7 +1492,9 @@ class IdeaTool:
                 effective_density = part.track_density[cfg.name]
             if effective_density < cfg.density:
                 keep_prob = effective_density / cfg.density
-                rng = random.Random(hash(f"{cfg.name}:{part.name}:density") & 0xFFFFFFFF)
+                rng = random.Random(
+                    hash(f"{self._composition_seed}:{cfg.name}:{part.name}:density") & 0xFFFFFFFF
+                )
                 part_notes = [n for n in part_notes if rng.random() < keep_prob]
 
             # Per-part velocity scaling: adjust dynamics per section
@@ -1750,8 +1785,14 @@ class IdeaTool:
                             ]
 
             if section_notes is None:
-                # Deterministic seeding — uses base_label so identical letters get identical seeds
-                seed_str = f"{cfg.name}:{part.name}:{base_label}"
+                # Deterministic seeding — uses base_label so identical letters
+                # get identical seeds. The composition seed and the part's key are
+                # folded in so different runs/keys diverge, while identical
+                # (letter, track, key) within one composition still repeats.
+                seed_str = (
+                    f"{self._composition_seed}:{cfg.name}:{part.name}:{base_label}:"
+                    f"{scale.root}:{scale.mode.value}"
+                )
                 seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2**32)
                 random.seed(seed_val)
 
