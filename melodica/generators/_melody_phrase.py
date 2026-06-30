@@ -15,7 +15,8 @@ from melodica.generators import GeneratorParams
 from melodica.utils import nearest_pitch
 
 
-PHRASE_CONTOUR_OPTIONS = frozenset({"arch", "rise_fall", "flat", "rise", "wave", "spiral"})
+PHRASE_CONTOUR_OPTIONS = frozenset({"arch", "rise_fall", "flat", "rise", "wave", "spiral",
+                                    "descent", "zigzag"})
 CLIMAX_OPTIONS = frozenset({"auto", "first_plus_maj3", "up_3rd", "up_5th", "up_octave", "none"})
 
 
@@ -79,6 +80,10 @@ class PhraseContour:
             return self._wave_curve(phrase_pos, mid, climax_pitch, low)
         elif self.phrase_contour == "spiral":
             return self._spiral_curve(phrase_pos, mid, climax_pitch)
+        elif self.phrase_contour == "descent":
+            return self._descent_curve(phrase_pos, mid, low)
+        elif self.phrase_contour == "zigzag":
+            return self._zigzag_curve(phrase_pos, mid, climax_pitch, low)
 
         return mid  # "flat"
 
@@ -123,6 +128,26 @@ class PhraseContour:
         base_ascent = (climax - mid) * _ease_out(pos)
         dip = math.sin(pos * 4 * math.pi) * (climax - mid) * 0.15
         return int(mid + base_ascent + dip)
+
+    def _descent_curve(self, pos: float, mid: int, low: int) -> int:
+        """Mirror of 'rise': starts high, falls toward low end of range.
+        Suited for weary, exhausted, or fading melodic lines."""
+        # Begin near mid+range/4, fall toward low by phrase end.
+        high_start = mid + (mid - low) // 2
+        return int(high_start - (high_start - low) * _ease_in_out(pos))
+
+    def _zigzag_curve(self, pos: float, mid: int, climax: int, low: int) -> int:
+        """Alternates up/down each quarter-phrase (4 peaks per phrase).
+        Creates restless, uncertain melodic motion."""
+        import math as _math
+        # Triangle wave with 2 cycles: rises and falls quickly.
+        cycle = (pos * 4.0) % 1.0  # 0..1 within each quarter
+        if cycle < 0.5:
+            frac = cycle * 2.0
+        else:
+            frac = (1.0 - cycle) * 2.0
+        amplitude = (climax - low) * 0.4
+        return int(mid - amplitude * 0.5 + amplitude * frac)
 
 
 # ------------------------------------------------------------------

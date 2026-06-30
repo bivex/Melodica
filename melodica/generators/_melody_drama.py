@@ -19,6 +19,8 @@ DRAMA_SHAPE_OPTIONS = frozenset({
     "dramatic",        # slow start, steep build, sharp peak, gentle fall
     "tension_release", # two peaks: build at 40%, bigger peak at 75%
     "epic",            # slow build, late peak at 80%, powerful resolution
+    "diminuendo",      # starts high, steady decay — quiet and exhausted ending
+    "swell",           # gentle arch: soft open, peak at centre, soft close
 })
 
 
@@ -58,6 +60,10 @@ class DramaticArc:
             local_tension = _two_peak_curve(t, pk)
         elif self.shape == "epic":
             local_tension = _epic_curve(t, pk)
+        elif self.shape == "diminuendo":
+            local_tension = _diminuendo_curve(t)
+        elif self.shape == "swell":
+            local_tension = _swell_curve(t)
         else:
             local_tension = 0.5
 
@@ -260,6 +266,17 @@ def _epic_curve(t: float, pk: float) -> float:
     else:
         frac = (t - pk) / (1.0 - pk)
         return 1.0 - 0.6 * _ease_out(frac)
+
+
+def _diminuendo_curve(t: float) -> float:
+    """Starts at full tension, steady decay — exhausted, fading out."""
+    return _ease_out(1.0 - t) * 0.9 + 0.1
+
+
+def _swell_curve(t: float) -> float:
+    """Gentle sine arch: soft open, peak at centre, soft close.
+    Lighter than crescendo — suited for intimate passages."""
+    return math.sin(t * math.pi) * 0.7 + 0.1
 
 
 def _ease_in_out(t: float) -> float:

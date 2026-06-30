@@ -63,6 +63,7 @@ class StringsLegatoGenerator(PhraseGenerator):
     ensemble_mode: str = "full"
     portamento_speed: float = 0.15
     dynamic_shape: str = "cresc_dim"
+    dynamic_base: int | None = None    # explicit velocity base; overrides density formula
     interval_preference: str = "step"
     vibrato_amount: float = 0.1
     rhythm: RhythmGenerator | None = None
@@ -76,6 +77,8 @@ class StringsLegatoGenerator(PhraseGenerator):
         ensemble_mode: str = "full",
         portamento_speed: float = 0.15,
         dynamic_shape: str = "cresc_dim",
+        dynamic_curve: str | None = None,
+        dynamic_base: int | None = None,
         interval_preference: str = "step",
         vibrato_amount: float = 0.1,
         rhythm: RhythmGenerator | None = None,
@@ -84,7 +87,10 @@ class StringsLegatoGenerator(PhraseGenerator):
         self.section_size = section_size
         self.ensemble_mode = ensemble_mode
         self.portamento_speed = max(0.0, min(0.5, portamento_speed))
-        self.dynamic_shape = dynamic_shape
+        # dynamic_curve is a user-friendly synonym for dynamic_shape.
+        # When both are given, dynamic_curve takes precedence.
+        self.dynamic_shape = dynamic_curve if dynamic_curve is not None else dynamic_shape
+        self.dynamic_base = max(1, min(127, dynamic_base)) if dynamic_base is not None else None
         self.interval_preference = interval_preference
         self.vibrato_amount = max(0.0, min(1.0, vibrato_amount))
         self.rhythm = rhythm
@@ -270,7 +276,9 @@ class StringsLegatoGenerator(PhraseGenerator):
         return nearest_pitch(int(pc), prev)
 
     def _dynamic_velocity(self, progress: float) -> int:
-        base = int(45 + self.params.density * 25)
+        # dynamic_base overrides the density-derived floor when set explicitly.
+        base = self.dynamic_base if self.dynamic_base is not None \
+            else int(45 + self.params.density * 25)
         if self.dynamic_shape == "crescendo":
             return int(base * (0.6 + 0.4 * progress))
         elif self.dynamic_shape == "diminuendo":

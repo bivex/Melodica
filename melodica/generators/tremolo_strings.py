@@ -49,8 +49,20 @@ class TremoloStringsGenerator(PhraseGenerator):
         "single", "chord", "octave", "cluster"
     bow_speed:
         Subdivision in beats (0.0625 = very fast shimmer).
+    tremolo_speed:
+        Semantic alias for bow_speed.
+        ``"slow"``   — 0.25 beats per stroke (felt, heavy shimmer).
+        ``"medium"`` — 0.125 beats per stroke.
+        ``"fast"``   — 0.0625 beats per stroke (rapid, intense shimmer).
+        When set, overrides bow_speed.
     dynamic_swell:
         If True, apply slow dynamic swells across the tremolo.
+    dynamic_curve:
+        Controls global loudness shape.
+        ``"flat"``       — uniform velocity (default).
+        ``"crescendo"``  — builds from piano to forte.
+        ``"fortissimo"`` — starts forte and stays there.
+        ``"diminuendo"`` — fades from forte to piano.
     """
 
     name: str = "Tremolo Strings Generator"
@@ -62,21 +74,47 @@ class TremoloStringsGenerator(PhraseGenerator):
     rhythm: RhythmGenerator | None = None
     _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
+    _TREMOLO_SPEED_MAP: dict[str, float] = {
+        "slow":   0.25,
+        "medium": 0.125,
+        "fast":   0.0625,
+    }
+    _DYNAMIC_CURVE_OPTIONS: frozenset[str] = frozenset(
+        {"flat", "crescendo", "fortissimo", "diminuendo"}
+    )
+
     def __init__(
         self,
         params: GeneratorParams | None = None,
         *,
         variant: str = "chord",
         bow_speed: float = 0.0625,
+        tremolo_speed: str | None = None,
         dynamic_swell: bool = True,
+        dynamic_curve: str = "flat",
         attack_time: float = 0.5,
         decay_time: float = 0.5,
         rhythm: RhythmGenerator | None = None,
     ) -> None:
         super().__init__(params)
         self.variant = variant
+        # tremolo_speed overrides bow_speed when provided
+        if tremolo_speed is not None:
+            if tremolo_speed not in self._TREMOLO_SPEED_MAP:
+                raise ValueError(
+                    f"tremolo_speed must be one of "
+                    f"{sorted(self._TREMOLO_SPEED_MAP)}; got {tremolo_speed!r}"
+                )
+            bow_speed = self._TREMOLO_SPEED_MAP[tremolo_speed]
         self.bow_speed = max(0.02, min(0.2, bow_speed))
+        self.tremolo_speed = tremolo_speed
         self.dynamic_swell = dynamic_swell
+        if dynamic_curve not in self._DYNAMIC_CURVE_OPTIONS:
+            raise ValueError(
+                f"dynamic_curve must be one of "
+                f"{sorted(self._DYNAMIC_CURVE_OPTIONS)}; got {dynamic_curve!r}"
+            )
+        self.dynamic_curve = dynamic_curve
         self.attack_time = max(0.0, attack_time)
         self.decay_time = max(0.0, decay_time)
         self.rhythm = rhythm
@@ -156,9 +194,19 @@ class TremoloStringsGenerator(PhraseGenerator):
                     if t >= end:
                         break
                     n_dur = min(effective_speed, end - t)
-                    vel = int(base_vel * intensity * vel_factor) + bow_vel_offset
+                    # dynamic_curve: global phrase-level loudness shape
+                    _phrase_prog = elapsed / total_dur if total_dur > 0 else 0.0
+                    if self.dynamic_curve == "crescendo":
+                        _curve = 0.5 + 0.5 * _phrase_prog
+                    elif self.dynamic_curve == "fortissimo":
+                        _curve = 1.0
+                    elif self.dynamic_curve == "diminuendo":
+                        _curve = 1.0 - 0.5 * _phrase_prog
+                    else:  # "flat"
+                        _curve = 1.0
+                    vel = int(base_vel * intensity * vel_factor * _curve) + bow_vel_offset
                     vel += random.randint(-2, 2)
-                    
+
                     # Micro-timing jitter per pitch to prevent Harmonic Fusion
                     pitch_jitter = random.uniform(-0.005, 0.005)
                     onset = max(0.0, t + pitch_jitter)

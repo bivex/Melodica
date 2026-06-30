@@ -45,6 +45,7 @@ from melodica.generators._melody_motif import MotifManager
 from melodica.generators._melody_ornament import OrnamentProcessor
 from melodica.generators._melody_fill import FillProcessor
 from melodica.generators._melody_drama import DramaticArc, DRAMA_SHAPE_OPTIONS
+from melodica.generators._melody_phrase import PHRASE_CONTOUR_OPTIONS
 
 # Option sets
 FIRST_NOTE_OPTIONS = frozenset(
@@ -54,7 +55,8 @@ LAST_NOTE_OPTIONS = frozenset({"last_chord_root", "any_chord", "scale", "any"})
 AFTER_LEAP_OPTIONS = frozenset(
     {"step_opposite", "step_any", "step_or_smaller_opposite", "leap_opposite", "any"}
 )
-CONTOUR_OPTIONS = frozenset({"arch", "rise_fall", "flat", "rise", "wave", "spiral"})
+# Re-export from _melody_phrase so external code can import CONTOUR_OPTIONS from melody.
+CONTOUR_OPTIONS = PHRASE_CONTOUR_OPTIONS
 ACCENT_OPTIONS = frozenset({"natural", "strong_weak", "syncopated"})
 MOTIF_VARIATION_OPTIONS = frozenset({"transpose", "invert", "retrograde", "sequence", "fragment", "any"})
 

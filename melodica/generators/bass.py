@@ -46,7 +46,8 @@ from melodica.utils import (
 )
 
 
-STYLES = {"root_only", "root_fifth", "root_fifth_octave", "walking"}
+STYLES = {"root_only", "root_fifth", "root_fifth_octave", "walking",
+          "pedal_tone", "chord_tone"}
 ALLOWED_NOTE_TYPES = {"root", "fourth", "sixth", "lower_octave"}
 GLOBAL_MOVEMENTS = {"up", "down", "up_down", "none"}
 NOTE_MOVEMENTS = {"none", "alternating"}
@@ -70,7 +71,15 @@ class BassGenerator(PhraseGenerator):
     Generates basslines.
 
     Style (legacy):
-        'root_only', 'root_fifth', 'root_fifth_octave', or 'walking'
+        'root_only', 'root_fifth', 'root_fifth_octave', 'walking'
+
+    Extended styles:
+        'pedal_tone'   — single sustained tonic pedal; one long note per chord,
+                         clamped to the key root.  Ideal for dramatic, static bass
+                         under turbulent upper voices.
+        'chord_tone'   — cycles through all chord tones on consecutive beats
+                         (root → 3rd → 5th → 7th …), creating harmonic arpeggiation
+                         without the chromatic passing notes of 'walking'.
 
     Melodica-style params (override style when set):
         allowed_notes:        which notes are available (root, fourth, sixth, lower_octave)
@@ -133,6 +142,12 @@ class BassGenerator(PhraseGenerator):
 
         if self.style == "walking" and self.allowed_notes == ["root"]:
             return self._render_walking(chords, key, duration_beats, context)
+
+        if self.style == "pedal_tone":
+            return self._render_pedal_tone(chords, key, duration_beats, context)
+
+        if self.style == "chord_tone":
+            return self._render_chord_tone(chords, key, duration_beats, context)
 
         # Use legacy path when style is non-default and allowed_notes is still default
         _use_legacy = self.allowed_notes == ["root"] and self.style != "root_only"
@@ -347,6 +362,134 @@ class BassGenerator(PhraseGenerator):
             v_min, v_max = self.params.velocity_range
             return (v_min + v_max) // 2
         return int(70 + self.params.density * 30)
+
+    # ------------------------------------------------------------------
+    # Pedal tone and chord tone extended styles
+    # ------------------------------------------------------------------
+
+    def _render_pedal_tone(
+        self,
+        chords: list[ChordLabel],
+        key: types.Scale,
+        duration_beats: float,
+        context: RenderContext | None,
+    ) -> list[NoteInfo]:
+        """Sustained tonic pedal: one long note per chord, always on the key root.
+
+        Creates a static, powerful bass foundation.  The pitch stays on the
+        key tonic (nearest to the low end of the register), while upper voices
+        can move freely above it.
+        """
+        if not chords:
+            return []
+
+        notes: list[NoteInfo] = []
+        key_root_pc = key.root
+        anchor = max(24, self.params.key_range_low)
+        tonic_pitch = nearest_pitch_below(key_root_pc, anchor + 12)
+        tonic_pitch = max(self.params.key_range_low,
+                          min(self.params.key_range_high, tonic_pitch))
+        tonic_pitch += self.transpose_octaves * types.OCTAVE
+        tonic_pitch = max(24, min(self.params.key_range_high, tonic_pitch))
+
+        base_vel = self._velocity()
+        last_chord: ChordLabel | None = None
+        for chord in chords:
+            dur = min(chord.duration, duration_beats - chord.start)
+            if dur <= 0:
+                continue
+            last_chord = chord
+            # Accent downbeats slightly
+            vel = min(127, int(base_vel * (1.10 if chord.start % 4.0 < 0.1 else 1.0)))
+            notes.append(NoteInfo(
+                pitch=tonic_pitch,
+                start=round(chord.start, 6),
+                duration=round(dur * 0.95, 6),
+                velocity=max(1, vel),
+            ))
+
+        if notes:
+            self._last_context = (context or RenderContext()).with_end_state(
+                last_pitch=notes[-1].pitch,
+                last_velocity=notes[-1].velocity,
+                last_chord=last_chord,
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
+            )
+        return notes
+
+    def _render_chord_tone(
+        self,
+        chords: list[ChordLabel],
+        key: types.Scale,
+        duration_beats: float,
+        context: RenderContext | None,
+    ) -> list[NoteInfo]:
+        """Cycle through chord tones on consecutive beats: root → 3rd → 5th → 7th.
+
+        Similar to a slow arpeggio at the bass register.  One note per beat;
+        the sequence resets at each chord change so the downbeat always falls
+        on the root.  No passing notes — strictly harmonic material.
+        """
+        if not chords:
+            return []
+
+        events = self._build_events(duration_beats)
+        notes: list[NoteInfo] = []
+        anchor = (
+            context.prev_pitch
+            if context and context.prev_pitch is not None
+            else max(24, self.params.key_range_low)
+        )
+        last_chord: ChordLabel | None = None
+        prev_chord_id: tuple | None = None
+        beat_in_chord = 0
+
+        for event in events:
+            chord = chord_at(chords, event.onset)
+            if chord is None:
+                continue
+            last_chord = chord
+
+            chord_id = (chord.root, chord.quality)
+            if chord_id != prev_chord_id:
+                beat_in_chord = 0
+                prev_chord_id = chord_id
+
+            pcs = chord.pitch_classes()
+            if not pcs:
+                beat_in_chord += 1
+                continue
+
+            target_pc = int(pcs[beat_in_chord % len(pcs)])
+            pitch = nearest_pitch(target_pc, anchor)
+            pitch += self.transpose_octaves * types.OCTAVE
+            pitch = max(self.params.key_range_low,
+                        min(self.params.key_range_high, pitch))
+            anchor = pitch
+
+            vel = int(self._velocity() * event.velocity_factor)
+            # Slight accent on root (beat 0 of chord)
+            if beat_in_chord == 0:
+                vel = min(127, int(vel * 1.10))
+
+            notes.append(NoteInfo(
+                pitch=pitch,
+                start=round(event.onset, 6),
+                duration=event.duration,
+                velocity=max(1, min(127, vel)),
+            ))
+            beat_in_chord += 1
+
+        if notes:
+            self._last_context = (context or RenderContext()).with_end_state(
+                last_pitch=notes[-1].pitch,
+                last_velocity=notes[-1].velocity,
+                last_chord=last_chord,
+                duration_beats=duration_beats,
+                total_duration=duration_beats,
+            )
+        return notes
 
     # ------------------------------------------------------------------
     # Walking bass
