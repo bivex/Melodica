@@ -47,7 +47,6 @@ from melodica.generators.orchestral_percussion import TimpaniGenerator
 # Sections / texture
 from melodica.generators.strings_legato import StringsLegatoGenerator
 from melodica.generators.strings_ensemble import StringsEnsembleGenerator
-from melodica.generators.tremolo_strings import TremoloStringsGenerator
 from melodica.generators.brass_section import BrassSectionGenerator
 from melodica.generators.choir_ahhs import ChoirAahsGenerator
 
@@ -151,7 +150,7 @@ def generate_cosmic_voyage():
             ),
             TrackConfig(
                 name="Suspended_Strings",
-                generator=TremoloStringsGenerator(),
+                generator=StringsLegatoGenerator(),
                 instrument="strings", density=0.35,
             ),
         ],
