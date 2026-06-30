@@ -288,6 +288,8 @@ def produce_roblox_brainrot_album():
         instruments_maps=instruments_maps,
         moods=moods,
         names=names,
+        rhythm="straight_quarters",
+        time_signature=(4, 4),
         strict_validation=True
     )
 
