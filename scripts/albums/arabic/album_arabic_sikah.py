@@ -124,7 +124,8 @@ def generate_arabic_sikah():
             bpm=cfg['tempo'], key=sikah_scale,
             instruments=instruments_map,
             cc_events=notes_dict.get("_cc_events", {}),
-            mpe_tracks=notes_dict.get("_mpe_tracks", set())
+            mpe_tracks=notes_dict.get("_mpe_tracks", set()),
+            postprocess_arr=True,
         )
         print(f"    Exported {cfg['name']}.mid")
 

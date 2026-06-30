@@ -56,7 +56,8 @@ def generate_track(name, parts, tracks, out_dir, bpm):
     instruments_map = {t.name: FLUID_R3_PROGRAMS.get(t.instrument, 0) for t in tracks}
 
     file_path = out_dir / f"{name.replace(' ', '_')}.mid"
-    export_multitrack_midi(tracks_data, str(file_path), bpm=bpm, instruments=instruments_map)
+    export_multitrack_midi(tracks_data, str(file_path), bpm=bpm, instruments=instruments_map,
+                           postprocess_arr=True)
     return file_path
 
 

@@ -29,6 +29,192 @@ if TYPE_CHECKING:
     from melodica.tension import TensionCurve
 
 
+# ---------------------------------------------------------------------------
+# ARR-fix-lite: lightweight ARR-12/ARR-13 repair for the compact path
+# (IdeaTool.generate() → export_multitrack_midi(), no full pipeline).
+# ---------------------------------------------------------------------------
+
+# GM program numbers that correspond to melodic (single-line) voices.
+# Ranges: Piano 0-7, Chromatic Perc 8-15, Organ 16-23, Guitar 24-31,
+#         Bass 32-39, Strings 40-47, Ensemble 48-55, Brass 56-63,
+#         Reed/Woodwind 64-79.
+# Excluded: Synth Lead/Pad (80-103), Ethnic (104-111), Percussive (112-119),
+#           Sound Effects (120-127) — not subject to melodic-leap rules.
+_MELODIC_GM_PROGRAMS: frozenset[int] = frozenset(range(0, 80))
+
+
+def _is_melodic_track(track_name: str, instruments: dict[str, int] | None) -> bool:
+    """Return True if the track carries a melodic (single-line) GM instrument."""
+    if instruments is None:
+        return True  # conservative: apply to all tracks when map is absent
+    prog = instruments.get(track_name, 0)
+    return prog in _MELODIC_GM_PROGRAMS
+
+
+def _resolve_leaps_lite(notes: list[NoteInfo]) -> list[NoteInfo]:
+    """Fix ARR-12: melodic leaps (≥ a fifth) must resolve in contrary motion.
+
+    Pure function — no pipeline state required.  Identical algorithm to
+    ``_resolve_leaps`` in ``album_pipeline.py`` but self-contained so that
+    ``_postprocess.py`` has no import dependency on ``composer``.
+    """
+    if len(notes) < 3:
+        return notes
+
+    out = [
+        NoteInfo(
+            pitch=n.pitch,
+            start=n.start,
+            duration=n.duration,
+            velocity=n.velocity,
+            articulation=n.articulation,
+            expression=dict(n.expression),
+        )
+        for n in notes
+    ]
+
+    def _set(idx: int, new_pitch: int) -> None:
+        out[idx] = NoteInfo(
+            pitch=new_pitch,
+            start=out[idx].start,
+            duration=out[idx].duration,
+            velocity=out[idx].velocity,
+            articulation=out[idx].articulation,
+            expression=dict(out[idx].expression),
+        )
+
+    def _violations() -> int:
+        count = 0
+        for i in range(len(out) - 2):
+            p0, p1, p2 = out[i].pitch, out[i + 1].pitch, out[i + 2].pitch
+            d1, d2 = p1 - p0, p2 - p1
+            if abs(d1) >= 7 and d1 * d2 >= 0:
+                count += 1
+        return count
+
+    for _ in range(20):  # bounded passes — guaranteed convergence
+        if _violations() == 0:
+            break
+        for i in range(len(out) - 2):
+            p0, p1, p2 = out[i].pitch, out[i + 1].pitch, out[i + 2].pitch
+            d1 = p1 - p0
+            d2 = p2 - p1
+            if abs(d1) < 7:
+                continue
+            if d1 * d2 < 0:
+                continue  # already resolves by contrary motion
+            # Disjointed run: consecutive same-direction leaps > an octave.
+            if d1 * d2 > 0 and abs(d1 + d2) > 12:
+                shift = -12 if d1 > 0 else 12
+                new_p1 = p1 + shift
+                if 0 <= new_p1 <= 127:
+                    _set(i + 1, new_p1)
+                continue
+            # Unresolved leap: shift n2 toward n1 across the octave.
+            shift = -12 if p2 > p1 else 12
+            new_p2 = p2 + shift
+            if 0 <= new_p2 <= 127 and (new_p2 - p1) * d1 < 0:
+                _set(i + 2, new_p2)
+                continue
+            # Shifting n2 didn't help — shrink the leap itself by shifting n1.
+            shift1 = -12 if p1 > p0 else 12
+            new_p1 = p1 + shift1
+            if 0 <= new_p1 <= 127:
+                _set(i + 1, new_p1)
+
+    return out
+
+
+def _fix_breathing_lite(
+    notes: list[NoteInfo],
+    max_block: float = 28.0,
+    rest_gap: float = 1.6,
+) -> list[NoteInfo]:
+    """Fix ARR-13: ensure melodic lines have phrasing rests every ~20 beats.
+
+    Pure function — no pipeline state required.  Identical algorithm to
+    ``_stage_breathing_room`` in ``album_pipeline.py``.
+    """
+    if len(notes) < 6:
+        return notes
+
+    ordered = sorted(notes, key=lambda n: float(n.start))
+    keep = [True] * len(ordered)
+    ends = [float(n.start) + float(n.duration) for n in ordered]
+
+    sounding_end = ends[0]
+    last_rest_at = float(ordered[0].start)
+
+    for i in range(1, len(ordered)):
+        onset = float(ordered[i].start)
+        sounding_end = max(sounding_end, ends[i])
+        # Silence already present?
+        silent_since = max((ends[j] for j in range(i) if keep[j]), default=0.0)
+        if onset - silent_since >= rest_gap:
+            last_rest_at = onset
+            continue
+        # Time to breathe — open a phrasing rest by dropping notes in window.
+        if onset - last_rest_at >= 20.0:
+            rest_lo = onset
+            rest_hi = onset + rest_gap
+            for j in range(i, len(ordered)):
+                if float(ordered[j].start) > rest_hi:
+                    break
+                if ends[j] > rest_lo:
+                    keep[j] = False
+            last_rest_at = rest_hi
+
+    if not all(keep):
+        return [n for n, k in zip(ordered, keep) if k]
+    return notes
+
+
+def fix_arr_lite(
+    tracks_data: dict[str, list[NoteInfo]],
+    instruments: dict[str, int] | None = None,
+) -> dict[str, list[NoteInfo]]:
+    """Lightweight ARR-12 + ARR-13 repair for the compact path.
+
+    Intended for album scripts that call ``IdeaTool.generate()`` →
+    ``export_multitrack_midi()`` directly, bypassing the full 23-stage
+    ``produce_track()`` pipeline.  Applies:
+
+    * **ARR-12** — melodic leap resolution (``_resolve_leaps_lite``):
+      every leap ≥ a fifth must be followed by contrary motion.
+    * **ARR-13** — breathing room (``_fix_breathing_lite``):
+      melodic lines must not run continuously for > 20 beats without a rest.
+
+    Track eligibility is determined by the GM program number from
+    ``instruments``.  Tracks with programs in 0–79 (piano, strings, brass,
+    woodwinds, etc.) are treated as melodic and processed; synth pads,
+    percussion, and sound-effects programs (80–127) are left untouched.
+    When ``instruments`` is ``None``, all tracks are processed.
+
+    Parameters
+    ----------
+    tracks_data:
+        Dict mapping track name → list of NoteInfo, as returned by
+        ``IdeaTool.generate()`` (``_``-prefixed keys are ignored).
+    instruments:
+        Optional GM program map ``{track_name: program_number}``.  Pass the
+        same dict you give to ``export_multitrack_midi(instruments=...)``.
+
+    Returns
+    -------
+    New dict with the same keys; melodic tracks contain fixed notes.
+    """
+    result: dict[str, list[NoteInfo]] = {}
+    for tname, notes in tracks_data.items():
+        if tname.startswith("_") or not isinstance(notes, list):
+            result[tname] = notes
+            continue
+        if _is_melodic_track(tname, instruments) and len(notes) >= 3:
+            notes = _resolve_leaps_lite(notes)
+            notes = _fix_breathing_lite(notes)
+        result[tname] = notes
+    return result
+
+
 def apply_texture_control(
     result: dict[str, list[NoteInfo]],
     tracks,

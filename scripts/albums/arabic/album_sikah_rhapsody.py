@@ -513,6 +513,7 @@ def main():
             cc_events=pan,
             instruments=instruments,
             reaper_project=True,
+            postprocess_arr=True,
         )
         nc = sum(len(n) for n in raw.values())
         total_notes += nc

@@ -369,6 +369,7 @@ def export_multitrack_midi(
     validate_form: bool = True,
     form: "MusicalForm | None" = None,
     strict_validation: bool = False,
+    postprocess_arr: bool = False,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -391,8 +392,24 @@ def export_multitrack_midi(
         Defaults to True when form is provided, False otherwise.
     form: optional MusicalForm — enables form-level checks (sonata, ternary, etc.)
         in addition to arrangement checks.
+    postprocess_arr: if True, apply lightweight ARR-12/ARR-13 fixes
+        (melodic-leap resolution + breathing-room rests) before writing the
+        MIDI file.  Use this on the compact path (IdeaTool.generate() →
+        export_multitrack_midi()) to get the same correctness guarantees as
+        the full produce_track() pipeline, without requiring rhythm/mixing
+        stages.  Tracks are selected by GM program number: programs 0–79
+        (piano, strings, brass, woodwinds, etc.) are processed; programs
+        80–127 (pads, percussion, SFX) are left untouched.  Defaults to
+        False to preserve backward-compatibility.
     """
     from melodica.types import TICKS_PER_BEAT, MIDI_MAX
+
+    # Optional: lightweight ARR-12/ARR-13 repair (compact path opt-in).
+    # Runs before the `_`-prefix filter so internal keys are transparently skipped
+    # inside fix_arr_lite itself.
+    if postprocess_arr:
+        from melodica._postprocess import fix_arr_lite
+        tracks_data = fix_arr_lite(tracks_data, instruments=instruments)
 
     tracks_data = {k: v for k, v in tracks_data.items() if not k.startswith("_")}
     tpb = TICKS_PER_BEAT

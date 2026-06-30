@@ -263,6 +263,7 @@ def generate_nahawand_lost_love():
             instruments=instruments_map,
             cc_events=notes_dict.get("_cc_events", {}),
             mpe_tracks=notes_dict.get("_mpe_tracks", set()),
+            postprocess_arr=True,
         )
         # Report the harmony actually generated for this movement.
         chords = notes_dict.get("_chords") or []
