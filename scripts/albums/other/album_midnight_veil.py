@@ -379,6 +379,34 @@ def generate_midnight_veil():
 
     total_notes = 0
 
+    # Reuse a single IdeaTool instance across all movements so that
+    # _track_contexts (prev_pitch, prev_velocity, prev_chord …) carry over
+    # from the end of one movement into the start of the next.  We build a
+    # throw-away config for the first movement; it gets replaced on every
+    # iteration before generate() is called.
+    _first_name, _first_bpm, _first_ts, _first_bars, _, _first_build = MOVEMENTS[0]
+    _first_parts = [IdeaPart(
+        name=_first_name,
+        bars=_first_bars,
+        scale=A_MINOR,
+        tempo=_first_bpm,
+        time_signature=_first_ts,
+        progression_type="coupled_hmm",
+    )]
+    _bootstrap_config = IdeaToolConfig(
+        style="cinematic_hybrid",
+        time_signature=_first_ts,
+        tempo=_first_bpm,
+        scale=A_MINOR,
+        use_tension_curve=True,
+        use_harmonic_verifier=True,
+        use_texture_control=True,
+        use_non_chord_tones=True,
+        parts=_first_parts,
+        tracks=_first_build(),
+    )
+    shared_tool = IdeaTool(_bootstrap_config)
+
     for name, bpm, ts, bars, title, build_fn in MOVEMENTS:
         print(f"\n── {name}  [{title}, A minor, {ts[0]}/{ts[1]}, {bpm} BPM, {bars} bars] ──")
 
@@ -408,7 +436,15 @@ def generate_midnight_veil():
             tracks=track_list,
         )
 
-        notes_dict = IdeaTool(config).generate()
+        # Hot-swap the config on the shared tool so _track_contexts survive.
+        # IdeaTool.__init__ sets self.config, _style, _chords, _track_contexts,
+        # and _generator_cache.  We only need to update config and _style; the
+        # context + generator caches are intentionally kept from the prior movement.
+        from melodica.composer import get_style as _get_style
+        shared_tool.config = config
+        shared_tool._style = _get_style(config.style)
+
+        notes_dict = shared_tool.generate()
 
         tracks_data = {
             k: v for k, v in notes_dict.items()

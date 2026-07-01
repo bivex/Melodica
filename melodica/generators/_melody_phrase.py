@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 
+from melodica.easing import ease_in_out, ease_in, ease_out
 from melodica.generators import GeneratorParams
 from melodica.utils import nearest_pitch
 
@@ -75,7 +76,7 @@ class PhraseContour:
         elif self.phrase_contour == "rise_fall":
             return self._rise_fall_curve(phrase_pos, mid, climax_pitch, low)
         elif self.phrase_contour == "rise":
-            return int(mid + (climax_pitch - mid) * _ease_out(phrase_pos))
+            return int(mid + (climax_pitch - mid) * ease_out(phrase_pos))
         elif self.phrase_contour == "wave":
             return self._wave_curve(phrase_pos, mid, climax_pitch, low)
         elif self.phrase_contour == "spiral":
@@ -103,19 +104,19 @@ class PhraseContour:
     def _arch_curve(self, pos: float, mid: int, climax: int, low: int) -> int:
         """Sine arch: smooth rise to ~60%, then smooth fall."""
         if pos < 0.6:
-            frac = _ease_in_out(pos / 0.6)
+            frac = ease_in_out(pos / 0.6)
             return int(mid + (climax - mid) * frac)
         else:
-            frac = _ease_in_out((pos - 0.6) / 0.4)
+            frac = ease_in_out((pos - 0.6) / 0.4)
             return int(climax - (climax - mid) * frac * 0.7)
 
     def _rise_fall_curve(self, pos: float, mid: int, climax: int, low: int) -> int:
         """Exponential rise + logarithmic fall."""
         if pos < 0.5:
-            frac = _ease_in(pos / 0.5)
+            frac = ease_in(pos / 0.5)
             return int(mid + (climax - mid) * frac)
         else:
-            frac = _ease_out((pos - 0.5) / 0.5)
+            frac = ease_out((pos - 0.5) / 0.5)
             return int(climax - (climax - low) * frac * 0.5)
 
     def _wave_curve(self, pos: float, mid: int, climax: int, low: int) -> int:
@@ -125,7 +126,7 @@ class PhraseContour:
 
     def _spiral_curve(self, pos: float, mid: int, climax: int) -> int:
         """Ascending with periodic dips — grows toward climax over time."""
-        base_ascent = (climax - mid) * _ease_out(pos)
+        base_ascent = (climax - mid) * ease_out(pos)
         dip = math.sin(pos * 4 * math.pi) * (climax - mid) * 0.15
         return int(mid + base_ascent + dip)
 
@@ -134,7 +135,7 @@ class PhraseContour:
         Suited for weary, exhausted, or fading melodic lines."""
         # Begin near mid+range/4, fall toward low by phrase end.
         high_start = mid + (mid - low) // 2
-        return int(high_start - (high_start - low) * _ease_in_out(pos))
+        return int(high_start - (high_start - low) * ease_in_out(pos))
 
     def _zigzag_curve(self, pos: float, mid: int, climax: int, low: int) -> int:
         """Alternates up/down each quarter-phrase (4 peaks per phrase).
@@ -150,21 +151,4 @@ class PhraseContour:
         return int(mid - amplitude * 0.5 + amplitude * frac)
 
 
-# ------------------------------------------------------------------
-# Easing functions
-# ------------------------------------------------------------------
 
-
-def _ease_in_out(t: float) -> float:
-    """Sine-based ease-in-out."""
-    return (1.0 - math.cos(t * math.pi)) / 2.0
-
-
-def _ease_in(t: float) -> float:
-    """Quadratic ease-in (slow start, fast end)."""
-    return t * t
-
-
-def _ease_out(t: float) -> float:
-    """Quadratic ease-out (fast start, slow end)."""
-    return 1.0 - (1.0 - t) * (1.0 - t)

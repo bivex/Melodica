@@ -134,6 +134,7 @@ class CounterpointGenerator(PhraseGenerator):
         self.voice_crossing = voice_crossing
         self.rhythm = rhythm
         self._prev_cantus_pitch: int | None = None  # tracks cantus direction for motion logic
+        self._prev_counter_pitches: list[int | None] = [None, None, None]
 
     def render(
         self,
@@ -241,6 +242,29 @@ class CounterpointGenerator(PhraseGenerator):
             )
         return notes
 
+    def _filter_parallel_perfects(
+        self, candidates: list[int], prev_counter: int, cantus_pitch: int
+    ) -> list[int]:
+        """Remove candidates that create parallel perfect 5ths or octaves."""
+        if self._prev_cantus_pitch is None:
+            return candidates
+        filtered = [
+            c for c in candidates
+            if not self._is_parallel_perfect(prev_counter, c, self._prev_cantus_pitch, cantus_pitch)
+        ]
+        return filtered if filtered else candidates
+
+    def _is_parallel_perfect(self, prev_c: int, new_c: int, prev_k: int, new_k: int) -> bool:
+        """True if motion from (prev_k, prev_c) to (new_k, new_c) is parallel 5th or octave."""
+        prev_interval = abs(prev_c - prev_k) % 12
+        new_interval = abs(new_c - new_k) % 12
+        if new_interval not in (0, 7):
+            return False
+        if prev_interval != new_interval:
+            return False
+        # Same direction = parallel (not contrary)
+        return (new_k > prev_k) == (new_c > prev_c)
+
     def _pick_counter_pitch(
         self,
         other_active_pitches: list[int],
@@ -285,6 +309,10 @@ class CounterpointGenerator(PhraseGenerator):
         if not candidates:
             p = nearest_pitch(int(pcs[0]), search_anchor)
             candidates = [max(low, min(high, p))]
+
+        # Parallel perfects filter (Fux rule 1)
+        if cantus_pitch is not None:
+            candidates = self._filter_parallel_perfects(candidates, prev, cantus_pitch)
 
         # interval_preference filter: prefer candidates whose interval with cantus matches
         pref_intervals = _INTERVAL_PREF.get(self.interval_preference, frozenset())

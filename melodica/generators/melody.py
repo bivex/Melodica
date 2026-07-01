@@ -383,7 +383,7 @@ class MelodyGenerator(PhraseGenerator):
             # Register shift from drama
             reg_shift = drama.register_shift(event.onset, range_span)
             effective_low = max(self.params.key_range_low, low)
-            effective_high = min(self.params.key_range_high + reg_shift, high + reg_shift)
+            effective_high = min(self.params.key_range_high, min(high, high + reg_shift))
             effective_climax = min(effective_high, base_climax + reg_shift)
 
             # Phrase climax (drama-enhanced)

@@ -21,6 +21,7 @@ import math
 from dataclasses import dataclass, field
 from typing import List
 
+from melodica.easing import ease_in
 from melodica.types_pkg._notes import NoteInfo
 
 
@@ -187,7 +188,7 @@ class PhraseDynamicsShaper:
             if pos <= self.cresc_peak:
                 # crescendo: 0 → cresc_gain
                 t = pos / self.cresc_peak
-                delta = self.cresc_gain * scale * _ease_in(t)
+                delta = self.cresc_gain * scale * ease_in(t)
             else:
                 # diminuendo: cresc_gain → 0 → -dim_loss
                 t = (pos - self.cresc_peak) / (1.0 - self.cresc_peak)
@@ -213,10 +214,6 @@ class PhraseDynamicsShaper:
 
         return shaped
 
-
-def _ease_in(t: float) -> float:
-    """Smooth ease-in curve (sine)."""
-    return math.sin(t * math.pi * 0.5)
 
 
 # ---------------------------------------------------------------------------

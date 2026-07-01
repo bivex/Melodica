@@ -28,6 +28,7 @@ Note movement:   "none", "alternating"
 
 from __future__ import annotations
 
+import bisect
 import random
 from dataclasses import dataclass, field
 
@@ -520,20 +521,18 @@ class BassGenerator(PhraseGenerator):
                     resolution = next_root - 1
                     return max(24, min(self.params.key_range_high, resolution))
             if prev_pitch > next_root:
-                approach = next_root - 1
+                approach = next_root + 1   # half-step above (chromatic from above)
             else:
-                approach = next_root + 1
+                approach = next_root - 1   # half-step below (classic walking approach)
             return max(24, min(self.params.key_range_high, approach))
 
         if self.params.complexity > 0.5 and random.random() < 0.4:
-            direction = 1 if root_pc > prev_pitch % 12 else -1
-            pass_pc = (prev_pitch + direction) % 12
-            if not key.contains(pass_pc):
-                for offset in [direction, -direction]:
-                    if key.contains((prev_pitch + offset) % 12):
-                        pass_pc = (prev_pitch + offset) % 12
-                        break
-            return nearest_pitch(pass_pc, prev_pitch)
+            step = 1 if root_pc > prev_pitch % 12 else -1
+            candidate = prev_pitch + step
+            if key.contains(candidate % 12):
+                return max(24, min(self.params.key_range_high, candidate))
+            # chromatic passing tone (non-scale) — still valid in walking bass
+            return max(24, min(self.params.key_range_high, candidate))
 
         if pcs:
             return min(
@@ -560,17 +559,16 @@ class BassGenerator(PhraseGenerator):
         )
         last_chord: ChordLabel | None = None
 
+        chord_starts = [c.start for c in chords]
+
         for event in events:
             chord = chord_at(chords, event.onset)
             if chord is None:
                 continue
             last_chord = chord
 
-            next_chord: ChordLabel | None = None
-            for c in chords:
-                if c.start > event.onset:
-                    next_chord = c
-                    break
+            _idx = bisect.bisect_right(chord_starts, event.onset)
+            next_chord = chords[_idx] if _idx < len(chords) else None
 
             beats_in_chord = int(chord.duration)
             beat_in_chord = int(event.onset - chord.start)

@@ -12,6 +12,8 @@ from __future__ import annotations
 import math
 import random
 
+from melodica.easing import ease_in_out, ease_in, ease_out
+
 
 DRAMA_SHAPE_OPTIONS = frozenset({
     "none",
@@ -210,24 +212,24 @@ class DramaticArc:
 def _crescendo_curve(t: float, pk: float) -> float:
     """Steady build, smooth peak, gentle fall."""
     if t < pk:
-        return _ease_in_out(t / pk)
+        return ease_in_out(t / pk)
     else:
-        return 1.0 - 0.5 * _ease_in_out((t - pk) / (1.0 - pk))
+        return 1.0 - 0.5 * ease_in_out((t - pk) / (1.0 - pk))
 
 
 def _dramatic_curve(t: float, pk: float) -> float:
     """Slow start, steep build, sharp peak, gentle fall with dip."""
     if t < pk * 0.5:
         # Slow start (low tension)
-        return _ease_in(t / (pk * 0.5)) * 0.25
+        return ease_in(t / (pk * 0.5)) * 0.25
     elif t < pk:
         # Steep build
         frac = (t - pk * 0.5) / (pk * 0.5)
-        return 0.25 + 0.75 * _ease_in(frac)
+        return 0.25 + 0.75 * ease_in(frac)
     else:
         # Sharp fall with small secondary dip
         frac = (t - pk) / (1.0 - pk)
-        base = 1.0 - 0.7 * _ease_out(frac)
+        base = 1.0 - 0.7 * ease_out(frac)
         # Small re-rise at ~85% (false resolution)
         if 0.6 < frac < 0.8:
             base += 0.08 * math.sin((frac - 0.6) / 0.2 * math.pi)
@@ -239,7 +241,7 @@ def _two_peak_curve(t: float, pk: float) -> float:
     first_peak = pk * 0.55
 
     if t < first_peak:
-        return _ease_in_out(t / first_peak) * 0.65
+        return ease_in_out(t / first_peak) * 0.65
     elif t < pk * 0.75:
         # Dip between peaks
         frac = (t - first_peak) / (pk * 0.75 - first_peak)
@@ -247,30 +249,30 @@ def _two_peak_curve(t: float, pk: float) -> float:
     elif t < pk:
         # Second, bigger build
         frac = (t - pk * 0.75) / (pk * 0.25)
-        return 0.4 + 0.6 * _ease_in(frac)
+        return 0.4 + 0.6 * ease_in(frac)
     else:
         frac = (t - pk) / (1.0 - pk)
-        return 1.0 - 0.8 * _ease_out(frac)
+        return 1.0 - 0.8 * ease_out(frac)
 
 
 def _epic_curve(t: float, pk: float) -> float:
     """Very slow build, late peak, powerful resolution."""
     if t < pk * 0.6:
-        return _ease_in(t / (pk * 0.6)) * 0.15
+        return ease_in(t / (pk * 0.6)) * 0.15
     elif t < pk * 0.85:
         frac = (t - pk * 0.6) / (pk * 0.25)
-        return 0.15 + 0.45 * _ease_in_out(frac)
+        return 0.15 + 0.45 * ease_in_out(frac)
     elif t < pk:
         frac = (t - pk * 0.85) / (pk * 0.15)
-        return 0.6 + 0.4 * _ease_in(frac)
+        return 0.6 + 0.4 * ease_in(frac)
     else:
         frac = (t - pk) / (1.0 - pk)
-        return 1.0 - 0.6 * _ease_out(frac)
+        return 1.0 - 0.6 * ease_out(frac)
 
 
 def _diminuendo_curve(t: float) -> float:
     """Starts at full tension, steady decay — exhausted, fading out."""
-    return _ease_out(1.0 - t) * 0.9 + 0.1
+    return ease_out(1.0 - t) * 0.9 + 0.1
 
 
 def _swell_curve(t: float) -> float:
@@ -279,13 +281,4 @@ def _swell_curve(t: float) -> float:
     return math.sin(t * math.pi) * 0.7 + 0.1
 
 
-def _ease_in_out(t: float) -> float:
-    return (1.0 - math.cos(t * math.pi)) / 2.0
 
-
-def _ease_in(t: float) -> float:
-    return t * t
-
-
-def _ease_out(t: float) -> float:
-    return 1.0 - (1.0 - t) * (1.0 - t)
