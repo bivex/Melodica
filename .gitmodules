@@ -1,0 +1,3 @@
+[submodule "vendor/tonality"]
+	path = vendor/tonality
+	url = https://github.com/bivex/Tonality
