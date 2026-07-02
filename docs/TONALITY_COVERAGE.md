@@ -1,7 +1,7 @@
 # Tonality Coverage — CoupledHMM Harmonization across all Modes
 
 **Last updated:** 2026-07-02  
-**Model:** CoupledHMMHarmonizer (supervised weights, t5harmony 49 803 songs)  
+**Model:** CoupledHMMHarmonizer (supervised weights, t5harmony 49 803 + ChoCo jazz 2 935 songs)  
 **Script:** `scripts/tonality_scale_showcase.py`  
 **Method:** Melody built from I–III–V–VII degrees of each scale, `key_coupling_weight=2.0`
 
@@ -11,8 +11,8 @@
 
 | Category | Count | % |
 |---|---|---|
-| **CLEAN** — parse=4/4, ambiguous=0 | 52 | 66% |
-| **PARTIAL** — some ambiguous or 7th-chord naming edge cases | 26 | 33% |
+| **CLEAN** — parse=4/4, ambiguous=0 | 54 | 69% |
+| **PARTIAL** — some ambiguous or 7th-chord naming edge cases | 24 | 30% |
 | **EXOTIC** — 0 parsed / all ambiguous | 0 | 0% |
 | **ERRORS** | 0 | 0% |
 
@@ -144,24 +144,23 @@ would be required.
 
 The model operates with **12 chord types** (9 originally + 3 added):
 
-| Index | Quality | Symbol | Status in real music (t5harmony) |
+| Index | Quality | Symbol | Status in real music (combined corpus) |
 |---|---|---|---|
-| 0 | Major | C | 46.7% |
-| 1 | Minor | Cm | 27.7% |
-| 2 | Diminished | Cdim | 2.7% |
+| 0 | Major | C | 44.7% |
+| 1 | Minor | Cm | 26.0% |
+| 2 | Diminished | Cdim | 2.8% |
 | 3 | Augmented | Caug | 0.1% |
 | 4 | Sus2 | Csus2 | ~0% (template prior only) |
-| 5 | Sus4 | Csus4 | ~0% (template prior only) |
-| 6 | Major7 | CM7 | ~0% (template prior only) |
-| 7 | Minor7 | Cm7 | 10.3% |
-| 8 | Dominant7 | C7 | 9.5% |
+| 5 | Sus4 | Csus4 | 0.1% |
+| 6 | Major7 | CM7 | 0.5% (jazz corpus) |
+| 7 | Minor7 | Cm7 | 10.7% |
+| 8 | Dominant7 | C7 | 11.7% |
 | 9 | Major9 | CM9 | 1.1% |
-| 10 | Minor9 | Cm9 | 0.9% |
-| 11 | Add9 | Cadd9 | 1.0% |
+| 10 | Minor9 | Cm9 | 1.0% |
+| 11 | Add9 | Cadd9 | 1.3% |
 
-Types 4–6 (sus2, sus4, Maj7) appear ~0% in real music (t5harmony corpus) and rely
-on template priors. The model will rarely output them unless the melody strongly
-implies them. This is by design — see `docs/HMM_TRAINING_GOLD_STANDARD.md`.
+Types 4 (sus2) still relies on template prior (~0%). Sus4 (0.1%), Maj7 (0.5%),
+and Dom7 (11.7%) are now empirically grounded thanks to the ChoCo jazz corpus.
 
 ---
 
@@ -169,11 +168,13 @@ implies them. This is by design — see `docs/HMM_TRAINING_GOLD_STANDARD.md`.
 
 | Parameter | Value |
 |---|---|
-| Corpus | t5harmony (Hooktheory TheoryTab) |
-| Songs | 49 803 |
+| Corpus | t5harmony (Hooktheory TheoryTab) + ChoCo jazz (Real Book + JAAH) |
+| Songs | 49 803 (t5harmony) + 2 935 (ChoCo) = **52 738 total** |
+| Chord frames | ~1.5M (t5harmony melody) + 187 230 (ChoCo lead sheets) |
 | Method | Supervised from gold `[root type bass]` labels |
-| Script | `scripts/generators/train_full_modes.py --corpus t5harmony` |
-| Runtime | ~17 seconds (numpy-only, no GPU required) |
+| Script | `scripts/generators/train_full_modes.py --corpus-dir melodica/harmonize/corpus_combined` |
+| Converter | `scripts/data/convert_choco_jazz.py` — Harte→ntc2 (106 shorthands, unmapped=0) |
+| Runtime | ~10 seconds (numpy-only, no GPU required) |
 | Weights | `melodica/harmonize/weights/pnote_full.txt` + `pchange_full.npy` |
 | Backup (EM) | `pnote_full_unsup.txt` + `pchange_full_unsup.npy` |
 
@@ -181,6 +182,10 @@ Prior to supervised training, the unsupervised EM path produced degenerate spike
 (`pnote[2,sus2]=1.0`, `pnote[5,sus4]=1.0`) causing sus-chord spam on sparse melodies.
 The supervised estimator fixes this at the source — see `scripts/supervised_pnote_probe.py`
 for the diagnostic that confirmed the issue.
+
+ChoCo lead sheets have no melody bracket (`[]` empty) — they contribute to `pchange`
+(jazz ii-V-I, tritone substitution transitions) but not to `pnote` (emission weights
+come from t5harmony melody annotations only).
 
 ---
 
