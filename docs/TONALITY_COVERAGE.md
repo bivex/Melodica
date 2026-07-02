@@ -209,3 +209,82 @@ pchange[tp,int,tn] from chord transition sequences. See
   strongly implies them (no real-corpus evidence)
 - **when-in-rome** partition (449 classical songs) not yet converted — requires
   key-aware Roman numeral resolver
+
+---
+
+## Rebuild After Reboot
+
+Corpus directories are in `.gitignore` — only scripts and weights are committed.
+After a fresh clone or reboot, rebuild everything in order:
+
+```bash
+cd /Volumes/External/Code/Melodica
+
+# 1. ChoCo jazz (real-book + jaah) — 2 935 songs
+.venv_dd/bin/python scripts/data/convert_choco_jazz.py \
+  --partitions real-book jaah \
+  --choco-dir /Volumes/External/Code/choco/partitions \
+  --out-dir melodica/harmonize/corpus_choco_jazz
+
+# 2. ChoCo extra (wikifonia + jazz-corpus + weimar + nottingham) — 7 648 songs
+.venv_dd/bin/python scripts/data/convert_choco_jazz.py \
+  --partitions wikifonia jazz-corpus weimar nottingham \
+  --choco-dir /Volumes/External/Code/choco/partitions \
+  --out-dir melodica/harmonize/corpus_choco_extra
+
+# 3. iReal Pro — 2 045 songs (jazz/bossa/latin)
+.venv_dd/bin/python scripts/data/convert_ireal_pro.py \
+  --playlist-dir /Volumes/External/Code/choco/partitions/ireal-pro/raw/playlists \
+  --out-dir melodica/harmonize/corpus_ireal_pro
+
+# 4. Merge into combined (t5harmony already lives separately)
+rsync -a melodica/harmonize/corpus_choco_jazz/  melodica/harmonize/corpus_combined/
+rsync -a melodica/harmonize/corpus_choco_extra/ melodica/harmonize/corpus_combined/
+rsync -a melodica/harmonize/corpus_ireal_pro/   melodica/harmonize/corpus_combined/
+# t5harmony — 49 803 songs, copy or re-download if not present:
+#   .venv_dd/bin/python scripts/data/convert_t5harmony.py --out-dir melodica/harmonize/corpus_combined
+
+# 5. Chordonomicon pchange-aux — 50 000 songs (HuggingFace streaming, ~28s)
+.venv_dd/bin/python scripts/data/convert_chordonomicon.py \
+  --limit 50000 \
+  --out-dir melodica/harmonize/corpus_chordonomicon
+
+# 6. Retrain supervised weights (~20s, numpy-only, no GPU)
+.venv_dd/bin/python scripts/generators/train_full_modes.py \
+  --corpus-dir melodica/harmonize/corpus_combined \
+  --pchange-aux-dir melodica/harmonize/corpus_chordonomicon \
+  --supervised auto
+
+# 7. Verify
+.venv_dd/bin/python -m pytest tests/test_coupled_hmm.py -q          # 232 passed
+.venv_dd/bin/python scripts/tonality_scale_showcase.py               # 58 CLEAN (74%)
+```
+
+**Expected output of step 6:**
+
+```
+labeled frames by type%: {0: 57.0, 1: 23.2, 2: 1.2, ..., 7: 6.3, 8: 8.7, ...}
+Supervised weights saved to melodica/harmonize/weights
+```
+
+**DO NOT** add Maiakovsky/song_chord_changes as pchange-aux — it is pop-heavy
+(Maj 60%), inflates tonic mass and causes EXOTIC regression in the showcase.
+The converter (`convert_maiakovsky.py`) is available for experimentation only.
+
+### Update TONALITY_COVERAGE.md after retraining
+
+Run the showcase and paste the summary:
+
+```bash
+.venv_dd/bin/python scripts/tonality_scale_showcase.py 2>&1 \
+  | grep -E "SUMMARY|CLEAN|PARTIAL|EXOTIC"
+```
+
+Then update the Summary table and the CLEAN/PARTIAL lists in this file manually,
+or regenerate with:
+
+```bash
+.venv_dd/bin/python scripts/tonality_scale_showcase.py 2>&1 \
+  | grep -v "Warning\|warn" > /tmp/showcase_out.txt
+# then copy relevant lines into this doc
+```
