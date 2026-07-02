@@ -47,6 +47,7 @@ from melodica.generators.drum_kit_pattern import DrumKitPatternGenerator
 from melodica.generators.ghost_notes import GhostNotesGenerator
 from melodica.generators.bass import BassGenerator
 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
+from melodica.harmonize import harmonizer_profile
 from melodica.composer.transformers import spiceup
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
@@ -91,6 +92,7 @@ def make_chords(key: Scale, dur: float, bars_per_chord: float = 4.0) -> list[Cho
     harmonizer = CoupledHMMHarmonizer(
         beam_width=14,
         chord_change="half",     # "half" = half-note resolution (jazz standard)
+        config=harmonizer_profile("jazz"),  # 7th-chord harmony (completion_bonus=5)
     )
     # Build a sparse melody contour for harmonization
     contour = []
