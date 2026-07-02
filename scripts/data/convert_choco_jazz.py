@@ -50,13 +50,69 @@ KEY_PC: dict[str, int] = {**ROOT_PC}
 #   1. Strip bass note (/X) from shorthand
 #   2. Map by prefix/content
 
+# Namespaces to accept as chord annotations (in priority order)
+CHORD_NAMESPACES = [
+    "chord",               # real-book, jaah (standard Harte root:quality)
+    "chord_harte",
+    "chord_jparser_harte", # jazz-corpus
+    "chord_m21_leadsheet", # wikifonia
+    "chord_m21_abc",       # nottingham
+    "chord_weimar",        # weimar (Ej=Eb notation, NC=no chord)
+    # skip chord_roman (when-in-rome) — Roman numeral needs key resolution
+    # skip chord_jparser_functional — redundant with harte in jazz-corpus
+]
+
+# Weimar enharmonic spellings: j = b (Ej=Eb, Bj=Bb etc.)
+_WEIMAR_FIX = str.maketrans("j", "b")
+
+_ROOT_RE = re.compile(r"^([A-G][b#]?)(.*)")
+
+
+def _parse_no_colon(val: str) -> tuple[int, int] | None:
+    """Parse chord strings WITHOUT colon: 'C', 'G7', 'Cm', 'Fm7', 'EbM7', 'A7'.
+    Also handles:
+      - Weimar/ABC flat notation: 'B-' = Bb, 'E-' = Eb (single '-' after root = flat)
+      - Slash chords: 'G/B', 'F/A' → take root only, ignore bass
+    Returns (root_pc, type_idx) or None.
+    """
+    val = val.translate(_WEIMAR_FIX).strip()
+    if val in ("N", "NC", "X", "n", ""):
+        return None  # no chord
+
+    # strip bass from slash chord before root parsing
+    val = val.split("/")[0]
+
+    # ABC/Lilypond flat: root letter + '-' with no other quality suffix
+    # e.g. 'B-' → 'Bb', 'E-' → 'Eb', 'B-7' → 'Bb7', 'E-7' → 'Eb7'
+    # Only when '-' immediately follows root note (A-G + optional b/#)
+    val = re.sub(r'^([A-G][b#]?)-', r'\1b', val)
+
+    m = _ROOT_RE.match(val)
+    if not m:
+        return None
+    root_str, quality = m.group(1), m.group(2)
+    root_pc = ROOT_PC.get(root_str)
+    if root_pc is None:
+        return None
+    # normalise quality suffixes to Harte-like for reuse of _harte_to_type
+    quality = quality.strip("/").split("/")[0]  # strip bass
+    t = _harte_to_type(quality)
+    if t is None:
+        return None
+    return root_pc, t
+
+
 def _harte_to_type(shorthand: str) -> int | None:
     """Map a Harte chord shorthand to our type index. Returns None for N/X."""
     s = shorthand.strip()
 
     # silence / no chord / unknown
-    if s in ("N", "X", "", "1"):
+    if s in ("N", "X", "1"):
         return None
+
+    # empty quality = plain major triad
+    if s == "":
+        return 0
 
     # strip bass note
     if "/" in s:
@@ -159,6 +215,25 @@ def _harte_to_type(shorthand: str) -> int | None:
     if s in ("5", "(1,5)"):
         return 0  # treat as maj
 
+    # Additional jazz/extended shorthands from wikifonia/nottingham/weimar
+    # Half-dim variants
+    if s in ("%7", "ø7", "ø", "hdim7", "hdim", "m7b5", "-m7", "-7b5"):
+        return 7  # min7 (half-dim)
+    # Dom7 alterations not caught by ^7 prefix
+    if s in ("b7", "79", "79b", "79#", "79b", "7+", "7alt", "7 add b9",
+             "7911#", "b7911#", "sus7", "sus7913", "sus4,7", "+7", "aug7",
+             "mab7", "-mab7", "d"):
+        return 8
+    # Min variants
+    if s in ("-6", "m6", "-m", "-9", "min6"):
+        return 1
+    # Maj6 / add9 extras
+    if s in ("maj(6,9)", "69", "add(9)"):
+        return 11
+    # Pedal / misc → treat as maj
+    if s in ("pedal", "sus2sus4", "1"):
+        return 0
+
     return None  # unmapped
 
 
@@ -186,7 +261,7 @@ def convert_jams(jams_path: Path, out_dir: Path, stats: dict) -> bool:
     chord_ann = key_ann = timesig_ann = None
     for a in d.get("annotations", []):
         ns = a.get("namespace", "")
-        if ns == "chord" and chord_ann is None:
+        if chord_ann is None and ns in CHORD_NAMESPACES:
             chord_ann = a
         elif ns == "key_mode" and key_ann is None:
             key_ann = a
@@ -215,16 +290,30 @@ def convert_jams(jams_path: Path, out_dir: Path, stats: dict) -> bool:
     prev_type = None
     for obs in chord_ann["data"]:
         val = obs.get("value", "N")
-        if ":" not in val:
-            # N or X — skip beat, still advance
+        if not val or val in ("N", "NC", "X", "n"):
             beat += 1
             prev_type = None
             continue
 
-        root_str, shorthand = val.split(":", 1)
-        shorthand = shorthand.split("/")[0]  # strip bass from value too
-        root_pc  = ROOT_PC.get(root_str)
-        chord_type = _harte_to_type(shorthand)
+        if ":" in val:
+            # Standard Harte: root:quality or "F minor:V" (roman — skip)
+            root_str, shorthand = val.split(":", 1)
+            if root_str not in ROOT_PC:
+                # Roman numeral like "F minor:V" — skip
+                beat += 1
+                prev_type = None
+                continue
+            shorthand = shorthand.split("/")[0]
+            root_pc = ROOT_PC.get(root_str)
+            chord_type = _harte_to_type(shorthand)
+        else:
+            # No-colon format: "C", "G7", "Cm", "Fm7", "EbM7" etc.
+            parsed = _parse_no_colon(val)
+            if parsed is None:
+                beat += 1
+                prev_type = None
+                continue
+            root_pc, chord_type = parsed
 
         if root_pc is None or chord_type is None:
             stats["unmapped"] += 1
@@ -306,16 +395,29 @@ def _dry(jams_path: Path, stats: dict) -> bool:
         stats["read_error"] += 1
         return False
     for a in d.get("annotations", []):
-        if a.get("namespace") == "chord":
-            for obs in a.get("data", []):
-                val = obs.get("value", "N")
-                if ":" in val:
-                    sh = val.split(":", 1)[1].split("/")[0]
-                    t  = _harte_to_type(sh)
-                    if t is None:
-                        stats["unmapped"] += 1
-                    else:
-                        stats["chords"] += 1
+        ns = a.get("namespace", "")
+        if ns not in CHORD_NAMESPACES:
+            continue
+        found = 0
+        for obs in a.get("data", []):
+            val = obs.get("value", "N")
+            if not val or val in ("N", "NC", "X", "n"):
+                continue
+            if ":" in val:
+                root_str, sh = val.split(":", 1)
+                if root_str not in ROOT_PC:
+                    continue
+                sh = sh.split("/")[0]
+                t = _harte_to_type(sh)
+            else:
+                parsed = _parse_no_colon(val)
+                t = parsed[1] if parsed else None
+            if t is None:
+                stats["unmapped"] += 1
+            else:
+                found += 1
+                stats["chords"] += 1
+        if found:
             stats["files"] += 1
             return True
     stats["no_chords"] += 1
