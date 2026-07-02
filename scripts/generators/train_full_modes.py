@@ -130,7 +130,7 @@ def _ntc2_files(data_dir: Path):
             yield p
 
 
-def estimate_supervised(data_dir: Path):
+def estimate_supervised(data_dir: Path, aux_pchange_dir: Path | None = None):
     """Supervised pnote/pchange from .ntc2 gold [root type] labels — no EM.
 
     Uses the chord bracket the unsupervised path discards:
@@ -139,20 +139,26 @@ def estimate_supervised(data_dir: Path):
     Direct counting with template/Dirichlet smoothing. Returns (pnote, pchange,
     frames) as numpy arrays, or None if the corpus has no parseable labels
     (legacy .ntc) so the caller falls back to EM.
+
+    aux_pchange_dir: optional extra corpus used ONLY for pchange (no melody).
+    Useful for large chord-only datasets (e.g. Chordonomicon) that would skew
+    pnote if merged into the main corpus.
     """
     note_counts  = np.zeros((N_TONES, N_TYPES), dtype=np.float64)
     frames       = np.zeros(N_TYPES, dtype=np.float64)  # all chord frames (pchange denom)
     mel_frames   = np.zeros(N_TYPES, dtype=np.float64)  # melody-annotated frames only (pnote denom)
     pchg = np.zeros((N_TYPES, N_TONES, N_TYPES), dtype=np.float64)
     labeled = 0
-    for p in _ntc2_files(data_dir):
+
+    def _count_file(p: Path, pnote_active: bool) -> None:
+        nonlocal labeled
         if p.suffix != ".ntc2":
-            continue  # legacy .ntc has no chord bracket -> EM path handles it
+            return
         try:
             text = p.read_text()
         except (UnicodeDecodeError, OSError):
-            continue
-        prev = None  # reset per song — no transitions across file boundaries
+            return
+        prev = None
         for line in text.splitlines():
             brackets = _BRACKET_RE.findall(line)
             if len(brackets) < 2:
@@ -167,20 +173,29 @@ def estimate_supervised(data_dir: Path):
             if not (0 <= root < 12 and 0 <= ctype < N_TYPES):
                 continue
             cur = (root, ctype)
-            if prev is not None and cur != prev:  # chord-CHANGE transitions only
+            if prev is not None and cur != prev:
                 pchg[prev[1], (root - prev[0]) % N_TONES, ctype] += 1
             prev = cur
+            if not pnote_active:
+                frames[ctype] += 1
+                continue
             mel = [int(x.strip()) for x in brackets[1].split(",") if x.strip() != ""]
             if mel:
-                # melody present — count pnote emissions
                 labeled += 1
                 mel_frames[ctype] += 1
                 frames[ctype] += 1
                 for pc in {m % N_TONES for m in mel}:
                     note_counts[(pc - root) % N_TONES, ctype] += 1
             else:
-                # no melody (lead sheets like ChoCo) — count for pchange only
                 frames[ctype] += 1
+
+    for p in _ntc2_files(data_dir):
+        _count_file(p, pnote_active=True)
+
+    # aux corpus: pchange only (no pnote contribution)
+    if aux_pchange_dir is not None and aux_pchange_dir.exists():
+        for p in _ntc2_files(aux_pchange_dir):
+            _count_file(p, pnote_active=False)
 
     if labeled == 0 and frames.sum() == 0:
         return None
@@ -299,6 +314,14 @@ def main():
         help="Custom path to the corpus directory (overrides --corpus)"
     )
     parser.add_argument(
+        "--pchange-aux-dir",
+        type=str,
+        default=None,
+        help="Extra corpus used ONLY for pchange estimation (no pnote). "
+             "Useful for large chord-only datasets like Chordonomicon that "
+             "would skew pnote if merged into the main corpus."
+    )
+    parser.add_argument(
         "--max-iter",
         type=int,
         default=MAX_ITER,
@@ -366,7 +389,8 @@ def main():
     # unsupervised EM path produces. Auto-enabled whenever the corpus has labels.
     if args.supervised in ("auto", "yes"):
         print(f"  Estimating supervised weights from {corpus_dir} ...")
-        sup = estimate_supervised(corpus_dir)
+        aux = Path(args.pchange_aux_dir) if args.pchange_aux_dir else None
+        sup = estimate_supervised(corpus_dir, aux_pchange_dir=aux)
         if sup is not None:
             pnote_np, pchange_np, frame_counts = sup
             tot = frame_counts.sum()
