@@ -90,7 +90,7 @@ def probe_mode(mode: Mode, root: int = DEFAULT_ROOT):
                 if "microtonal" in str(w.message).lower():
                     microtonal = True
 
-        rep       = verify_progression(chords)
+        rep       = verify_progression(chords, key=key)
         parseable = rep["parseable"]
         ambiguous = rep["ambiguous"]
         vl        = rep["total_voice_leading"]
