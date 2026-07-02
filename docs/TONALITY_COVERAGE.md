@@ -11,8 +11,8 @@
 
 | Category | Count | % |
 |---|---|---|
-| **CLEAN** — parse=4/4, ambiguous=0 | 58 | 74% |
-| **PARTIAL** — parse=4/4 but ≥1 chord ambiguous | 20 | 26% |
+| **CLEAN** — parse=4/4, ambiguous=0 | 60 | 76% |
+| **PARTIAL** — parse=4/4 but ≥1 chord ambiguous | 18 | 23% |
 | **EXOTIC** — 0 parsed / all ambiguous | 0 | 0% |
 | **ERRORS** | 0 | 0% |
 
@@ -23,7 +23,7 @@ exotic, microtonal, and symmetric scales.
 
 ---
 
-## CLEAN — Full Tonality Coverage (58 modes)
+## CLEAN — Full Tonality Coverage (60 modes)
 
 These modes produce parse=4/4, ambiguous=0. Tonality names every chord unambiguously.
 
@@ -48,10 +48,10 @@ These modes produce parse=4/4, ambiguous=0. Tonality names every chord unambiguo
 | hungarian_minor | Cm → Ab → Gm → Bm | 7 |
 | gypsy | C → Em → C → E | 4 |
 | hirojoshi | Cm → Dm → Cm → Gm | 15 |
+| kumoi | Cm → Dm → Gm → C | — |
 | japanese | Cm → C# → Fm → C | 7 |
 | spanish_8_tone | Cm → Dm → Fm → Cm | 12 |
 | byzantine | C → Em → C → E | 4 |
-| persian | Caug → Caug → F#m → Bm | 7 |
 | arabian | Cm → Ab → Gm → Bm | 7 |
 | altered | Cm → Ab → F# → Bbm | 8 |
 | lydian_dominant | C → Em → C → Bb | 8 |
@@ -67,8 +67,8 @@ These modes produce parse=4/4, ambiguous=0. Tonality names every chord unambiguo
 | alt_bb3_bb7 | Cm → Ab → F#m → Am | 9 |
 | messiaen_2 | Cm → Ebm → B → Am | 9 |
 | messiaen_4 | Cm → G → F#m → Bbm | 8 |
-| messiaen_5 | Cm → Dm → F#m → D | 9 |
-| messiaen_6 | Cm → Dm → Fm → Cm | 12 |
+| messiaen_5 | Cm → Dm → F#m → D | — |
+| messiaen_6 | Cm → Dm → Fm → Cm | — |
 | prometheus | Cm → Dm → A → F#m | 10 |
 | mystic | Cm → Dm → A → F#m | 10 |
 | locrian_nat_2 | Cm → Ab → F# → Bbm | 8 |
@@ -76,6 +76,7 @@ These modes produce parse=4/4, ambiguous=0. Tonality names every chord unambiguo
 | dorian_b2 | Cm → Ebm → Gm → Bbm | 8 |
 | ionian_b5 | Cm → Em → F#m → Bm | 8 |
 | pedal_minor | Cm → Ebm → Fm → Cm | 12 |
+| suspended_penta | Cm → Dm → Gm → C | — |
 | slendro_approx | C → G → Em → C | 6 |
 | pelog_approx | Cm → C#m → Ebm → Gm | — |
 | bhupali | C → G → Em → C | 6 |
@@ -91,7 +92,7 @@ These modes produce parse=4/4, ambiguous=0. Tonality names every chord unambiguo
 
 ---
 
-## PARTIAL — Ambiguous naming (20 modes)
+## PARTIAL — Ambiguous naming (18 modes)
 
 Parse=4/4 in all cases — harmonization succeeds, but ≥1 chord is ambiguous in the
 naming layer. Root causes:
@@ -104,20 +105,18 @@ naming layer. Root causes:
 |---|---|---|---|
 | natural_minor | Cm → Ab → Gm → **Cm7** | 1 | VII = Cm7 ambiguous |
 | aeolian | Cm → Ab → Gm → **Cm7** | 1 | same as natural_minor |
-| whole_tone | **Caug** → Daug → Em → F#m | 2 | symmetric scale, aug I+II |
+| whole_tone | **Caug** → Daug → Caug → F#m | 3 | symmetric scale |
 | bebop_minor | Cm → Ab → Gm → **Cm7** | 1 | VII = Cm7 |
 | hungarian_major | Cm → Em → Gm → **Cm7** | 1 | VII = Cm7 |
-| kumoi | Cm → Dm → **Gm7** → C7 | 1 | Gm7 ambiguous |
-| persian | **Caug** → Caug → F#m → Bm | 2 | aug on I+II |
+| persian | **Caug** → E → F#m → Bm | 1 | aug on I |
 | augmented_mode_2 | **Caug** → C#m → Caug → Fm | 2 | aug on I+III |
-| messiaen_1 | **Caug** → Daug → Em → F#m | 2 | whole-tone = aug I+II |
+| messiaen_1 | **Caug** → Daug → Caug → F#m | 3 | whole-tone = aug |
 | messiaen_3 | **Caug** → C#m → Caug → Fm | 2 | aug on I+III |
 | enigmatic | Cm → Ebm → Gm → **Cm7** | 1 | VII = Cm7 |
 | suspense | **Caug** → C → G → CM7 | 1 | aug on I |
 | horror_cluster | **Caug** → C#m → G → Cmajadd9 | 1 | aug on I |
-| quarter_tone_minor | Cm → Ab → Gm → **Cm7** | 1 | microtonal → 12-TET approx |
+| quarter_tone_minor | Cm → Ab → Gm → **Cm7** | 1 | microtonal → 12-TET |
 | arabic_sikah | Cm → C → Gm → **Cm7** | 1 | quarter-tone [see note] |
-| suspended_penta | Cm → Dm → **Gm7** → C7 | 1 | Gm7 ambiguous |
 | acoustic_minor | Cm → Ebm → Gm → **Cm7** | 1 | VII = Cm7 |
 | lydian_minor | **Caug** → C → Gm → Cm7 | 2 | aug + 7th |
 | lydian_aug_mode | **Caug** → A → Abm → E | 1 | aug on I |
@@ -172,7 +171,7 @@ is empirically grounded from ChoCo jazz + iReal Pro + ChoCo extra corpora.
 | **pnote + pchange corpus** | t5harmony + ChoCo jazz + iReal Pro + ChoCo extra |
 | Songs | 49 803 + 2 935 + 2 045 + 7 578 = **62 361 total** |
 | Chord frames | ~2.97M |
-| **pchange-only aux** | Chordonomicon (HuggingFace ailsntua/Chordonomicon, 50k songs, 4.1M frames) |
+| **pchange-only aux** | Chordonomicon (HuggingFace ailsntua/Chordonomicon, 666k songs, 50.3M frames) |
 | Method | Supervised from gold `[root type bass]` labels; aux=pchange only (no pnote) |
 | Script | `train_full_modes.py --corpus-dir corpus_combined --pchange-aux-dir corpus_chordonomicon --supervised auto` |
 | Runtime | ~20 seconds (numpy-only, no GPU) |
@@ -244,9 +243,9 @@ rsync -a melodica/harmonize/corpus_ireal_pro/   melodica/harmonize/corpus_combin
 # t5harmony — 49 803 songs, copy or re-download if not present:
 #   .venv_dd/bin/python scripts/data/convert_t5harmony.py --out-dir melodica/harmonize/corpus_combined
 
-# 5. Chordonomicon pchange-aux — 50 000 songs (HuggingFace streaming, ~28s)
+# 5. Chordonomicon pchange-aux — full 666k songs (HuggingFace streaming, ~5min)
 .venv_dd/bin/python scripts/data/convert_chordonomicon.py \
-  --limit 50000 \
+  --limit 666000 \
   --out-dir melodica/harmonize/corpus_chordonomicon
 
 # 6. Retrain supervised weights (~20s, numpy-only, no GPU)
