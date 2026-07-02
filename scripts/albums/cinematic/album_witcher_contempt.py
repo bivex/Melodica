@@ -50,6 +50,24 @@ _LEAD_REST_SCHEDULE = PhraseSchedule(
     slots=[PhraseSlot(kind="play", bars=8), PhraseSlot(kind="rest", bars=1)],
     loop=True,
 )
+
+# Hand-authored functional progressions per movement ("master's voice"). Used as
+# constraints for constrained_hmm: the HMM still fits each track's melody contour
+# and voice-leading, but anchors to these chords + durations — replacing the
+# generic statistical progressions from plain coupled_hmm. Each chord = 1 bar
+# (duration = time_signature numerator beats). Roman numerals are relative to
+# each movement's scale (parse_progression / Scale.parse_roman).
+_PROGRESSIONS: dict[str, list[str]] = {
+    # NB: numerals are DIATONIC to each mode (parse_roman flats/raises by
+    # semitone), so e.g. Dorian "b7" is written VII, Phrygian "b2" is II, etc.
+    "frantic_strings":     ["Im9:6.0", "VII:6.0",     "IVmaj9:6.0", "VII:6.0"],     # Dm9-C-G-C Dorian gallop
+    "lyrical_tragedy":     ["Im9:3.0", "VImaj9:3.0",   "IIImaj7:3.0","VII:3.0"],     # Dm9-Bb-F-C noble elegy
+    "imperial_industrial": ["Im:4.0",  "II:4.0",      "VImaj7:4.0", "II:4.0"],       # Em-F-C-F Phrygian dread
+    "magic_chaos":         ["Idim:5.0","II:5.0",      "V:5.0",      "VII:5.0"],      # Gdim-Ab-Db-F Locrian betrayal
+    "witcher_combat":      ["Im:6.0",  "iv7:6.0",     "V7:6.0",     "Im:6.0"],       # Dm-Gm-A7-Dm harmonic-minor battle
+    "madness_folk":        ["Im:7.0",  "IVaug:7.0",   "Idim:7.0",   "IVaug:7.0"],    # Hungarian-minor exotic madness
+    "epic_requiem":        ["Im9:3.0", "VII:3.0",     "VImaj9:3.0", "V:3.0"],        # Em9-D-C-Bb Andalusian cadence
+}
 from melodica.midi import export_multitrack_midi
 from melodica.tracer import EngineTracer
 
@@ -168,7 +186,8 @@ def generate_witcher_album():
                 scale=cfg["scale"],
                 tempo=cfg["tempo"],
                 time_signature=cfg["time_signature"],
-                progression_type=cfg.get("progression_type", "hmm3"),
+                progression_type="constrained_hmm",
+                progression_list=_PROGRESSIONS.get(cfg["style_hint"]),
             )
         ]
 
