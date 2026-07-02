@@ -31,6 +31,7 @@ from melodica.harmonize.advanced import (
 )
 from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
 from melodica.harmonize.functional_hmm import FunctionalHMMHarmonizer
+from melodica.harmonize.profiles import harmonizer_profile, PROFILES as HARMONIZER_PROFILES
 
 __all__ = [
     "FunctionalHarmonizer",
@@ -44,4 +45,6 @@ __all__ = [
     "GeneticHarmonizer",
     "ChromaticMediantHarmonizer",
     "ModalInterchangeHarmonizer",
+    "harmonizer_profile",
+    "HARMONIZER_PROFILES",
 ]
