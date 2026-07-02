@@ -41,9 +41,29 @@ from melodica.rhythm import get_rhythm
 from melodica.types import Scale, Mode
 from melodica.midi import export_multitrack_midi
 
+# Accompaniment thinning — clash/density reduction. rhythm_rests is the
+# generator-agnostic note filter at idea_tool.py:1590 (keeps a fraction of
+# notes). Applied to dense accompaniment/textural tracks ONLY; leads, bass,
+# drone, and percussion foundation are left intact so phrasing and groove hold.
+_ACCOMPANIMENT_RESTS: dict[str, float] = {
+    "Strings": 0.45,      # was the worst offender (3573 notes in track 3)
+    "LowStrings": 0.6,
+    "Choir": 0.5,
+    "Lament": 0.65,
+    "Pad": 0.6,
+    "Echo": 0.6,
+    "Harpsichord": 0.55,
+    "Perc": 0.5,
+}
+
 
 def generate_track(name, parts, tracks, out_dir, bpm):
     print(f"  > {name}")
+    for _t in tracks:
+        _r = _ACCOMPANIMENT_RESTS.get(_t.name)
+        if _r is not None:
+            _t.rhythm_rests = _r
+
     config = IdeaToolConfig(
         style="cinematic",
         parts=parts,

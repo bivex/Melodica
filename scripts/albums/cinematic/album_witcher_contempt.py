@@ -11,8 +11,45 @@ Bar-aware: per-track time signatures via BarGrid (6/8, 3/4, 4/4, 5/4, 7/8).
 
 import random
 from pathlib import Path
-from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart
+from melodica.idea_tool import (
+    IdeaTool,
+    IdeaToolConfig,
+    TrackConfig,
+    IdeaPart,
+    PhraseSchedule,
+    PhraseSlot,
+)
+from melodica.modifiers import LimitNoteRangeModifier, ModifierContext
 from melodica.types import Scale, Mode, BarGrid
+
+# Role-based register bands (low, high MIDI). Strategy: isolate ONE sub-bass
+# voice (clears ARR-11 sub-bass mud) and push leads above the mid cluster
+# (clears ARR-10 register crossings). Mid-range sections (horns/choir/organ/
+# brass) deliberately overlap — that's correct orchestration; clamping them
+# into non-overlapping bands would destroy the voicing and concentrate notes
+# into worse clashes. Notes outside a band are octave-shifted into it.
+_REGISTER_BANDS: dict[str, tuple[int, int]] = {
+    "Low Strings": (24, 40),        # sole sub-bass voice
+    "Cimbasso Heavy": (45, 60),     # low brass, cleared of sub zone
+    "French Horns": (48, 64),       # tenor
+    "Imperial Trombones": (53, 67), # tenor
+    "Solo Cello": (48, 67),         # tenor
+    "Prophecy Choir": (52, 70),     # mid
+    "Brass Majesty": (52, 74),      # mid
+    "Cathedral Organ": (55, 79),    # mid
+    "Violins Ensemble": (74, 96),   # high — above the mid cluster
+    "Fast Violins": (74, 96),       # high
+    "Vocal Lead": (55, 82),         # mid-high lead
+    "Taiko Drums": (40, 60),
+    "Orchestral Perc": (45, 62),
+}
+
+# Periodic rest for melodic leads so a line never runs 100+ beats without
+# breathing room (ARR-13). Tiles play/rest across the whole part.
+_LEAD_REST_SCHEDULE = PhraseSchedule(
+    slots=[PhraseSlot(kind="play", bars=8), PhraseSlot(kind="rest", bars=1)],
+    loop=True,
+)
 from melodica.midi import export_multitrack_midi
 from melodica.tracer import EngineTracer
 
@@ -180,7 +217,7 @@ def generate_witcher_album():
                     generator=SnareDrumGenerator(pattern_type="march"),
                     instrument="drums",
                     arrangement="AABB",
-                    density=0.5,
+                    density=0.32,
                 )
             )
 
@@ -334,6 +371,16 @@ def generate_witcher_album():
                 )
             )
 
+        # Lead breathing room (ARR-13) + accompaniment thinning (clash/density).
+        _accomp = {"Cimbasso Heavy": 0.5, "Brass Majesty": 0.6, "Prophecy Choir": 0.6,
+                   "Cathedral Organ": 0.6, "Imperial Trombones": 0.65}
+        for _t in track_list:
+            if _t.name in ("Fast Violins", "Violins Ensemble", "Vocal Lead"):
+                _t.phrase_schedule = _LEAD_REST_SCHEDULE
+            _r = _accomp.get(_t.name)
+            if _r is not None:
+                _t.rhythm_rests = _r
+
         tool_config = IdeaToolConfig(
             style="cinematic_hybrid",
             time_signature=cfg["time_signature"],
@@ -355,6 +402,18 @@ def generate_witcher_album():
 
         # Generate with the tool
         notes_dict = IdeaTool(tool_config).generate()
+
+        # Register separation (ARR-10/11 + clash reduction). IdeaTool does NOT
+        # apply TrackConfig.modifiers in the generate_all path, so clamp each
+        # track's notes to its role band post-generation.
+        _mctx = ModifierContext(
+            duration_beats=0, chords=[], timeline=None, scale=cfg["scale"], tracks={}
+        )
+        for _t in track_list:
+            _band = _REGISTER_BANDS.get(_t.name)
+            if _band is not None and isinstance(notes_dict.get(_t.name), list):
+                _mod = LimitNoteRangeModifier(low=_band[0], high=_band[1])
+                notes_dict[_t.name] = _mod.modify(notes_dict[_t.name], _mctx)
 
         # Filter tracks and export
         tracks_data = {
