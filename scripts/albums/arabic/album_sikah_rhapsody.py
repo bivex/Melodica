@@ -164,6 +164,10 @@ def _clamp(notes, lo=1, hi=127):
     return notes
 
 
+def _filter_range(notes, lo=1, hi=127):
+    return [n for n in notes if lo <= n.pitch <= hi]
+
+
 def _off(notes, offset):
     return [
         NoteInfo(pitch=n.pitch, start=n.start + offset, duration=n.duration, velocity=n.velocity)
@@ -772,19 +776,23 @@ def track_05_return():
     oboe = _thin(_off(oboe, 8.0), dur)
 
     harp = _thin(
-        _clamp(
-            HarpGenerator(
-                GeneratorParams(density=0.02, key_range_low=66, key_range_high=82),
-                pattern="arpeggio",
-                direction="up_down",
-            ).render(chords, key, dur),
-            38,
-            76,
+        _filter_range(
+            _clamp(
+                HarpGenerator(
+                    GeneratorParams(density=0.5, key_range_low=66, key_range_high=82),
+                    pattern="rolled_chord",
+                    direction="up",
+                ).render(chords, key, dur),
+                42,
+                80,
+            ),
+            62,
+            82,
         ),
         dur,
         intro_end=dur * 0.15,
         outro_start=dur * 0.82,
-        keep=0.06,
+        keep=0.08,
     )
 
     bass = _clamp(
@@ -870,22 +878,6 @@ def track_05_return():
         78,
     )
     oboe = _thin(_off(oboe, 8.0), dur)
-
-    harp = _thin(
-        _clamp(
-            HarpGenerator(
-                GeneratorParams(density=0.08, key_range_low=62, key_range_high=82),
-                pattern="arpeggio",
-                direction="up_down",
-            ).render(chords, key, dur),
-            38,
-            76,
-        ),
-        dur,
-        intro_end=dur * 0.15,
-        outro_start=dur * 0.82,
-        keep=0.10,
-    )
 
     bass = _clamp(
         ContrabassGenerator(
