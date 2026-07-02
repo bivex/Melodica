@@ -98,6 +98,80 @@ def _to_pcs(chord: "ChordLabel | Iterable[int]") -> list[int]:
     return sorted({int(p) % 12 for p in chord})
 
 
+def _key_context(key: "Scale") -> Any:
+    """Build an mts ``AnalyticalContext`` from a Melodica key (Scale).
+
+    Lets ``name_chord`` score candidate namings against the active key
+    (scale-degree fit). Required, alongside a bass realization, to resolve
+    pc-set equivalences such as Cm7 ≡ Eb6 or augmented symmetry. Returns
+    ``None`` if the key cannot be mapped (caller then names intrinsically).
+    """
+    try:
+        from mts.analysis.analytical_context import (
+            AnalyticalContext,
+            Scale as MtsScale,
+        )
+    except Exception:  # pragma: no cover - mts layout drift
+        return None
+    abs_pcs = sorted({int(d) for d in key.degrees() if abs(d - round(d)) < 0.01})
+    if not abs_pcs:
+        return None
+    root = int(key.root) % 12
+    degrees = tuple(sorted({(p - root) % 12 for p in abs_pcs}))
+    mask = sum(1 << p for p in abs_pcs)
+    mode_val = getattr(getattr(key, "mode", None), "value", "key")
+    try:
+        mts_key = MtsScale(name=str(mode_val), degrees=degrees, mask=mask)
+    except Exception:  # pragma: no cover - mts rejects the degree/mask shape
+        return None
+    return AnalyticalContext(tonic_pc=root, key=mts_key)
+
+
+def _actual_bass_pc(chord: "ChordLabel | Iterable[int]", root: int) -> int:
+    """The true sounding bass pc of *chord*: slash bass > inversion > root.
+
+    Inversions matter for the m7 ≡ maj6 disambiguation (a first-inversion Cm7
+    has bass Eb and really does resemble Eb6), so the bass fed to ``name_chord``
+    must be the actual lowest tone, not an assumed root. Plain pc iterables have
+    no bass/voice information, so they fall back to *root*.
+    """
+    slash = getattr(chord, "bass", None)
+    if slash is not None:
+        return int(slash) % 12
+    inv = getattr(chord, "inversion", 0) or 0
+    if inv == 0:
+        return int(root) % 12
+    try:  # N-th chord tone (ascending interval) is the bass in inversion N
+        from melodica.types_pkg._theory import CHORD_TEMPLATES
+
+        ivls = sorted(
+            set(CHORD_TEMPLATES.get(chord.quality, [0]))
+            | set(getattr(chord, "extensions", []) or [])
+        )
+    except Exception:  # pragma: no cover - plain iterable / missing template
+        return int(root) % 12
+    return (int(root) + ivls[inv]) % 12 if inv < len(ivls) else int(root) % 12
+
+
+def _bass_realization(pcs: list[int], bass_pc: int, root_pc: int) -> Any:
+    """Build an mts ``Realization`` with *bass_pc* as the lowest pitch.
+
+    The bass is the disambiguator for equivalences like Cm7 (bass C) vs Eb6
+    (bass Eb), or which augmented-triad root is in play. The remaining chord
+    tones sit an octave above so the bass is unambiguously lowest; ``root_pc``
+    records the true root (which may differ from the bass in an inversion).
+    """
+    from mts.analysis import Pitch, Realization
+
+    b = int(bass_pc) % 12
+    pitches = [Pitch(midi=60 + b, pc=b, octave=(60 + b) // 12 - 1)]
+    for p in sorted({int(x) % 12 for x in pcs}):
+        if p == b:
+            continue
+        pitches.append(Pitch(midi=72 + p, pc=p, octave=(72 + p) // 12 - 1))
+    return Realization(pitches=tuple(pitches), root_pc=int(root_pc) % 12)
+
+
 def _mode_for_succession(key: Scale) -> str | None:
     """Map a Melodica mode to the major/minor label ``mts`` succession accepts.
 
@@ -114,18 +188,36 @@ def _mode_for_succession(key: Scale) -> str | None:
 
 # -- analysis API ------------------------------------------------------------
 
-def name_chord_label(chord: ChordLabel | Iterable[int]) -> Any:
+def name_chord_label(chord: ChordLabel | Iterable[int], key: Scale | None = None) -> Any:
     """Rank every valid naming of *chord* (ChordLabel or pc iterable).
 
     Returns ``mts.analysis.results.ChordNaming`` (``.chosen``, ``.alternatives``,
-    ``.is_ambiguous``, ``.weights_version``). Intrinsic-only ranking — no key
-    is fabricated. Returns ``None`` if ``mts`` is unavailable.
+    ``.is_ambiguous``, ``.weights_version``). Returns ``None`` if ``mts`` is
+    unavailable.
+
+    With ``key=None`` (default) the ranking is intrinsic-only — no key is
+    fabricated, so pc-set equivalences (Cm7 ≡ Eb6, augmented symmetry) are
+    reported ambiguous. Pass the active *key* together with a ``ChordLabel``
+    (which carries its root) to also supply key context and a bass realization;
+    together they resolve those equivalences. The effect is monotone: ambiguity
+    can only decrease, never increase, since context scores interpretations
+    rather than adding them.
     """
     if not HAVE_TONALITY:
         return None
     from mts.analysis import name_chord  # type: ignore[import-not-found]
 
-    return name_chord(_to_pcs(chord), None)
+    pcs = _to_pcs(chord)
+    if key is None:
+        return name_chord(pcs, None)
+
+    context = _key_context(key)
+    if context is None:
+        return name_chord(pcs, None)
+    root = getattr(chord, "root", None)
+    bass = _actual_bass_pc(chord, root) if root is not None else None
+    realization = _bass_realization(pcs, bass, root) if bass is not None else None
+    return name_chord(pcs, context, realization=realization)
 
 
 def voice_leading_distance(
@@ -303,7 +395,7 @@ def analyze_progression(chords: list[ChordLabel], key: Scale | None = None) -> l
     """
     reports: list[dict[str, Any]] = []
     for chord in chords:
-        naming = name_chord_label(chord)
+        naming = name_chord_label(chord, key=key)
         if naming is None:
             reports.append({"pcs": _to_pcs(chord), "chosen": None, "ambiguous": None})
             continue
@@ -330,13 +422,16 @@ def analyze_progression(chords: list[ChordLabel], key: Scale | None = None) -> l
     return reports
 
 
-def verify_progression(chords: list[ChordLabel]) -> dict[str, Any]:
+def verify_progression(chords: list[ChordLabel], key: Scale | None = None) -> dict[str, Any]:
     """Summarize a progression's theory-coherence for generation feedback.
 
     Counts parseable / ambiguous / unparseable chords and accumulates total
     voice-leading motion — a cheap "did the generator stay coherent?" signal.
+    Pass the active *key* so chord naming uses key context + bass, resolving
+    pc-set equivalences (Cm7 ≡ Eb6, aug symmetry) instead of flagging them
+    ambiguous. With ``key=None`` naming stays intrinsic-only.
     """
-    reports = analyze_progression(chords)
+    reports = analyze_progression(chords, key=key)
     unparseable = sum(1 for r in reports if r["chosen"] is None)
     ambiguous = sum(1 for r in reports if r.get("ambiguous"))
     total_vl = 0

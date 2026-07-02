@@ -11,21 +11,55 @@
 
 | Category | Count | % |
 |---|---|---|
-| **CLEAN** — parse=4/4, ambiguous=0 | 60 | 76% |
-| **PARTIAL** — parse=4/4 but ≥1 chord ambiguous | 18 | 23% |
+| **CLEAN** — parse=4/4, ambiguous=0 | 78 | 100% |
+| **PARTIAL** — parse=4/4 but ≥1 chord ambiguous | 0 | 0% |
 | **EXOTIC** — 0 parsed / all ambiguous | 0 | 0% |
 | **ERRORS** | 0 | 0% |
 
 Total modes probed: **78**
 
-No mode causes a crash or zero-parse result. The model degrades gracefully even on
-exotic, microtonal, and symmetric scales.
+All 78 modes parse 4/4 with ambiguous=0. The 100% reflects a **key- and
+bass-aware verification oracle** (see Methodology), not a model or corpus
+change — the supervised weights are unchanged from the prior 60-CLEAN run. The
+18 modes formerly PARTIAL (m7≡maj6, augmented symmetry) now resolve because the
+oracle uses the key + chord bass it already held.
 
 ---
 
-## CLEAN — Full Tonality Coverage (60 modes)
+## Methodology — key- and bass-aware chord naming (2026-07-02)
 
-These modes produce parse=4/4, ambiguous=0. Tonality names every chord unambiguously.
+The showcase's ambiguous-chord count is decided by `mts.name_chord`, invoked via
+`melodica.theory.tonality_bridge.verify_progression`. Previously the call passed
+the chord's pitch-class set with **no key and no bass** (`context=None`), so any
+pc set with more than one valid naming was flagged ambiguous unconditionally.
+Two intrinsic pc-set equivalences drove all 18 former PARTIAL results:
+
+- **m7 ≡ maj6** — `{0,3,7,10}` names as both Cm7 and Eb6
+- **augmented symmetry** — `{0,4,8}` names at three roots
+
+The harmonizer already knows the active key and each chord's root/bass. The fix
+threads both into `name_chord` — an `AnalyticalContext(key=…)` plus a
+`Realization` whose lowest pitch is the chord's **actual bass** (slash > inversion
+> root). With key + bass the two interpretations separate (Cm7 has bass C, Eb6
+has bass Eb), so `is_ambiguous` flips to False.
+
+This change is **monotone**: context scores interpretations rather than adding
+them, so ambiguity can only decrease, never increase. It uses the chord's true
+lowest tone (not an assumed root), so it stays correct for inverted voicings.
+
+**This is a verification-oracle change, not a model or data change.** The
+underlying pc-set equivalences still exist; we resolve them with information the
+system already held. Supervised weights and corpora are unchanged.
+
+---
+
+## CLEAN — Full Tonality Coverage (78 modes)
+
+All 78 modes produce parse=4/4, ambiguous=0. Tonality names every chord
+unambiguously once the active key and chord bass are supplied to the oracle
+(see Methodology). The table below lists the modes that were already CLEAN under
+the intrinsic-only oracle; the 18 formerly PARTIAL (m7/aug equivalences) are
+listed in the "Resolved" section.
 
 | Mode | Example progression (C root) | VL |
 |---|---|---|
@@ -92,35 +126,33 @@ These modes produce parse=4/4, ambiguous=0. Tonality names every chord unambiguo
 
 ---
 
-## PARTIAL — Ambiguous naming (18 modes)
+## Resolved — formerly PARTIAL, now CLEAN (18 modes)
 
-Parse=4/4 in all cases — harmonization succeeds, but ≥1 chord is ambiguous in the
-naming layer. Root causes:
+These 18 modes were PARTIAL under the intrinsic-only oracle: their progressions
+contain a m7 or augmented chord whose pc set has multiple intrinsic namings.
+Under the key+bass-aware oracle (see Methodology) all of them are now CLEAN.
+No model or data change — the oracle now uses the key + chord bass it already had.
 
-1. **7th chord ambiguity** — Cm7, Gm7, C7 have multiple valid interpretations
-2. **Augmented triad** — symmetric, no single root reading
-3. **Microtonal intervals** — quarter-tone scales map to 12-TET approximations
-
-| Mode | Progression | amb | Note |
-|---|---|---|---|
-| natural_minor | Cm → Ab → Gm → **Cm7** | 1 | VII = Cm7 ambiguous |
-| aeolian | Cm → Ab → Gm → **Cm7** | 1 | same as natural_minor |
-| whole_tone | **Caug** → Daug → Caug → F#m | 3 | symmetric scale |
-| bebop_minor | Cm → Ab → Gm → **Cm7** | 1 | VII = Cm7 |
-| hungarian_major | Cm → Em → Gm → **Cm7** | 1 | VII = Cm7 |
-| persian | **Caug** → E → F#m → Bm | 1 | aug on I |
-| augmented_mode_2 | **Caug** → C#m → Caug → Fm | 2 | aug on I+III |
-| messiaen_1 | **Caug** → Daug → Caug → F#m | 3 | whole-tone = aug |
-| messiaen_3 | **Caug** → C#m → Caug → Fm | 2 | aug on I+III |
-| enigmatic | Cm → Ebm → Gm → **Cm7** | 1 | VII = Cm7 |
-| suspense | **Caug** → C → G → CM7 | 1 | aug on I |
-| horror_cluster | **Caug** → C#m → G → Cmajadd9 | 1 | aug on I |
-| quarter_tone_minor | Cm → Ab → Gm → **Cm7** | 1 | microtonal → 12-TET |
-| arabic_sikah | Cm → C → Gm → **Cm7** | 1 | quarter-tone [see note] |
-| acoustic_minor | Cm → Ebm → Gm → **Cm7** | 1 | VII = Cm7 |
-| lydian_minor | **Caug** → C → Gm → Cm7 | 2 | aug + 7th |
-| lydian_aug_mode | **Caug** → A → Abm → E | 1 | aug on I |
-| lyrical_major | **Caug** → C → G → CM7 | 1 | aug on I |
+| Mode | Progression (C root) | Was ambiguous because |
+|---|---|---|
+| natural_minor | Cm → Ab → Gm → Cm7 | Cm7 ≡ Eb6 |
+| aeolian | Cm → Ab → Gm → Cm7 | Cm7 ≡ Eb6 |
+| whole_tone | Caug → Daug → Caug → F#m | aug symmetry |
+| bebop_minor | Cm → Ab → Gm → Cm7 | Cm7 ≡ Eb6 |
+| hungarian_major | Cm → Em → Gm → Cm7 | Cm7 ≡ Eb6 |
+| persian | Caug → E → F#m → Bm | aug on I |
+| augmented_mode_2 | Caug → C#m → Caug → Fm | aug on I+III |
+| messiaen_1 | Caug → Daug → Caug → F#m | whole-tone = aug |
+| messiaen_3 | Caug → C#m → Caug → Fm | aug on I+III |
+| enigmatic | Cm → Ebm → Gm → Cm7 | Cm7 ≡ Eb6 |
+| suspense | Caug → C → G → CM7 | aug on I |
+| horror_cluster | Caug → C#m → G → Cmajadd9 | aug on I |
+| quarter_tone_minor | Cm → Ab → Gm → Cm7 | microtonal → 12-TET, Cm7 ≡ Eb6 |
+| arabic_sikah | Cm → C → Gm → Cm7 | quarter-tone, Cm7 ≡ Eb6 |
+| acoustic_minor | Cm → Ebm → Gm → Cm7 | Cm7 ≡ Eb6 |
+| lydian_minor | Caug → C → Gm → Cm7 | aug + 7th |
+| lydian_aug_mode | Caug → A → Abm → E | aug on I |
+| lyrical_major | Caug → C → G → CM7 | aug on I |
 
 ---
 
@@ -132,8 +164,8 @@ remain 12-TET** — quarter-tone pitches are not synthesized in chord voicings.
 
 | Mode | Intervals (semitones) | Coverage |
 |---|---|---|
-| arabic_sikah | 0, 1.5, 3.5, 5, 7, 8.5, 10.5 | PARTIAL (amb=1) |
-| quarter_tone_minor | contains ~0.5 offsets | PARTIAL (amb=1) |
+| arabic_sikah | 0, 1.5, 3.5, 5, 7, 8.5, 10.5 | CLEAN (resolved by key+bass oracle) |
+| quarter_tone_minor | contains ~0.5 offsets | CLEAN (resolved by key+bass oracle) |
 
 For authentic maqam harmony, a dedicated microtonal naming layer and corpus
 would be required.
@@ -199,9 +231,10 @@ pchange[tp,int,tn] from chord transition sequences. See
 
 ## Limitations
 
-- **7th chord naming ambiguity** is a naming-layer issue, not an HMM issue;
-  harmonization itself is correct, Tonality has multiple valid interpretations
-- **Augmented triads** are symmetric — no single root reading possible
+- **7th-chord / augmented pc-set equivalences** (Cm7≡Eb6, aug symmetry) are
+  intrinsic to bare pitch-class sets. The showcase oracle now resolves them via
+  the active key + chord bass (see Methodology), so they no longer show as
+  PARTIAL — but the equivalences remain real for any context-free naming task
 - **Microtonal modes** (sikah, quarter_tone_minor) produce 12-TET approximations;
   authentic quarter-tone voicings not supported
 - **sus2/sus4** types are template-prior-only; they appear only when melody
@@ -256,7 +289,7 @@ rsync -a melodica/harmonize/corpus_ireal_pro/   melodica/harmonize/corpus_combin
 
 # 7. Verify
 .venv_dd/bin/python -m pytest tests/test_coupled_hmm.py -q          # 232 passed
-.venv_dd/bin/python scripts/tonality_scale_showcase.py               # 58 CLEAN (74%)
+.venv_dd/bin/python scripts/tonality_scale_showcase.py               # 78 CLEAN (100%)
 ```
 
 **Expected output of step 6:**
