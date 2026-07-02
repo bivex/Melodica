@@ -21,5 +21,6 @@ from .tonality_bridge import (
     recommend_next,
     verify_progression,
     voice_lead_exact,
+    voice_lead_progression,
     voice_leading_distance,
 )

@@ -20,6 +20,7 @@ from melodica.theory.tonality_bridge import (
     recommend_next,
     verify_progression,
     voice_lead_exact,
+    voice_lead_progression,
     voice_leading_distance,
 )
 from melodica.types import ChordLabel, Scale
@@ -102,6 +103,67 @@ class TestExactVoiceLeading:
             voice_lead_exact([], ChordLabel(0, Quality.MAJOR))
         with pytest.raises(ValueError):
             voice_lead_exact([60, 64, 67], [])
+
+
+class TestVoiceLeadProgression:
+    @staticmethod
+    def _ii_v_i():
+        return [
+            ChordLabel(2, Quality.MINOR7, start=0, duration=4),
+            ChordLabel(7, Quality.DOMINANT7, start=4, duration=4),
+            ChordLabel(0, Quality.MAJOR7, start=8, duration=4),
+        ]
+
+    def test_one_voicing_per_chord(self):
+        voicings = voice_lead_progression(self._ii_v_i())
+        assert len(voicings) == 3
+        assert all(len(v) >= 3 for v in voicings)
+
+    def test_each_voicing_uses_only_its_chord_pcs(self):
+        chords = self._ii_v_i()
+        voicings = voice_lead_progression(chords)
+        for voicing, chord in zip(voicings, chords):
+            assert {p % 12 for p in voicing}.issubset(set(chord.pitch_classes()))
+
+    def test_empty_progression_returns_empty(self):
+        assert voice_lead_progression([]) == []
+
+
+class TestExactVoiceLeadingModifier:
+    def test_snaps_chord_tones_to_exact_voicings_and_preserves_timing(self):
+        from melodica.modifiers import ExactVoiceLeadingModifier, ModifierContext
+        from melodica.theory.voicing import chord_to_notes
+        from melodica.types import NoteInfo
+        from melodica.types_pkg._timeline import MusicTimeline
+
+        chords = [
+            ChordLabel(2, Quality.MINOR7, start=0, duration=4),
+            ChordLabel(7, Quality.DOMINANT7, start=4, duration=4),
+            ChordLabel(0, Quality.MAJOR7, start=8, duration=4),
+        ]
+        # Block chords at root position (deliberately jumpy between segments).
+        notes = [
+            NoteInfo(pitch=p, start=c.start, duration=c.duration, velocity=80, absolute=True)
+            for c in chords
+            for p in chord_to_notes(c)
+        ]
+        ctx = ModifierContext(
+            duration_beats=12.0,
+            chords=chords,
+            timeline=MusicTimeline(),
+            scale=C_MAJOR,
+        )
+        out = ExactVoiceLeadingModifier().modify(notes, ctx)
+
+        assert len(out) == len(notes)  # count preserved
+        # Each segment's pitches match the exact-VL progression voicing.
+        expected = voice_lead_progression(chords)
+        for i, start in enumerate((0, 4, 8)):
+            got = sorted(n.pitch for n in out if n.start == start)
+            assert got == sorted(expected[i])
+        # Timing / duration / velocity preserved (only pitch changes).
+        for o, n in zip(sorted(out, key=lambda x: x.start), sorted(notes, key=lambda x: x.start)):
+            assert (o.start, o.duration, o.velocity) == (n.start, n.duration, n.velocity)
 
 
 class TestSuccession:

@@ -80,7 +80,7 @@ from melodica.modifiers.dynamic import (
     ExpressionLFOModifier,
 )
 
-from melodica.modifiers.voice_leading import VoiceLeadingModifier
+from melodica.modifiers.voice_leading import ExactVoiceLeadingModifier, VoiceLeadingModifier
 
 from melodica.modifiers.aesthetic import GrooveModifier, PolishedOctaveModifier
 
@@ -162,6 +162,7 @@ __all__ = [
     "VelocityCurveModifier",
     "ExpressionLFOModifier",
     "VoiceLeadingModifier",
+    "ExactVoiceLeadingModifier",
     "GrooveModifier",
     "PolishedOctaveModifier",
     "MirrorModifier",

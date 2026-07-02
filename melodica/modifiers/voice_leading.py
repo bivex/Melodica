@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from melodica import types
 from melodica.modifiers import ModifierContext, PhraseModifier
+from melodica.theory.tonality_bridge import HAVE_TONALITY, voice_lead_progression
 from melodica.types import NoteInfo
 from melodica.utils import pitch_class, nearest_pitch
 
@@ -141,3 +142,76 @@ class VoiceLeadingModifier(PhraseModifier):
             if c.start <= start:
                 return len(chords) - 1 - i
         return 0
+
+
+class ExactVoiceLeadingModifier(PhraseModifier):
+    """Voice-lead a phrase using Tonality's exact minimal-motion assignment.
+
+    Where :class:`VoiceLeadingModifier` nudges whole segments by a center-of-mass
+    heuristic, this modifier computes the optimal pc-assignment (via
+    ``mts.voice_leading``) between consecutive chords and snaps each note onto
+    its chord's exact voice-led realization at the nearest octave. Note timing,
+    duration, and velocity are preserved — only ``pitch`` changes.
+
+    Chord tones (whose pc belongs to the current chord) are re-voiced exactly;
+    non-chord tones (passing/melodic) keep their pitch. No-ops when the Tonality
+    engine is unavailable, so the modifier chain stays safe in minimal envs.
+    """
+
+    def __init__(self, keep_source_cardinality: bool = True) -> None:
+        super().__init__()
+        self.keep_source_cardinality = keep_source_cardinality
+
+    @staticmethod
+    def _find_chord_idx(start: float, chords: list) -> int:
+        for i, c in enumerate(reversed(chords)):
+            if c.start <= start:
+                return len(chords) - 1 - i
+        return 0
+
+    def modify(self, notes: list[types.NoteInfo], context: ModifierContext) -> list[types.NoteInfo]:
+        if not notes or not context.chords or not HAVE_TONALITY:
+            return notes
+
+        # One minimal-motion MIDI voicing per chord, chained across the progression.
+        voicings = voice_lead_progression(
+            context.chords, keep_source_cardinality=self.keep_source_cardinality
+        )
+        # Per-chord map: pitch class -> sorted realization pitches available.
+        targets_per_chord: list[dict[int, list[int]]] = []
+        for v in voicings:
+            m: dict[int, list[int]] = {}
+            for p in v:
+                m.setdefault(p % 12, []).append(p)
+            targets_per_chord.append({pc: sorted(ps) for pc, ps in m.items()})
+
+        low_bound = types.OCTAVE
+        high_bound = types.MIDI_MAX - types.OCTAVE
+
+        modified: list[NoteInfo] = []
+        current_chord_idx = -1
+        targets: dict[int, list[int]] = {}
+        for n in sorted(notes, key=lambda x: x.start):
+            idx = self._find_chord_idx(n.start, context.chords)
+            if idx != current_chord_idx:
+                current_chord_idx = idx
+                targets = targets_per_chord[idx] if idx < len(targets_per_chord) else {}
+
+            new_pitch = n.pitch
+            candidates = targets.get(pitch_class(n.pitch))
+            if candidates:  # chord tone -> snap to nearest exact-VL realization
+                best = min(candidates, key=lambda c: abs(c - n.pitch))
+                if low_bound <= best <= high_bound:
+                    new_pitch = best
+
+            modified.append(
+                types.NoteInfo(
+                    pitch=new_pitch,
+                    start=n.start,
+                    duration=n.duration,
+                    velocity=n.velocity,
+                    absolute=n.absolute,
+                )
+            )
+
+        return sorted(modified, key=lambda x: x.start)

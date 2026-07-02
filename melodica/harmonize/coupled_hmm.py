@@ -376,6 +376,7 @@ class HMMConfig:
     dominant_penultimate_bias: float = 1.5    # Recommended range: [0.5, 3.0]. Cadential attraction to the dominant root on the penultimate step.
     cadence_transition_bias: float = 4.5      # Recommended range: [0.0, 8.0]. Per-step bonus added to the *transition* (not emission) for the key-specific penultimate→tonic root motion at the FINAL step. This is the structural driver of the V→I / bII→i / IV→i / bVII→I cadence: because the melody's final pitch is rarely the tonic, emission alone resists resolving to the tonic chord, and additive biases (tonic_end_bias) saturate at ~50-60% reliability. Folding the reward into the transition makes the cadential resolution a path property (chord→chord) rather than a per-frame preference, so it wins regardless of melody contour. Scaled with the mode's characteristic penultimate degree (see _penultimate_degree).
     extended_chord_penalty: float = 1.0       # Recommended range: [0.0, 2.0]. Penalty for extended/9th chords to prevent their overuse.
+    color_chord_penalty: float = 0.0          # Recommended range: [0.0, 12.0] (~8.0–10.0 to suppress color-chord dominance). Emission penalty for color/non-functional types — diminished, augmented, sus2, sus4 (type idx 2,3,4,5). The trained PNOTE has near-deterministic spikes (PNOTE[2,sus2]≈PNOTE[3,dim]≈PNOTE[4,aug]≈PNOTE[5,sus4]≈1.0); because emissions are scaled by emission_weight (×20) before this penalty applies, a value in the ~8–10 range is needed to overcome a spike advantage, not ~1–2. Penalizing one type alone is whack-a-mole (sus→dim→aug); a flat penalty on all four restores functional major/minor harmony. Leave 0.0 for genres that want color. Opt-in (default 0.0 keeps prior behavior).
     requested_key_bias: float = 6.0           # Recommended range: [2.0, 12.0]. Per-step Layer-2 emission bonus for the exact (root, mode) the caller requested (initial_scale). Honors the composer's mode (prevents collapse of Phrygian/Dorian/Mixolydian to major). The requested mode's MODE_PRIORS penalty is cancelled out for this mode (see _viterbi_keys), so this bonus is the sole arbiter of the requested mode against the (prior-weighted) common modes; it must therefore comfortably exceed a typical per-step offset/type-prior gap to win. Additive, so strong chord evidence can still overcome it; favors modal fidelity over free modulation detection.
     requested_key_mode_bias: float = 2.0      # Recommended range: [0.0, 6.0]. Milder per-step Layer-2 bonus for the requested MODE on any other root, so the harmonization keeps the modality even if the tonal center shifts.
 
@@ -603,6 +604,12 @@ class CoupledHMMHarmonizer:
             
             # Apply extended chord penalty to 9th/add9 chords (indices 9, 10, 11) to prevent overuse
             emit[t_step, :, 9:] -= self.config.extended_chord_penalty
+
+            # Optional color-chord penalty (dim/aug/sus2/sus4 = indices 2..5) — see
+            # HMMConfig.color_chord_penalty. Breaks the degenerate PNOTE spikes that
+            # otherwise swamp functional major/minor on pentatonic-ish melodies.
+            if self.config.color_chord_penalty:
+                emit[t_step, :, 2:6] -= self.config.color_chord_penalty
 
         # Tension indices
         STABLE_INDICES = {0, 1, 11}

@@ -46,6 +46,7 @@ __all__ = [
     "name_chord_label",
     "voice_leading_distance",
     "voice_lead_exact",
+    "voice_lead_progression",
     "ExactVoiceLeading",
     "recommend_next",
     "analyze_progression",
@@ -234,6 +235,38 @@ def voice_lead_exact(
         mapping=[list(pair) for pair in vl.mapping],
         policy=str(vl.policy),
     )
+
+
+def voice_lead_progression(
+    chords: list["ChordLabel"],
+    *,
+    start_voicing: list[int] | None = None,
+    keep_source_cardinality: bool = True,
+) -> list[list[int]]:
+    """Voice a whole chord progression with chained minimal-motion voice-leading.
+
+    Each chord is voice-led from the *realized* previous voicing, so total
+    motion across the progression stays minimal — the album-assembly helper
+    over an engine's ``list[ChordLabel]`` output. The first chord is seeded at
+    root position (or by ``start_voicing``). Returns one MIDI voicing per chord.
+
+    Raises ``RuntimeError`` if ``mts`` is unavailable.
+    """
+    if not chords:
+        return []
+    if start_voicing is not None:
+        voicings: list[list[int]] = [sorted(start_voicing)]
+    else:
+        from melodica.theory.voicing import chord_to_notes
+
+        voicings = [list(chord_to_notes(chords[0]))]
+    for chord in chords[1:]:
+        voicings.append(
+            voice_lead_exact(
+                voicings[-1], chord, keep_source_cardinality=keep_source_cardinality
+            ).voicing
+        )
+    return voicings
 
 
 def recommend_next(chord: ChordLabel, key: Scale) -> Any:
