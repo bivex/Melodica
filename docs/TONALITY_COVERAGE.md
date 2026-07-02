@@ -1,7 +1,7 @@
 # Tonality Coverage — CoupledHMM Harmonization across all Modes
 
 **Last updated:** 2026-07-02  
-**Model:** CoupledHMMHarmonizer (supervised weights, t5harmony 49 803 + ChoCo jazz 2 935 songs)  
+**Model:** CoupledHMMHarmonizer (supervised weights, t5harmony 49 803 + ChoCo jazz 2 935 + iReal Pro 2 045 songs)  
 **Script:** `scripts/tonality_scale_showcase.py`  
 **Method:** Melody built from I–III–V–VII degrees of each scale, `key_coupling_weight=2.0`
 
@@ -146,21 +146,21 @@ The model operates with **12 chord types** (9 originally + 3 added):
 
 | Index | Quality | Symbol | Status in real music (combined corpus) |
 |---|---|---|---|
-| 0 | Major | C | 44.7% |
-| 1 | Minor | Cm | 26.0% |
-| 2 | Diminished | Cdim | 2.8% |
+| 0 | Major | C | 43.8% |
+| 1 | Minor | Cm | 25.1% |
+| 2 | Diminished | Cdim | 2.7% |
 | 3 | Augmented | Caug | 0.1% |
 | 4 | Sus2 | Csus2 | ~0% (template prior only) |
-| 5 | Sus4 | Csus4 | 0.1% |
-| 6 | Major7 | CM7 | 0.5% (jazz corpus) |
-| 7 | Minor7 | Cm7 | 10.7% |
-| 8 | Dominant7 | C7 | 11.7% |
-| 9 | Major9 | CM9 | 1.1% |
-| 10 | Minor9 | Cm9 | 1.0% |
+| 5 | Sus4 | Csus4 | 0.2% |
+| 6 | Major7 | CM7 | 1.0% (jazz corpus) |
+| 7 | Minor7 | Cm7 | 11.2% |
+| 8 | Dominant7 | C7 | 12.7% |
+| 9 | Major9 | CM9 | 1.0% |
+| 10 | Minor9 | Cm9 | 0.9% |
 | 11 | Add9 | Cadd9 | 1.3% |
 
-Types 4 (sus2) still relies on template prior (~0%). Sus4 (0.1%), Maj7 (0.5%),
-and Dom7 (11.7%) are now empirically grounded thanks to the ChoCo jazz corpus.
+Types 4 (sus2) still relies on template prior (~0%). Sus4 (0.2%), Maj7 (1.0%),
+and Dom7 (12.7%) are now empirically grounded thanks to the ChoCo jazz + iReal Pro corpora.
 
 ---
 
@@ -168,12 +168,13 @@ and Dom7 (11.7%) are now empirically grounded thanks to the ChoCo jazz corpus.
 
 | Parameter | Value |
 |---|---|
-| Corpus | t5harmony (Hooktheory TheoryTab) + ChoCo jazz (Real Book + JAAH) |
-| Songs | 49 803 (t5harmony) + 2 935 (ChoCo) = **52 738 total** |
-| Chord frames | ~1.5M (t5harmony melody) + 187 230 (ChoCo lead sheets) |
+| Corpus | t5harmony (Hooktheory TheoryTab) + ChoCo jazz (Real Book + JAAH) + iReal Pro |
+| Songs | 49 803 (t5harmony) + 2 935 (ChoCo) + 2 045 (iReal Pro) = **54 783 total** |
+| Chord frames | ~1.5M (t5harmony melody) + 187 230 (ChoCo) + 134 353 (iReal Pro) |
 | Method | Supervised from gold `[root type bass]` labels |
 | Script | `scripts/generators/train_full_modes.py --corpus-dir melodica/harmonize/corpus_combined` |
 | Converter | `scripts/data/convert_choco_jazz.py` — Harte→ntc2 (106 shorthands, unmapped=0) |
+| Converter | `scripts/data/convert_ireal_pro.py` — iReal Pro URL→ntc2 (pyRealParser) |
 | Runtime | ~10 seconds (numpy-only, no GPU required) |
 | Weights | `melodica/harmonize/weights/pnote_full.txt` + `pchange_full.npy` |
 | Backup (EM) | `pnote_full_unsup.txt` + `pchange_full_unsup.npy` |
