@@ -140,8 +140,9 @@ def estimate_supervised(data_dir: Path):
     frames) as numpy arrays, or None if the corpus has no parseable labels
     (legacy .ntc) so the caller falls back to EM.
     """
-    note_counts = np.zeros((N_TONES, N_TYPES), dtype=np.float64)
-    frames = np.zeros(N_TYPES, dtype=np.float64)
+    note_counts  = np.zeros((N_TONES, N_TYPES), dtype=np.float64)
+    frames       = np.zeros(N_TYPES, dtype=np.float64)  # all chord frames (pchange denom)
+    mel_frames   = np.zeros(N_TYPES, dtype=np.float64)  # melody-annotated frames only (pnote denom)
     pchg = np.zeros((N_TYPES, N_TONES, N_TYPES), dtype=np.float64)
     labeled = 0
     for p in _ntc2_files(data_dir):
@@ -170,21 +171,27 @@ def estimate_supervised(data_dir: Path):
                 pchg[prev[1], (root - prev[0]) % N_TONES, ctype] += 1
             prev = cur
             mel = [int(x.strip()) for x in brackets[1].split(",") if x.strip() != ""]
-            if not mel:
-                continue  # skip rests — don't inflate the pnote denominator
-            labeled += 1
-            frames[ctype] += 1
-            for pc in {m % N_TONES for m in mel}:
-                note_counts[(pc - root) % N_TONES, ctype] += 1
+            if mel:
+                # melody present — count pnote emissions
+                labeled += 1
+                mel_frames[ctype] += 1
+                frames[ctype] += 1
+                for pc in {m % N_TONES for m in mel}:
+                    note_counts[(pc - root) % N_TONES, ctype] += 1
+            else:
+                # no melody (lead sheets like ChoCo) — count for pchange only
+                frames[ctype] += 1
 
-    if labeled == 0:
+    if labeled == 0 and frames.sum() == 0:
         return None
 
     template = np.array(
         [[TEMPLATE_CHORD if off in CHORD_NOTES[k] else TEMPLATE_NONCHORD
           for off in range(N_TONES)] for k in range(N_TYPES)], dtype=np.float64,
     ).T  # [offset, type]
-    pnote = (note_counts + PNOTE_PRIOR_STRENGTH * template) / (frames + PNOTE_PRIOR_STRENGTH)
+    # pnote uses mel_frames (melody-only denominator) so ChoCo lead sheets
+    # don't dilute emission counts while still contributing to pchange.
+    pnote = (note_counts + PNOTE_PRIOR_STRENGTH * template) / (mel_frames + PNOTE_PRIOR_STRENGTH)
     pnote = np.clip(pnote, 0.001, 0.999)
 
     uni = np.ones_like(pchg) / (N_TONES * N_TYPES)
