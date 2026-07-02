@@ -27,7 +27,7 @@ from melodica.engines.coupled_hmm_engine import CoupledHMMEngine
 from melodica.generators import ArpeggiatorGenerator, BassGenerator, ChordGenerator
 from melodica.harmonize.coupled_hmm import HMMConfig
 from melodica.midi import export_multitrack_midi
-from melodica.modifiers import ExactVoiceLeadingModifier, HumanizeModifier
+from melodica.modifiers import ExactVoiceLeadingModifier, HumanizeModifier, LimitNoteRangeModifier
 from melodica.theory import name_chord_label, verify_progression, voice_lead_progression
 from melodica.types import HarmonizationRequest, Mode, Note, PhraseInstance, Scale
 
@@ -106,9 +106,9 @@ def generate(profile: dict, out_path: Path) -> None:
               f"verify: parse={rep['parseable']}/{rep['n']} amb={rep['ambiguous']} VL={rep['total_voice_leading']}")
 
         pad = PhraseInstance(generator=ChordGenerator(voicing="closed"),
-                             modifiers=[ExactVoiceLeadingModifier()])
-        bass = PhraseInstance(generator=BassGenerator(), modifiers=[HumanizeModifier()])
-        arp = PhraseInstance(generator=ArpeggiatorGenerator())
+                             modifiers=[ExactVoiceLeadingModifier(), LimitNoteRangeModifier(low=60, high=83)])
+        bass = PhraseInstance(generator=BassGenerator(), modifiers=[HumanizeModifier(), LimitNoteRangeModifier(low=36, high=47)])
+        arp = PhraseInstance(generator=ArpeggiatorGenerator(), modifiers=[LimitNoteRangeModifier(low=72, high=95)])
         pad_track += _shift(pad.render(chords, key, BEATS), offset)
         bass_track += _shift(bass.render(chords, key, BEATS), offset)
         arp_track += _shift(arp.render(chords, key, BEATS), offset)
