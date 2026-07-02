@@ -26,6 +26,7 @@ from pathlib import Path
 from melodica.engines.coupled_hmm_engine import CoupledHMMEngine
 from melodica.generators import ArpeggiatorGenerator, BassGenerator, ChordGenerator
 from melodica.harmonize.coupled_hmm import HMMConfig
+from melodica.harmonize import harmonizer_profile
 from melodica.midi import export_multitrack_midi
 from melodica.modifiers import ExactVoiceLeadingModifier, HumanizeModifier, LimitNoteRangeModifier
 from melodica.theory import name_chord_label, verify_progression, voice_lead_progression
@@ -63,6 +64,27 @@ PROFILES = {
                            (60,12,1),(64,13,1),(67,14,1),(72,15,1)]),
         ],
     },
+    "jazz": {
+        "key": Scale(root=0, mode=Mode.MAJOR), "bpm": 100,
+        "profile": "jazz",  # harmonizer_profile("jazz") -> completion_bonus=5 (7th retention)
+        "config": {},
+        # Dense 4-note/bar 7th-arp outlines so the set-completion term fires:
+        # I-vi-ii-V / ii-V-I / secondary-dominant turnarounds.
+        "movements": [
+            ("I-Turnaround", [(60,0,1),(64,1,1),(67,2,1),(71,3,1),    # Cmaj7
+                              (57,4,1),(60,5,1),(64,6,1),(67,7,1),    # Am7
+                              (62,8,1),(65,9,1),(69,10,1),(72,11,1),  # Dm7
+                              (67,12,1),(71,13,1),(74,14,1),(77,15,1)]),  # G7
+            ("II-IiViI",     [(62,0,1),(65,1,1),(69,2,1),(72,3,1),    # Dm7
+                              (67,4,1),(71,5,1),(74,6,1),(77,7,1),    # G7
+                              (60,8,1),(64,9,1),(67,10,1),(71,11,1),  # Cmaj7
+                              (60,12,1),(64,13,1),(67,14,1),(71,15,1)]),  # Cmaj7
+            ("III-SecDom",   [(60,0,1),(64,1,1),(67,2,1),(71,3,1),    # Cmaj7
+                              (57,4,1),(61,5,1),(64,6,1),(67,7,1),    # A7 (V/vi)
+                              (62,8,1),(65,9,1),(69,10,1),(72,11,1),  # Dm7
+                              (67,12,1),(71,13,1),(74,14,1),(77,15,1)]),  # G7
+        ],
+    },
 }
 
 
@@ -89,14 +111,14 @@ def _chord_names(chords: list) -> list[str]:
 
 def generate(profile: dict, out_path: Path) -> None:
     key = profile["key"]
-    engine = CoupledHMMEngine(config=HMMConfig(**profile["config"]))
+    engine = CoupledHMMEngine(config=harmonizer_profile(profile.get("profile", "pop"), **profile.get("config", {})))
     pad_track: list = []
     bass_track: list = []
     arp_track: list = []
     offset = 0.0
 
     print(f"\n### {out_path.stem} | key=root{key.root} {key.mode.value} | "
-          f"BPM {profile['bpm']} | {profile['config']}")
+          f"BPM {profile['bpm']} | profile={profile.get('profile','pop')} +{profile['config']}")
     for name, mel in profile["movements"]:
         notes = [Note(p, s, d) for (p, s, d) in mel]
         chords = engine.harmonize(HarmonizationRequest(notes, key, chord_rhythm=4.0))
