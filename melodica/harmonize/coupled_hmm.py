@@ -384,7 +384,7 @@ class HMMConfig:
     dominant_penultimate_bias: float = 1.5    # Recommended range: [0.5, 3.0]. Cadential attraction to the dominant root on the penultimate step.
     cadence_transition_bias: float = 4.5      # Recommended range: [0.0, 8.0]. Per-step bonus added to the *transition* (not emission) for the key-specific penultimate→tonic root motion at the FINAL step. This is the structural driver of the V→I / bII→i / IV→i / bVII→I cadence: because the melody's final pitch is rarely the tonic, emission alone resists resolving to the tonic chord, and additive biases (tonic_end_bias) saturate at ~50-60% reliability. Folding the reward into the transition makes the cadential resolution a path property (chord→chord) rather than a per-frame preference, so it wins regardless of melody contour. Scaled with the mode's characteristic penultimate degree (see _penultimate_degree).
     extended_chord_penalty: float = 1.0       # Recommended range: [0.0, 2.0]. Penalty for extended/9th chords to prevent their overuse.
-    completion_bonus: float = 0.0             # EXPERIMENT (default 0.0 = off, no behavior change): set-completion inductive bias. Adds λ to the log-score of every (root,type) whose chord-tone set COVERS all active melody pcs (M ⊆ chord_tones(r,k)). The bare emission is trained on linear melodies, so it rewards subset-coverage (triads win, 7ths collapse); this term rewards chord identity instead, letting maj7/min7/dom7 win when the melody spells them. Recommended range [2.0, 8.0]; too high over-emits 7ths. See docs/HARMONIZATION_CEILING.md.
+    completion_bonus: float | dict = 0.0      # set-completion inductive bias (default 0.0 = off). Scalar λ adds λ to the log-score of every (root,type) whose chord-tone set COVERS all active melody pcs (M ⊆ chord_tones(r,k)) — lets 7ths win when the melody spells them. A dict {type_idx: weight} gives PER-TYPE completion (e.g. {8: 5.0} = dom7-only for blues/funk; unspecified types get no bonus) — uniform bonus can't favor dom7 over maj7, the dict can. Recommended range [2.0, 8.0]. See docs/HARMONIZATION_CEILING.md.
     color_chord_penalty: float = 0.0          # Recommended range: [0.0, 12.0] (~8.0–10.0 to suppress color-chord dominance). Emission penalty for color/non-functional types — diminished, augmented, sus2, sus4 (type idx 2,3,4,5). The trained PNOTE has near-deterministic spikes (PNOTE[2,sus2]≈PNOTE[3,dim]≈PNOTE[4,aug]≈PNOTE[5,sus4]≈1.0); because emissions are scaled by emission_weight (×20) before this penalty applies, a value in the ~8–10 range is needed to overcome a spike advantage, not ~1–2. Penalizing one type alone is whack-a-mole (sus→dim→aug); a flat penalty on all four restores functional major/minor harmony. Leave 0.0 for genres that want color. Opt-in (default 0.0 keeps prior behavior).
     requested_key_bias: float = 6.0           # Recommended range: [2.0, 12.0]. Per-step Layer-2 emission bonus for the exact (root, mode) the caller requested (initial_scale). Honors the composer's mode (prevents collapse of Phrygian/Dorian/Mixolydian to major). The requested mode's MODE_PRIORS penalty is cancelled out for this mode (see _viterbi_keys), so this bonus is the sole arbiter of the requested mode against the (prior-weighted) common modes; it must therefore comfortably exceed a typical per-step offset/type-prior gap to win. Additive, so strong chord evidence can still overcome it; favors modal fidelity over free modulation detection.
     requested_key_mode_bias: float = 2.0      # Recommended range: [0.0, 6.0]. Milder per-step Layer-2 bonus for the requested MODE on any other root, so the harmonization keeps the modality even if the tonal center shifts.
@@ -622,12 +622,17 @@ class CoupledHMMHarmonizer:
 
             # Optional set-completion bonus (see HMMConfig.completion_bonus).
             # Reward (root,type) hypotheses whose chord tones cover ALL active
-            # melody pcs — the inductive bias the bare emission lacks (it is
-            # estimated on linear melodies → subset-coverage, not chord identity).
-            # Default 0.0 = no change.
-            if self.config.completion_bonus:
+            # melody pcs. completion_bonus may be a scalar λ (uniform across
+            # types) or a dict {type_idx: weight} for per-type completion (e.g.
+            # dom7-only for blues). Default 0.0 / empty = no change.
+            cb = self.config.completion_bonus
+            if cb:
                 mset = {wn.pitch_class % N_TONES for wn in wpcs}
+                cb_map = isinstance(cb, dict)
                 for k in range(N_TYPES):
+                    w = cb.get(k, 0.0) if cb_map else cb
+                    if not w:
+                        continue
                     valid = None
                     for m in mset:
                         roots_m = {(m - o) % N_TONES for o in CHORD_NOTES[k]}
@@ -635,7 +640,7 @@ class CoupledHMMHarmonizer:
                         if not valid:
                             break
                     for r in (valid or ()):
-                        emit[t_step, r, k] += self.config.completion_bonus
+                        emit[t_step, r, k] += w
 
         # Tension indices
         STABLE_INDICES = {0, 1, 11}

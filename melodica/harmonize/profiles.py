@@ -24,9 +24,10 @@ controls chromaticism, ``extended_chord_penalty`` the 9/dim extensions,
     ``neo_soul``, ``gospel``
   Diatonic 7th loops (7ths but in-key — higher coupling):
     ``lofi``, ``bossa``, ``citypop``, ``lounge``
+  Dom7-centric (per-type completion_bonus dict — only Dom7 [+min7] get the bonus):
+    ``blues``, ``funk``
 
-See ``docs/HARMONIZATION_CEILING.md``. Per-type completion weights (needed for
-dom7-specific genres like blues/funk) are a future extension.
+See ``docs/HARMONIZATION_CEILING.md``.
 
 The genre-defining knob is ``completion_bonus``. Other knobs (``key_coupling_weight``,
 ``color_chord_penalty``, …) are left at their ``HMMConfig`` defaults and can be
@@ -57,6 +58,10 @@ _PROFILES: dict[str, HMMConfig] = {
     "bossa":    HMMConfig(completion_bonus=4.0, key_coupling_weight=1.2, extended_chord_penalty=0.8, color_chord_penalty=6.0),
     "citypop":  HMMConfig(completion_bonus=3.0, key_coupling_weight=1.5, extended_chord_penalty=0.5, color_chord_penalty=5.0),
     "lounge":   HMMConfig(completion_bonus=3.0, key_coupling_weight=1.0, extended_chord_penalty=0.3, color_chord_penalty=4.0),
+    # Dom7-centric (per-type completion_bonus dict — only Dom7 type 8 [+ min7 7]
+    # get the bonus; a uniform bonus can't favor dom7 over maj7). For blues/funk.
+    "blues":    HMMConfig(completion_bonus={8: 5.0}, key_coupling_weight=0.6, extended_chord_penalty=1.0, color_chord_penalty=8.0),
+    "funk":     HMMConfig(completion_bonus={8: 5.0, 7: 4.0}, key_coupling_weight=0.5, extended_chord_penalty=1.0, color_chord_penalty=6.0),
 }
 
 #: Public, read-only view of the named profile presets.

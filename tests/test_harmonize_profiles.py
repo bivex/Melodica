@@ -32,6 +32,8 @@ def test_profile_knobs_pinned():
         "bossa":    dict(completion_bonus=4.0, key_coupling_weight=1.2, extended_chord_penalty=0.8, color_chord_penalty=6.0),
         "citypop":  dict(completion_bonus=3.0, key_coupling_weight=1.5, extended_chord_penalty=0.5, color_chord_penalty=5.0),
         "lounge":   dict(completion_bonus=3.0, key_coupling_weight=1.0, extended_chord_penalty=0.3, color_chord_penalty=4.0),
+        "blues":    dict(completion_bonus={8: 5.0}, key_coupling_weight=0.6, extended_chord_penalty=1.0, color_chord_penalty=8.0),
+        "funk":     dict(completion_bonus={8: 5.0, 7: 4.0}, key_coupling_weight=0.5, extended_chord_penalty=1.0, color_chord_penalty=6.0),
     }
     for name, knobs in expected.items():
         cfg = harmonizer_profile(name)
