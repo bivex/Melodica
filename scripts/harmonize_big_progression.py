@@ -144,8 +144,16 @@ def chord_label(c):
 
 
 def harmonize(pname, contour):
-    h = CoupledHMMHarmonizer(beam_width=14, chord_change="bars",
-                             config=harmonizer_profile(pname))
+    if pname == "boost_exotic":
+        # jazz's uniform 5 on common types, but ×15 on the rare types so their
+        # completion_bonus can overcome the emission gap from tiny real-music priors.
+        cfg = harmonizer_profile("jazz", completion_bonus={
+            0: 5.0, 1: 5.0, 6: 5.0, 7: 5.0, 8: 5.0,                 # maj/min/maj7/m7/dom7 keep ×5
+            2: 15.0, 3: 15.0, 5: 15.0, 9: 15.0, 10: 15.0, 11: 15.0,  # dim/aug/sus4/halfdim/fulldim/add9 ×15
+        })
+    else:
+        cfg = harmonizer_profile(pname)
+    h = CoupledHMMHarmonizer(beam_width=14, chord_change="bars", config=cfg)
     return h.harmonize(contour, KEY, DUR)
 
 
@@ -216,18 +224,30 @@ def main():
     dump_target()
 
     results = {p: analyze(p, harmonize(p, contour))
-               for p in ["pop", "jazz", "neo_soul", "funk", "blues"]}
+               for p in ["pop", "jazz", "neo_soul", "funk", "blues", "boost_exotic"]}
 
     # Full bar-by-bar dump for the most 7th-retentive profile (jazz).
     dump_render(results["jazz"])
 
     print("\n=== STATS — same contour, 5 profiles ===")
     print(f"{'profile':<10} {'chords':>6} {'exact%':>7} {'root%':>7} {'overlap':>8}  top qualities")
-    for p in ["pop", "jazz", "neo_soul", "funk", "blues"]:
+    for p in ["pop", "jazz", "neo_soul", "funk", "blues", "boost_exotic"]:
         r = results[p]
         top = ", ".join(f"{q}:{n}" for q, n in r["qdist"].most_common(5))
-        print(f"{p:<10} {r['n_chords']:>6} {r['exact_pct']:>6.0f}% {r['root_pct']:>6.0f}% "
+        print(f"{p:<12} {r['n_chords']:>6} {r['exact_pct']:>6.0f}% {r['root_pct']:>6.0f}% "
               f"{r['avg_overlap']:>8.2f}  {top}")
+
+    # Focused: do heavily-boosted rare types now survive where jazz dropped them?
+    exotic = {"m7b5", "dim7", "dim", "aug", "sus4", "sus2", "6", "m6",
+              "maj9", "min9", "9", "add9"}
+    print("\n=== EXOTIC-TYPE RETENTION: jazz (uniform ×5) vs boost_exotic (rare types ×15) ===")
+    print(f"{'bar':>4} {'target':<10} {'jazz':<14} {'boost_exotic':<16}")
+    for i, (_, tr, tq) in enumerate(PROG):
+        if tq in exotic:
+            j, b = results["jazz"]["rows"][i], results["boost_exotic"]["rows"][i]
+            js = f"{NAMES[j[2]]}:{j[3]} {'✓' if j[5] else '·'}" if j[2] is not None else "—"
+            bs = f"{NAMES[b[2]]}:{b[3]} {'✓' if b[5] else '·'}" if b[2] is not None else "—"
+            print(f"{i:>4} {NAMES[tr] + ':' + tq:<10} {js:<14} {bs:<16}")
 
 
 if __name__ == "__main__":
