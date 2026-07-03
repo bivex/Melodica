@@ -174,7 +174,7 @@ def main():
             ri = nm.chosen.interpretation
             q = ri.quality
             names.append(f"{ri.root_pc}:{q}")
-            if q == "m7":
+            if q in ("m7", "min7"):
                 n_m7 += 1
             elif q == "7":
                 n_dom7 += 1
