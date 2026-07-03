@@ -1,6 +1,6 @@
 # Tonality Coverage — CoupledHMM Harmonization across all Modes
 
-**Last updated:** 2026-07-02  
+**Last updated:** 2026-07-03
 **Model:** CoupledHMMHarmonizer (supervised weights)  
 **Script:** `scripts/tonality_scale_showcase.py`  
 **Method:** Melody built from I–III–V–VII degrees of each scale, `key_coupling_weight=2.0`
@@ -239,6 +239,19 @@ pchange[tp,int,tn] from chord transition sequences. See
   authentic quarter-tone voicings not supported
 - **sus2/sus4** types are template-prior-only; they appear only when melody
   strongly implies them (no real-corpus evidence)
+- **Rare types aren't retainable via `completion_bonus`** — half-dim (m7b5,
+  type 9), full-dim (dim7, type 10), and sus4 (type 5) are in the 12-type
+  vocabulary, but their real-music priors are too small (0.9% / 0.8% / 0.2%)
+  for the Viterbi path to prefer them: the emission `P(notes|type)` plus
+  transitions for a tone-sharing dom7/maj7 dominate even when the per-type
+  `completion_bonus` is raised to ×15. Measured empirically on a 150-bar
+  stress test (`scripts/harmonize_big_progression.py`): maj/min/maj7/m7/dom7
+  retain at 91% under the `jazz` profile; aug retains (its pc set is
+  geometrically unique, nothing else shares it); m7b5/dim7/sus4 collapse to a
+  tone-sharing dom7 or maj7. The m7b5→V7-a-fifth-below case reproduces the
+  ii-V relation, so the "failure" is usually musically correct. Literal
+  retention for these types needs retraining on more gold frames of those
+  types (a corpus/data change), not a bigger bonus.
 - **when-in-rome** partition (449 classical songs) not yet converted — requires
   key-aware Roman numeral resolver
 
