@@ -85,8 +85,33 @@ def test_chord_pitches_spread():
     assert chord_pitches_spread(c_empty) == []
 
 def test_voice_leading_distance():
+    # empty predecessor -> no motion
     assert voice_leading_distance([], [60, 64, 67]) == 0.0
+    # backward-compatible value (identity assignment is optimal here)
     assert voice_leading_distance([60, 64, 67], [62, 65, 69]) == 2.0 + 1.0 + 2.0
+
+    # bijectivity: greedy would double-assign 67 and report 5; the true
+    # bijective optimum over permutations is 12.
+    prev, nxt = [60, 64, 67], [64, 67, 72]
+    assert voice_leading_distance(prev, nxt) == 12.0
+    # symmetry: a true voice-leading distance is symmetric
+    assert voice_leading_distance(nxt, prev) == 12.0
+
+    # pitch-class equivalence: C4 -> C5 is zero motion mod 12
+    assert voice_leading_distance([60], [72], equivalence="pitch_class") == 0.0
+    assert voice_leading_distance([60], [72], equivalence="register") == 12.0
+
+    # norm variants on [60,64] -> [61,67]: identity assignment 1+3
+    assert voice_leading_distance([60, 64], [61, 67], norm="L1") == 4.0
+    assert voice_leading_distance([60, 64], [61, 67], norm="L2") == (1 + 9) ** 0.5
+    assert voice_leading_distance([60, 64], [61, 67], norm="Linf") == 3.0
+
+    # bass_anchored prevents crossing under pitch-class wraparound:
+    # prev=[6,11] -> next=[2,4]; free optimum crosses (5), anchored bass->bass (9)
+    assert voice_leading_distance([6, 11], [2, 4], equivalence="pitch_class") == 5.0
+    assert voice_leading_distance(
+        [6, 11], [2, 4], equivalence="pitch_class", bass_anchored=True
+    ) == 9.0
 
 def test_pitch_classes_in_window():
     n1 = NoteInfo(pitch=60, start=0.0, duration=1.0)

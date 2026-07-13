@@ -165,23 +165,102 @@ def chord_pitches_spread(
 # ---------------------------------------------------------------------------
 # Voice-leading distance
 # ---------------------------------------------------------------------------
+#
+# Geometric voice-leading metric (Tymoczko, "The Geometry of Musical Chords",
+# Science 2006; Callender-Quinn-Tymoczko 2008): the distance between two
+# chords is the minimum total voice displacement over all BIJECTIVE
+# assignments of voices (a permutation for equal-cardinality chords), solved
+# as a linear assignment problem (Hungarian algorithm).
+#
+# This supersedes an earlier greedy nearest-note match, which was not
+# bijective (two voices could grab the same predecessor), not symmetric, and
+# therefore not a true voice-leading distance.
+
+
+def _pc_move(a: int, b: int) -> int:
+    """Shortest pitch-class displacement between two MIDI pitches (mod 12)."""
+    d = abs(a - b) % 12
+    return min(d, 12 - d)
 
 
 def voice_leading_distance(
     prev_pitches: list[int],
     next_pitches: list[int],
+    *,
+    norm: str = "L1",
+    equivalence: str = "register",
+    bass_anchored: bool = False,
 ) -> float:
+    """Bijective voice-leading distance between two chords.
+
+    Returns the minimum, over all voice assignments, of the total
+    displacement, where each voice in ``next_pitches`` is matched to a
+    distinct voice in ``prev_pitches`` (optimal assignment via the Hungarian
+    algorithm). ``prev_pitches`` / ``next_pitches`` are order-independent
+    multisets of MIDI pitches; unequal cardinality is solved as an injective
+    assignment (surplus voices on the larger side are left unmatched).
+
+    Keyword arguments
+    -----------------
+    norm : {"L1", "L2", "Linf"}
+        "L1"   - sum of semitone displacements (Tymoczko's voice-leading
+                 size; the default and standard measure).
+        "L2"   - Euclidean displacement (matches the orbifold geometry;
+                 penalises a single voice leaping).
+        "Linf" - largest single-voice displacement (the "smallest voice
+                 leading" / jazz criterion).
+    equivalence : {"register", "pitch_class"}
+        "register"     - linear MIDI distance (octaves count). Use when
+                         choosing concrete voicings (minimise actual voice
+                         travel). Default.
+        "pitch_class"  - shortest distance mod 12 (octave-invariant). Use
+                         for abstract harmonic proximity (reharmonization,
+                         chord-class distance).
+    bass_anchored : bool
+        If True, pin the lowest voice of each chord together (bass -> bass)
+        before assigning the rest. Classical practice for chord-progression
+        voicing; prevents the assignment from routing the bass through an
+        inner voice (relevant mainly under pitch_class wraparound).
     """
-    Sum of |next_pitch - nearest_prev_pitch| for every note in next_pitches.
-    Modeled after inversion-minimizing note distance logic.
-    """
-    if not prev_pitches:
+    if not prev_pitches or not next_pitches:
         return 0.0
-    total = 0.0
-    for np_ in next_pitches:
-        nearest = min(prev_pitches, key=lambda pp: abs(np_ - pp))
-        total += abs(np_ - nearest)
-    return total
+    if norm not in ("L1", "L2", "Linf"):
+        raise ValueError(f"unknown norm: {norm!r}")
+    if equivalence not in ("register", "pitch_class"):
+        raise ValueError(f"unknown equivalence: {equivalence!r}")
+
+    from scipy.optimize import linear_sum_assignment
+
+    prev = [int(p) for p in prev_pitches]
+    nxt = [int(p) for p in next_pitches]
+
+    def cell(a: int, b: int) -> float:
+        if equivalence == "pitch_class":
+            return float(_pc_move(a, b))
+        return float(abs(a - b))
+
+    n_p, n_n = len(prev), len(nxt)
+    inf = float("inf")
+    cost = [[cell(prev[i], nxt[j]) for j in range(n_n)] for i in range(n_p)]
+
+    if bass_anchored and n_p >= 2 and n_n >= 2:
+        i0 = min(range(n_p), key=lambda k: prev[k])
+        j0 = min(range(n_n), key=lambda k: nxt[k])
+        for j in range(n_n):
+            cost[i0][j] = inf
+        for i in range(n_p):
+            cost[i][j0] = inf
+        cost[i0][j0] = cell(prev[i0], nxt[j0])
+
+    rows, cols = linear_sum_assignment(cost)
+    disp = [cost[r][c] for r, c in zip(rows, cols) if cost[r][c] != inf]
+    if not disp:
+        return 0.0
+    if norm == "L1":
+        return float(sum(disp))
+    if norm == "L2":
+        return float(sum(d * d for d in disp) ** 0.5)
+    return float(max(disp))  # Linf
 
 
 # ---------------------------------------------------------------------------
