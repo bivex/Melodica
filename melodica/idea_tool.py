@@ -673,11 +673,16 @@ class IdeaTool:
                 result[mel_cfg.name] = mel_notes
                 all_melody_notes.extend(mel_notes)
 
-            # Step 2: harmonize the combined melody output
+            # Step 2: harmonize the combined melody output.
+            # Use CoupledHMMHarmonizer (Tymoczko/Newman, the same engine the
+            # progression path uses) rather than the older HMM3Harmonizer:
+            # both expose harmonize(melody, scale, duration), so the melody-first
+            # workflow should not silently degrade to the weaker harmonizer.
             bar_grid = BarGrid(
                 numerator=self.config.time_signature[0], denominator=self.config.time_signature[1]
             )
-            harmonizer = HMM3Harmonizer(bar_grid=bar_grid)
+            from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
+            harmonizer = CoupledHMMHarmonizer(bar_grid=bar_grid)
             chords = harmonizer.harmonize(
                 sorted(all_melody_notes, key=lambda n: n.start),
                 self.config.scale,
