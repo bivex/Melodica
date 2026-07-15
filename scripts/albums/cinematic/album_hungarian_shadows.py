@@ -38,15 +38,17 @@ from melodica.idea_tool import (
 from melodica.generators import (
     ChordGenerator,
     StringsEnsembleGenerator,
+    StringsPizzicatoGenerator,
     AmbientPadGenerator,
     BassGenerator,
     MelodyGenerator,
 )
+from melodica.rhythm import ProbabilisticRhythmGenerator
 from melodica.types import Scale, Mode, SectionRole, SectionFunction
 from melodica.midi import export_multitrack_midi
 
 
-ALL_TRACKS = ["Geometry_Piano", "String_Chorus", "Dark_Pad", "Contrabass", "Lead_Melody"]
+ALL_TRACKS = ["Geometry_Piano", "String_Chorus", "Pizz_Strings", "Dark_Pad", "Contrabass", "Lead_Melody"]
 
 
 def _mute(*keep: str) -> list[str]:
@@ -82,10 +84,10 @@ def _part(
 def _movement_sections(m: dict) -> list[IdeaPart]:
     """Build the four-section arc for one movement.
 
-    INTRO  — piano + contrabass only, thinned (BUILD); melody silent
-    VERSE  — add pad + melody enters (BUILD)
-    CLIMAX — full ensemble, strings join, densest (SUSTAIN)
-    CODA   — melody + strings drop out, piano + pad + bass fade (FADE)
+    INTRO  — rhythmic piano + contrabass only, thinned (BUILD); melody silent
+    VERSE  — add pad + pizz ostinato + melody enters (BUILD)
+    CLIMAX — full ensemble, sustained strings join, densest (SUSTAIN)
+    CODA   — melody + strings + pizz drop out, piano + pad + bass fade (FADE)
     """
     name, root, tempo, ts = m["name"], m["root"], m["tempo"], m["ts"]
     b = m["bars"]  # {"intro","verse","climax","coda"}
@@ -97,12 +99,12 @@ def _movement_sections(m: dict) -> list[IdeaPart]:
         ),
         _part(
             name, "VERSE", "BUILD", root, tempo, ts, b["verse"],
-            mute=_mute("Geometry_Piano", "Dark_Pad", "Contrabass", "Lead_Melody"),
+            mute=_mute("Geometry_Piano", "Dark_Pad", "Contrabass", "Lead_Melody", "Pizz_Strings"),
         ),
         _part(
             name, "CLIMAX", "SUSTAIN", root, tempo, ts, b["climax"],
             mute=[],
-            density={"Geometry_Piano": 0.95, "String_Chorus": 0.85, "Lead_Melody": 0.7},
+            density={"Geometry_Piano": 0.95, "String_Chorus": 0.85, "Pizz_Strings": 0.85, "Lead_Melody": 0.7},
         ),
         _part(
             name, "CODA", "FADE", root, tempo, ts, b["coda"],
@@ -142,7 +144,14 @@ def main() -> None:
     tracks_common = [
         TrackConfig(
             name="Geometry_Piano",
-            generator=ChordGenerator(voicing="closed", add_bass_note=-2),
+            generator=ChordGenerator(
+                voicing="closed",
+                add_bass_note=-2,
+                rhythm=ProbabilisticRhythmGenerator(
+                    grid_resolution=1.0, density=0.65, downbeat_weight=0.3,
+                    gate=0.55, seed=7,
+                ),
+            ),
             instrument="piano",
             density=0.9,
         ),
@@ -153,6 +162,13 @@ def main() -> None:
             ),
             instrument="strings",
             density=0.7,
+        ),
+        TrackConfig(
+            name="Pizz_Strings",
+            generator=StringsPizzicatoGenerator(pattern="ostinato", section_divisi=2),
+            instrument="strings",
+            density=0.7,
+            octave_shift=-1,
         ),
         TrackConfig(
             name="Dark_Pad",
