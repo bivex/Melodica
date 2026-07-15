@@ -310,12 +310,7 @@ class IdeaPart:
 # Kept for backward compatibility (many album scripts set them), but enabling
 # one raises a UserWarning so callers know it is a placebo. If you implement a
 # flag, remove its name here and wire it to a stage.
-_DEAD_IDEA_FLAGS: tuple[str, ...] = (
-    "use_voice_leading",
-    "use_tempo_modulation",
-    "use_tension_tempo",
-    "run_doctor",
-)
+_DEAD_IDEA_FLAGS: tuple[str, ...] = ()
 
 
 @dataclass
