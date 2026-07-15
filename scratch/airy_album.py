@@ -28,7 +28,7 @@ warnings.filterwarnings("ignore")
 random.seed(108)
 
 from melodica.types import Scale, Mode, Quality, ChordLabel, NoteInfo
-from melodica.generators import GeneratorParams, TriangleGenerator
+from melodica.generators import GeneratorParams
 from melodica.generators.melody import MelodyGenerator
 from melodica.generators.arpeggiator import ArpeggiatorGenerator
 from melodica.generators.ambient import AmbientPadGenerator
@@ -51,7 +51,7 @@ def _off(notes: list[NoteInfo], offset: float) -> list[NoteInfo]:
 def _master(raw: dict, bpm: float, lufs: float = -16.0):
     desk = MixingDesk(niche_cfg={})
     desk.track_gains.update({           # lead + bells ride above the airy pad
-        "pad": 0.46, "arp": 0.52, "lead": 0.64, "bells": 0.56, "tri": 0.30,
+        "pad": 0.46, "arp": 0.52, "lead": 0.64, "bells": 0.56,
     })
     mixed = desk.apply_mixing(raw, [], int(bpm))
     return MasteringDesk(target_lufs=lufs).apply_mastering(mixed)  # (notes, cc)
@@ -87,9 +87,7 @@ def build_track(key: Scale, chords: list[ChordLabel], dur: float,
     ).render(chords, key, dur - 32.0)
     lead = _off(lead, 28.0)
     bells = _bells(bell_pitches, first_beat=24.0, step_beats=dur / (len(bell_pitches) + 1))
-    # silver shimmer, very sparse
-    tri = TriangleGenerator(GeneratorParams(density=0.05), pattern_type="trill").render(chords, key, dur)
-    return {"pad": pad, "arp": arp, "lead": lead, "bells": bells, "tri": tri}
+    return {"pad": pad, "arp": arp, "lead": lead, "bells": bells}
 
 
 # ── 6 bright Lydian/Major tracks, climbing in register across the album ─────
@@ -137,12 +135,13 @@ def main() -> None:
         final, cc = _master(raw, bpm)
         out = OUT / f"{t['name']}.mid"
         instruments = {"pad": PAD_SPACE, "arp": t["arp"], "lead": t["lead"],
-                       "bells": TUBULAR_BELLS, "tri": 0}
+                       "bells": TUBULAR_BELLS}
         export_multitrack_midi(final, str(out), bpm=bpm, key=key,
                                instruments=instruments, cc_events=cc)
 
-        lo = min(n.pitch for n in final if n.pitch) if final else 0
-        hi = max(n.pitch for n in final) if final else 0
+        all_notes = [n for v in final.values() for n in v]
+        lo = min((n.pitch for n in all_notes), default=0)
+        hi = max((n.pitch for n in all_notes), default=0)
         print(f"\n✦ {t['name']}  ({KEYNAMES[t['root']]} {t['mode'].name.title()} · {bpm} BPM · "
               f"arp={INST_NAME[t['arp']]} lead={INST_NAME[t['lead']]} · ~{secs:.0f}s)")
         print(f"  register {lo}-{hi} (MIDI)  |  "
