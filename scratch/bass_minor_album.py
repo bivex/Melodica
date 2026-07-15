@@ -13,6 +13,7 @@ Out:  output/bass_minor/*.mid
 """
 from __future__ import annotations
 
+import copy
 import random
 import sys
 import warnings
@@ -33,6 +34,9 @@ from melodica.generators.trap_drums import TrapDrumsGenerator
 from melodica.generators.piano_comp import PianoCompGenerator
 from melodica.generators.solo_melody import SoloMelodyGenerator
 from melodica.generators.ambient import AmbientPadGenerator
+from melodica.generators.fx_riser import FXRiserGenerator
+from melodica.generators.fx_impact import FXImpactGenerator
+from melodica.generators.fills import FillGenerator
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 from melodica.midi import export_multitrack_midi
@@ -42,7 +46,33 @@ from melodica.types import NoteInfo, Scale, Mode
 # ── GM programs ─────────────────────────────────────────────────────────────
 SYNTH_BASS, DRUMS, EPIANO, SYNTH_PAD, LEAD_SYNTH = 38, 0, 4, 88, 85
 INSTRUMENTS = {"Sub808": SYNTH_BASS, "Drums": DRUMS, "Keys": EPIANO,
-               "Pad": SYNTH_PAD, "Lead": LEAD_SYNTH}
+               "Pad": SYNTH_PAD, "Lead": LEAD_SYNTH,
+               "Fills": DRUMS, "Riser": LEAD_SYNTH, "Impact": SYNTH_BASS}
+
+# ── section plan: intro → drop → verse → build → drop → outro ───────────────
+# sparse intro builds tension; riser→impact at each drop = the "wow" transition.
+PROF = {  # per-section density by generator
+    "intro": {"drums": 0.26, "bass": 0.22, "keys": 0.22, "pad": 0.10, "lead": 0.00},
+    "drop":  {"drums": 0.50, "bass": 0.60, "keys": 0.28, "pad": 0.10, "lead": 0.24},
+    "verse": {"drums": 0.42, "bass": 0.50, "keys": 0.26, "pad": 0.08, "lead": 0.20},
+    "build": {"drums": 0.34, "bass": 0.45, "keys": 0.22, "pad": 0.14, "lead": 0.10},
+    "outro": {"drums": 0.30, "bass": 0.40, "keys": 0.20, "pad": 0.10, "lead": 0.16},
+}
+
+
+def _sections(total_bars: int) -> list[tuple[str, int]]:
+    if total_bars >= 48:
+        return [("intro", 8), ("drop", 8), ("verse", 8),
+                ("build", 8), ("drop", 8), ("outro", 8)]
+    return [("intro", 8), ("drop", 8), ("verse", 8),
+            ("build", 4), ("drop", 8), ("outro", 4)]
+
+
+def _offset(notes: list, delta: float) -> list:
+    """Shift a freshly-rendered note list forward by `delta` beats (in place)."""
+    for n in notes:
+        n.start += delta
+    return notes
 
 BARS_PER_CHORD = 4.0
 CONTOUR_BASE = 48  # multiple of 12 → no transposition artifact
@@ -78,38 +108,80 @@ def make_chords(key: Scale, root: int, dur: float, form: list[str], profile: str
     return harmonizer.harmonize(contour, key, dur)
 
 
-def build_tracks(chords, key, dur) -> dict:
-    # ── the star: deep sliding 808 sub-bass ────────────────────────────────
-    sub808 = Bass808SlidingGenerator(
-        GeneratorParams(density=0.55, key_range_low=24, key_range_high=38),
-        pattern="trap_basic", slide_type="overlap", slide_probability=0.65,
-        octave_range=1, accent_velocity=1.25, slide_curve="exponential",
-        transient_ducking=True, envelope_gating=True,
-    ).render(chords, key, dur)
-    drums = TrapDrumsGenerator(
-        GeneratorParams(density=0.42),
-        variant="standard", hat_roll_density=0.55, kick_pattern="standard",
-        open_hat_probability=0.18, groove_swing=0.50,
-    ).render(chords, key, dur)
-    keys = PianoCompGenerator(
-        GeneratorParams(density=0.24, key_range_low=48, key_range_high=72),
-        comp_style="pop", voicing_type="close", accent_pattern="syncopated", chord_density=0.45,
-    ).render(chords, key, dur)
-    pad = AmbientPadGenerator(
-        GeneratorParams(density=0.08, key_range_low=36, key_range_high=60),
-        voicing="spread", overlap=0.4,
-    ).render(chords, key, dur)
-    lead = SoloMelodyGenerator(
-        GeneratorParams(density=0.18, key_range_low=60, key_range_high=84),
-        style="blues_lick", blues_notes=True, chromaticism=0.30, vibrato_depth=0.3,
-    ).render(chords, key, dur)
-    return {"Sub808": sub808, "Drums": drums, "Keys": keys, "Pad": pad, "Lead": lead}
+def build_track(chords_all: list, key: Scale, total_bars: int) -> dict:
+    """Section-by-section render: builds, risers, impacts, fills at transitions."""
+    tracks = {k: [] for k in ("Sub808", "Drums", "Keys", "Pad", "Lead",
+                              "Fills", "Riser", "Impact")}
+    bar_cursor = 0
+    for sec_type, sec_bars in _sections(total_bars):
+        cslice = chords_all[bar_cursor:bar_cursor + sec_bars]
+        dur = float(sec_bars * BARS_PER_CHORD)
+        off = float(bar_cursor * BARS_PER_CHORD)
+        p = PROF[sec_type]
+
+        bass = Bass808SlidingGenerator(
+            GeneratorParams(density=p["bass"], key_range_low=24, key_range_high=38),
+            pattern="trap_basic", slide_type="overlap", slide_probability=0.65,
+            octave_range=1, accent_velocity=1.25, slide_curve="exponential",
+            transient_ducking=True, envelope_gating=True,
+        ).render(cslice, key, dur)
+        drums = TrapDrumsGenerator(
+            GeneratorParams(density=p["drums"]),
+            variant="standard", hat_roll_density=0.58, kick_pattern="standard",
+            open_hat_probability=0.20, groove_swing=0.58,   # ← "раскач" swing
+        ).render(cslice, key, dur)
+        keys = PianoCompGenerator(
+            GeneratorParams(density=p["keys"], key_range_low=48, key_range_high=72),
+            comp_style="pop", voicing_type="close", accent_pattern="syncopated", chord_density=0.45,
+        ).render(cslice, key, dur)
+        pad = AmbientPadGenerator(
+            GeneratorParams(density=p["pad"], key_range_low=36, key_range_high=60),
+            voicing="spread", overlap=0.4,
+        ).render(cslice, key, dur)
+        lead = (SoloMelodyGenerator(
+            GeneratorParams(density=p["lead"], key_range_low=60, key_range_high=84),
+            style="blues_lick", blues_notes=True, chromaticism=0.30, vibrato_depth=0.3,
+        ).render(cslice, key, dur) if p["lead"] > 0 else [])
+
+        for name, notes in (("Sub808", bass), ("Drums", drums), ("Keys", keys),
+                            ("Pad", pad), ("Lead", lead)):
+            tracks[name] += _offset(notes, off)
+
+        # one drum fill rolling out of the last bar of drops/verses
+        if sec_type in ("drop", "verse") and sec_bars >= 4:
+            fills = FillGenerator(
+                GeneratorParams(density=0.30, key_range_low=36, key_range_high=60),
+                fill_type="descending", fill_length=2.0, position="end",
+                velocity_curve="crescendo",
+            ).render(cslice[-1:], key, 4.0)
+            tracks["Fills"] += _offset(fills, off + dur - 4.0)
+
+        # riser sweeping up across the whole build → lands on the next drop
+        if sec_type == "build":
+            riser = FXRiserGenerator(
+                GeneratorParams(density=0.50, key_range_low=48, key_range_high=84),
+                riser_type="synth", length_beats=min(dur, 4.0),
+                pitch_curve="exponential", peak_velocity=118,
+            ).render(cslice, key, dur)
+            tracks["Riser"] += _offset(riser, off)
+
+        # impact boom on the downbeat of every drop (the "slam")
+        if sec_type == "drop":
+            impact = FXImpactGenerator(
+                GeneratorParams(density=0.50, key_range_low=24, key_range_high=48),
+                impact_type="boom", tail_length=2.5, pitch_drop=12, placement="downbeat",
+            ).render(cslice, key, min(dur, 4.0))
+            tracks["Impact"] += _offset(impact, off)
+
+        bar_cursor += sec_bars
+    return tracks
 
 
 def _mix(raw: dict, bpm: int, lufs: float = -13.0) -> dict:
     desk = MixingDesk(niche_cfg={})
-    desk.track_gains.update({           # 808 loudest → lows dominate
-        "Sub808": 1.00, "Drums": 0.72, "Keys": 0.48, "Pad": 0.38, "Lead": 0.50,
+    desk.track_gains.update({           # 808 loudest → lows dominate; impacts punch through
+        "Sub808": 1.00, "Drums": 0.74, "Keys": 0.48, "Pad": 0.38, "Lead": 0.50,
+        "Fills": 0.58, "Riser": 0.52, "Impact": 0.85,
     })
     mixed = desk.apply_mixing(raw, [], int(bpm))
     mastered, _cc = MasteringDesk(target_lufs=lufs).apply_mastering(mixed)
@@ -159,17 +231,17 @@ def main() -> None:
             rp = (nm.chosen.interpretation.root_pc if (nm and nm.chosen) else c.root)
             names.append(f"{rp}:{q}")
 
-        raw = build_tracks(chords, key, dur)
+        raw = build_track(chords, key, t["bars"])
         mixed = _mix(raw, t["bpm"])
         out = out_dir / f"{t['name']}.mid"
         export_multitrack_midi(mixed, out, bpm=t["bpm"], key=key, instruments=INSTRUMENTS)
 
         form_str = "-".join(t["form"])
+        n_impact, n_riser = len(raw["Impact"]), len(raw["Riser"])
         print(f"\n♫ {t['name']}  ({KEYNAMES[t['root']]} minor · {t['bpm']} BPM · "
               f"{t['profile']} · {form_str} · {t['bars']} bars · ~{secs:.0f}s)")
-        print(f"  lows: Sub808={len(raw['Sub808'])} notes  |  "
-              + ", ".join(f"{k}={len(v)}" for k, v in mixed.items()))
-        print(f"  chords: {' '.join(names[:16])}{' ...' if len(names) > 16 else ''}")
+        print(f"  transitions: {n_impact} impact booms · {n_riser} riser notes · "
+              f"swing 0.58  |  Sub808={len(raw['Sub808'])} low notes")
         print(f"  ✓ {out.name}")
 
     print("\n" + "=" * 78)
