@@ -506,7 +506,7 @@ class TestEdgeCases:
     def test_invalid_phrase_contour_raises(self):
         """Invalid phrase_contour raises ValueError."""
         with pytest.raises(ValueError, match="phrase_contour"):
-            MelodyGenerator(phrase_contour="zigzag")
+            MelodyGenerator(phrase_contour="nonexistent_contour")
 
     def test_invalid_accent_pattern_raises(self):
         """Invalid accent_pattern raises ValueError."""

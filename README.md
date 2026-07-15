@@ -4,7 +4,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-green.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Tests Status](https://img.shields.io/badge/tests-4634%2F4636%20passed-green.svg)](#7-development--testing)
+[![Tests Status](https://img.shields.io/badge/tests-4696%2F4696%20passed-brightgreen.svg)](#7-development--testing)
 
 > **Melodica** is a professional Python framework for generative music composition, orchestration, and harmonization. It translates high-level musical ideas into structured multitrack MIDI/Audio arrangements via a decoupled Hexagonal (Ports & Adapters) architecture, offering production-grade composing pipelines, dynamic DSP effects, and advanced acoustic analytics.
 
@@ -347,6 +347,40 @@ The analyzer outputs metrics categorized by:
 * **Psychoacoustic Constraints**: Automatically flags low-interval mud (LIM), frequency masking, and brightness overload.
 * **Harmonic Audits**: Flags cross-track collision intervals (e.g. minor 2nd clashes, tritone overlaps, parallel fifths).
 
+### Harmonization Tracing
+
+To inspect the chord progression output by the `coupled_hmm` engine for any album or composition script, use a diagnostics trace script. The following example iterates over movements and dumps the inferred chord sequence per section:
+
+```python
+from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig
+from melodica.generators import MelodyGenerator, ChordGenerator
+from melodica.types import Scale, Mode
+
+NOTE = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
+QSHORT = {"MAJOR":"","MINOR":"m","DIMINISHED":"dim","AUGMENTED":"+","DOMINANT7":"7","MAJOR7":"maj7"}
+
+def lab(c):
+    q = QSHORT.get(c.quality.name, c.quality.name)
+    return f"{NOTE[c.root]}{q}"
+
+cfg = IdeaToolConfig(
+    style="cinematic",
+    workflow="generate_melody_then_harmonize",
+    scale=Scale(0, Mode.NATURAL_MINOR),   # C minor
+    parts=[IdeaPart(name="Verse", bars=8)],
+    tracks=[
+        TrackConfig(name="Melody", generator=MelodyGenerator(), instrument="piano", generator_type="melody"),
+        TrackConfig(name="Chords", generator=ChordGenerator(), instrument="strings"),
+    ]
+)
+tool = IdeaTool(cfg)
+tool.generate()
+print(" | ".join(lab(c) for c in tool._chords))
+# Example output: Cm | G#+ | Cmaj7 | G | G# | G#m | Ddim | Cm
+```
+
+For a full multi-movement trace example see `scratch/dump_harmony.py`.
+
 ### Register Balancing Workflow
 
 When the MIDI analyzer prints dynamic warning alerts (such as Mid-range congestion or lacking bass power), follow this optimization process:
@@ -369,7 +403,9 @@ flowchart LR
 
 ## 7. Development & Testing
 
-Unit and integration tests can be verified using `pytest`. The codebase incorporates standard test markers, test suites covering 4600+ tests, and mutation validation frameworks:
+Unit and integration tests can be verified using `pytest`. The codebase incorporates standard test markers, test suites covering **4696 tests** (100% green), and mutation validation frameworks:
+
+> **Note**: The voice-leading distance engine (`utils.voice_leading_distance`) depends on `scipy` for optimal SATB assignment. Install it in your virtual environment: `.venv_dd/bin/pip install scipy`.
 
 ```bash
 # Execute standard tests
