@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-bass_minor_album.py — «Sub Pressure» · 6-track bass-heavy minor-key trap album.
+bass_minor_album.py — «Sub Pressure» · 9-track bass-heavy minor-key album (trap · four-on-the-floor · hardstyle).
 ================================================================================
 Built to flex the low end: sliding 808 sub-bass parked in MIDI 24-38 (C1-D2,
 ~33-73 Hz sub/bass region) at high density with heavy pitch slides and hard
@@ -37,6 +37,8 @@ from melodica.generators.ambient import AmbientPadGenerator
 from melodica.generators.fx_riser import FXRiserGenerator
 from melodica.generators.fx_impact import FXImpactGenerator
 from melodica.generators.fills import FillGenerator
+from melodica.generators.four_on_floor import FourOnFloorGenerator
+from melodica.generators.hardstyle import HardstyleGenerator
 from melodica.shorts_mixing import MixingDesk
 from melodica.shorts_mastering import MasteringDesk
 from melodica.midi import export_multitrack_midi
@@ -123,7 +125,27 @@ def make_chords(key: Scale, root: int, dur: float, form: list[str], profile: str
     return harmonizer.harmonize(contour, key, dur)
 
 
-def build_track(chords_all: list, key: Scale, total_bars: int) -> dict:
+def _render_drums(kick: str, ch, key, dur: float, density: float, swing: float):
+    """Pick the drum engine by kick mode — 'trap' | 'four_floor' | 'hardstyle'."""
+    if kick == "four_floor":                       # relentless kick every beat + claps 2&4
+        return FourOnFloorGenerator(
+            GeneratorParams(density=density),
+            variant="house", hihat_style="mixed", clap_location="2_4", swing=swing,
+        ).render(ch, key, dur)
+    if kick == "hardstyle":                        # distorted pumping kick
+        return HardstyleGenerator(
+            GeneratorParams(density=density),
+            variant="euphoric", kick_distortion=0.85, include_lead=False,
+            reverse_bass_weight=0.5,
+        ).render(ch, key, dur)
+    return TrapDrumsGenerator(                      # default trap half-time
+        GeneratorParams(density=density),
+        variant="standard", hat_roll_density=0.58, kick_pattern="standard",
+        open_hat_probability=0.20, groove_swing=swing,
+    ).render(ch, key, dur)
+
+
+def build_track(chords_all: list, key: Scale, total_bars: int, kick: str = "trap") -> dict:
     """Section-by-section render: builds, risers, impacts, fills at transitions."""
     tracks = {k: [] for k in ("Sub808", "Drums", "Keys", "Pad", "Lead",
                               "Fills", "Riser", "Impact")}
@@ -141,11 +163,7 @@ def build_track(chords_all: list, key: Scale, total_bars: int) -> dict:
             octave_range=1, accent_velocity=1.25, slide_curve="exponential",
             transient_ducking=True, envelope_gating=True,
         ).render(ch, key, dur)
-        drums = TrapDrumsGenerator(
-            GeneratorParams(density=p["drums"]),
-            variant="standard", hat_roll_density=0.58, kick_pattern="standard",
-            open_hat_probability=0.20, groove_swing=0.58,   # ← "раскач" swing
-        ).render(ch, key, dur)
+        drums = _render_drums(kick, ch, key, dur, p["drums"], 0.58)
         keys = PianoCompGenerator(
             GeneratorParams(density=p["keys"], key_range_low=48, key_range_high=72),
             comp_style="pop", voicing_type="close", accent_pattern="syncopated", chord_density=0.45,
@@ -218,6 +236,13 @@ TRACKS = [
      "form": ["i", "bIII", "bVII", "bVI"]},
     {"name": "06_Mariana",    "root": 4, "bpm": 134, "bars": 48, "profile": "pop",
      "form": ["i", "bVI", "bIII", "bVII"]},
+    # ── +3 kick-forward tracks: the drum is the point ──────────────────────
+    {"name": "07_Piston",     "root": 1, "bpm": 128, "bars": 40, "profile": "pop",
+     "kick": "four_floor", "form": ["i", "bVI", "bIII", "bVII"]},
+    {"name": "08_Overdrive",  "root": 6, "bpm": 150, "bars": 40, "profile": "funk",
+     "kick": "hardstyle", "form": ["i", "bVI", "bIII", "V7", "i", "iv", "V7iv", "i"]},
+    {"name": "09_Locomotive", "root": 8, "bpm": 130, "bars": 40, "profile": "pop",
+     "kick": "four_floor", "form": ["i", "bVII", "bVI", "bIII"]},
 ]
 
 KEYNAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -225,7 +250,7 @@ KEYNAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 def main() -> None:
     print("=" * 78)
-    print("  « S U B   P R E S S U R E »  —  6-track bass-heavy minor-key trap")
+    print("  « S U B   P R E S S U R E »  —  9-track bass-heavy minor-key · trap + four-on-the-floor + hardstyle")
     print("  808 sub-bass · MIDI 24-38 (C1-D2) · sliding · pushed to the front")
     print("=" * 78)
 
@@ -247,21 +272,23 @@ def main() -> None:
             rp = (nm.chosen.interpretation.root_pc if (nm and nm.chosen) else c.root)
             names.append(f"{rp}:{q}")
 
-        raw = build_track(chords, key, t["bars"])
+        raw = build_track(chords, key, t["bars"], kick=t.get("kick", "trap"))
         mixed = _mix(raw, t["bpm"])
         out = out_dir / f"{t['name']}.mid"
         export_multitrack_midi(mixed, out, bpm=t["bpm"], key=key, instruments=INSTRUMENTS)
 
         form_str = "-".join(t["form"])
-        n_impact, n_riser = len(raw["Impact"]), len(raw["Riser"])
+        kick = t.get("kick", "trap")
+        kick_tag = {"trap": "half-time trap", "four_floor": "FOUR-ON-THE-FLOOR",
+                    "hardstyle": "hardstyle pump"}[kick]
         print(f"\n♫ {t['name']}  ({KEYNAMES[t['root']]} minor · {t['bpm']} BPM · "
-              f"{t['profile']} · {form_str} · {t['bars']} bars · ~{secs:.0f}s)")
-        print(f"  transitions: {n_impact} impact booms · {n_riser} riser notes · "
-              f"swing 0.58  |  Sub808={len(raw['Sub808'])} low notes")
+              f"{t['profile']} · {form_str} · {kick_tag} · {t['bars']} bars · ~{secs:.0f}s)")
+        print(f"  kick+drums={len(raw['Drums'])} notes · impacts={len(raw['Impact'])} · "
+              f"riser={len(raw['Riser'])} · Sub808={len(raw['Sub808'])} low notes")
         print(f"  ✓ {out.name}")
 
     print("\n" + "=" * 78)
-    print(f"  ALBUM DONE · 6 tracks · ~{total_s:.0f}s (~{total_s/60:.1f} min)")
+    print(f"  ALBUM DONE · 9 tracks · ~{total_s:.0f}s (~{total_s/60:.1f} min)")
     print(f"  Output: output/bass_minor/")
     print("=" * 78)
 
