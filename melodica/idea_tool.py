@@ -319,7 +319,7 @@ class IdeaToolConfig:
 
     # Workflow
     workflow: str = (
-        "generate_all"  # "generate_all", "harmonize_melody", "generate_melody_then_harmonize"
+        "generate_melody_then_harmonize"  # default: melody-first. Alt: "generate_all", "harmonize_melody"
     )
 
     # Master track
