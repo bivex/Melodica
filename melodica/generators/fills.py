@@ -78,6 +78,8 @@ class FillGenerator(PhraseGenerator):
         *,
         fill_type: str = "descending",
         fill_length: float = 2.0,
+        fill_every_bars: float = 4.0,
+        beats_per_bar: int = 4,
         position: str = "end",
         velocity_curve: str = "crescendo",
         rhythm: RhythmGenerator | None = None,
@@ -96,6 +98,11 @@ class FillGenerator(PhraseGenerator):
             raise ValueError(f"Unknown fill_type: {fill_type!r}")
         self.fill_type = fill_type
         self.fill_length = max(0.5, min(8.0, fill_length))
+        # Cadence is bar-aware: a fill lands at the end of every `fill_every_bars`
+        # bars (one bar = `beats_per_bar` beats). Previously this fired every 4
+        # *beats* despite the docstring saying "4-bar region" — i.e. every bar.
+        self.fill_every_bars = max(1.0, fill_every_bars)
+        self.beats_per_bar = max(1, int(beats_per_bar))
         self.position = position
         self.velocity_curve = velocity_curve
         self.rhythm = rhythm
@@ -386,11 +393,15 @@ class FillGenerator(PhraseGenerator):
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
         if self.rhythm is not None:
             return self.rhythm.generate(duration_beats)
-        # Place fills at the end of each 4-bar region
+        # A fill at the end of every `fill_every_bars` bars (bar = beats_per_bar
+        # beats). The region is clamped to the duration so a span shorter than
+        # one region still gets a single fill at its tail (otherwise short
+        # renders — e.g. a 4-beat section — would produce nothing).
+        region = max(self.fill_length, self.fill_every_bars * self.beats_per_bar)
+        interval = min(region, duration_beats)
         t, events = 0.0, []
-        fill_interval = max(self.fill_length, 4.0)
         while t < duration_beats:
-            fill_start = t + fill_interval - self.fill_length
+            fill_start = t + interval - self.fill_length
             if fill_start < duration_beats:
                 events.append(
                     RhythmEvent(
@@ -398,7 +409,9 @@ class FillGenerator(PhraseGenerator):
                         duration=min(self.fill_length, duration_beats - fill_start),
                     )
                 )
-            t += fill_interval
+            if interval <= 0:
+                break
+            t += interval
         return events
 
     def _velocity(self) -> int:

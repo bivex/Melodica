@@ -481,6 +481,19 @@ class TestFillGenerator:
         notes = gen.render(_simple_chords(), C_MAJOR, 8.0)
         _assert_valid_notes(notes)
 
+    def test_fill_cadence_is_bar_aware(self):
+        # default fill_every_bars=4, beats_per_bar=4, fill_length=2 → a fill at
+        # the tail of each 4-bar region (16 beats). 16 bars @ 4/4 = 64 beats.
+        gen = FillGenerator()
+        onsets = [e.onset for e in gen._build_events(64.0)]
+        assert onsets == [14.0, 30.0, 46.0, 62.0]
+        # a span shorter than one region still yields a single fill at its tail
+        # (previously a 4-beat render could produce nothing)
+        assert len(gen._build_events(4.0)) == 1
+        # cadence is configurable
+        gen2 = FillGenerator(fill_every_bars=2, beats_per_bar=4)
+        assert [e.onset for e in gen2._build_events(32.0)] == [6.0, 14.0, 22.0, 30.0]
+
 
 # ---------------------------------------------------------------------------
 # Bass
