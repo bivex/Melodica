@@ -118,17 +118,17 @@ def _mix(raw: dict, bpm: int, lufs: float = -13.0) -> dict:
 
 # ── 6 dark minor keys, low BPMs for heavy half-time low-end pocket ──────────
 TRACKS = [
-    {"name": "01_Deep_C",      "root": 0, "bpm": 140, "bars": 40, "profile": "pop",
+    {"name": "01_Trench",     "root": 0, "bpm": 140, "bars": 40, "profile": "pop",
      "form": ["i", "bVI", "bIII", "bVII"]},
-    {"name": "02_Sub_Fusion",  "root": 5, "bpm": 138, "bars": 40, "profile": "pop",
+    {"name": "02_Undertow",   "root": 5, "bpm": 138, "bars": 40, "profile": "pop",
      "form": ["i", "bVII", "bVI", "bIII"]},
-    {"name": "03_Gravity_G",   "root": 7, "bpm": 142, "bars": 40, "profile": "pop",
+    {"name": "03_Subzero",    "root": 7, "bpm": 142, "bars": 40, "profile": "pop",
      "form": ["i", "bVI", "iv", "bVII"]},
-    {"name": "04_Nightline_D", "root": 2, "bpm": 144, "bars": 40, "profile": "funk",
+    {"name": "04_Lowburn",    "root": 2, "bpm": 144, "bars": 40, "profile": "funk",
      "form": ["i", "bVI", "bIII", "V7", "i", "iv", "V7iv", "i"]},
-    {"name": "05_Vault_A",     "root": 9, "bpm": 140, "bars": 40, "profile": "pop",
+    {"name": "05_Concrete",   "root": 9, "bpm": 140, "bars": 40, "profile": "pop",
      "form": ["i", "bIII", "bVII", "bVI"]},
-    {"name": "06_Abyss_E",     "root": 4, "bpm": 134, "bars": 48, "profile": "pop",
+    {"name": "06_Mariana",    "root": 4, "bpm": 134, "bars": 48, "profile": "pop",
      "form": ["i", "bVI", "bIII", "bVII"]},
 ]
 
