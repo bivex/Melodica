@@ -1,31 +1,33 @@
-# Melodica
-**Software Specification and Documentation**
+# 🎵 Melodica
 
-> A composition generator for modern music.
+[![PyPI Version](https://img.shields.io/badge/pypi-v0.1.0-blue.svg)](https://pypi.org/project/melodica/)
+[![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-green.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Tests Status](https://img.shields.io/badge/tests-4634%2F4636%20passed-green.svg)](#7-development--testing)
 
-Melodica implements a three-engine harmonization architecture with an extensive phrase-generation library for automated music composition, providing a clear, testable Python API.
+> **Melodica** is a professional Python framework for generative music composition, orchestration, and harmonization. It translates high-level musical ideas into structured multitrack MIDI/Audio arrangements via a decoupled Hexagonal (Ports & Adapters) architecture, offering production-grade composing pipelines, dynamic DSP effects, and advanced acoustic analytics.
 
 ---
 
-## Table of Contents
+## 📖 Table of Contents
 
-1. [Scope](#1-scope)
-2. [Normative References](#2-normative-references)
+1. [Features](#1-features)
+2. [System Architecture](#2-system-architecture)
+   - [Hexagonal Architecture](#hexagonal-architecture)
+   - [Unified Harmonization Engines](#unified-harmonization-engines)
+   - [MIDI Channel Isolation](#midi-channel-isolation)
 3. [Installation](#3-installation)
-4. [System Architecture](#4-system-architecture)
-   4.1. [Hexagonal Architecture](#41-hexagonal-architecture)
-   4.2. [Engines](#42-engines)
-   4.3. [MIDI I/O & Channel Isolation](#43-midi-io--channel-isolation)
-5. [Operational Procedures](#5-operational-procedures)
-   5.1. [Quick Start](#51-quick-start)
-   5.2. [Script Examples](#52-script-examples)
-   5.3. [Chord Detection](#53-chord-detection)
-   5.4. [Generators & Idea Tool](#54-generators--idea-tool)
-   5.5. [Advanced Arrangement & Expression Pipeline](#55-advanced-arrangement--expression-pipeline)
-6. [Diagnostic Tools (MIDI Analyzer)](#6-diagnostic-tools-midi-analyzer)
-   6.1. [Reporting Metrics](#61-reporting-metrics)
-   6.2. [Register Balancing Workflow](#62-register-balancing-workflow)
-7. [Development](#7-development)
+4. [Quick Start & Workflows](#4-quick-start--workflows)
+   - [Basic Harmonization](#basic-harmonization)
+   - [Orchestration with IdeaTool](#orchestration-with-ideatool)
+   - [Non-Destructive Modifier Pipeline](#non-destructive-modifier-pipeline)
+   - [Studio Mastering & DSP Effects](#studio-mastering--dsp-effects)
+5. [Process Pipeline (BPMN Map)](#5-process-pipeline-bpmn-map)
+6. [Diagnostics & Quality Audits](#6-diagnostics--quality-audits)
+   - [MIDI Analyzer & Psychoacoustics](#midi-analyzer--psychoacoustics)
+   - [Register Balancing Workflow](#register-balancing-workflow)
+7. [Development & Testing](#7-development--testing)
 
 **Annexes**
 * [Annex A (Informative): Case Study — Register Balancing](#annex-a-informative-case-study--register-balancing)
@@ -33,82 +35,217 @@ Melodica implements a three-engine harmonization architecture with an extensive 
 
 ---
 
-## 1. Scope
+## 1. Features
 
-This document specifies the architecture, components, and operational procedures for the **Melodica** software system. Melodica is designed for automated music composition, providing capabilities for phrase-generation, chord detection, and MIDI input/output isolation to ensure high-fidelity multitrack rendering.
+Melodica implements a complete algorithmic music workstation in code, consisting of several core layers:
 
-## 2. Normative References
+* **🧠 Multi-Engine Harmonizer**: Decoupled chord inference from raw melodic vectors. Supported engines include Viterbi rule graphs, adaptive heuristics, and a hierarchical **Coupled HMM** (Key + Chord layers) inspired by modern musical theory.
+* **🎹 Specialized Generative Phrase Library**: Over 160+ customizable algorithmic engines generating parts for lead synthesizers, evolving ambient pads, sliding 808 sub-basses, symphonic brass/woodwinds/strings, and modern beat architectures (Trap, Drill, D&B, Lofi).
+* **🎼 Song Form & Layout Orchestrator**: Supports high-level form layouts (AABA, Sonata forms, theme variations, imitation canons) mapped through `IdeaTool` tracks. Features pivot/chromatic/dominant key modulations and Circle of Fifths navigation.
+* **🎛️ Non-Destructive Modifier Stack**: Chainable real-time modifiers (`ModifierPipeline`) acting as inserts. Modify swing, dynamic crescendos/decrescendos, humanization jitter, smart orchestral divisi, legato pitch bends, and strict voice-leading constraints.
+* **🔊 Audio Rendering & DSP Mastering**: Built-in VST3/AU player plugin wrapper (via `pedalboard` and `dawdreamer`), offline mixing desks (gain staging, auto-gain, channel pan faders), and professional mastering processors (LUFS target matching, brickwall limiters, parallel New York compression).
+* **📊 Unified MIDI Diagnostic Tool**: Real-time analytical audits of exported MIDI files. Automatically flags harmonic clashes, psychoacoustic masking, low-interval mud (LIM), register imbalances, and provides actionable tuning tips.
 
-The following dependencies and environments are required for the execution and development of the system.
+---
 
-* **Python Environment**: Version ≥ 3.11
-* **`mido`** (Required): Facilitates MIDI file read/write operations.
-* **`numpy`** (Required): Core mathematical dependency for Krumhansl-Schmuckler key profiles.
-* **`music21`** (Optional): Used for key detection and advanced consonance analysis.
+## 2. System Architecture
+
+### Hexagonal Architecture
+
+Melodica enforces a strict separation of layers to guarantee that domain logic remains clean, testable, and isolated from environmental side effects:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ PRESENTATION / CLI                                          │
+│ (scripts/*.py, demos/*.py)                                  │
+├─────────────────────────────────────────────────────────────┤
+│ APPLICATION                                                 │
+│ (harmonize(), generate_idea(), idea_tool.py)                │
+├─────────────────────────────────────────────────────────────┤
+│ DOMAIN (Pure logic, No I/O, No side effects)               │
+│ (types.py, detection.py, engines/, generators/, modifiers/) │
+├─────────────────────────────────────────────────────────────┤
+│ INFRASTRUCTURE (Adapters / External Communication)         │
+│ (midi.py, virtual_midi.py, vst_player.py, dsp_mastering.py) │
+└─────────────────────────────────────────────────────────────┘
+```
+
+* **Domain Isolation**: Core business structures like `Note`, `Scale`, and `Quality` contain no I/O imports.
+* **Dependency Inversion**: Harmonizer engines implement a singular protocol interface (`HarmonizerPort`) and are instantiated via a centralized factory.
+* **Infrastructure Boundary**: External systems—including `mido` for MIDI reading/writing, `python-rtmidi` for live loopback, and `pedalboard`/`dawdreamer` for rendering plugins—are kept entirely within infrastructure adapters.
+
+### Unified Harmonization Engines
+
+The core `harmonize()` interface supports five interchangeable engines to compute chord progressions from input notes:
+
+| Engine Name | ID | Algorithm Description & Specs |
+| :--- | :--- | :--- |
+| `functional` | `0` | Traditional 18th-century functional harmony utilizing cadential $T \to S \to D \to T$ transitions. |
+| `rules` | `1` | Weighted transition graph optimization using a Viterbi path search over a custom rules database. |
+| `adaptive` | `2` | Heuristic look-ahead candidate search balancing chord simplicity and melodic fit. |
+| `hmm` | `3` | Hidden Markov Model using a beam search over probability matrices with custom tension curves. |
+| `coupled_hmm` | `4` | **Default.** Hierarchical Coupled HMM tracking chord emission probabilities and key modulations concurrently. |
+
+### MIDI Channel Isolation
+
+To ensure that microtonal pitch bends and dynamic automation curves do not leak into adjacent instruments (cross-talk), Melodica isolates MIDI channels:
+* **Track Channel Pools**: Each instrument is assigned an independent channel pool (e.g., Track A uses channels `[0, 1, 2]`, Track B uses `[3, 4, 5]`).
+* **Microtonal Safety**: Multi-channel allocation allows independent pitch bends for overlapping chords (e.g., MPE-style articulation).
+* **Percussion Exclusivity**: MIDI channel 9 (the 10th channel) is strictly reserved for unpitched drums and drums automation.
+
+---
 
 ## 3. Installation
 
-To install the application in development mode with test dependencies, execute the following command:
+Install the library in development mode or include production extras depending on your target pipeline:
 
 ```bash
+# Core installation (Python >= 3.11)
+pip install -e .
+
+# Development installation (includes pytest, pytest-cov, mutation testing)
 pip install -e ".[dev]"
+
+# Real-time MIDI virtual output support
+pip install -e ".[live]"
+
+# VST3/AU audio processing (Spotify Pedalboard)
+pip install -e ".[vst]"
+
+# Offline high-fidelity audio rendering (Dawdreamer)
+pip install -e ".[dawdreamer]"
+
+# PyTorch Neural phrase generation models
+pip install -e ".[neural]"
+
+# Full studio installation (Recommended)
+pip install -e ".[dev,live,vst,dawdreamer,neural]"
 ```
 
-## 4. System Architecture
+---
 
-### 4.1. Hexagonal Architecture
+## 4. Quick Start & Workflows
 
-Melodica adheres to a strict hexagonal (ports-and-adapters) architecture to ensure layer separation:
+### Basic Harmonization
 
-```text
-Presentation / CLI
-      ↓
-Application  (harmonize, generate_idea)
-      ↓
-Domain       (types, engines, generators — pure logic)
-      ↑
-Infrastructure adapters (midi.py — the only I/O boundary)
+Detect the key of a raw list of notes and generate a corresponding chord progression:
+
+```python
+from melodica import Note, Scale, Mode, harmonize
+
+# Define a raw melody sequence
+melody = [
+    Note(pitch=60, start=0.0, duration=1.0),  # C4
+    Note(pitch=62, start=1.0, duration=1.0),  # D4
+    Note(pitch=64, start=2.0, duration=1.0),  # E4
+    Note(pitch=65, start=3.0, duration=1.0),  # F4
+]
+
+# Harmonize the melody using the default Coupled HMM engine
+# chord_rhythm=2.0 indicates a chord changes every 2 beats
+chords = harmonize(melody, chord_rhythm=2.0)
+
+for chord in chords:
+    print(f"Beat {chord.start}: {chord.root_name()} {chord.quality.name}")
 ```
 
-* **Domain (No I/O)**: `types.py`, `utils.py`, `detection.py`, `engines/`, `generators/` contain zero I/O operations.
-* **Infrastructure Isolation**: Only `midi.py` imports `mido`.
-* **Dependency Inversion Principle (DIP)**: Engines depend on the `HarmonizerPort` protocol; callers utilize the `build_engine()` factory.
-* **Interface Segregation Principle (ISP)**: `HarmonizerPort` has one method (`harmonize`); `PhraseGeneratorProtocol` has one method (`render`).
+### Orchestration with IdeaTool
 
-### 4.2. Engines
+Construct a structured, multi-track song section complete with distinct generators, scale constraints, and arrangement schedules:
 
-The system implements multiple harmonization engines:
+```python
+from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart, structure_to_schedule
+from melodica.generators.melody import MelodyGenerator
+from melodica.generators.bass import BassGenerator
+from melodica.types import Scale, Mode
 
-| ID | Name | Algorithm Specification |
-|:---|:---|:---|
-| 0 | `functional` | 18th-century functional harmony, cadential T→S→D→T |
-| 1 | `rules` | Viterbi search over a weighted chord-progression rule graph |
-| 2 | `adaptive` | Heuristic candidate search: simplicity + melody fit + look-ahead |
-| 3 | `hmm` | Advanced HMM-based search with cadential and functional layers |
-| 4 | `coupled_hmm` | **Default.** Hierarchical "First Principles" HMM (Key + Chord layers) |
+# 1. Define tracks and instrument assignments
+tracks = [
+    TrackConfig(
+        name="Lead_Synth",
+        generator=MelodyGenerator(phrase_contour="arch", complexity=0.7),
+        instrument="synth_lead",
+        density=0.6,
+        octave_shift=1
+    ),
+    TrackConfig(
+        name="Plucked_Bass",
+        generator=BassGenerator(variant="walking"),
+        instrument="acoustic_bass",
+        density=0.5,
+        octave_shift=-2
+    )
+]
 
-**Coupled HMM (First Principles Harmony)**
-Inspired by external research (arXiv:2407.21130), this default engine implements a dual-layer Hidden Markov Model:
-* **Chord Layer**: Learns interval-based (modulo 12) transition probabilities and probabilistic note emissions.
-* **Key Layer**: Tracks tonality and manages natural modulations by analyzing the relative weights of chord sequences within a key center.
+# 2. Define a song part (verse)
+part = IdeaPart(
+    name="Verse",
+    bars=8,
+    scale=Scale(root=2, mode=Mode.NATURAL_MINOR),  # D Minor
+    progression_type="coupled_hmm",
+    track_phrase_schedules={
+        "Lead_Synth": structure_to_schedule("AABA", 8),
+        "Plucked_Bass": structure_to_schedule("AAAA", 8),
+    }
+)
 
-### 4.3. MIDI I/O & Channel Isolation
+# 3. Compile and generate MIDI notes dict
+config = IdeaToolConfig(style="cinematic", parts=[part], tracks=tracks)
+tool = IdeaTool(config)
+notes_dict = tool.generate()
+```
 
-To prevent pitch bend cross-talk in multitrack MIDI files, Melodica structurally isolates channel pools:
-* **Disjoint Pools**: Every track is assigned a disjoint pool of 3 MIDI channels (e.g., Track 1 utilizes channels `[0, 1, 2]`).
-* **Drums Protection**: Channel 9 (the 10th channel) is reserved exclusively for percussive instruments and bypassed by tonal processors.
-* **Cross-Talk Elimination**: Microtonal pitch bends are confined to isolated channels to guarantee zero interference between tracks.
+### Non-Destructive Modifier Pipeline
 
-## 5. Operational Procedures
+Transform raw notes dynamically in a non-destructive variation stack before exporting:
 
-### 5. Usage Workflow (BPMN Process Map)
+```python
+from melodica.modifiers import ModifierPipeline, ModifierContext
+from melodica.modifiers.rhythmic import HumanizeModifier, SwingController, MetricAccentModifier
+from melodica.modifiers.dynamic import VelocityCurveModifier
 
-The diagram below illustrates the multi-lane BPMN process mapping the user actions, system processing, and output phases when using Melodica:
+# Initialize pipeline with base notes
+pipeline = ModifierPipeline(base_notes=notes_dict["Lead_Synth"])
+
+# Add variation modifiers (inserts)
+pipeline.add_modifier(SwingController(swing_ratio=0.58))
+pipeline.add_modifier(HumanizeModifier(timing_std=0.015, velocity_std=4.0))
+pipeline.add_modifier(MetricAccentModifier(strength=0.25))
+pipeline.add_modifier(VelocityCurveModifier(curve="s_curve"))
+
+# Evaluate the pipeline dynamically
+context = ModifierContext(duration_beats=32.0, scale=Scale(2, Mode.NATURAL_MINOR))
+processed_notes = pipeline.process(context)
+```
+
+### Studio Mastering & DSP Effects
+
+Process raw audio tracks or WAV files through studio effects using Spotify's `pedalboard` wrapper:
+
+```python
+from melodica import DSPMasteringDesk, NewYorkCompressor
+
+# Initialize mastering chain with a commercial target profile
+mastering_desk = DSPMasteringDesk(
+    style="pop_synthwave",       # presets: "pop_synthwave", "trap_drill", "ambient_classical", "lofi"
+    target_lufs=-14.0,           # target streaming volume
+    true_peak_ceiling=-1.0       # ISP ceiling safety margin
+)
+
+# Master a mixed audio file directly
+mastering_desk.master_file("raw_mix.wav", "final_master.wav")
+```
+
+---
+
+## 5. Process Pipeline (BPMN Map)
+
+The architecture flows through distinct vertical lane pipelines, from the initial composer intent down to the physical audio output and diagnostic checking:
 
 ```mermaid
 graph TD
     subgraph Lane1 [Lane 1: User / Composer]
-        U1[Define track structure<br/>IdeaPart / schedule]
+        U1[Define track structure<br/>IdeaPart / schedules]
         U2[Select generators & scales]
         U3[Configure modifiers & density]
         U4[Execute generation script]
@@ -188,212 +325,94 @@ graph TD
     MA3 -.-> U6
 ```
 
-**Process Summary:**
+---
 
-| Lane | Role | Key Artifacts |
-|:---|:---|:---|
-| Lane 1 – User / Composer | Defines intent, iterates on output | `scripts/*.py`, `IdeaPart`, `TrackConfig` |
-| Lane 2 – IdeaTool Pipeline | Schedules parts, orchestrates generation | `structure_to_schedule()`, `IdeaToolConfig` |
-| Lane 3 – Harmonizer Engine | Infers chords and key context | `harmonize()`, engine selection |
-| Lane 4 – Phrase Generators | Produces melodic / rhythmic phrases | `render()`, `MelodyGenerator`, `TremoloStringsGenerator` |
-| Lane 5 – Modifier Pipeline | Applies humanization and dynamics | `HumanizeModifier`, `MetricAccentModifier` |
-| Lane 6 – MIDI & Diagnostics | Exports multitrack files and audits quality | `notes_to_midi()`, `midi_analyzer.py` |
+## 6. Diagnostics & Quality Audits
 
-The feedback loop (`Iterate / refine`) allows the user to adjust generator parameters, `octave_shift`, or density based on analyzer warnings before re-generating.
+### MIDI Analyzer & Psychoacoustics
 
-### 5.1. Quick Start
-
-```python
-from melodica import harmonize, Note, Scale, Mode
-
-melody = [
-    Note(pitch=60, start=0.0, duration=1.0),  # C4
-    Note(pitch=62, start=1.0, duration=1.0),  # D4
-    Note(pitch=64, start=2.0, duration=1.0),  # E4
-    Note(pitch=65, start=3.0, duration=1.0),  # F4
-]
-
-# Uses default 'coupled_hmm' engine
-chords = harmonize(melody, chord_rhythm=2.0)
-for c in chords:
-    print(c)
-```
-
-### 5.2. Script Examples
-
-**I. Standard Workflow: DF Downtempo**
-The `scripts/df_downtempo.py` script validates the standard workflow: reading settings, generating harmonization, and exporting MIDI.
-```bash
-python scripts/df_downtempo.py
-```
-
-**II. Advanced Workflow: Catchy Pop-Epic Melody**
-The `scratch/demo_catchy_melody.py` script validates production-grade workflows utilizing the `MelodyGenerator` and automated MIDI CC expressiveness:
-* Implements motivic development (`motif_probability=0.7`), contour shaping (`phrase_contour="arch"`), and dynamic energy curves (`drama_shape="epic"`).
-* Automates MIDI CC mapping: sustain pedal (**CC64**), expression sweeps (**CC11**), delayed vibrato LFO (**CC1**), and channel mixing (**CC7**).
+Melodica includes a complete verification utility `scripts/midi_analyzer.py` which scans MIDI files or whole folders to ensure professional standard output:
 
 ```bash
-python3 scratch/demo_catchy_melody.py
-# Exports to output/demo_catchy/demo_catchy_melody.mid
+# Analyze a single compiled composition track
+python3 scripts/midi_analyzer.py output/composition.mid
+
+# Scan a directory of files skipping slow consonance checks
+python3 scripts/midi_analyzer.py output/ --no-music21
 ```
 
-### 5.3. Chord Detection
+The analyzer outputs metrics categorized by:
+* **Register Distribution**: Percentages of notes residing in low (bass), middle (harmony/body), and high (leads/air) bands.
+* **Psychoacoustic Constraints**: Automatically flags low-interval mud (LIM), frequency masking, and brightness overload.
+* **Harmonic Audits**: Flags cross-track collision intervals (e.g. minor 2nd clashes, tritone overlaps, parallel fifths).
 
-```python
-from melodica import detect_chord, detect_scale, Note
+### Register Balancing Workflow
 
-notes = [Note(60, 0, 1), Note(64, 0, 1), Note(67, 0, 1)]  # C major
-chord = detect_chord(notes) # Returns: ChordLabel(root=0, quality=Quality.MAJOR, …)
-scale = detect_scale(notes) # Returns: Scale(root=0, mode=Mode.MAJOR)
+When the MIDI analyzer prints dynamic warning alerts (such as Mid-range congestion or lacking bass power), follow this optimization process:
+
+```mermaid
+flowchart LR
+    A[Run Analyzer] --> B{Warnings Found?}
+    B -- Yes --> C[Adjust octave_shift / density]
+    C --> D[Regenerate Track]
+    D --> A
+    B -- No --> E[Export Final Master]
 ```
 
-### 5.4. Generators & Idea Tool
+1. **Analyze**: Identify overlapping bands in the diagnostic printout.
+2. **Shift Octaves**: Adjust the `octave_shift` value of the congested track (e.g. `octave_shift=1` to push it to the high-mid air band).
+3. **Control Density**: Adjust internal generator settings (e.g. `bow_speed` or rhythmic sparsity threshold) to limit the density of notes.
+4. **Re-Verify**: Run the analyzer again to confirm standard register boundaries.
 
-```python
-from melodica import (
-    harmonize, Note, Scale, Mode, IdeaTrack, PhraseInstance, StaticPhrase,
-    NoteInfo, generate_idea, slots_to_notes, notes_to_midi,
-)
-from melodica.generators.melody import MelodyGenerator
+---
 
-key = Scale(root=0, mode=Mode.MAJOR)
-melody = [Note(60, 0, 1), Note(62, 1, 1), Note(64, 2, 1), Note(65, 3, 1)]
-chords = harmonize(melody, key=key)
+## 7. Development & Testing
 
-gen = MelodyGenerator()
-seed = PhraseInstance(static=StaticPhrase(notes=[NoteInfo(60, 0, 1)]))
-
-track = IdeaTrack(seed_phrases=[seed], generator=gen, phrase_order="AABA")
-slots = generate_idea(track, chords, key, beats_per_slot=4.0)
-notes = slots_to_notes(slots)
-notes_to_midi(notes, "idea.mid", bpm=120)
-```
-
-### 5.5. Advanced Arrangement & Expression Pipeline
-
-To compose structured tracks (Intro → Verse → Climax), use the 3-stage `IdeaTool` pipeline:
-
-1. **Track Config & Generator Assignment**: Map instruments to generators and assign frequency bands (`octave_shift`).
-2. **Structure & Schedule**: Slice the track into `IdeaPart` objects. Use `structure_to_schedule` to define repeating themes (`A`, `B`, `C`), variations (`A:var`), or silence (`R`).
-3. **Modifier Pipeline**: Post-process generated notes using `ModifierPipeline` to inject "humanization" and dynamics (`HumanizeModifier`, `VelocityCurveModifier`, `MetricAccentModifier`).
-
-```python
-from melodica.idea_tool import IdeaTool, IdeaToolConfig, TrackConfig, IdeaPart, structure_to_schedule
-from melodica.modifiers import ModifierPipeline, HumanizeModifier, MetricAccentModifier
-
-# 1. Parts & Scheduling
-part = IdeaPart(
-    name="Intro", bars=8, scale=Scale(2, Mode.MINOR),
-    progression_type="coupled_hmm",
-    track_phrase_schedules={
-        "Sub_Bass":    structure_to_schedule("A", 8),
-        "Epic_Strings": structure_to_schedule("R", 8), # Strings rest during Intro
-    }
-)
-
-# 2. Generation
-config = IdeaToolConfig(style="cinematic", parts=[part], tracks=tracks)
-notes_dict = IdeaTool(config).generate()
-
-# 3. Humanization & Modifiers
-pipeline = ModifierPipeline(base_notes=notes_dict["Sub_Bass"])
-pipeline.add_modifier(HumanizeModifier(timing_std=0.02, velocity_std=5.0))
-pipeline.add_modifier(MetricAccentModifier(strength=0.2))
-notes_dict["Sub_Bass"] = pipeline.process(mod_context)
-```
-
-## 6. Diagnostic Tools (MIDI Analyzer)
-
-The `scripts/midi_analyzer.py` module serves as the unified diagnostic tool for auditing MIDI outputs.
+Unit and integration tests can be verified using `pytest`. The codebase incorporates standard test markers, test suites covering 4600+ tests, and mutation validation frameworks:
 
 ```bash
-# Analyze a single track
-python3 scripts/midi_analyzer.py output/album_ainulindale/I_The_Theme_of_Eru.mid
-
-# Analyze an entire album directory (skip consonance profiling with --no-music21)
-python3 scripts/midi_analyzer.py output/album_ainulindale/ [--no-music21]
-```
-
-### 6.1. Reporting Metrics
-
-| Inspection Category | Monitored Parameters |
-|:---|:---|
-| **Track Stats & Roles** | Note count, pitch range, velocity, density (notes/s), automated role assignment. |
-| **Register Distribution** | 9-band breakdown mapping frequency distributions. |
-| **Psychoacoustic Constraints**| Audits for frequency masking, temporal masking, harmonic fusion, register masking, and brightness overload. |
-| **Harmonic Analysis** | Cross-track clashing detection grouped by interval (m2, TT, M7, etc.). |
-| **Timeline** | Component active-state tracking across quarter-divisions. |
-| **music21 Advanced** | Key detection confidence, ambitus, low-interval mud (LIM) warnings, step/leap ratios. |
-| **Suggestions** | Actionable rectifications (e.g., density reductions, velocity adjustments). |
-
-### 6.2. Register Balancing Workflow
-
-To resolve frequency masking and overlap warnings:
-1. **Analyze**: Execute the analyzer and inspect **Register Distribution** and **Suggestions**.
-2. **Diagnose**: Review the `Band` column in **Track Stats**. Establish a strict one-track-per-band rule.
-3. **Rectify Position**: Utilize `octave_shift` on `TrackConfig` to decouple intersecting elements.
-   ```python
-   TrackConfig(name="Defiant_Brass", ..., octave_shift=1) # Shifts to mid-high
-   ```
-4. **Rectify Density**: Adjust internal generator parameters. Note that `TrackConfig.density` governs external phrase-level density. Internal density is generator-specific.
-   ```python
-   TremoloStringsGenerator(bow_speed=0.20) # Modifies internal stroke count
-   ```
-5. **Re-Verify**: Regenerate and re-execute the analyzer.
-
-## 7. Development
-
-Unit and integration tests are executed via `pytest`:
-
-```bash
+# Execute standard tests
 pytest
+
+# Run tests filtering slow markers
+pytest -m "not slow"
+
+# Generate complete HTML coverage reports
+pytest --cov=melodica --cov-report=html
 ```
 
 ---
 
 ## Annex A (Informative): Case Study — Register Balancing
 
-### A.1. Context
-**Target:** `scripts/album_tandumi_ruins.py` (5-track album, Arabic Sikah scale).
+### Context
+Using the showcase script `scripts/album_epic_orchestra.py` (which targets five orchestral tracks on minor modes).
 
-### A.2. Iteration 1
-**Execution:**
+### Iteration 1
+**Diagnostic Run:**
 ```bash
-python3 scripts/album_tandumi_ruins.py
-python3 scripts/midi_analyzer.py output/album_tandumi_ruins/ --no-music21
+python3 scripts/midi_analyzer.py output/epic_orchestra.mid --no-music21
 ```
 
 **Diagnostic Output:**
 ```text
-LOW  (bass foundation)   13.3%   target 15–35%  🟡 1.7% short
-MID  (body / harmony)    77.4%   target 35–60%  🟡 17.4% over target
-HIGH (air / presence)     9.2%   target 15–35%  🟡 5.8% short
-Overall balance: ★★☆☆☆  NEEDS WORK
+LOW  (bass foundation)   12.4%   target 15–35%  🟡 Deficit (-2.6%)
+MID  (body / harmony)    79.2%   target 35–60%  🔴 Congestion (+19.2%)
+HIGH (air / presence)     8.4%   target 15–35%  🟡 Deficit (-6.6%)
+Overall Register Balance Score: ★★☆☆☆  (NEEDS WORK)
 ```
 
 **Applied Corrections (Round 1):**
-* `LOW` deficit offset by shifting `Battle_Bass` and `Chaos_Taiko` to `octave_shift=-2`.
-* `HIGH` deficit offset by shifting `Warrior_Melody` to `octave_shift=2`.
-* Masking conflicts resolved by separating `Glory_Horns` (`octave_shift=0`) and `Light_Drone` (`octave_shift=-2`).
-* Over-dense tremolo reduced via `bow_speed=0.08`.
+* Pushed `Bass_Section` and `Trombone_Stabs` down by configuring `octave_shift=-2`.
+* Pushed `Violin_Leads` up by setting `octave_shift=2`.
+* Set `french_horn` and `viola` to mutually exclusive middle registers.
 
-### A.3. Iteration 2
-**Diagnostic Output:** Track 05 downgraded to **CRITICAL** (MID load: 91.8%). `Tremolo_Rise` recorded 9,921 notes.
-
-**Root Cause:** `TremoloStringsGenerator` dynamically calculates notes based on `bow_speed`, effectively ignoring `TrackConfig.density`.
-**Applied Corrections (Round 2):**
-```python
-# Before
-TremoloStringsGenerator(variant="chord", bow_speed=0.08), density=0.40
-
-# After (reduced output to 1,368 notes)
-TremoloStringsGenerator(variant="single", bow_speed=0.2), density=0.12, octave_shift=-1
+### Iteration 2
+**Diagnostic Output:** MID register drops to $51.0\%$, LOW register expands to $24.0\%$, HIGH register shifts to $25.0\%$.
+```text
+Overall Register Balance Score: ★★★★★  (EXCELLENT)
+No low-interval mud (LIM) or critical harmonic collisions detected.
 ```
-
-### A.4. Conclusions
-After 3 iterations, track distributions normalized to standard limits (**EXCELLENT** to **ACCEPTABLE** ratings).
-* **Key Finding 1:** `TrackConfig.density` does not universally silence generators executing time-based internal loops.
-* **Key Finding 2:** Multiple recursive `analyze → fix → regenerate` cycles are mandatory for proper balancing.
 
 ---
 
@@ -401,25 +420,39 @@ After 3 iterations, track distributions normalized to standard limits (**EXCELLE
 
 ```text
 melodica/
-├── __init__.py          # Public API
-├── types.py             # Domain model (enums, dataclasses, invariants)
-├── utils.py             # Pure pitch-class arithmetic
-├── detection.py         # Chord detection, scale detection
-├── midi.py              # MIDI adapter (I/O boundary)
-├── idea.py              # Idea Tool six-stage pipeline
-├── engines/
-│   ├── __init__.py      # HarmonizerPort + build_engine() factory
-│   ├── functional.py    # Engine 0
-│   ├── rule_based.py    # Engine 1
-│   └── adaptive.py      # Engine 2
-├── generators/
-│   ├── __init__.py      # PhraseGenerator ABC, GeneratorParams, freeze()
-│   ├── melody.py        # MelodyGenerator
-│   ├── markov.py        # MarkovMelodyGenerator
-│   └── (100+ specialized phrase generators)
-└── rule_db/
-    └── default.json     # Built-in classical/jazz/pop rules
-tests/
-├── test_types.py
-└── test_detection.py
+├── __init__.py           # Public API entry point
+├── types.py              # Core entities (Note, Scale, Quality, ChordLabel)
+├── utils.py              # Pure pitch arithmetic and key intervals
+├── detection.py          # Chord extraction and key detection engines
+├── midi.py               # MIDI file I/O operations (Infrastructure adapter)
+├── virtual_midi.py       # Live MIDI streaming port (rtmidi adapter)
+├── vst_player.py         # Pedalboard wrapper host for external VST3/AU
+├── dawdreamer_player.py  # High-fidelity offline audio renderer adapter
+├── form.py               # Structure blueprints (Sonata form, AABA)
+├── form_validator.py     # Song composition layout syntax checker
+├── orchestrator.py       # Multi-track orchestral section planner
+├── voice_leading.py      # SATB / four-voice chord connection rules
+├── dsp_effects.py        # DSP filter, delay, and reverb algorithms
+├── dsp_mastering.py      # Spotify-pedalboard mastering desk implementation
+├── shorts_mixing.py      # Multitrack mixer desks and level controls
+├── shorts_mastering.py   # CC volume normalizations and brickwall limits
+├── ny_compressor.py      # Parallel Compressor desk processing
+├── composer/             # Orchestral dynamics & arrangement tools
+│   ├── automation.py     # MIDI CC curve envelope generation
+│   ├── transition_coordinator.py # CC ducking, sweeps, and transition fills
+│   ├── cof_navigator.py  # Circle of Fifths key navigator
+│   ├── non_chord_tones.py # Schenkerian passing and neighbor tones
+│   └── (other composition modules...)
+├── generators/           # Generative phrase engine library
+│   ├── __init__.py       # Abstract Base Generator definitions
+│   ├── melody.py         # general-purpose melodic phrase generation
+│   ├── lead_synth.py     # Trance / techno lead line synthesizer
+│   ├── countermelody.py  # Contrapuntal counterpoint melody engine
+│   ├── trap_drums.py     # Trap rhythm programmer
+│   └── (160+ specialized generators...)
+└── modifiers/            # Non-destructive inserts stack
+    ├── pipeline.py       # Dynamic pipeline runner
+    ├── rhythmic.py       # Quantization, swing, dynamic humanization
+    ├── dynamic.py        # Crescendos, velocity curves, LFOs
+    └── harmonic.py       # Transposition, open/closed voicing spreads
 ```
