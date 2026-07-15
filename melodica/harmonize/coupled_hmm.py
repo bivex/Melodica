@@ -395,6 +395,13 @@ class WeightedNote:
     pitch_class: int
     weight: float
 
+    def __post_init__(self) -> None:
+        # Observation extraction can pass float pitch-classes (e.g. when the
+        # melody carries float MIDI pitches); the declared type is int and the
+        # emission tables (LOG_PNOTE) are integer-indexed, so coerce here once
+        # at construction rather than at every indexing site.
+        self.pitch_class = int(self.pitch_class)
+
 
 # ---------------------------------------------------------------------------
 # Mode-limitation warnings (per-call, covers all mode sources)
