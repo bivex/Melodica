@@ -215,9 +215,8 @@ class TestGeneratorValidation:
 
     def test_nebula_invalid_variant(self):
         from melodica.generators.nebula import NebulaGenerator
-        gen = NebulaGenerator(variant="nonexistent")
         with pytest.raises(ValueError, match="variant"):
-            gen.render(*self._chords_and_key())
+            NebulaGenerator(variant="nonexistent")
 
     @pytest.mark.parametrize("variant", ["cloud", "cascade", "swell", "granular", "stasis"])
     def test_nebula_valid_variants(self, variant):

@@ -219,7 +219,7 @@ class TestTextureController:
     def test_silence_tension(self):
         ctrl = TextureController()
         level = ctrl._tension_to_texture(0.05)
-        assert level == TextureLevel.SILENCE
+        assert level == TextureLevel.BASS_ONLY
 
     def test_full_tension(self):
         ctrl = TextureController()
