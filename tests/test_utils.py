@@ -26,6 +26,7 @@ from melodica.utils import (
     diatonic_transpose,
     compute_simplicity,
     chord_at,
+    rebase_chords,
     build_guitar_voicing,
 )
 from melodica.types import ChordLabel, Quality, NoteInfo, Scale
@@ -189,6 +190,36 @@ def test_chord_at():
     assert chord_at(chords, 2.0).root == 5
     assert chord_at(chords, 3.5).root == 5
     assert chord_at([], 0.0) is None
+
+
+def test_chord_at_localized_slice():
+    # A section slice keeps global .start (32, 36, ...) but is queried in local
+    # beats (0..16). chord_at must resolve against the slice's own origin instead
+    # of silently returning None — the section-rendering footgun.
+    slc = [
+        ChordLabel(root=0, quality=Quality.MAJOR, start=32.0, duration=4.0),
+        ChordLabel(root=5, quality=Quality.MAJOR, start=36.0, duration=4.0),
+        ChordLabel(root=7, quality=Quality.MAJOR, start=40.0, duration=4.0),
+    ]
+    assert chord_at(slc, 0.0).root == 0   # was None before the fix
+    assert chord_at(slc, 3.9).root == 0
+    assert chord_at(slc, 4.0).root == 5
+    assert chord_at(slc, 9.5).root == 7
+    assert chord_at(slc, 99.0).root == 7  # beyond slice → clamps to last
+
+
+def test_rebase_chords_shifts_and_does_not_mutate():
+    orig = [
+        ChordLabel(root=0, quality=Quality.MAJOR, start=32.0, duration=4.0),
+        ChordLabel(root=5, quality=Quality.MAJOR, start=36.0, duration=4.0),
+    ]
+    rebased = rebase_chords(orig, -32.0)
+    assert [c.start for c in rebased] == [0.0, 4.0]      # shifted to local time
+    assert [c.start for c in orig] == [32.0, 36.0]        # input untouched
+    assert all(r is not o for r, o in zip(rebased, orig))  # shallow copies
+    # rebased slice now resolves with plain absolute matching
+    assert chord_at(rebased, 0.0).root == 0
+    assert chord_at(rebased, 4.0).root == 5
 
 
 def test_build_guitar_voicing():

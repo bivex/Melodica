@@ -13,7 +13,6 @@ Out:  output/bass_minor/*.mid
 """
 from __future__ import annotations
 
-import copy
 import random
 import sys
 import warnings
@@ -76,20 +75,6 @@ def _offset(notes: list, delta: float) -> list:
         n.start += delta
     return notes
 
-
-def _local_chords(cslice: list, off: float) -> list:
-    """Copy a chord slice with .start rebased to local section time (beat 0…).
-
-    Generators resolve harmony via ``chord_at(chords, local_beat)`` which matches
-    on a chord's absolute ``.start``. A sliced chord keeps its global start, so we
-    rebase it — otherwise chord_at returns None and impacts/bass-lines go silent.
-    """
-    out = []
-    for c in cslice:
-        cc = copy.copy(c)
-        cc.start = c.start - off
-        out.append(cc)
-    return out
 
 BARS_PER_CHORD = 4.0
 CONTOUR_BASE = 48  # multiple of 12 → no transposition artifact
@@ -154,7 +139,7 @@ def build_track(chords_all: list, key: Scale, total_bars: int, kick: str = "trap
         cslice = chords_all[bar_cursor:bar_cursor + sec_bars]
         dur = float(sec_bars * BARS_PER_CHORD)
         off = float(bar_cursor * BARS_PER_CHORD)
-        ch = _local_chords(cslice, off)   # rebased to local beats for chord_at()
+        ch = cslice   # chord_at() now resolves localized slices in-core (no rebase needed)
         p = PROF[sec_type]
 
         bass = Bass808SlidingGenerator(

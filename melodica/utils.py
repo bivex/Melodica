@@ -22,6 +22,8 @@ Rules:
 
 from __future__ import annotations
 
+import copy
+
 from melodica.types_pkg._notes import NoteInfo
 from melodica.types_pkg._theory import ChordLabel, Scale
 from melodica.theory.chords import Quality
@@ -353,11 +355,46 @@ def snap_pitches_to_scale(pitches: list[int], key: Scale) -> list[int]:
 
 
 def chord_at(chords: list[ChordLabel], beat: float) -> ChordLabel | None:
-    """Return the chord active at the given beat position, or None."""
+    """Return the chord active at the given beat position, or ``None`` if empty.
+
+    Matching uses each chord's ``.start`` (an absolute beat). If every chord
+    starts *after* the query beat — which happens when a caller passes a
+    localized/sliced section list (whose ``.start`` values still carry their
+    global offset) together with a *local* beat — the list is re-anchored at its
+    own earliest chord and resolved in that local time, instead of silently
+    returning ``None``. Pass full un-sliced harmonizer output, or rebase slices
+    with :func:`rebase_chords`, for exact absolute matching.
+    """
+    if not chords:
+        return None
     for c in reversed(chords):
         if c.start <= beat:
             return c
-    return None
+    # No chord starts at/before `beat`: either a pre-first-chord pickup or, more
+    # commonly, a localized slice whose starts are offset past the local beat.
+    # Resolve against the slice's own origin so section rendering doesn't break.
+    earliest = min(c.start for c in chords)
+    if earliest > beat:
+        for c in reversed(chords):
+            if (c.start - earliest) <= beat:
+                return c
+    return chords[0]
+
+
+def rebase_chords(chords: list[ChordLabel], delta: float) -> list[ChordLabel]:
+    """Return shallow copies of ``chords`` with ``.start`` shifted by ``delta`` beats.
+
+    Generators resolve harmony via :func:`chord_at`, which matches on a chord's
+    absolute ``.start``. To render a *slice* of harmonizer output in local
+    section time, rebase it first (``delta = -section_start_beat``) so the slice
+    starts at beat 0. The input list is not mutated.
+    """
+    out = []
+    for c in chords:
+        cc = copy.copy(c)
+        cc.start = c.start + delta
+        out.append(cc)
+    return out
 
 
 # ---------------------------------------------------------------------------
