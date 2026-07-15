@@ -40,13 +40,13 @@ from melodica.generators import (
     StringsEnsembleGenerator,
     AmbientPadGenerator,
     BassGenerator,
-    FluteGenerator,
+    MelodyGenerator,
 )
 from melodica.types import Scale, Mode, SectionRole, SectionFunction
 from melodica.midi import export_multitrack_midi
 
 
-ALL_TRACKS = ["Geometry_Piano", "String_Chorus", "Dark_Pad", "Contrabass", "Lead_Flute"]
+ALL_TRACKS = ["Geometry_Piano", "String_Chorus", "Dark_Pad", "Contrabass", "Lead_Melody"]
 
 
 def _mute(*keep: str) -> list[str]:
@@ -82,10 +82,10 @@ def _part(
 def _movement_sections(m: dict) -> list[IdeaPart]:
     """Build the four-section arc for one movement.
 
-    INTRO  — piano + contrabass only, thinned (BUILD)
-    VERSE  — add strings + pad (BUILD)
-    CLIMAX — full ensemble, flute enters, densest (SUSTAIN)
-    CODA   — pull back to piano + pad + bass, thinned (FADE)
+    INTRO  — piano + contrabass only, thinned (BUILD); melody silent
+    VERSE  — add pad + melody enters (BUILD)
+    CLIMAX — full ensemble, strings join, densest (SUSTAIN)
+    CODA   — melody + strings drop out, piano + pad + bass fade (FADE)
     """
     name, root, tempo, ts = m["name"], m["root"], m["tempo"], m["ts"]
     b = m["bars"]  # {"intro","verse","climax","coda"}
@@ -97,12 +97,12 @@ def _movement_sections(m: dict) -> list[IdeaPart]:
         ),
         _part(
             name, "VERSE", "BUILD", root, tempo, ts, b["verse"],
-            mute=_mute("Geometry_Piano", "String_Chorus", "Dark_Pad", "Contrabass"),
+            mute=_mute("Geometry_Piano", "Dark_Pad", "Contrabass", "Lead_Melody"),
         ),
         _part(
             name, "CLIMAX", "SUSTAIN", root, tempo, ts, b["climax"],
             mute=[],
-            density={"Geometry_Piano": 0.95, "String_Chorus": 0.85, "Lead_Flute": 0.6},
+            density={"Geometry_Piano": 0.95, "String_Chorus": 0.85, "Lead_Melody": 0.7},
         ),
         _part(
             name, "CODA", "FADE", root, tempo, ts, b["coda"],
@@ -169,11 +169,17 @@ def main() -> None:
             octave_shift=-2,
         ),
         TrackConfig(
-            name="Lead_Flute",
-            generator=FluteGenerator(),
+            name="Lead_Melody",
+            generator_type="melody",
+            generator=MelodyGenerator(
+                prefer_chord_tones=0.7,
+                note_range_low=74,
+                note_range_high=96,
+                allow_2nd=True,
+                allow_7th=True,
+            ),
             instrument="flute",
-            density=0.45,
-            octave_shift=1,
+            density=0.6,
         ),
     ]
 
@@ -186,6 +192,8 @@ def main() -> None:
         parts = _movement_sections(m)
         tool_config = IdeaToolConfig(
             style="cinematic_hybrid",
+            workflow="generate_melody_then_harmonize",
+            scale=Scale(m["root"], Mode.HUNGARIAN_MINOR),
             parts=parts,
             tracks=tracks_common,
             use_voice_leading=True,
