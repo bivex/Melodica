@@ -34,11 +34,16 @@ from melodica.types import Scale, Mode, SectionRole, SectionFunction
 from melodica.midi import export_multitrack_midi
 
 NOTE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+# Keys must match melodica.theory.chords.Quality member names exactly.
 QSHORT = {
     "MAJOR": "", "MINOR": "m", "DIMINISHED": "dim", "AUGMENTED": "+",
-    "DOMINANT7": "7", "MAJOR7": "maj7", "MINOR7": "m7", "MINOR_MAJOR7": "mMaj7",
-    "SUSPENDED4": "sus4", "SUSPENDED2": "sus2",
-    "DIMINISHED7": "dim7", "HALF_DIMINISHED": "m7b5", "DOMINANT9": "9",
+    "MAJOR7": "maj7", "DOMINANT7": "7", "MINOR7": "m7",
+    "HALF_DIM7": "m7b5", "FULL_DIM7": "dim7",
+    "SUS2": "sus2", "SUS4": "sus4", "POWER": "5",
+    "MAJOR9": "maj9", "MINOR9": "m9", "ADD9": "add9",
+    "MAJ_TRIAD_B9": "(b9)", "DOM7_SHARP11": "7#11", "DOM7_FLAT9": "7b9",
+    "DOM7_SHARP9": "7#9", "ALTERED_DOMINANT": "7alt",
+    "PHRYGIAN_MAJOR": "bII", "LYDIAN_AUG": "maj7#5",
 }
 
 ALL_TRACKS = [
@@ -85,7 +90,7 @@ def _movement_sections(m: dict) -> list[IdeaPart]:
                          "Dark_Pad", "Contrabass", "Flute_Lead", "Harp")),
         _part(name, "CLIMAX", "SUSTAIN", root, mode, tempo, ts, b["climax"],
               mute=[],
-              density={"Grand_Piano": 0.95, "Violin_I": 0.90, "Trombone": 0.85,
+              density={"Grand_Piano": 0.78, "Violin_I": 0.90, "Trombone": 0.85,
                        "French_Horn": 0.80, "Choir_Aahs": 0.75,
                        "Flute_Lead": 0.80, "Counter_Melody": 0.65}),
         _part(name, "OUTRO", "FADE", root, mode, tempo, ts, b["outro"],
@@ -96,7 +101,7 @@ def _movement_sections(m: dict) -> list[IdeaPart]:
 
 
 def label(c) -> str:
-    q = QSHORT.get(c.quality.name, c.quality.name)
+    q = QSHORT.get(c.quality.name) or c.quality.name.lower()
     inv = f"/{NOTE[c.bass]}" if getattr(c, "bass", None) and c.bass != c.root else ""
     return f"{NOTE[c.root]}{q}{inv}"
 
@@ -107,10 +112,10 @@ TRACKS_COMMON = [
         generator=ChordGenerator(
             voicing="closed", add_bass_note=-2,
             rhythm=ProbabilisticRhythmGenerator(
-                grid_resolution=0.5, density=0.70, downbeat_weight=0.35, gate=0.60, seed=42
+                grid_resolution=0.5, density=0.42, downbeat_weight=0.35, gate=0.50, seed=42
             ),
         ),
-        instrument="piano", density=0.90,
+        instrument="piano", density=0.55,
     ),
     TrackConfig(
         name="Violin_I",
@@ -125,17 +130,17 @@ TRACKS_COMMON = [
     TrackConfig(
         name="Pizz_Strings",
         generator=StringsPizzicatoGenerator(pattern="ostinato", section_divisi=2),
-        instrument="strings", density=0.60, octave_shift=-1,
+        instrument="strings", density=0.50, octave_shift=-1,
     ),
     TrackConfig(
         name="French_Horn",
         generator=FrenchHornGenerator(articulation="sustained", dynamic_curve="swell"),
-        instrument="brass", density=0.60,
+        instrument="brass", density=0.60, octave_shift=1,
     ),
     TrackConfig(
         name="Trombone",
         generator=TromboneGenerator(articulation="sustained", dynamic_curve="flat"),
-        instrument="brass", density=0.55, octave_shift=-1,
+        instrument="brass", density=0.55, octave_shift=0,
     ),
     TrackConfig(
         name="Clarinet",
