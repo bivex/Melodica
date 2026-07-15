@@ -132,6 +132,7 @@ def build_track(chords_all: list, key: Scale, total_bars: int) -> dict:
         cslice = chords_all[bar_cursor:bar_cursor + sec_bars]
         dur = float(sec_bars * BARS_PER_CHORD)
         off = float(bar_cursor * BARS_PER_CHORD)
+        ch = _local_chords(cslice, off)   # rebased to local beats for chord_at()
         p = PROF[sec_type]
 
         bass = Bass808SlidingGenerator(
@@ -139,24 +140,24 @@ def build_track(chords_all: list, key: Scale, total_bars: int) -> dict:
             pattern="trap_basic", slide_type="overlap", slide_probability=0.65,
             octave_range=1, accent_velocity=1.25, slide_curve="exponential",
             transient_ducking=True, envelope_gating=True,
-        ).render(cslice, key, dur)
+        ).render(ch, key, dur)
         drums = TrapDrumsGenerator(
             GeneratorParams(density=p["drums"]),
             variant="standard", hat_roll_density=0.58, kick_pattern="standard",
             open_hat_probability=0.20, groove_swing=0.58,   # ← "раскач" swing
-        ).render(cslice, key, dur)
+        ).render(ch, key, dur)
         keys = PianoCompGenerator(
             GeneratorParams(density=p["keys"], key_range_low=48, key_range_high=72),
             comp_style="pop", voicing_type="close", accent_pattern="syncopated", chord_density=0.45,
-        ).render(cslice, key, dur)
+        ).render(ch, key, dur)
         pad = AmbientPadGenerator(
             GeneratorParams(density=p["pad"], key_range_low=36, key_range_high=60),
             voicing="spread", overlap=0.4,
-        ).render(cslice, key, dur)
+        ).render(ch, key, dur)
         lead = (SoloMelodyGenerator(
             GeneratorParams(density=p["lead"], key_range_low=60, key_range_high=84),
             style="blues_lick", blues_notes=True, chromaticism=0.30, vibrato_depth=0.3,
-        ).render(cslice, key, dur) if p["lead"] > 0 else [])
+        ).render(ch, key, dur) if p["lead"] > 0 else [])
 
         for name, notes in (("Sub808", bass), ("Drums", drums), ("Keys", keys),
                             ("Pad", pad), ("Lead", lead)):
@@ -168,7 +169,7 @@ def build_track(chords_all: list, key: Scale, total_bars: int) -> dict:
                 GeneratorParams(density=0.30, key_range_low=36, key_range_high=60),
                 fill_type="descending", fill_length=2.0, position="end",
                 velocity_curve="crescendo",
-            ).render(cslice[-1:], key, 4.0)
+            ).render(ch[-1:], key, 4.0)
             tracks["Fills"] += _offset(fills, off + dur - 4.0)
 
         # riser sweeping up across the whole build → lands on the next drop
@@ -177,7 +178,7 @@ def build_track(chords_all: list, key: Scale, total_bars: int) -> dict:
                 GeneratorParams(density=0.50, key_range_low=48, key_range_high=84),
                 riser_type="synth", length_beats=min(dur, 4.0),
                 pitch_curve="exponential", peak_velocity=118,
-            ).render(cslice, key, dur)
+            ).render(ch, key, dur)
             tracks["Riser"] += _offset(riser, off)
 
         # impact boom on the downbeat of every drop (the "slam")
@@ -185,7 +186,7 @@ def build_track(chords_all: list, key: Scale, total_bars: int) -> dict:
             impact = FXImpactGenerator(
                 GeneratorParams(density=0.50, key_range_low=24, key_range_high=48),
                 impact_type="boom", tail_length=2.5, pitch_drop=12, placement="downbeat",
-            ).render(cslice, key, min(dur, 4.0))
+            ).render(ch, key, min(dur, 4.0))
             tracks["Impact"] += _offset(impact, off)
 
         bar_cursor += sec_bars
