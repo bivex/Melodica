@@ -28,6 +28,7 @@
    - [MIDI Analyzer & Psychoacoustics](#midi-analyzer--psychoacoustics)
    - [Register Balancing Workflow](#register-balancing-workflow)
 7. [Development & Testing](#7-development--testing)
+8. [Related Projects](#8-related-projects)
 
 **Annexes**
 * [Annex A (Informative): Case Study — Register Balancing](#annex-a-informative-case-study--register-balancing)
@@ -380,6 +381,12 @@ pytest -m "not slow"
 # Generate complete HTML coverage reports
 pytest --cov=melodica --cov-report=html
 ```
+
+---
+
+## 8. Related Projects
+
+* **[Birka](https://github.com/bivex/Birka)** — A lightweight MIDI playback helper utility designed to play `.mid` files directly from the terminal or integrate within Python workflows.
 
 ---
 
