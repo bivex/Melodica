@@ -52,11 +52,11 @@ INSTRUMENTS = {"Sub808": SYNTH_BASS, "Drums": DRUMS, "Keys": EPIANO,
 # ── section plan: intro → drop → verse → build → drop → outro ───────────────
 # sparse intro builds tension; riser→impact at each drop = the "wow" transition.
 PROF = {  # per-section density by generator
-    "intro": {"drums": 0.26, "bass": 0.22, "keys": 0.22, "pad": 0.10, "lead": 0.00},
-    "drop":  {"drums": 0.50, "bass": 0.60, "keys": 0.28, "pad": 0.10, "lead": 0.24},
-    "verse": {"drums": 0.42, "bass": 0.50, "keys": 0.26, "pad": 0.08, "lead": 0.20},
-    "build": {"drums": 0.34, "bass": 0.45, "keys": 0.22, "pad": 0.14, "lead": 0.10},
-    "outro": {"drums": 0.30, "bass": 0.40, "keys": 0.20, "pad": 0.10, "lead": 0.16},
+    "intro": {"drums": 0.30, "bass": 0.30, "keys": 0.22, "pad": 0.10, "lead": 0.00},
+    "drop":  {"drums": 0.50, "bass": 0.72, "keys": 0.28, "pad": 0.10, "lead": 0.24},
+    "verse": {"drums": 0.44, "bass": 0.60, "keys": 0.26, "pad": 0.08, "lead": 0.20},
+    "build": {"drums": 0.36, "bass": 0.55, "keys": 0.22, "pad": 0.16, "lead": 0.10},
+    "outro": {"drums": 0.32, "bass": 0.50, "keys": 0.20, "pad": 0.10, "lead": 0.16},
 }
 
 
@@ -73,6 +73,21 @@ def _offset(notes: list, delta: float) -> list:
     for n in notes:
         n.start += delta
     return notes
+
+
+def _local_chords(cslice: list, off: float) -> list:
+    """Copy a chord slice with .start rebased to local section time (beat 0…).
+
+    Generators resolve harmony via ``chord_at(chords, local_beat)`` which matches
+    on a chord's absolute ``.start``. A sliced chord keeps its global start, so we
+    rebase it — otherwise chord_at returns None and impacts/bass-lines go silent.
+    """
+    out = []
+    for c in cslice:
+        cc = copy.copy(c)
+        cc.start = c.start - off
+        out.append(cc)
+    return out
 
 BARS_PER_CHORD = 4.0
 CONTOUR_BASE = 48  # multiple of 12 → no transposition artifact
