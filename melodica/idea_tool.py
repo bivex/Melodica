@@ -682,6 +682,7 @@ class IdeaTool:
                 sorted(all_melody_notes, key=lambda n: n.start),
                 self.config.scale,
                 total_beats,
+                tension_curve=tension_curve,
             )
             if not chords:
                 chords = bootstrap_chords
