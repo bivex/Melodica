@@ -1019,7 +1019,7 @@
 
             // Destroy previous instance
             if (pixiRoll) {
-                try { pixiRoll.pianoRollAPI.pause(); } catch(e) {}
+                try { pixiRoll.playback.pause(); } catch(e) {}
                 mount.innerHTML = '';
                 pixiRoll = null;
             }
@@ -1046,11 +1046,12 @@
                     noteData:        noteData
                 });
 
-                mount.appendChild(pixiRoll.renderer.view);
-                const pixiCanvas = pixiRoll.renderer.view;
+                // pixiPianoRoll() returns the pianoRollAPI directly; canvas is at .view
+                const pixiCanvas = pixiRoll.view;
                 pixiCanvas.style.width   = '100%';
                 pixiCanvas.style.height  = '100%';
                 pixiCanvas.style.display = 'block';
+                mount.appendChild(pixiCanvas);
             } catch(err) {
                 console.warn('[pixi-piano-roll] init error:', err);
             }
@@ -1067,7 +1068,7 @@
             const qtr = Math.floor(elapsedBeats % 4);
             const s   = Math.round((elapsedBeats % 1) * 4);
             try {
-                pixiRoll.pianoRollAPI.seek(`${bar}:${qtr}:${s}`);
+                pixiRoll.playback.seek(`${bar}:${qtr}:${s}`);
             } catch(e) {}
         }
 
@@ -1685,15 +1686,9 @@
         }
 
 
-        // Resize window → resize pixi roll
+        // Resize window → re-initialize pixi roll with new dimensions
         window.addEventListener("resize", () => {
-            const mount = document.getElementById('pixi-piano-roll-mount');
-            if (!pixiRoll || !mount) return;
-            try {
-                pixiRoll.renderer.resize(mount.clientWidth, mount.clientHeight);
-                const c = pixiRoll.renderer.view;
-                c.style.width = '100%'; c.style.height = '100%';
-            } catch(e) {}
+            if (generatedNotes.length > 0) initPixiRoll(generatedNotes);
         });
 
 
@@ -1848,7 +1843,7 @@
 
             // Start pixi-piano-roll playback and sync
             if (pixiRoll) {
-                try { pixiRoll.pianoRollAPI.seek('0:0:0'); pixiRoll.pianoRollAPI.play(); } catch(e) {}
+                try { pixiRoll.playback.seek('0:0:0'); pixiRoll.playback.play(); } catch(e) {}
             }
             startPixiSync();
             
@@ -1891,7 +1886,7 @@
             playbackSchedulers.forEach(clearTimeout);
             playbackSchedulers = [];
             // Pause pixi-piano-roll playhead
-            if (pixiRoll) { try { pixiRoll.pianoRollAPI.pause(); } catch(e) {} }
+            if (pixiRoll) { try { pixiRoll.playback.pause(); } catch(e) {} }
             drawPianoRoll();
         }
 
