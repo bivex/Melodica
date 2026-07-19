@@ -223,6 +223,7 @@ from melodica.generators.percussion import PercussionGenerator
 from melodica.generators.phrase_morpher import PhraseMorpher
 from melodica.generators.random_note import RandomNoteGenerator
 from melodica.generators.motive import MotiveGenerator
+from melodica.generators.lorn_hook import LornHookGenerator
 from melodica.generators.walking_bass import WalkingBassGenerator
 from melodica.generators.alberti_bass import AlbertiBassGenerator
 from melodica.generators.drone import DroneGenerator
@@ -530,6 +531,7 @@ __all__ = [
     "PhraseMorpher",
     "RandomNoteGenerator",
     "MotiveGenerator",
+    "LornHookGenerator",
     "WalkingBassGenerator",
     "AlbertiBassGenerator",
     "DroneGenerator",

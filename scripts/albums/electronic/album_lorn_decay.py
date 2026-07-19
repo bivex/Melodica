@@ -32,6 +32,7 @@ from melodica.generators.dark_pad import DarkPadGenerator
 from melodica.generators.dark_bass import DarkBassGenerator
 from melodica.generators.vocal_chops import VocalChopsGenerator
 from melodica.generators.arpeggiator import ArpeggiatorGenerator
+from melodica.generators.lorn_hook import LornHookGenerator
 from melodica.composer.album_pipeline import produce_track, Mood
 from melodica.composer.tempo_modulator import TempoModulator
 from melodica.idea_tool import IdeaPart
@@ -202,11 +203,11 @@ def produce_acid_rain():
     )
     pads = pad_gen.render(chords, key, dur)
 
-    # 4. Melancholic high-tension lead
-    lead_gen = MelodyGenerator(
-        params=GeneratorParams(key_range_low=60, key_range_high=80),
-        phrase_length=4.0,
-        phrase_rest_probability=0.4,
+    # 4. Sparse memorable hook lead (LornHookGenerator)
+    lead_gen = LornHookGenerator(
+        hook_length=5,
+        octave=5,
+        seed=101,
     )
     leads = lead_gen.render(chords, key, dur)
 
@@ -287,15 +288,13 @@ def produce_grave_dirt():
     )
     pads = pad_gen.render(chords, key, dur)
 
-    # 4. Reversed/syncopated vocal chop leads
-    vocal_gen = VocalChopsGenerator(
-        params=GeneratorParams(key_range_low=58, key_range_high=74),
-        processing="reverse",
-        density=0.5,
-        source_pitch=64,
-        chop_pattern="syncopated",
+    # 4. Sparse vocal-synth hook (LornHookGenerator)
+    lead_gen = LornHookGenerator(
+        hook_length=4,
+        octave=4,
+        seed=202,
     )
-    leads = vocal_gen.render(chords, key, dur)
+    leads = lead_gen.render(chords, key, dur)
 
     # Apply Structured Arrangement
     pads = keep_in_range(pads, 0.0, 192.0)
@@ -372,15 +371,13 @@ def produce_iron_lungs():
     )
     pads = drone_gen.render(chords, key, dur)
 
-    # 4. Glitchy stuttered vocal chops
-    vocal_gen = VocalChopsGenerator(
-        params=GeneratorParams(key_range_low=58, key_range_high=70),
-        processing="stutter",
-        density=0.7,
-        source_pitch=58,
-        chop_pattern="offbeat",
+    # 4. Sparse stuttered vocal glitch hook (LornHookGenerator)
+    lead_gen = LornHookGenerator(
+        hook_length=6,
+        octave=5,
+        seed=303,
     )
-    leads = vocal_gen.render(chords, key, dur)
+    leads = lead_gen.render(chords, key, dur)
 
     # Apply Structured Arrangement
     pads = keep_in_range(pads, 0.0, 320.0) # drone
@@ -457,13 +454,13 @@ def produce_sega_sunset():
     )
     pads = pad_gen.render(chords, key, dur)
 
-    # 4. Eerie rising and falling arpeggiator keys
-    arp_gen = ArpeggiatorGenerator(
-        params=GeneratorParams(key_range_low=60, key_range_high=84),
-        pattern="up_down",
-        note_duration=0.25,
+    # 4. Sparse haunting lead hook (LornHookGenerator)
+    lead_gen = LornHookGenerator(
+        hook_length=5,
+        octave=5,
+        seed=404,
     )
-    leads = arp_gen.render(chords, key, dur)
+    leads = lead_gen.render(chords, key, dur)
 
     # Apply Structured Arrangement
     pads = keep_in_range(pads, 0.0, 256.0)
@@ -540,11 +537,11 @@ def produce_dystopia():
     )
     pads = pad_gen.render(chords, key, dur)
 
-    # 4. Piercing distorted lead melody
-    lead_gen = MelodyGenerator(
-        params=GeneratorParams(key_range_low=58, key_range_high=86),
-        phrase_length=8.0,
-        phrase_rest_probability=0.3,
+    # 4. Piercing distorted lead melody (LornHookGenerator)
+    lead_gen = LornHookGenerator(
+        hook_length=6,
+        octave=6,
+        seed=505,
     )
     leads = lead_gen.render(chords, key, dur)
 
@@ -620,11 +617,11 @@ def produce_decay():
     )
     pads = drone_gen.render(chords, key, dur)
 
-    # 3. Floating, sparse, melancholic melody
-    lead_gen = MelodyGenerator(
-        params=GeneratorParams(key_range_low=60, key_range_high=72),
-        phrase_length=6.0,
-        phrase_rest_probability=0.5,
+    # 3. Floating, sparse, melancholic melody (LornHookGenerator)
+    lead_gen = LornHookGenerator(
+        hook_length=4,
+        octave=4,
+        seed=606,
     )
     leads = lead_gen.render(chords, key, dur)
 
