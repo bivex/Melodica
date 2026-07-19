@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lorn Melody Hook Laboratory</title>
+    <meta name="description" content="Lorn Melody Hook Laboratory — generate and evaluate memorable melody hooks across 25 scales with the Apple MLX neural engine and a local JS generator.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
@@ -656,7 +657,7 @@
             padding: 2rem;
             text-align: center;
             font-size: 0.8rem;
-            color: rgba(243, 232, 255, 0.4);
+            color: rgba(243, 232, 255, 0.7);
             border-top: 1px solid rgba(168, 85, 247, 0.05);
             font-family: var(--font-mono);
         }
@@ -730,7 +731,7 @@
             <h2 class="section-title">Melody Config</h2>
             
             <div class="control-group">
-                <label>Scale Root Pitch <span id="val-root">C</span></label>
+                <label for="ctrl-root">Scale Root Pitch <span id="val-root">C</span></label>
                 <select id="ctrl-root">
                     <option value="0">C</option>
                     <option value="1">C#</option>
@@ -748,7 +749,7 @@
             </div>
 
             <div class="control-group">
-                <label>Scale Mode</label>
+                <label for="ctrl-mode">Scale Mode</label>
                 <select id="ctrl-mode">
                     <option value="major">Major (Ionian)</option>
                     <option value="aeolian">Aeolian (Natural Minor)</option>
@@ -779,7 +780,7 @@
             </div>
 
             <div class="control-group">
-                <label>Genre Profile</label>
+                <label for="ctrl-genre">Genre Profile</label>
                 <select id="ctrl-genre">
                     <option value="pop" selected>Pop (Tonic, 70/30, Balanced)</option>
                     <option value="hiphop">Hip-Hop/Rap (Dominant, 55/45, Syncopated)</option>
@@ -793,17 +794,17 @@
             </div>
 
             <div class="control-group">
-                <label>MIDI Octave <span id="val-octave">5</span></label>
+                <label for="ctrl-octave">MIDI Octave <span id="val-octave">5</span></label>
                 <input type="range" id="ctrl-octave" min="3" max="7" value="5">
             </div>
 
             <div class="control-group">
-                <label>Hook Length (Notes) <span id="val-hooklen">5</span></label>
+                <label for="ctrl-hooklen">Hook Length (Notes) <span id="val-hooklen">5</span></label>
                 <input type="range" id="ctrl-hooklen" min="3" max="8" value="5">
             </div>
 
             <div class="control-group">
-                <label>Random Seed</label>
+                <label for="ctrl-seed">Random Seed</label>
                 <input type="number" id="ctrl-seed" value="101" min="1" max="99999">
             </div>
         </div>
