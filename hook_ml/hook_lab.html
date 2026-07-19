@@ -596,6 +596,7 @@
 
             <button class="btn btn-secondary" id="btn-randomize">Randomize Config</button>
             <button class="btn btn-primary" id="btn-elite" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border: none; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); margin-top: -0.5rem;">Generate Elite Hook (95+)</button>
+            <button class="btn btn-primary" id="btn-mlx-api" style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%); border: none; box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); margin-top: -0.5rem;">Generate Neural Hook (MLX)</button>
             <button class="btn btn-secondary" id="btn-copy-md" style="margin-top: -0.5rem; background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #3b82f6;">Copy Hook Markdown</button>
             <button class="btn btn-primary" id="btn-generate">Generate New Hook</button>
             <button class="btn btn-play" id="btn-play">Play Hook Synthesizer</button>
@@ -1644,6 +1645,111 @@ ${notesMdTable}
             }).catch(err => {
                 alert("Failed to copy markdown: " + err);
             });
+        });
+
+        // Helper to render client notes matching server cycle structure
+        function renderHookForClient(notesList, durationBeats, root, mode) {
+            const notes = [];
+            let t = 0.0;
+            while (t < durationBeats) {
+                const progress = t / durationBeats;
+                let schema, octaveShift;
+                if (progress < 0.2) {
+                    schema = ["play", "silence", "play", "silence"];
+                    octaveShift = -12;
+                } else if (progress < 0.45) {
+                    schema = ["play", "play", "silence", "play"];
+                    octaveShift = 0;
+                } else if (progress < 0.70) {
+                    schema = ["play", "play", "play", "silence"];
+                    octaveShift = 0;
+                } else if (progress < 0.85) {
+                    schema = ["play", "play", "play", "play"];
+                    octaveShift = 0;
+                } else {
+                    schema = ["play", "silence", "silence", "silence"];
+                    octaveShift = -12;
+                }
+                
+                for (let bar = 0; bar < 4; bar++) {
+                    const action = schema[bar];
+                    if (action === "silence") continue;
+                    const tBar = t + bar * 4.0;
+                    if (tBar >= durationBeats) break;
+                    
+                    for (let i = 0; i < notesList.length; i++) {
+                        const n = notesList[i];
+                        let p = n.pitch;
+                        if (bar === 2 && progress >= 0.2 && progress < 0.45) {
+                            p = (i === notesList.length - 1) ? p + 2 : p;
+                        }
+                        
+                        notes.push({
+                            pitch: p + octaveShift,
+                            start: tBar + n.start,
+                            duration: n.duration,
+                            velocity: 100,
+                            label: NOTE_NAMES[(p + octaveShift) % 12] + Math.floor((p + octaveShift) / 12)
+                        });
+                    }
+                }
+                t += 16.0;
+            }
+            return notes;
+        }
+
+        // MLX API Neural Generator button
+        document.getElementById("btn-mlx-api").addEventListener("click", () => {
+            stopPlayback();
+            
+            const btn = document.getElementById("btn-mlx-api");
+            const originalText = btn.textContent;
+            btn.textContent = "Optimizing MLX...";
+            btn.style.background = "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)";
+            btn.disabled = true;
+            
+            const root = document.getElementById("ctrl-root").value;
+            const mode = document.getElementById("ctrl-mode").value;
+            
+            fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}`)
+                .then(res => res.json())
+                .then(data => {
+                    btn.textContent = originalText;
+                    btn.style.background = "linear-gradient(135deg, #10b981 0%, #3b82f6 100%)";
+                    btn.disabled = false;
+                    
+                    if (data.status === "success") {
+                        const scaleIntervals = SCALE_MODES[mode];
+                        const octave = parseInt(document.getElementById("ctrl-octave").value);
+                        
+                        document.getElementById("ctrl-seed").value = data.steps;
+                        
+                        const targetBaseMidi = 12 * octave + parseInt(root);
+                        const diffMidi = targetBaseMidi - 60;
+                        
+                        const optNotesList = data.notes.map(n => ({
+                            pitch: n.pitch + diffMidi,
+                            start: n.start,
+                            duration: n.duration
+                        }));
+                        
+                        const renderedNotes = renderHookForClient(optNotesList, 128.0, parseInt(root), mode);
+                        generatedNotes = renderedNotes.sort((a, b) => a.start - b.start);
+                        
+                        evaluateHookMemorability(generatedNotes, parseInt(root), scaleIntervals, optNotesList.length, optNotesList.map(n => n.pitch));
+                        drawPianoRoll();
+                        
+                        startPlayback();
+                    } else {
+                        alert("MLX Optimization failed: " + data.message);
+                    }
+                })
+                .catch(err => {
+                    btn.textContent = originalText;
+                    btn.style.background = "linear-gradient(135deg, #10b981 0%, #3b82f6 100%)";
+                    btn.disabled = false;
+                    alert("Failed to connect to MLX API Server. Please ensure 'python hook_ml/server.py' is running on port 8081.");
+                });
         });
 
         // Dropdowns slider label sync
