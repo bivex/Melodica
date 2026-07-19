@@ -2120,12 +2120,12 @@ ${notesMdTable}
             return notes;
         }
 
-        function triggerMLXGeneration(elite = false) {
+        function triggerMLXGeneration(elite = false, btnId = null) {
             stopPlayback();
             
-            const btnId = elite ? "btn-mlx-elite" : "btn-mlx-api";
-            const btn = document.getElementById(btnId);
-            const originalText = elite ? "Generate Elite" : "Generate Hook";
+            const targetBtnId = btnId || (elite ? "btn-mlx-elite" : "btn-mlx-api");
+            const btn = document.getElementById(targetBtnId);
+            const originalText = btn.textContent;
             btn.textContent = elite ? "Optimizing Elite..." : "Optimizing...";
             btn.style.background = "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)";
             btn.style.boxShadow = "0 4px 20px rgba(168, 85, 247, 0.6)";
@@ -2181,12 +2181,12 @@ ${notesMdTable}
 
         // MLX API Neural Generator button
         document.getElementById("btn-mlx-api").addEventListener("click", () => {
-            triggerMLXGeneration(false);
+            triggerMLXGeneration(false, "btn-mlx-api");
         });
 
         // MLX API Elite Neural Generator button (for current chosen parameters)
         document.getElementById("btn-mlx-elite").addEventListener("click", () => {
-            triggerMLXGeneration(true);
+            triggerMLXGeneration(true, "btn-mlx-elite");
         });
 
         // MLX API Random Neural Generator button
@@ -2215,7 +2215,7 @@ ${notesMdTable}
             document.querySelectorAll(".preset-tab").forEach(t => t.classList.remove("active"));
             
             // Trigger MLX API button optimization automatically (standard)
-            triggerMLXGeneration(false);
+            triggerMLXGeneration(false, "btn-mlx-random");
         });
 
         // MLX API Random Neural Generator Elite button
@@ -2244,7 +2244,37 @@ ${notesMdTable}
             document.querySelectorAll(".preset-tab").forEach(t => t.classList.remove("active"));
             
             // Trigger MLX API button optimization automatically (elite)
-            triggerMLXGeneration(true);
+            triggerMLXGeneration(true, "btn-mlx-random-elite");
+        });
+
+        // MLX API Random Drop Generator button
+        document.getElementById("btn-mlx-random-drop").addEventListener("click", () => {
+            stopPlayback();
+            
+            // Randomize root key and scale mode (favoring dark modes)
+            const randRoot = Math.floor(Math.random() * 12);
+            const darkModes = ["phrygian", "locrian", "harmonic_minor", "hungarian_minor", "byzantine", "aeolian", "dorian"];
+            const randMode = darkModes[Math.floor(Math.random() * darkModes.length)];
+            const randOctave = 3 + Math.floor(Math.random() * 2); // octaves 3 or 4 (perfect heavy drop bass range)
+            const randHooklen = 4 + Math.floor(Math.random() * 2); // 4 or 5 notes (sparse, heavy drop motif)
+            const randSeed = 1 + Math.floor(Math.random() * 99999);
+            
+            document.getElementById("ctrl-root").value = randRoot;
+            document.getElementById("ctrl-mode").value = randMode;
+            document.getElementById("ctrl-genre").value = "drop";
+            document.getElementById("ctrl-octave").value = randOctave;
+            document.getElementById("ctrl-hooklen").value = randHooklen;
+            document.getElementById("ctrl-seed").value = randSeed;
+            
+            // Sync labels
+            document.getElementById("val-root").textContent = NOTE_NAMES[randRoot];
+            document.getElementById("val-octave").textContent = randOctave;
+            document.getElementById("val-hooklen").textContent = randHooklen;
+            
+            document.querySelectorAll(".preset-tab").forEach(t => t.classList.remove("active"));
+            
+            // Trigger MLX API button optimization automatically (elite)
+            triggerMLXGeneration(true, "btn-mlx-random-drop");
         });
 
         // Dropdowns slider label sync
