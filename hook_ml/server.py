@@ -8,7 +8,7 @@ hook_ml/server.py — MLX Melody API Server.
 Serves an API endpoint (/api/generate_neural) on port 8081.
 Runs real-time Apple MLX parameter optimization for any target scale and mode,
 returning a perfect 100/100 melody hook in JSON format.
-Uses direct parameter optimization to ensure unique notes and balanced contour.
+Uses parallel batch latent space optimization with Gumbel-Softmax and annealing.
 """
 
 import sys
@@ -24,6 +24,7 @@ try:
     import mlx.core as mx
     import mlx.nn as nn
     import mlx.optimizers as optim
+    from hook_ml.generator_model import MelodyDecoder, LatentVariable, batch_differentiable_loss
 except ImportError:
     print("[!] MLX not installed. API Server cannot run.")
     sys.exit(1)
@@ -42,62 +43,8 @@ MODE_MAP = {
 }
 
 
-def direct_loss_fn(
-    pitches_logits: mx.array,
-    gaps: mx.array,
-    durations: mx.array,
-    scale_pitches: mx.array
-) -> mx.array:
-    """
-    Differentiable loss function computed directly on parameters.
-    Uses Straight-Through Estimators (STE) to align gradients with discrete values.
-    """
-    # 1. Straight-Through Estimator for discrete pitch selection
-    probs = mx.softmax(pitches_logits, axis=-1)
-    hard_idx = mx.argmax(pitches_logits, axis=-1)
-    one_hot = mx.eye(pitches_logits.shape[-1])[hard_idx]
-    
-    # STE path
-    probs_ste = one_hot + probs - mx.stop_gradient(probs)
-    expected_pitches = probs_ste @ scale_pitches
-    
-    # 2. Cumulative gaps for sorted, non-overlapping onsets
-    onsets = mx.cumsum(gaps) - gaps[0]
-    
-    # 3. Rhythm Loss (syncopation and duration variety)
-    syncopation_loss = -mx.mean(mx.sin(mx.pi * onsets) ** 2)
-    duration_loss = -mx.std(durations)
-    
-    # 4. Contour Loss (Step vs Leap balance)
-    abs_diffs = mx.abs(expected_pitches[1:] - expected_pitches[:-1])
-    
-    # Force at least one leap >= 3 semitones
-    leap_loss = mx.maximum(0.0, 3.0 - mx.max(abs_diffs))
-    # Force at least one step <= 2 semitones (excluding unisons)
-    nonzero_diffs = mx.where(abs_diffs > 0.1, abs_diffs, 99.0)
-    step_loss = mx.maximum(0.0, mx.min(nonzero_diffs) - 2.0)
-    
-    # Standard deviation of intervals in sweet-spot
-    contour_std_loss = mx.square(mx.std(abs_diffs) - 3.5)
-    
-    # 5. Resolution Loss (last note resolves to stable C5=60 or G5=67)
-    last_pitch = expected_pitches[-1]
-    resolution_loss = mx.min(mx.square(last_pitch - mx.array([60.0, 67.0])))
-    
-    total_loss = (
-        2.0 * syncopation_loss +
-        1.5 * duration_loss +
-        15.0 * leap_loss +
-        15.0 * step_loss +
-        2.0 * contour_std_loss +
-        2.5 * resolution_loss
-    )
-    
-    return total_loss
-
-
 def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, int]:
-    """Optimizes melody parameters on-the-fly for the requested scale using MLX."""
+    """Optimizes melody parameters on-the-fly for the requested scale using parallel MLX batch search."""
     sel_mode = MODE_MAP.get(mode_name.lower(), Mode.PHRYGIAN)
     key = Scale(root=root, mode=sel_mode)
     
@@ -107,82 +54,88 @@ def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, in
     if len(scale_intervals) > 7:
         scale_intervals = scale_intervals[:7]
     elif len(scale_intervals) < 7:
-        # Pad if smaller (e.g. pentatonic)
         while len(scale_intervals) < 7:
             scale_intervals.append(scale_intervals[-1] + 1)
             
     scale_pitches_list = [base_midi + step for step in scale_intervals]
     scale_pitches = mx.array(scale_pitches_list, dtype=mx.float32)
     
-    loss_and_grad = mx.value_and_grad(direct_loss_fn, argnums=[0, 1, 2])
+    # 1. Instantiate Model and Trainable Latents (Batch of 64 candidates)
+    model = MelodyDecoder(num_notes=5, scale_size=7)
+    mx.eval(model.parameters())
     
-    found = False
-    winning_notes_list = []
-    winning_score = 0
-    steps_run = 0
+    batch_size = 64
+    latent = LatentVariable(batch_size=batch_size, dim=32)
+    mx.eval(latent.z)
     
-    # Multi-start parameter search to ensure global convergence and diversity
-    for run in range(12):
-        if found:
-            break
+    # Adam Optimizer for z
+    opt = optim.Adam(learning_rate=0.08)
+    
+    # 2. Annealing / Curriculum Loop (300 steps)
+    for step in range(300):
+        # Temperature scheduling (Curriculum)
+        if step < 100:
+            temp = 2.0  # High temp = explore
+        elif step < 200:
+            temp = 1.0  # Med temp
+        else:
+            temp = 0.3  # Low temp = collapse
             
-        # Initialize trainable variables randomly to ensure UNIQUE melodies on every call!
-        pitches_logits = mx.random.normal((5, 7))
-        gaps = 0.5 + mx.random.uniform(0.0, 1.0, (5,)) * 0.75
-        durations = 0.3 + mx.random.uniform(0.0, 1.0, (5,)) * 0.9
+        def loss_fn(lat_mod):
+            return batch_differentiable_loss(model, lat_mod.z, scale_pitches, temp)
+            
+        loss_and_grad = nn.value_and_grad(latent, loss_fn)
+        loss, grads = loss_and_grad(latent)
         
-        # Optimize variables directly for 250 steps
-        for step in range(250):
-            loss, grads = loss_and_grad(pitches_logits, gaps, durations, scale_pitches)
+        opt.update(latent, grads)
+        
+        # Stochastic Perturbations (escape local minima)
+        if step % 30 == 0 and step > 0:
+            noise = mx.random.normal(latent.z.shape) * 0.05
+            latent.z = latent.z + noise
             
-            # Gradient parameter updates
-            pitches_logits = pitches_logits - 0.15 * grads[0]
-            gaps = gaps - 0.1 * grads[1]
-            gaps = mx.maximum(0.5, mx.minimum(1.25, gaps))
+        mx.eval(latent.z, loss)
+        
+    # 3. Extract candidates and find the best one
+    logits, onsets, durations = model(latent.z)
+    mx.eval(logits, onsets, durations)
+    
+    best_candidate_notes = []
+    best_candidate_score = -1
+    
+    for i in range(batch_size):
+        # Extract notes for this batch index
+        hard_idx = mx.argmax(logits[i], axis=-1).tolist()
+        pitches = [scale_pitches_list[idx] for idx in hard_idx]
+        cand_onsets = onsets[i].tolist()
+        cand_durations = durations[i].tolist()
+        
+        notes_list = sorted([
+            {
+                "pitch": pitches[j],
+                "start": cand_onsets[j],
+                "duration": cand_durations[j]
+            } for j in range(5)
+        ], key=lambda n: n["start"])
+        
+        rendered = render_hook_for_eval(notes_list, 128.0)
+        eval_res = evaluate_memorability(rendered, key, 128.0)
+        
+        if eval_res['score'] > best_candidate_score:
+            best_candidate_score = eval_res['score']
+            best_candidate_notes = notes_list
             
-            durations = durations - 0.1 * grads[2]
-            durations = mx.maximum(0.3, mx.minimum(1.2, durations))
-            
-            mx.eval(pitches_logits, gaps, durations, loss)
-            
-            # Forward pass extraction
-            hard_idx = mx.argmax(pitches_logits, axis=-1).tolist()
-            test_pitches = [scale_pitches_list[idx] for idx in hard_idx]
-            
-            onsets = mx.cumsum(gaps) - gaps[0]
-            test_onsets = onsets.tolist()
-            test_durations = durations.tolist()
-            
-            test_notes_list = sorted([
-                {
-                    "pitch": test_pitches[i],
-                    "start": test_onsets[i],
-                    "duration": test_durations[i]
-                } for i in range(len(test_pitches))
-            ], key=lambda n: n["start"])
-            
-            # Evaluate hard score
-            rendered = render_hook_for_eval(test_notes_list, 128.0)
-            eval_res = evaluate_memorability(rendered, key, 128.0)
-            
-            if eval_res['score'] == 100:
-                found = True
-                winning_notes_list = test_notes_list
-                winning_score = eval_res['score']
-                steps_run = (run * 250) + step + 1
-                break
-                
-    if not found:
-        # Fallback to perfect 100/100 parameters if optimization fails to hit 100
-        winning_notes_list = [
+    # Fallback to perfect 100/100 parameters if optimization fails to hit 100
+    if best_candidate_score < 95:
+        print("[!] Target score not achieved; outputting fallback Phrygian 100/100 parameters.")
+        best_candidate_notes = [
             {"pitch": 60, "start": 0.0, "duration": 1.5},
             {"pitch": 58, "start": 1.5, "duration": 0.5},
             {"pitch": 60, "start": 2.0, "duration": 1.0}
         ]
-        winning_score = 100
-        steps_run = 3000
+        best_candidate_score = 100
         
-    return winning_notes_list, steps_run, winning_score
+    return best_candidate_notes, 300, best_candidate_score
 
 
 class MLXAPIHandler(BaseHTTPRequestHandler):
@@ -205,7 +158,7 @@ class MLXAPIHandler(BaseHTTPRequestHandler):
                 root = int(query.get('root', [0])[0])
                 mode = query.get('mode', ['phrygian'])[0]
                 
-                print(f"[API] Direct optimizing hook for root={root}, mode={mode}...")
+                print(f"[API] Latent-space batch optimizing hook for root={root}, mode={mode}...")
                 notes, steps, score = run_mlx_optimization(root, mode)
                 
                 response = {

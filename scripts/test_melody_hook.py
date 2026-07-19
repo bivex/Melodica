@@ -56,8 +56,7 @@ def evaluate_memorability(notes: list[NoteInfo], key: Scale, duration_beats: flo
     durations = [round(n.duration, 2) for n in notes]
     unique_durs = set(durations)
     
-    # Syncopations (notes starting on offbeats)
-    syncopated_count = sum(1 for n in notes if (n.start % 1.0) != 0.0)
+    syncopated_count = sum(1 for n in notes if abs(n.start - round(n.start)) > 0.05)
     syncopation_ratio = syncopated_count / len(notes) if notes else 0.0
     
     # Silence Ratio
