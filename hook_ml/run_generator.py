@@ -79,10 +79,10 @@ def render_hook_for_eval(notes_list: list[dict], duration_beats: float) -> list[
     return notes
 
 
-def enforce_resolution(notes_list: list[dict], key: Scale) -> list[dict]:
+def enforce_resolution(notes_list: list[dict], key: Scale, scale_pitches_list: list[int], resolve_to: str = "tonic") -> list[dict]:
     """
     Forcibly shifts the last note of the hook to the nearest octave of the
-    scale's tonic (root) or dominant (5th) to guarantee 5/5 resolution score.
+    scale's tonic, mediant, or dominant depending on the genre profile.
     Limits leaps from the preceding note to avoid breaking the contour score.
     """
     if len(notes_list) < 2:
@@ -93,21 +93,23 @@ def enforce_resolution(notes_list: list[dict], key: Scale) -> list[dict]:
     last_note = res_notes[last_idx]
     prev_note = res_notes[-2]
     
-    # Target pitch classes (tonic and dominant)
-    tonic_pc = key.root % 12
-    dominant_pc = (key.root + 7) % 12
-    
+    # Resolve target pitch class (0..11)
+    if resolve_to == "mediant" and len(scale_pitches_list) > 2:
+        target_pc = scale_pitches_list[2] % 12
+    elif resolve_to == "dominant" and len(scale_pitches_list) > 4:
+        target_pc = scale_pitches_list[4] % 12
+    else:
+        target_pc = key.root % 12
+        
     current_pitch = last_note["pitch"]
     prev_pitch = prev_note["pitch"]
     
-    # Find nearest octave for tonic and dominant (MIDI octaves 3 to 7)
-    tonic_pitch_options = [tonic_pc + 12 * oct for oct in range(3, 8)]
-    dominant_pitch_options = [dominant_pc + 12 * oct for oct in range(3, 8)]
+    # Target options (MIDI octaves 3 to 7)
+    target_pitch_options = [target_pc + 12 * oct for oct in range(3, 8)]
     
-    all_options = tonic_pitch_options + dominant_pitch_options
     # Sort by proximity to current pitch, heavily penalizing leaps > 8 semitones from prev note
     best_pitch = min(
-        all_options,
+        target_pitch_options,
         key=lambda p: abs(p - current_pitch) + 4.0 * max(0, abs(p - prev_pitch) - 8)
     )
     
@@ -115,13 +117,13 @@ def enforce_resolution(notes_list: list[dict], key: Scale) -> list[dict]:
     return res_notes
 
 
-def hill_climbing_refine(notes_list: list[dict], key: Scale, scale_pitches_list: list[int]) -> tuple[list[dict], dict]:
+def hill_climbing_refine(notes_list: list[dict], key: Scale, scale_pitches_list: list[int], resolve_to: str = "tonic") -> tuple[list[dict], dict]:
     """
     Performs discrete hill-climbing local search on a generated melody hook
     to close the continuous-discrete gap and hit exactly 100/100.
     """
     best_notes = [dict(n) for n in notes_list]
-    best_notes = enforce_resolution(best_notes, key)  # lock resolution first
+    best_notes = enforce_resolution(best_notes, key, scale_pitches_list, resolve_to)  # lock resolution first
     rendered = render_hook_for_eval(best_notes, 128.0)
     best_metrics = evaluate_memorability(rendered, key, 128.0)
     best_score = best_metrics['score']
@@ -292,7 +294,7 @@ def main():
                 ], key=lambda n: n["start"])
                 
                 # Apply forced discrete resolution override
-                notes_list = enforce_resolution(notes_list, key)
+                notes_list = enforce_resolution(notes_list, key, scale_pitches_list, "tonic")
                 
                 rendered = render_hook_for_eval(notes_list, 128.0)
                 eval_res = evaluate_memorability(rendered, key, 128.0)
@@ -332,7 +334,7 @@ def main():
                 } for j in range(5)
             ], key=lambda n: n["start"])
             
-            notes_list = enforce_resolution(notes_list, key)
+            notes_list = enforce_resolution(notes_list, key, scale_pitches_list, "tonic")
             
             rendered = render_hook_for_eval(notes_list, 128.0)
             eval_res = evaluate_memorability(rendered, key, 128.0)
@@ -344,7 +346,7 @@ def main():
                 
     # 5. Apply Discrete Hill-Climbing Refinement to guarantee 100/100
     print(f"Applying CPU Hill-Climbing Refinement to candidate (Current Score: {best_candidate_score}/100)...")
-    refined_notes, refined_metrics = hill_climbing_refine(best_candidate_notes, key, scale_pitches_list)
+    refined_notes, refined_metrics = hill_climbing_refine(best_candidate_notes, key, scale_pitches_list, "tonic")
     best_candidate_notes = refined_notes
     best_candidate_score = refined_metrics['score']
     best_candidate_metrics = refined_metrics

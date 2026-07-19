@@ -779,6 +779,18 @@
             </div>
 
             <div class="control-group">
+                <label>Genre Profile</label>
+                <select id="ctrl-genre">
+                    <option value="pop" selected>Pop (Tonic, 70/30, Balanced)</option>
+                    <option value="hiphop">Hip-Hop/Rap (Dominant, 55/45, Syncopated)</option>
+                    <option value="rnb">R&B/Neo-Soul (Mediant, 65/35, Floating)</option>
+                    <option value="reggaeton">Reggaeton (Tonic, 75/25, Dembow)</option>
+                    <option value="afrobeats">Afrobeats (Tonic, 70/30, Swung)</option>
+                    <option value="drill">Drill (Dominant, 50/50, Aggressive)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
                 <label>MIDI Octave <span id="val-octave">5</span></label>
                 <input type="range" id="ctrl-octave" min="3" max="7" value="5">
             </div>
@@ -2095,8 +2107,9 @@ ${notesMdTable}
             
             const root = document.getElementById("ctrl-root").value;
             const mode = document.getElementById("ctrl-mode").value;
+            const genre = document.getElementById("ctrl-genre").value;
             
-            fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}&elite=${elite}`)
+            fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}&elite=${elite}&genre=${genre}`)
                 .then(res => res.json())
                 .then(data => {
                     btn.textContent = "Generate Hook";

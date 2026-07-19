@@ -79,14 +79,16 @@ def batch_differentiable_loss(
     model: MelodyDecoder,
     z: mx.array,
     scale_pitches: mx.array,
-    target_root_midi: float,
-    target_dominant_midi: float,
+    target_resolution_midi: float,
+    sync_target: float = 0.40,
+    step_target: float = 0.70,
+    leap_target: float = 0.30,
     temperature: float = 1.0
 ) -> mx.array:
     """
     Batch-vectorized fully continuous loss function.
     Rewards syncopations (targeted ratio), duration variance, step-leap balance (soft ratios),
-    resolutions (aligned with key), and entropy exploration.
+    resolutions (aligned with key/genre), and entropy exploration.
     """
     logits, onsets, durations = model(z)
     
@@ -95,10 +97,10 @@ def batch_differentiable_loss(
     expected_pitches = probs @ scale_pitches
     
     # 2. Rhythm Loss
-    # Soft syncopation ratio target: keep syncopated notes around 40% (inside target 15%-60%)
+    # Soft syncopation ratio target: keep syncopated notes around target
     sync_soft = mx.sum(mx.sigmoid(20.0 * (mx.sin(mx.pi * onsets) ** 2 - 0.15)), axis=1)
     sync_ratio = sync_soft / 5.0
-    syncopation_loss = mx.square(sync_ratio - 0.40)
+    syncopation_loss = mx.square(sync_ratio - sync_target)
     
     # Duration variety: reward standard deviation of durations
     duration_loss = -mx.std(durations, axis=1)
@@ -116,14 +118,12 @@ def batch_differentiable_loss(
     step_ratio = steps_soft / total_intervals
     leap_ratio = leaps_soft / total_intervals
     
-    # Quadratic targets: 70% steps, 30% leaps
-    contour_loss = mx.square(step_ratio - 0.70) + mx.square(leap_ratio - 0.30)
+    # Quadratic targets
+    contour_loss = mx.square(step_ratio - step_target) + mx.square(leap_ratio - leap_target)
     
-    # 4. Resolution Loss (last note resolves to stable key root/dominant midi)
+    # 4. Resolution Loss (last note resolves to target resolution midi)
     last_pitch = expected_pitches[:, -1]
-    dist_c = mx.square(last_pitch - target_root_midi)
-    dist_g = mx.square(last_pitch - target_dominant_midi)
-    resolution_loss = mx.minimum(dist_c, dist_g)
+    resolution_loss = mx.square(last_pitch - target_resolution_midi)
     
     # 5. Entropy Regularization
     p = mx.softmax(logits, axis=-1)
@@ -135,7 +135,7 @@ def batch_differentiable_loss(
         12.0 * syncopation_loss +
         3.0 * duration_loss +
         15.0 * contour_loss +
-        8.0 * resolution_loss +  # Pulled to the target root/dominant key pitch
+        8.0 * resolution_loss +  # Pulled to the target resolution midi
         1.0 * entropy_loss
     )
     

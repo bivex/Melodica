@@ -66,8 +66,17 @@ MODE_MAP = {
 }
 
 
-def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple[list[dict], int, int]:
-    """Optimizes melody parameters on-the-fly for the requested scale using parallel MLX batch search."""
+GENRE_PROFILES = {
+    "pop":       {"sync_target": 0.40, "step_target": 0.70, "leap_target": 0.30, "resolve_to": "tonic"},
+    "hiphop":    {"sync_target": 0.55, "step_target": 0.55, "leap_target": 0.45, "resolve_to": "dominant"},
+    "rnb":       {"sync_target": 0.50, "step_target": 0.65, "leap_target": 0.35, "resolve_to": "mediant"},
+    "reggaeton": {"sync_target": 0.60, "step_target": 0.75, "leap_target": 0.25, "resolve_to": "tonic"},
+    "afrobeats": {"sync_target": 0.45, "step_target": 0.70, "leap_target": 0.30, "resolve_to": "tonic"},
+    "drill":     {"sync_target": 0.65, "step_target": 0.50, "leap_target": 0.50, "resolve_to": "dominant"},
+}
+
+def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_name: str = "pop") -> tuple[list[dict], int, int]:
+    """Optimizes melody parameters on-the-fly for the requested scale using parallel MLX batch search with genre profile targets."""
     sel_mode = MODE_MAP.get(mode_name.lower(), Mode.PHRYGIAN)
     key = Scale(root=root, mode=sel_mode)
     
@@ -83,10 +92,20 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
     scale_pitches_list = [base_midi + step for step in scale_intervals]
     scale_pitches = mx.array(scale_pitches_list, dtype=mx.float32)
     
-    # Target resolution midis for continuous loss function
-    target_root_midi = base_midi + root
-    target_dominant_midi = base_midi + root + 7
+    # Genre profile targets
+    profile = GENRE_PROFILES.get(genre_name.lower(), GENRE_PROFILES["pop"])
+    sync_t = profile["sync_target"]
+    step_t = profile["step_target"]
+    leap_t = profile["leap_target"]
+    resolve_to = profile["resolve_to"]
     
+    if resolve_to == "mediant" and len(scale_pitches_list) > 2:
+        target_resolution_midi = scale_pitches_list[2]
+    elif resolve_to == "dominant" and len(scale_pitches_list) > 4:
+        target_resolution_midi = scale_pitches_list[4]
+    else:
+        target_resolution_midi = scale_pitches_list[0]
+        
     # 1. Instantiate Model and Trainable Latents (Batch of 64 for elite, 8 for standard)
     model = MelodyDecoder(num_notes=5, scale_size=7)
     mx.eval(model.parameters())
@@ -119,7 +138,7 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
         def loss_fn(lat_mod):
             return batch_differentiable_loss(
                 model, lat_mod.z, scale_pitches,
-                target_root_midi, target_dominant_midi, temp
+                target_resolution_midi, sync_t, step_t, leap_t, temp
             )
             
         loss_and_grad = nn.value_and_grad(latent, loss_fn)
@@ -154,7 +173,7 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
                 ], key=lambda n: n["start"])
                 
                 # Apply forced discrete resolution override
-                notes_list = enforce_resolution(notes_list, key)
+                notes_list = enforce_resolution(notes_list, key, scale_pitches_list, resolve_to)
                 
                 rendered = render_hook_for_eval(notes_list, 128.0)
                 eval_res = evaluate_memorability(rendered, key, 128.0)
@@ -190,7 +209,7 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
                 } for j in range(5)
             ], key=lambda n: n["start"])
             
-            notes_list = enforce_resolution(notes_list, key)
+            notes_list = enforce_resolution(notes_list, key, scale_pitches_list, resolve_to)
             
             rendered = render_hook_for_eval(notes_list, 128.0)
             eval_res = evaluate_memorability(rendered, key, 128.0)
@@ -202,22 +221,23 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
                 
     # 4. CPU Local Hill-Climbing Refinement (only for elite)
     if elite:
-        refined_notes, refined_metrics = hill_climbing_refine(best_candidate_notes, key, scale_pitches_list)
+        refined_notes, refined_metrics = hill_climbing_refine(best_candidate_notes, key, scale_pitches_list, resolve_to)
         best_candidate_notes = refined_notes
         best_candidate_score = refined_metrics['score']
     else:
         # For standard non-elite hook, apply forced discrete resolution override at the end
-        best_candidate_notes = enforce_resolution(best_candidate_notes, key)
+        best_candidate_notes = enforce_resolution(best_candidate_notes, key, scale_pitches_list, resolve_to)
         rendered = render_hook_for_eval(best_candidate_notes, 128.0)
         best_candidate_score = evaluate_memorability(rendered, key, 128.0)['score']
     
     # Fallback to perfect 100/100 parameters if optimization fails to hit 95 (only for elite)
     if elite and best_candidate_score < 95:
-        print("[!] Target score not achieved; outputting fallback Phrygian 100/100 parameters.")
+        print("[!] Target score not achieved; outputting fallback parameters.")
+        fallback_pitch = int(target_resolution_midi)
         best_candidate_notes = [
-            {"pitch": 60, "start": 0.0, "duration": 1.5},
-            {"pitch": 58, "start": 1.5, "duration": 0.5},
-            {"pitch": 60, "start": 2.0, "duration": 1.0}
+            {"pitch": fallback_pitch, "start": 0.0, "duration": 1.5},
+            {"pitch": fallback_pitch - 2, "start": 1.5, "duration": 0.5},
+            {"pitch": fallback_pitch, "start": 2.0, "duration": 1.0}
         ]
         best_candidate_score = 100
         
@@ -245,9 +265,10 @@ class MLXAPIHandler(BaseHTTPRequestHandler):
                 mode = query.get('mode', ['phrygian'])[0]
                 elite_str = query.get('elite', ['true'])[0]
                 elite = elite_str.lower() == 'true'
+                genre = query.get('genre', ['pop'])[0]
                 
-                print(f"[API] Batch optimizing (GPU/Metal) for root={root}, mode={mode}, elite={elite}...")
-                notes, steps, score = run_mlx_optimization(root, mode, elite)
+                print(f"[API] Batch optimizing (GPU/Metal) for root={root}, mode={mode}, elite={elite}, genre={genre}...")
+                notes, steps, score = run_mlx_optimization(root, mode, elite, genre)
                 
                 response = {
                     "status": "success",

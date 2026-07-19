@@ -13,7 +13,10 @@ $$
   & [MIDI] \subseteq \mathbb{N} && \text{Domain of MIDI pitch values } (0 \dots 127) \\
   & [Time] == \mathbb{R}_{\ge 0} && \text{Time beats domain} \\
   & [Latent] == \mathbb{R}^{32} && \text{Latent space dimension} \\
-  & Mode == \{ MAJOR, PHRYGIAN, AEOLIAN, LOCRIAN, HARMONIC\_MINOR, HUNGARIAN\_MINOR \}
+  & Mode == \{ MAJOR, PHRYGIAN, AEOLIAN, LOCRIAN, HARMONIC\_MINOR, HUNGARIAN\_MINOR, \\
+  & \quad\quad\quad\quad DORIAN, MIXOLYDIAN, PENTATONIC\_MINOR \} \\
+  & ResolveTo == \{ TONIC, MEDIANT, DOMINANT \} \\
+  & GenreProfile == [ sync\_target: \mathbb{R}; step\_target: \mathbb{R}; leap\_target: \mathbb{R}; resolve\_to: ResolveTo ]
 \end{align*}
 $$
 
@@ -43,7 +46,10 @@ $$
   scale\_intervals(AEOLIAN) = \{0, 2, 3, 5, 7, 8, 10\} \land \\
   scale\_intervals(LOCRIAN) = \{0, 1, 3, 5, 6, 8, 10\} \land \\
   scale\_intervals(HARMONIC\_MINOR) = \{0, 2, 3, 5, 7, 8, 11\} \land \\
-  scale\_intervals(HUNGARIAN\_MINOR) = \{0, 2, 3, 6, 7, 8, 11\}
+  scale\_intervals(HUNGARIAN\_MINOR) = \{0, 2, 3, 6, 7, 8, 11\} \land \\
+  scale\_intervals(DORIAN) = \{0, 2, 3, 5, 7, 9, 10\} \land \\
+  scale\_intervals(MIXOLYDIAN) = \{0, 2, 4, 5, 7, 9, 10\} \land \\
+  scale\_intervals(PENTATONIC\_MINOR) = \{0, 3, 5, 7, 10\}
 \end{axdef}
 $$
 
@@ -59,10 +65,12 @@ Defines the target key and scale constraints for the optimization.
 │ mode: Mode
 │ degrees: \mathbb{P} MIDI
 │ tonic: MIDI
+│ mediant: MIDI
 │ dominant: MIDI
 ├────────────────────────────────────────────────
 │ tonic = root
-│ dominant = root + 7
+│ mediant = \text{third degree of the scale}
+│ dominant = \text{fifth degree of the scale}
 │ \forall d: degrees \bullet pc(d) \in \{ pc(root + i) \mid i \in scale\_intervals(mode) \}
 └────────────────────────────────────────────────
 
@@ -81,7 +89,7 @@ Defines the parametric neural projection from the latent code $z$ to continuous 
 └────────────────────────────────────────────────
 
 ### Optimization State
-Defines the parallel search space containing the batch variables and objectives.
+Defines the parallel search space containing the batch variables and objectives, parametrized by the chosen Genre Profile.
 
 ┌─ OptimizationState ────────────────────────────
 │ Scale
@@ -89,13 +97,18 @@ Defines the parallel search space containing the batch variables and objectives.
 │ z\_batch: 1 \dots 64 \rightarrow Latent
 │ batch\_size: \mathbb{N}
 │ temp: \mathbb{R}_{>0}
-│ loss: Latent \times \mathbb{P} MIDI \times MIDI \times MIDI \times \mathbb{R} \rightarrow \mathbb{R}
+│ genre: GenreProfile
+│ loss: Latent \times \mathbb{P} MIDI \times MIDI \times GenreProfile \times \mathbb{R} \rightarrow \mathbb{R}
 ├────────────────────────────────────────────────
 │ batch\_size = 64
 │ \text{dom } z\_batch = 1 \dots batch\_size
 │ \forall z: Latent \bullet
-│   loss(z, degrees, \text{tonic}, \text{dominant}, temp) = \\
-│     \quad L_{sync} + L_{duration} + L_{contour} + L_{res} + L_{motif} + L_{entropy}
+│   \text{Let } target\_res == 
+│     \text{if } genre.resolve\_to = MEDIANT \text{ then } mediant
+│     \text{else if } genre.resolve\_to = DOMINANT \text{ then } dominant
+│     \text{else } tonic \bullet
+│   loss(z, degrees, target\_res, genre, temp) = \\
+│     \quad L_{sync}(genre.sync\_target) + L_{duration} + L_{contour}(genre.step\_target, genre.leap\_target) + L_{res}(target\_res) + L_{entropy}
 └────────────────────────────────────────────────
 
 ---
@@ -103,17 +116,20 @@ Defines the parallel search space containing the batch variables and objectives.
 ## 3. Operational Schemas
 
 ### Initialize Optimization
-Initializes the latent batch with random Gaussian noise and copies the scale parameters.
+Initializes the latent batch with random Gaussian noise and copies the scale and genre parameters.
 
 ┌─ InitOptimization ─────────────────────────────
 │ \Delta OptimizationState
 │ scale?: Scale
+│ genre?: GenreProfile
 ├────────────────────────────────────────────────
 │ root' = scale?.root
 │ mode' = scale?.mode
 │ degrees' = scale?.degrees
 │ tonic' = scale?.tonic
+│ mediant' = scale?.mediant
 │ dominant' = scale?.dominant
+│ genre' = genre?
 │ 
 │ \forall i: 1 \dots batch\_size' \bullet z\_batch'(i) \sim \mathcal{N}(0, I_{32})
 │ temp' = 2.0
@@ -126,8 +142,12 @@ Updates the batch latent vectors using continuous gradients from the relaxed Gum
 │ \Delta OptimizationState
 │ \Xi Scale
 ├────────────────────────────────────────────────
+│ \text{Let } target\_res ==
+│   \text{if } genre.resolve\_to = MEDIANT \text{ then } mediant
+│   \text{else if } genre.resolve\_to = DOMINANT \text{ then } dominant
+│   \text{else } tonic \bullet
 │ \forall i: 1 \dots batch\_size \bullet
-│   z\_batch'(i) = z\_batch(i) - \alpha \cdot \nabla_z loss(z\_batch(i), degrees, \text{tonic}, \text{dominant}, temp)
+│   z\_batch'(i) = z\_batch(i) - \alpha \cdot \nabla_z loss(z\_batch(i), degrees, target\_res, genre, temp)
 │ temp' = \text{Anneal}(temp, step)
 └────────────────────────────────────────────────
 
@@ -156,7 +176,7 @@ Selects the candidate vector from the batch that maximizes the exact discrete fi
 └────────────────────────────────────────────────
 
 ### Discrete Enforce Resolution
-Forcibly shifts the last note to the nearest stable octave of tonic or dominant while minimizing melodic jump distance to note 4.
+Forcibly shifts the last note to the nearest stable octave of the genre-specified target pitch while minimizing melodic jump distance to note 4.
 
 ┌─ EnforceResolution ────────────────────────────
 │ \Xi OptimizationState
@@ -168,12 +188,14 @@ Forcibly shifts the last note to the nearest stable octave of tonic or dominant 
 │ 
 │ \text{Let } last = melody?(5) \bullet
 │ \text{Let } prev = melody?(4) \bullet
-│ \text{Let } t\_pc = pc(tonic) \bullet
-│ \text{Let } d\_pc = pc(dominant) \bullet
-│ \text{Let } OctavesStable == \{ p: MIDI \mid pc(p) \in \{ t\_pc, d\_pc \} \} \bullet
+│ \text{Let } target\_pc ==
+│   \text{if } genre.resolve\_to = MEDIANT \text{ then } pc(mediant)
+│   \text{else if } genre.resolve\_to = DOMINANT \text{ then } pc(dominant)
+│   \text{else } pc(tonic) \bullet
+│ \text{Let } OctavesStable == \{ p: MIDI \mid pc(p) = target\_pc \} \bullet
 │ \text{Let } Cost == \lambda p: MIDI \bullet |p - last.pitch| + 4.0 \times \max(0, |p - prev.pitch| - 8) \bullet
 │ 
-│ (pc(melody!(5).pitch) \in \{ t\_pc, d\_pc \}) \land
+│ (pc(melody!(5).pitch) = target\_pc) \land
 │ (melody!(5).pitch = \arg\min_{p \in OctavesStable} Cost(p))
 └────────────────────────────────────────────────
 
