@@ -1737,7 +1737,6 @@
             if (isDrop) {
                 osc3 = ctx.createOscillator();
                 osc3.type = "sawtooth";
-                osc3.frequency.value = freq => freq * 0.5; // Will be set below
             }
             
             const gainNode = ctx.createGain();
