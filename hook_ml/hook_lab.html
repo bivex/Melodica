@@ -2108,8 +2108,9 @@ ${notesMdTable}
             const root = document.getElementById("ctrl-root").value;
             const mode = document.getElementById("ctrl-mode").value;
             const genre = document.getElementById("ctrl-genre").value;
+            const seed = parseInt(document.getElementById("ctrl-seed").value) || 101;
             
-            fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}&elite=${elite}&genre=${genre}`)
+            fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}&elite=${elite}&genre=${genre}&seed=${seed}`)
                 .then(res => res.json())
                 .then(data => {
                     btn.textContent = "Generate Hook";
@@ -2121,7 +2122,7 @@ ${notesMdTable}
                         const scaleIntervals = SCALE_MODES[mode];
                         const octave = parseInt(document.getElementById("ctrl-octave").value);
                         
-                        document.getElementById("ctrl-seed").value = data.steps;
+                        console.log(`MLX Optimization completed in ${data.steps} steps.`);
                         
                         const targetBaseMidi = 12 * octave + parseInt(root);
                         const diffMidi = targetBaseMidi - 60;
@@ -2161,17 +2162,19 @@ ${notesMdTable}
         document.getElementById("btn-mlx-random").addEventListener("click", () => {
             stopPlayback();
             
-            // Randomize root scale and mode
+            // Randomize root scale, mode, and seed
             const randRoot = Math.floor(Math.random() * 12);
             const modes = Object.keys(SCALE_MODES);
             const randMode = modes[Math.floor(Math.random() * modes.length)];
             const randOctave = 4 + Math.floor(Math.random() * 3); // 4 to 6
             const randHooklen = 5 + Math.floor(Math.random() * 3); // 5 to 7
+            const randSeed = 1 + Math.floor(Math.random() * 99999);
             
             document.getElementById("ctrl-root").value = randRoot;
             document.getElementById("ctrl-mode").value = randMode;
             document.getElementById("ctrl-octave").value = randOctave;
             document.getElementById("ctrl-hooklen").value = randHooklen;
+            document.getElementById("ctrl-seed").value = randSeed;
             
             // Sync labels
             document.getElementById("val-root").textContent = NOTE_NAMES[randRoot];
@@ -2188,17 +2191,19 @@ ${notesMdTable}
         document.getElementById("btn-mlx-random-elite").addEventListener("click", () => {
             stopPlayback();
             
-            // Randomize root scale and mode
+            // Randomize root scale, mode, and seed
             const randRoot = Math.floor(Math.random() * 12);
             const modes = Object.keys(SCALE_MODES);
             const randMode = modes[Math.floor(Math.random() * modes.length)];
             const randOctave = 4 + Math.floor(Math.random() * 3); // 4 to 6
             const randHooklen = 5 + Math.floor(Math.random() * 3); // 5 to 7
+            const randSeed = 1 + Math.floor(Math.random() * 99999);
             
             document.getElementById("ctrl-root").value = randRoot;
             document.getElementById("ctrl-mode").value = randMode;
             document.getElementById("ctrl-octave").value = randOctave;
             document.getElementById("ctrl-hooklen").value = randHooklen;
+            document.getElementById("ctrl-seed").value = randSeed;
             
             // Sync labels
             document.getElementById("val-root").textContent = NOTE_NAMES[randRoot];

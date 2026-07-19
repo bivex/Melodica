@@ -75,8 +75,9 @@ GENRE_PROFILES = {
     "drill":     {"sync_target": 0.65, "step_target": 0.50, "leap_target": 0.50, "resolve_to": "dominant"},
 }
 
-def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_name: str = "pop") -> tuple[list[dict], int, int]:
+def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_name: str = "pop", seed: int = 101) -> tuple[list[dict], int, int]:
     """Optimizes melody parameters on-the-fly for the requested scale using parallel MLX batch search with genre profile targets."""
+    mx.random.seed(seed)
     sel_mode = MODE_MAP.get(mode_name.lower(), Mode.PHRYGIAN)
     key = Scale(root=root, mode=sel_mode)
     
@@ -266,9 +267,10 @@ class MLXAPIHandler(BaseHTTPRequestHandler):
                 elite_str = query.get('elite', ['true'])[0]
                 elite = elite_str.lower() == 'true'
                 genre = query.get('genre', ['pop'])[0]
+                seed = int(query.get('seed', [101])[0])
                 
-                print(f"[API] Batch optimizing (GPU/Metal) for root={root}, mode={mode}, elite={elite}, genre={genre}...")
-                notes, steps, score = run_mlx_optimization(root, mode, elite, genre)
+                print(f"[API] Batch optimizing (GPU/Metal) for root={root}, mode={mode}, elite={elite}, genre={genre}, seed={seed}...")
+                notes, steps, score = run_mlx_optimization(root, mode, elite, genre, seed)
                 
                 response = {
                     "status": "success",
