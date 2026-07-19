@@ -1840,23 +1840,22 @@ ${notesMdTable}
             return notes;
         }
 
-        // MLX API Neural Generator button
-        document.getElementById("btn-mlx-api").addEventListener("click", () => {
+        function triggerMLXGeneration(elite = false) {
             stopPlayback();
             
             const btn = document.getElementById("btn-mlx-api");
             const originalText = btn.textContent;
-            btn.textContent = "Optimizing MLX...";
+            btn.textContent = elite ? "Optimizing Elite MLX..." : "Optimizing MLX...";
             btn.style.background = "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)";
             btn.disabled = true;
             
             const root = document.getElementById("ctrl-root").value;
             const mode = document.getElementById("ctrl-mode").value;
             
-            fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}`)
+            fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}&elite=${elite}`)
                 .then(res => res.json())
                 .then(data => {
-                    btn.textContent = originalText;
+                    btn.textContent = "Generate Neural Hook (MLX)";
                     btn.style.background = "linear-gradient(135deg, #10b981 0%, #3b82f6 100%)";
                     btn.disabled = false;
                     
@@ -1887,11 +1886,16 @@ ${notesMdTable}
                     }
                 })
                 .catch(err => {
-                    btn.textContent = originalText;
+                    btn.textContent = "Generate Neural Hook (MLX)";
                     btn.style.background = "linear-gradient(135deg, #10b981 0%, #3b82f6 100%)";
                     btn.disabled = false;
                     alert("Failed to connect to MLX API Server. Please ensure 'python hook_ml/server.py' is running on port 8081.");
                 });
+        }
+
+        // MLX API Neural Generator button
+        document.getElementById("btn-mlx-api").addEventListener("click", () => {
+            triggerMLXGeneration(false);
         });
 
         // MLX API Random Neural Generator button
@@ -1917,8 +1921,8 @@ ${notesMdTable}
             
             document.querySelectorAll(".preset-tab").forEach(t => t.classList.remove("active"));
             
-            // Trigger MLX API button optimization automatically
-            document.getElementById("btn-mlx-api").click();
+            // Trigger MLX API button optimization automatically (standard)
+            triggerMLXGeneration(false);
         });
 
         // MLX API Random Neural Generator Elite button
@@ -1944,8 +1948,8 @@ ${notesMdTable}
             
             document.querySelectorAll(".preset-tab").forEach(t => t.classList.remove("active"));
             
-            // Trigger MLX API button optimization automatically
-            document.getElementById("btn-mlx-api").click();
+            // Trigger MLX API button optimization automatically (elite)
+            triggerMLXGeneration(true);
         });
 
         // Dropdowns slider label sync

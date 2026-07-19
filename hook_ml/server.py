@@ -44,7 +44,7 @@ MODE_MAP = {
 }
 
 
-def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, int]:
+def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple[list[dict], int, int]:
     """Optimizes melody parameters on-the-fly for the requested scale using parallel MLX batch search."""
     sel_mode = MODE_MAP.get(mode_name.lower(), Mode.PHRYGIAN)
     key = Scale(root=root, mode=sel_mode)
@@ -61,11 +61,13 @@ def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, in
     scale_pitches_list = [base_midi + step for step in scale_intervals]
     scale_pitches = mx.array(scale_pitches_list, dtype=mx.float32)
     
-    # 1. Instantiate Model and Trainable Latents (Batch of 64 candidates)
+    # 1. Instantiate Model and Trainable Latents (Batch of 64 for elite, 8 for standard)
     model = MelodyDecoder(num_notes=5, scale_size=7)
     mx.eval(model.parameters())
     
-    batch_size = 64
+    batch_size = 64 if elite else 8
+    max_steps = 300 if elite else 50
+    
     latent = LatentVariable(batch_size=batch_size, dim=32)
     mx.eval(latent.z)
     
@@ -76,14 +78,14 @@ def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, in
     best_candidate_notes = []
     best_candidate_score = -1
     best_candidate_metrics = None
-    early_stopped_step = 300
+    early_stopped_step = max_steps
     
-    # 2. Annealing / Curriculum Loop (300 steps)
-    for step in range(300):
+    # 2. Annealing / Curriculum Loop (max_steps steps)
+    for step in range(max_steps):
         # Temperature scheduling (Curriculum)
-        if step < 100:
+        if step < int(max_steps * 0.33):
             temp = 2.0  # High temp = explore
-        elif step < 200:
+        elif step < int(max_steps * 0.66):
             temp = 1.0  # Med temp
         else:
             temp = 0.3  # Low temp = collapse
@@ -103,8 +105,8 @@ def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, in
             
         mx.eval(latent.z, loss)
         
-        # Fitness-aware Early Stopping: evaluate exact CPU scores every 25 steps
-        if (step + 1) % 25 == 0:
+        # Fitness-aware Early Stopping: evaluate exact CPU scores every 25 steps (only for elite)
+        if elite and (step + 1) % 25 == 0:
             logits, onsets, durations = model(latent.z)
             mx.eval(logits, onsets, durations)
             
@@ -164,13 +166,14 @@ def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, in
                 best_candidate_notes = notes_list
                 best_candidate_metrics = eval_res
                 
-    # 4. CPU Local Hill-Climbing Refinement
-    refined_notes, refined_metrics = hill_climbing_refine(best_candidate_notes, key, scale_pitches_list)
-    best_candidate_notes = refined_notes
-    best_candidate_score = refined_metrics['score']
+    # 4. CPU Local Hill-Climbing Refinement (only for elite)
+    if elite:
+        refined_notes, refined_metrics = hill_climbing_refine(best_candidate_notes, key, scale_pitches_list)
+        best_candidate_notes = refined_notes
+        best_candidate_score = refined_metrics['score']
     
-    # Fallback to perfect 100/100 parameters if optimization fails to hit 95 (highly unlikely with HC refinement)
-    if best_candidate_score < 95:
+    # Fallback to perfect 100/100 parameters if optimization fails to hit 95 (only for elite)
+    if elite and best_candidate_score < 95:
         print("[!] Target score not achieved; outputting fallback Phrygian 100/100 parameters.")
         best_candidate_notes = [
             {"pitch": 60, "start": 0.0, "duration": 1.5},
@@ -201,9 +204,11 @@ class MLXAPIHandler(BaseHTTPRequestHandler):
             try:
                 root = int(query.get('root', [0])[0])
                 mode = query.get('mode', ['phrygian'])[0]
+                elite_str = query.get('elite', ['true'])[0]
+                elite = elite_str.lower() == 'true'
                 
-                print(f"[API] Batch optimizing (GPU/Metal) + Hill-Climbing (CPU) for root={root}, mode={mode}...")
-                notes, steps, score = run_mlx_optimization(root, mode)
+                print(f"[API] Batch optimizing (GPU/Metal) for root={root}, mode={mode}, elite={elite}...")
+                notes, steps, score = run_mlx_optimization(root, mode, elite)
                 
                 response = {
                     "status": "success",
