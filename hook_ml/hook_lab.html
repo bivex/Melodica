@@ -2350,16 +2350,21 @@ ${notesMdTable}
                         const targetBaseMidi = 12 * octave + parseInt(root);
                         const diffMidi = targetBaseMidi - 60;
                         
-                        const optNotesList = data.notes.map(n => ({
-                            pitch: n.pitch + diffMidi,
-                            start: n.start,
-                            duration: n.duration
-                        }));
-                        
-                        const renderedNotes = renderHookForClient(optNotesList, 128.0, parseInt(root), mode);
-                        generatedNotes = renderedNotes.sort((a, b) => a.start - b.start);
-                        
-                        evaluateHookMemorability(generatedNotes, parseInt(root), scaleIntervals, optNotesList.length, optNotesList.map(n => n.pitch));
+                        // Server returns the fully assembled 32-bar arrangement; consume it directly
+                        // (transposed to the chosen octave). No client-side re-tiling needed.
+                        const transposed = data.notes.map(n => {
+                            const p = n.pitch + diffMidi;
+                            return {
+                                pitch: p,
+                                start: n.start,
+                                duration: n.duration,
+                                velocity: n.velocity ?? 100,
+                                label: NOTE_NAMES[p % 12] + Math.floor(p / 12)
+                            };
+                        });
+                        generatedNotes = transposed.sort((a, b) => a.start - b.start);
+
+                        evaluateHookMemorability(generatedNotes, parseInt(root), scaleIntervals, generatedNotes.length, []);
                         drawPianoRoll();
                         startIdleAnim();
                                     

@@ -31,50 +31,109 @@ from melodica.types import Scale, NoteInfo
 from scripts.test_melody_hook import Mode, evaluate_memorability
 
 
-def render_hook_for_eval(notes_list: list[dict], duration_beats: float) -> list[NoteInfo]:
-    """Helper to render continuous loops matching the Lorn cycle structure."""
+def apply_variant(notes_list: list[dict], variant: int) -> list[dict]:
+    """Derive a motif variant from the base motif (variant 0 = base)."""
+    if variant == 1:
+        out = [dict(n) for n in notes_list]          # +2 semitones on the tail note
+        out[-1]["pitch"] = out[-1]["pitch"] + 2
+        return out
+    if variant == 2:
+        out = [dict(n) for n in notes_list]          # +1 octave on the first note (accent)
+        out[0]["pitch"] = out[0]["pitch"] + 12
+        return out
+    return [dict(n) for n in notes_list]
+
+
+def decode_structure_plan(plan: dict, i: int, oct_values=(-12, 0, 12)) -> list[tuple]:
+    """Decode the structure plan for batch index i into per-bar (play, variant, octshift)."""
+    play_g = plan["play_gate"][i]                 # [P]
+    var_l = plan["variant_logits"][i]             # [P, V]
+    oct_l = plan["octshift_logits"][i]            # [P, 3]
+    play = (mx.sigmoid(play_g) > 0.5).tolist()
+    variant = mx.argmax(var_l, axis=-1).tolist()
+    oct_idx = mx.argmax(oct_l, axis=-1).tolist()
+    return [(bool(play[p]), int(variant[p]), int(oct_values[int(oct_idx[p])]))
+            for p in range(len(play))]
+
+
+def _filter_matching_shapes(loaded: dict, model_params: dict) -> dict:
+    """Keep only loaded entries whose shape matches the model's current parameters.
+
+    Lets an old checkpoint (no structure heads) seed the motif heads of the new model
+    without crashing on the new fc_play_gate / fc_variant / fc_octshift layers."""
+    out = {}
+    for k, v in loaded.items():
+        mp = model_params.get(k)
+        if isinstance(v, dict):
+            if isinstance(mp, dict):
+                sub = _filter_matching_shapes(v, mp)
+                if sub:
+                    out[k] = sub
+        else:
+            if mp is not None and hasattr(mp, "shape") and mp.shape == v.shape:
+                out[k] = v
+    return out
+
+
+def render_hook_for_eval(notes_list: list[dict], duration_beats: float,
+                         plan: list[tuple] | None = None) -> list[NoteInfo]:
+    """Render the motif across the full arrangement.
+
+    If `plan` is given (per-bar (play, variant, octshift) over the plan length, tiled to
+    fill duration_beats), assemble from it — letting the model control silence ratio and
+    bar-profile repetition. Otherwise fall back to the original hardcoded Lorn schema.
+    """
+    if plan is not None:
+        notes: list[NoteInfo] = []
+        num_plan_bars = len(plan)
+        total_bars = int(duration_beats // 4.0)
+        for bar in range(total_bars):
+            play, variant, octshift = plan[bar % num_plan_bars]
+            if not play:
+                continue
+            t_bar = bar * 4.0
+            for n in apply_variant(notes_list, variant):
+                notes.append(NoteInfo(
+                    pitch=n["pitch"] + octshift,
+                    start=t_bar + n["start"],
+                    duration=n["duration"],
+                    velocity=100,
+                ))
+        return notes
+
+    # ---- Hardcoded-schema fallback (original behavior) ----
     notes = []
     t = 0.0
     while t < duration_beats:
         progress = t / duration_beats
-        
-        # Section structures
         if progress < 0.2:
-            schema = ["play", "silence", "play", "silence"]
-            octave_shift = -12
+            schema = ["play", "silence", "play", "silence"]; octave_shift = -12
         elif progress < 0.45:
-            schema = ["play", "play", "silence", "play"]
-            octave_shift = 0
+            schema = ["play", "play", "silence", "play"]; octave_shift = 0
         elif progress < 0.70:
-            schema = ["play", "play", "play", "silence"]
-            octave_shift = 0
+            schema = ["play", "play", "play", "silence"]; octave_shift = 0
         elif progress < 0.85:
-            schema = ["play", "play", "play", "play"]
-            octave_shift = 0
+            schema = ["play", "play", "play", "play"]; octave_shift = 0
         else:
-            schema = ["play", "silence", "silence", "silence"]
-            octave_shift = -12
-            
+            schema = ["play", "silence", "silence", "silence"]; octave_shift = -12
+
         for bar in range(4):
             action = schema[bar]
             if action == "silence":
                 continue
-            
             t_bar = t + bar * 4.0
             if t_bar >= duration_beats:
                 break
-                
             for i, n in enumerate(notes_list):
-                if bar == 2 and progress >= 0.2 and progress < 0.45:
+                if bar == 2 and 0.2 <= progress < 0.45:
                     p = (n["pitch"] + 2) if i == len(notes_list) - 1 else n["pitch"]
                 else:
                     p = n["pitch"]
-                    
                 notes.append(NoteInfo(
                     pitch=p + octave_shift,
                     start=t_bar + n["start"],
                     duration=n["duration"],
-                    velocity=100
+                    velocity=100,
                 ))
         t += 16.0
     return notes
@@ -243,7 +302,7 @@ def main():
                 for part in parts[:-1]:
                     curr = curr.setdefault(part, {})
                 curr[parts[-1]] = v
-            model.update(params)
+            model.update(_filter_matching_shapes(params, model.parameters()))
             print(f"Loaded pre-trained model weights from '{weights_path}'")
         except Exception as e:
             print(f"[!] Warning: Failed to load pre-trained weights: {e}")
@@ -297,7 +356,7 @@ def main():
         
         # Fitness-aware Early Stopping: check exact CPU scores every 25 steps
         if (step + 1) % 25 == 0:
-            logits, onsets, durations = model(latent.z)
+            logits, onsets, durations, _ = model(latent.z)  # demo: structure plan unused (legacy arrangement)
             mx.eval(logits, onsets, durations)
             
             for i in range(batch_size):

@@ -33,7 +33,13 @@ except ImportError:
 
 from melodica.types import Scale, Mode
 from scripts.test_melody_hook import evaluate_memorability
-from hook_ml.run_generator import render_hook_for_eval, hill_climbing_refine, enforce_resolution
+from hook_ml.run_generator import (
+    render_hook_for_eval,
+    hill_climbing_refine,
+    enforce_resolution,
+    decode_structure_plan,
+    _filter_matching_shapes,
+)
 
 PORT = 8081
 MODE_MAP = {
@@ -138,7 +144,7 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
                 for part in parts[:-1]:
                     curr = curr.setdefault(part, {})
                 curr[parts[-1]] = v
-            model.update(params)
+            model.update(_filter_matching_shapes(params, model.parameters()))
             print(f"[API] Loaded pre-trained model weights from '{weights_path}'")
         except Exception as e:
             print(f"[!] Warning: Failed to load pre-trained weights: {e}")
@@ -158,6 +164,7 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
     best_candidate_notes = []
     best_candidate_score = -1
     best_candidate_metrics = None
+    best_candidate_plan = None
     early_stopped_step = max_steps
     
     # 2. Annealing / Curriculum Loop (max_steps steps)
@@ -190,7 +197,7 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
         
         # Fitness-aware Early Stopping: evaluate exact CPU scores every 25 steps (only for elite)
         if elite and (step + 1) % 25 == 0:
-            logits, onsets, durations = model(latent.z)
+            logits, onsets, durations, plan_dict = model(latent.z)
             mx.eval(logits, onsets, durations)
             
             for i in range(batch_size):
@@ -208,15 +215,17 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
                 ], key=lambda n: n["start"])
                 
                 notes_list = enforce_resolution(notes_list, key, scale_pitches_list, resolve_to)
-                
-                rendered = render_hook_for_eval(notes_list, 128.0)
+                plan_i = decode_structure_plan(plan_dict, i)
+
+                rendered = render_hook_for_eval(notes_list, 128.0, plan_i)
                 eval_res = evaluate_memorability(rendered, key, 128.0)
-                
-                # BUG FIX: track the BEST in batch, not just first >=95
+
+                # track the BEST in batch, not just first >=95
                 if eval_res['score'] >= 95 and eval_res['score'] > best_candidate_score:
                     best_candidate_score = eval_res['score']
                     best_candidate_notes = notes_list
                     best_candidate_metrics = eval_res
+                    best_candidate_plan = plan_i
                     early_stopped = True
                     early_stopped_step = step + 1
                     if best_candidate_score >= 100:
@@ -227,7 +236,7 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
             
     # 3. Extract candidates if not early stopped
     if not early_stopped:
-        logits, onsets, durations = model(latent.z)
+        logits, onsets, durations, plan_dict = model(latent.z)
         mx.eval(logits, onsets, durations)
         
         for i in range(batch_size):
@@ -246,14 +255,16 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
             ], key=lambda n: n["start"])
             
             notes_list = enforce_resolution(notes_list, key, scale_pitches_list, resolve_to)
-            
-            rendered = render_hook_for_eval(notes_list, 128.0)
+            plan_i = decode_structure_plan(plan_dict, i)
+
+            rendered = render_hook_for_eval(notes_list, 128.0, plan_i)
             eval_res = evaluate_memorability(rendered, key, 128.0)
-            
+
             if eval_res['score'] > best_candidate_score:
                 best_candidate_score = eval_res['score']
                 best_candidate_notes = notes_list
                 best_candidate_metrics = eval_res
+                best_candidate_plan = plan_i
                 
     # 4. CPU Local Hill-Climbing Refinement (only for elite)
     if elite:
@@ -282,8 +293,17 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
         ]
         best_candidate_notes = fallback_pattern[:length]
         best_candidate_score = 100
-        
-    return best_candidate_notes, early_stopped_step, best_candidate_score
+
+    # Assemble the full arrangement (motif + learned structure plan) and return plain
+    # dicts for JSON. The client no longer re-tiles — it consumes these notes directly.
+    assembled = render_hook_for_eval(best_candidate_notes, 128.0, best_candidate_plan)
+    final_score = evaluate_memorability(assembled, key, 128.0)['score']
+    final_notes = [
+        {"pitch": int(n.pitch), "start": float(n.start), "duration": float(n.duration),
+         "velocity": int(getattr(n, "velocity", 100))}
+        for n in assembled
+    ]
+    return final_notes, early_stopped_step, final_score
 
 
 class MLXAPIHandler(BaseHTTPRequestHandler):
