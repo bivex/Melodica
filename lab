@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2026 Bivex
+# Melodica Lab Server Management Utility
+
+set -euo pipefail
+
+# Directory configuration
+PROJECT_DIR="/Volumes/External/Code/Melodica"
+LOG_DIR="${PROJECT_DIR}/logs"
+PYTHON_BIN="${PROJECT_DIR}/.venv_dd/bin/python"
+
+# Commands
+HTTP_CMD="${PYTHON_BIN} -m http.server 8080"
+API_CMD="${PYTHON_BIN} hook_ml/server.py"
+
+# PID files
+HTTP_PID_FILE="${PROJECT_DIR}/.http_server.pid"
+API_PID_FILE="${PROJECT_DIR}/.api_server.pid"
+
+# Colors for output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+GRAY='\033[1;30m'
+NC='\033[0m' # No Color
+
+# Ensure directories exist
+mkdir -p "${LOG_DIR}"
+
+get_pid() {
+    local pid_file=$1
+    if [ -f "$pid_file" ]; then
+        local pid
+        pid=$(cat "$pid_file")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            echo "$pid"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+get_process_start_time() {
+    local pid=$1
+    if ps -p "$pid" > /dev/null 2>&1; then
+        # On macOS, ps -o lstart returns the full start time
+        local lstart
+        lstart=$(ps -p "$pid" -o lstart= | tr -s ' ')
+        # Format to HH:MM:SS
+        date -j -f "%a %b %d %T %Y" "$lstart" "+%T" 2>/dev/null || echo "Unknown"
+    else
+        echo "Unknown"
+    fi
+}
+
+status() {
+    echo -e "${GRAY}──────────────────────────────────────────────────────────────${NC}"
+    
+    # 1. HTTP Server Check
+    local http_pid
+    if http_pid=$(get_pid "$HTTP_PID_FILE"); then
+        local start_time
+        start_time=$(get_process_start_time "$http_pid")
+        echo -e "  ${GREEN}●${NC} [${start_time}] ${HTTP_CMD} ${GREEN}running${NC} (PID: ${http_pid})"
+    else
+        echo -e "  ${RED}●${NC} [Stopped] ${HTTP_CMD} ${RED}stopped${NC}"
+    fi
+
+    # 2. MLX API Server Check
+    local api_pid
+    if api_pid=$(get_pid "$API_PID_FILE"); then
+        local start_time
+        start_time=$(get_process_start_time "$api_pid")
+        echo -e "  ${GREEN}●${NC} [${start_time}] ${API_CMD} ${GREEN}running${NC} (PID: ${api_pid})"
+    else
+        echo -e "  ${RED}●${NC} [Stopped] ${API_CMD} ${RED}stopped${NC}"
+    fi
+    
+    echo -e "${GRAY}──────────────────────────────────────────────────────────────${NC}"
+}
+
+start() {
+    # 1. Start HTTP Server
+    if get_pid "$HTTP_PID_FILE" >/dev/null; then
+        echo -e "HTTP Server is already running."
+    else
+        echo -n "Starting HTTP Server (port 8080)... "
+        cd "${PROJECT_DIR}"
+        nohup ${HTTP_CMD} > "${LOG_DIR}/http_server.log" 2>&1 &
+        echo $! > "$HTTP_PID_FILE"
+        sleep 0.5
+        if ps -p $(cat "$HTTP_PID_FILE") >/dev/null; then
+            echo -e "${GREEN}OK${NC}"
+        else
+            echo -e "${RED}FAILED${NC} (check ${LOG_DIR}/http_server.log)"
+        fi
+    fi
+
+    # 2. Start MLX API Server
+    if get_pid "$API_PID_FILE" >/dev/null; then
+        echo -e "MLX API Server is already running."
+    else
+        echo -n "Starting MLX API Server (port 8081)... "
+        cd "${PROJECT_DIR}"
+        nohup ${API_CMD} > "${LOG_DIR}/api_server.log" 2>&1 &
+        echo $! > "$API_PID_FILE"
+        sleep 0.5
+        if ps -p $(cat "$API_PID_FILE") >/dev/null; then
+            echo -e "${GREEN}OK${NC}"
+        else
+            echo -e "${RED}FAILED${NC} (check ${LOG_DIR}/api_server.log)"
+        fi
+    fi
+}
+
+stop() {
+    # 1. Stop HTTP Server
+    local http_pid
+    if http_pid=$(get_pid "$HTTP_PID_FILE"); then
+        echo -n "Stopping HTTP Server (PID: ${http_pid})... "
+        kill "$http_pid" 2>/dev/null || kill -9 "$http_pid" 2>/dev/null || true
+        rm -f "$HTTP_PID_FILE"
+        echo -e "${GREEN}Stopped${NC}"
+    else
+        echo "HTTP Server is not running."
+    fi
+
+    # 2. Stop MLX API Server
+    local api_pid
+    if api_pid=$(get_pid "$API_PID_FILE"); then
+        echo -n "Stopping MLX API Server (PID: ${api_pid})... "
+        kill "$api_pid" 2>/dev/null || kill -9 "$api_pid" 2>/dev/null || true
+        rm -f "$API_PID_FILE"
+        echo -e "${GREEN}Stopped${NC}"
+    else
+        echo "MLX API Server is not running."
+    fi
+}
+
+logs() {
+    local service=${1:-all}
+    if [ "$service" = "http" ]; then
+        tail -n 50 -f "${LOG_DIR}/http_server.log"
+    elif [ "$service" = "api" ]; then
+        tail -n 50 -f "${LOG_DIR}/api_server.log"
+    else
+        echo "=== HTTP SERVER LOGS ==="
+        tail -n 20 "${LOG_DIR}/http_server.log"
+        echo -e "\n=== MLX API SERVER LOGS ==="
+        tail -n 20 "${LOG_DIR}/api_server.log"
+    fi
+}
+
+case "${1:-status}" in
+    start)
+        start
+        status
+        ;;
+    stop)
+        stop
+        status
+        ;;
+    restart)
+        stop
+        sleep 1
+        start
+        status
+        ;;
+    status)
+        status
+        ;;
+    logs)
+        logs "${2:-all}"
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status|logs [http|api]}"
+        exit 1
+        ;;
+esac
