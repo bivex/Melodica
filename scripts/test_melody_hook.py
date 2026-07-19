@@ -59,8 +59,8 @@ def evaluate_memorability(notes: list[NoteInfo], key: Scale, duration_beats: flo
     syncopated_count = sum(1 for n in notes if abs(n.start - round(n.start)) > 0.05)
     syncopation_ratio = syncopated_count / len(notes) if notes else 0.0
     
-    # Silence Ratio
-    silence_ratio = (total_bars - active_bars) / total_bars if total_bars else 0.0
+    # Silence Ratio — clamped to [0, 1] to guard against notes that extend beyond duration_beats
+    silence_ratio = max(0.0, min(1.0, (total_bars - active_bars) / total_bars)) if total_bars else 0.0
     
     # Rhythmic scoring logic
     if len(unique_durs) >= 2:
@@ -111,8 +111,12 @@ def evaluate_memorability(notes: list[NoteInfo], key: Scale, duration_beats: flo
     
     leap_ratio = leap_count / total_intervals
     
-    if dir_changes >= 2:
-        contour_score += 10  # Up-and-down contour helps memorability
+    # Direction change ratio: meaningful only when we normalize by num transitions
+    # Raw count always >= 2 for 5+ notes, so compare against at least 25% of transitions
+    dir_change_ratio = dir_changes / max(len(directions) - 1, 1) if len(directions) > 1 else 0.0
+    
+    if dir_change_ratio >= 0.25:
+        contour_score += 10  # Genuine wave-shape contour
     else:
         suggestions.append("Contour: The melody is too flat or monotonic. Try moving pitch direction up and down.")
         

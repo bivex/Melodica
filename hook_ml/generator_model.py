@@ -71,7 +71,8 @@ class LatentVariable(nn.Module):
 def gumbel_softmax(logits: mx.array, temperature: float = 1.0) -> mx.array:
     """Computes differentiable categorical selection via Gumbel-Softmax relaxation."""
     u = mx.random.uniform(shape=logits.shape)
-    gumbel = -mx.log(-mx.log(u + 1e-20) + 1e-20)
+    # stop_gradient: Gumbel noise is a constant perturbation, not a learned param
+    gumbel = mx.stop_gradient(-mx.log(-mx.log(u + 1e-20) + 1e-20))
     return mx.softmax((logits + gumbel) / temperature, axis=-1)
 
 
@@ -99,7 +100,10 @@ def batch_differentiable_loss(
     # 2. Rhythm Loss
     # Soft syncopation ratio target: keep syncopated notes around target
     sync_soft = mx.sum(mx.sigmoid(20.0 * (mx.sin(mx.pi * onsets) ** 2 - 0.15)), axis=1)
-    sync_ratio = sync_soft / 5.0
+    # Bug fix: divide by actual num_notes (not hardcoded 5) so ratio stays in [0,1]
+    # for any melody length (transition=7, drop=4, hook=5, etc.)
+    num_notes = float(onsets.shape[1])
+    sync_ratio = sync_soft / num_notes
     syncopation_loss = mx.square(sync_ratio - sync_target)
     
     # Duration variety: reward standard deviation of durations
@@ -122,8 +126,9 @@ def batch_differentiable_loss(
     contour_loss = mx.square(step_ratio - step_target) + mx.square(leap_ratio - leap_target)
     
     # 4. Resolution Loss (last note resolves to target resolution midi)
+    # Normalize by 12 (semitone octave) so loss magnitude is scale-independent
     last_pitch = expected_pitches[:, -1]
-    resolution_loss = mx.square(last_pitch - target_resolution_midi)
+    resolution_loss = mx.square((last_pitch - target_resolution_midi) / 12.0)
     
     # 5. Entropy Regularization
     p = mx.softmax(logits, axis=-1)
