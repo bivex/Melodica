@@ -9,6 +9,7 @@ A dark, heavy, melancholic electronic album in the style of Lorn.
 Features slow, dragging halftime rhythms, deep analog sliding sub-bass (808s), detuned synth pads,
 distorted vocal chops, and gritty machine glitch textures.
 Leverages the new core-level tempo_profile configurations for natural, breathing tempo automation.
+All tracks are extended to a full, professional length (2 to 3 minutes each) with gradual staggering.
 
 Tracks:
   1. Acid Rain    — 165 BPM (halftime feel) — C Phrygian (agitato tempo map)
@@ -99,8 +100,8 @@ class InterceptWitchHouseGenerator(WitchHouseGenerator):
 def produce_acid_rain():
     print("  1. Acid Rain [C Phrygian — 165 BPM]")
     key = Scale(root=0, mode=Mode.PHRYGIAN)
-    dur = 96.0  # 24 bars
-    chords = parse_progression("i:4 VI:4 iv:4 v:4 " * 6, key)
+    dur = 384.0  # 96 bars (approx. 2.3 minutes)
+    chords = parse_progression("i:4 VI:4 iv:4 v:4 " * 24, key)
 
     # 1. Halftime Occult Witch House drums
     wh_gen = InterceptWitchHouseGenerator(
@@ -141,8 +142,10 @@ def produce_acid_rain():
     for n in leads:
         n.scale_velocity(1.5)
 
-    drums = [n for n in drums if n.start >= 16.0]  # drums enter bar 4
-    leads = [n for n in leads if n.start >= 32.0]  # lead enters bar 8
+    # Gradual build-up for the extended track length
+    bass = [n for n in bass if n.start >= 64.0]    # bass enters bar 16 (64 beats)
+    drums = [n for n in drums if n.start >= 128.0]  # drums enter bar 32 (128 beats)
+    leads = [n for n in leads if n.start >= 192.0]  # lead enters bar 48 (192 beats)
 
     tracks = {
         "drums": drums,
@@ -159,7 +162,7 @@ def produce_acid_rain():
     }
 
     # Generate core tempo events
-    parts = [IdeaPart(name="Acid Rain", bars=24, tempo=165, time_signature=(4, 4), tempo_profile="agitato")]
+    parts = [IdeaPart(name="Acid Rain", bars=96, tempo=165, time_signature=(4, 4), tempo_profile="agitato")]
     modulator = TempoModulator(default_tempo=165, tempo_profile="agitato")
     tempo_events = modulator.generate_events(parts)
 
@@ -184,8 +187,8 @@ def produce_acid_rain():
 def produce_grave_dirt():
     print("  2. Grave Dirt [D Aeolian — 84 BPM]")
     key = Scale(root=2, mode=Mode.AEOLIAN)
-    dur = 72.0  # 24 bars of 3/4
-    chords = parse_progression("i:3 III:3 VI:3 VII:3 " * 6, key)
+    dur = 192.0  # 64 bars of 3/4 (approx. 2.3 minutes)
+    chords = parse_progression("i:3 III:3 VI:3 VII:3 " * 16, key)
 
     # 1. Dark ambient halftime drums
     wh_gen = InterceptWitchHouseGenerator(
@@ -227,8 +230,8 @@ def produce_grave_dirt():
     for n in leads:
         n.scale_velocity(1.4)
 
-    bass = [n for n in bass if n.start >= 12.0]   # bass enters bar 4
-    drums = [n for n in drums if n.start >= 24.0]  # drums enter bar 8
+    bass = [n for n in bass if n.start >= 48.0]    # bass enters bar 16 (48 beats)
+    drums = [n for n in drums if n.start >= 96.0]  # drums enter bar 32 (96 beats)
 
     tracks = {
         "drums": drums,
@@ -244,7 +247,7 @@ def produce_grave_dirt():
         "leads": SYNTH_CHOIR,
     }
 
-    parts = [IdeaPart(name="Grave Dirt", bars=24, tempo=84, time_signature=(3, 4), tempo_profile="rubato")]
+    parts = [IdeaPart(name="Grave Dirt", bars=64, tempo=84, time_signature=(3, 4), tempo_profile="rubato")]
     modulator = TempoModulator(default_tempo=84, tempo_profile="rubato")
     tempo_events = modulator.generate_events(parts)
 
@@ -269,8 +272,8 @@ def produce_grave_dirt():
 def produce_iron_lungs():
     print("  3. Iron Lungs [E Locrian — 132 BPM]")
     key = Scale(root=4, mode=Mode.LOCRIAN)
-    dur = 96.0  # 24 bars
-    chords = parse_progression("idim:4 bII:4 vdim:4 bII:4 " * 6, key)
+    dur = 320.0  # 80 bars (approx. 2.4 minutes)
+    chords = parse_progression("idim:4 bII:4 vdim:4 bII:4 " * 20, key)
 
     # 1. Aggressive occult drums
     wh_gen = InterceptWitchHouseGenerator(
@@ -312,8 +315,8 @@ def produce_iron_lungs():
     for n in leads:
         n.scale_velocity(1.5)
 
-    bass = [n for n in bass if n.start >= 16.0]   # bass enters bar 4
-    leads = [n for n in leads if n.start >= 32.0]  # vocal chops enter bar 8
+    bass = [n for n in bass if n.start >= 80.0]     # bass enters bar 20 (80 beats)
+    leads = [n for n in leads if n.start >= 160.0]  # vocal chops enter bar 40 (160 beats)
 
     tracks = {
         "drums": drums,
@@ -329,7 +332,7 @@ def produce_iron_lungs():
         "leads": SYNTH_CHOIR,
     }
 
-    parts = [IdeaPart(name="Iron Lungs", bars=24, tempo=132, time_signature=(4, 4), tempo_profile="industrial")]
+    parts = [IdeaPart(name="Iron Lungs", bars=80, tempo=132, time_signature=(4, 4), tempo_profile="industrial")]
     modulator = TempoModulator(default_tempo=132, tempo_profile="industrial")
     tempo_events = modulator.generate_events(parts)
 
@@ -354,8 +357,8 @@ def produce_iron_lungs():
 def produce_sega_sunset():
     print("  4. Sega Sunset [A Harmonic Minor — 96 BPM]")
     key = Scale(root=9, mode=Mode.HARMONIC_MINOR)
-    dur = 96.0  # 24 bars
-    chords = parse_progression("i:4 iv:4 V7:4 i:4 " * 6, key)
+    dur = 256.0  # 64 bars (approx. 2.7 minutes)
+    chords = parse_progression("i:4 iv:4 V7:4 i:4 " * 16, key)
 
     # 1. Slow dragged drag-style drums
     wh_gen = InterceptWitchHouseGenerator(
@@ -395,8 +398,8 @@ def produce_sega_sunset():
     for n in leads:
         n.scale_velocity(1.5)
 
-    bass = [n for n in bass if n.start >= 16.0]   # bass enters bar 4
-    drums = [n for n in drums if n.start >= 32.0]  # drums enter bar 8
+    bass = [n for n in bass if n.start >= 64.0]     # bass enters bar 16 (64 beats)
+    drums = [n for n in drums if n.start >= 128.0]  # drums enter bar 32 (128 beats)
 
     tracks = {
         "drums": drums,
@@ -412,7 +415,7 @@ def produce_sega_sunset():
         "leads": SYNTH_LEAD,
     }
 
-    parts = [IdeaPart(name="Sega Sunset", bars=24, tempo=96, time_signature=(4, 4), tempo_profile="chaotic")]
+    parts = [IdeaPart(name="Sega Sunset", bars=64, tempo=96, time_signature=(4, 4), tempo_profile="chaotic")]
     modulator = TempoModulator(default_tempo=96, tempo_profile="chaotic")
     tempo_events = modulator.generate_events(parts)
 
@@ -437,8 +440,8 @@ def produce_sega_sunset():
 def produce_dystopia():
     print("  5. Dystopia [F Hungarian Minor — 110 BPM]")
     key = Scale(root=5, mode=Mode.HUNGARIAN_MINOR)
-    dur = 96.0  # 24 bars
-    chords = parse_progression("i:4 iv:4 vdim:4 i:4 " * 6, key)
+    dur = 288.0  # 72 bars (approx. 2.6 minutes)
+    chords = parse_progression("i:4 iv:4 vdim:4 i:4 " * 18, key)
 
     # 1. Massive aggressive drums
     wh_gen = InterceptWitchHouseGenerator(
@@ -478,8 +481,8 @@ def produce_dystopia():
     for n in leads:
         n.scale_velocity(1.6)
 
-    drums = [n for n in drums if n.start >= 16.0]  # drums enter bar 4
-    leads = [n for n in leads if n.start >= 32.0]  # lead enters bar 8
+    drums = [n for n in drums if n.start >= 64.0]    # drums enter bar 16 (64 beats)
+    leads = [n for n in leads if n.start >= 144.0]  # lead enters bar 36 (144 beats)
 
     tracks = {
         "drums": drums,
@@ -495,7 +498,7 @@ def produce_dystopia():
         "leads": SYNTH_LEAD,
     }
 
-    parts = [IdeaPart(name="Dystopia", bars=24, tempo=110, time_signature=(4, 4), tempo_profile="madness")]
+    parts = [IdeaPart(name="Dystopia", bars=72, tempo=110, time_signature=(4, 4), tempo_profile="madness")]
     modulator = TempoModulator(default_tempo=110, tempo_profile="madness")
     tempo_events = modulator.generate_events(parts)
 
@@ -520,8 +523,8 @@ def produce_dystopia():
 def produce_decay():
     print("  6. Decay [B Phrygian — 72 BPM]")
     key = Scale(root=11, mode=Mode.PHRYGIAN)
-    dur = 72.0  # 24 bars of 3/4
-    chords = parse_progression("i:3 iv:3 v:3 i:3 " * 6, key)
+    dur = 144.0  # 48 bars of 3/4 (approx. 2.0 minutes)
+    chords = parse_progression("i:3 iv:3 v:3 i:3 " * 12, key)
 
     # 1. Slow, long sustained doom sub-bass
     bass_gen = DarkBassGenerator(
@@ -555,8 +558,8 @@ def produce_decay():
     for n in leads:
         n.scale_velocity(1.5)
 
-    bass = [n for n in bass if n.start >= 18.0]   # bass enters bar 6
-    leads = [n for n in leads if n.start >= 36.0]  # melody enters bar 12
+    bass = [n for n in bass if n.start >= 36.0]   # bass enters bar 12 (36 beats)
+    leads = [n for n in leads if n.start >= 72.0]  # melody enters bar 24 (72 beats)
 
     tracks = {
         "synth_bass": bass,
@@ -570,7 +573,7 @@ def produce_decay():
         "leads": SYNTH_LEAD,
     }
 
-    parts = [IdeaPart(name="Decay", bars=24, tempo=72, time_signature=(3, 4), tempo_profile="requiem")]
+    parts = [IdeaPart(name="Decay", bars=48, tempo=72, time_signature=(3, 4), tempo_profile="requiem")]
     modulator = TempoModulator(default_tempo=72, tempo_profile="requiem")
     tempo_events = modulator.generate_events(parts)
 
