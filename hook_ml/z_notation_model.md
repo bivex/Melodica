@@ -37,7 +37,7 @@ We define the scale intervals axiomatically:
 $$
 \begin{axdef}
   scale\_intervals: Mode \rightarrow \mathbb{P} (0 \dots 11)
-\back
+\where
   scale\_intervals(PHRYGIAN) = \{0, 1, 3, 5, 7, 8, 10\} \land \\
   scale\_intervals(AEOLIAN) = \{0, 2, 3, 5, 7, 8, 10\} \land \\
   scale\_intervals(LOCRIAN) = \{0, 1, 3, 5, 6, 8, 10\} \land \\
@@ -88,7 +88,7 @@ Defines the parallel search space containing the batch variables and objectives.
 │ z\_batch: 1 \dots 64 \rightarrow Latent
 │ batch\_size: \mathbb{N}
 │ temp: \mathbb{R}_{>0}
-│ loss: Latent \times \mathbb{P} MIDI \times \mathbb{R} \times \mathbb{R} \times \mathbb{R} \rightarrow \mathbb{R}
+│ loss: Latent \times \mathbb{P} MIDI \times MIDI \times MIDI \times \mathbb{R} \rightarrow \mathbb{R}
 ├────────────────────────────────────────────────
 │ batch\_size = 64
 │ \text{dom } z\_batch = 1 \dots batch\_size
