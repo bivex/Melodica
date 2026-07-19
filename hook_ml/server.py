@@ -13,6 +13,7 @@ fitness-aware early stopping, and discrete hill-climbing refinement on CPU.
 """
 
 import sys
+import os
 import json
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
