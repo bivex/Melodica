@@ -787,6 +787,7 @@
                     <option value="reggaeton">Reggaeton (Tonic, 75/25, Dembow)</option>
                     <option value="afrobeats">Afrobeats (Tonic, 70/30, Swung)</option>
                     <option value="drill">Drill (Dominant, 50/50, Aggressive)</option>
+                    <option value="drop">Drop Bass (Tonic, 40/60, Heavy)</option>
                 </select>
             </div>
 
@@ -1723,11 +1724,20 @@
             const ctx = getAudioContext();
             const time = ctx.currentTime;
             
-            // Lorn's classic raw detuned synth setup:
-            // 2 detuned sawtooth waves + 1 sub-bass triangle wave
+            const genre = document.getElementById("ctrl-genre").value;
+            const isDrop = (genre === "drop");
+            
+            // detuned sawtooth waves + 1 sub-bass triangle wave
             const osc1 = ctx.createOscillator();
             const osc2 = ctx.createOscillator();
             const subOsc = ctx.createOscillator();
+            
+            let osc3 = null;
+            if (isDrop) {
+                osc3 = ctx.createOscillator();
+                osc3.type = "sawtooth";
+                osc3.frequency.value = freq => freq * 0.5; // Will be set below
+            }
             
             const gainNode = ctx.createGain();
             const filterNode = ctx.createBiquadFilter();
@@ -1736,40 +1746,44 @@
             
             osc1.type = "sawtooth";
             osc1.frequency.value = freq;
-            osc1.detune.value = -8; // Detuning left oscillator
+            osc1.detune.value = isDrop ? -15 : -8; // Detuning left oscillator
 
             osc2.type = "sawtooth";
             osc2.frequency.value = freq;
-            osc2.detune.value = 8; // Detuning right oscillator
+            osc2.detune.value = isDrop ? 15 : 8; // Detuning right oscillator
 
             subOsc.type = "triangle";
             subOsc.frequency.value = freq / 2.0; // Octave below sub
 
+            if (osc3) {
+                osc3.frequency.value = freq * 0.5; // sub-octave saw
+                osc3.detune.value = 0;
+            }
+
             // Filter sweeps
             filterNode.type = "lowpass";
-            filterNode.Q.value = 3.5;
-            filterNode.frequency.setValueAtTime(300, time);
+            filterNode.Q.value = isDrop ? 6.0 : 3.5;
+            filterNode.frequency.setValueAtTime(isDrop ? 150 : 300, time);
             if (duration > 0.15) {
-                filterNode.frequency.exponentialRampToValueAtTime(1400, time + 0.08);
-                filterNode.frequency.exponentialRampToValueAtTime(450, time + duration);
+                filterNode.frequency.exponentialRampToValueAtTime(isDrop ? 600 : 1400, time + 0.08);
+                filterNode.frequency.exponentialRampToValueAtTime(isDrop ? 220 : 450, time + duration);
             } else {
-                filterNode.frequency.exponentialRampToValueAtTime(1000, time + duration);
+                filterNode.frequency.exponentialRampToValueAtTime(isDrop ? 400 : 1000, time + duration);
             }
 
             // Envelope volume ramp ADSR (click-free)
             gainNode.gain.setValueAtTime(0.001, time);
             if (duration > 0.15) {
-                const attackTime = 0.03;
+                const attackTime = isDrop ? 0.05 : 0.03;
                 const decayTime = 0.06;
                 const releaseTime = 0.03;
-                gainNode.gain.linearRampToValueAtTime(0.25, time + attackTime);
-                gainNode.gain.linearRampToValueAtTime(0.18, time + attackTime + decayTime);
-                gainNode.gain.setValueAtTime(0.18, time + duration - releaseTime);
+                gainNode.gain.linearRampToValueAtTime(isDrop ? 0.35 : 0.25, time + attackTime);
+                gainNode.gain.linearRampToValueAtTime(isDrop ? 0.28 : 0.18, time + attackTime + decayTime);
+                gainNode.gain.setValueAtTime(isDrop ? 0.28 : 0.18, time + duration - releaseTime);
                 gainNode.gain.linearRampToValueAtTime(0.001, time + duration);
             } else {
-                // Short note: simple attack/release triangle envelope
                 const attackTime = duration * 0.3;
-                gainNode.gain.linearRampToValueAtTime(0.25, time + attackTime);
+                gainNode.gain.linearRampToValueAtTime(isDrop ? 0.35 : 0.25, time + attackTime);
                 gainNode.gain.linearRampToValueAtTime(0.001, time + duration);
             }
 
@@ -1777,6 +1791,9 @@
             osc1.connect(filterNode);
             osc2.connect(filterNode);
             subOsc.connect(filterNode);
+            if (osc3) {
+                osc3.connect(filterNode);
+            }
             
             filterNode.connect(gainNode);
             
@@ -1786,11 +1803,17 @@
             osc1.start(time);
             osc2.start(time);
             subOsc.start(time);
+            if (osc3) {
+                osc3.start(time);
+            }
 
             // Stop oscillators slightly later (silently) to let release tail fade out
             osc1.stop(time + duration + 0.05);
             osc2.stop(time + duration + 0.05);
             subOsc.stop(time + duration + 0.05);
+            if (osc3) {
+                osc3.stop(time + duration + 0.05);
+            }
         }
 
         // Synthesizer playback loop

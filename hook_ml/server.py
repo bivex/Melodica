@@ -74,6 +74,7 @@ GENRE_PROFILES = {
     "reggaeton": {"sync_target": 0.60, "step_target": 0.75, "leap_target": 0.25, "resolve_to": "tonic"},
     "afrobeats": {"sync_target": 0.45, "step_target": 0.70, "leap_target": 0.30, "resolve_to": "tonic"},
     "drill":     {"sync_target": 0.65, "step_target": 0.50, "leap_target": 0.50, "resolve_to": "dominant"},
+    "drop":      {"sync_target": 0.20, "step_target": 0.40, "leap_target": 0.60, "resolve_to": "tonic"},
 }
 
 def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_name: str = "pop", seed: int = 101) -> tuple[list[dict], int, int]:
