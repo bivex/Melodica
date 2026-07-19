@@ -977,7 +977,7 @@
             // 1. RHYTHM (40%)
             const durations = notes.map(n => Math.round(n.duration * 100) / 100);
             const uniqueDurs = new Set(durations);
-            const syncopated = notes.filter(n => (n.start % 1.0) !== 0).length;
+            const syncopated = notes.filter(n => Math.abs(n.start - Math.round(n.start)) > 0.05).length;
             const syncRatio = syncopated / notes.length;
             const silenceRatio = (totalBars - activeBars) / totalBars;
 
@@ -1273,7 +1273,7 @@
 
             const durations = notes.map(n => Math.round(n.duration * 100) / 100);
             const uniqueDurs = new Set(durations);
-            const syncopated = notes.filter(n => (n.start % 1.0) !== 0).length;
+            const syncopated = notes.filter(n => Math.abs(n.start - Math.round(n.start)) > 0.05).length;
             const syncRatio = syncopated / notes.length;
             const silenceRatio = (totalBars - activeBars) / totalBars;
 
