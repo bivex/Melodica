@@ -32,7 +32,7 @@ from melodica.generators.dark_pad import DarkPadGenerator
 from melodica.generators.dark_bass import DarkBassGenerator
 from melodica.generators.vocal_chops import VocalChopsGenerator
 from melodica.generators.arpeggiator import ArpeggiatorGenerator
-from melodica.composer.album_pipeline import produce_track, Mood, DEFAULT_PIPELINE, Stage
+from melodica.composer.album_pipeline import produce_track, Mood
 from melodica.composer.tempo_modulator import TempoModulator
 from melodica.idea_tool import IdeaPart
 
@@ -67,30 +67,6 @@ class PassThroughRhythmGenerator:
 
 
 _PASSTHROUGH_RHYTHM = PassThroughRhythmGenerator()
-
-
-# ------------------------------------------------------------------
-# Custom Pipeline:
-# - Exclude texture, polyphony, and sections stages to prevent note deletion.
-# - Protect percussion from transpositions/truncations in harmonic_verify.
-# ------------------------------------------------------------------
-def custom_harmonic_verify(kw):
-    drums = kw["tracks"].pop("drums", None)
-    from melodica.composer.album_pipeline import _stage_harmonic_verify
-    kw = _stage_harmonic_verify(kw)
-    if drums is not None:
-        kw["tracks"]["drums"] = drums
-    return kw
-
-
-LORN_PIPELINE = []
-for stage in DEFAULT_PIPELINE:
-    if stage.name in ("texture", "polyphony", "sections"):
-        continue
-    elif stage.name == "harmonic_verify":
-        LORN_PIPELINE.append(Stage("harmonic_verify", custom_harmonic_verify, config_flag="use_harmonic_verifier"))
-    else:
-        LORN_PIPELINE.append(stage)
 
 
 # ------------------------------------------------------------------
@@ -277,7 +253,7 @@ def produce_acid_rain():
         time_signature=(4, 4),
         rhythm=_PASSTHROUGH_RHYTHM,
         chords=chords,
-        pipeline=LORN_PIPELINE,
+        skip_stages=["texture", "polyphony", "sections"],
         psycho_verify_enabled=False,
     )
 
@@ -362,7 +338,7 @@ def produce_grave_dirt():
         time_signature=(3, 4),
         rhythm=_PASSTHROUGH_RHYTHM,
         chords=chords,
-        pipeline=LORN_PIPELINE,
+        skip_stages=["texture", "polyphony", "sections"],
         psycho_verify_enabled=False,
     )
 
@@ -447,7 +423,7 @@ def produce_iron_lungs():
         time_signature=(4, 4),
         rhythm=_PASSTHROUGH_RHYTHM,
         chords=chords,
-        pipeline=LORN_PIPELINE,
+        skip_stages=["texture", "polyphony", "sections"],
         psycho_verify_enabled=False,
     )
 
@@ -530,7 +506,7 @@ def produce_sega_sunset():
         time_signature=(4, 4),
         rhythm=_PASSTHROUGH_RHYTHM,
         chords=chords,
-        pipeline=LORN_PIPELINE,
+        skip_stages=["texture", "polyphony", "sections"],
         psycho_verify_enabled=False,
     )
 
@@ -613,7 +589,7 @@ def produce_dystopia():
         time_signature=(4, 4),
         rhythm=_PASSTHROUGH_RHYTHM,
         chords=chords,
-        pipeline=LORN_PIPELINE,
+        skip_stages=["texture", "polyphony", "sections"],
         psycho_verify_enabled=False,
     )
 
@@ -690,7 +666,7 @@ def produce_decay():
         time_signature=(3, 4),
         rhythm=_PASSTHROUGH_RHYTHM,
         chords=chords,
-        pipeline=LORN_PIPELINE,
+        skip_stages=["texture", "polyphony", "sections"],
         psycho_verify_enabled=False,
     )
 
