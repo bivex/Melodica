@@ -32,7 +32,7 @@ except ImportError:
 
 from melodica.types import Scale, Mode
 from scripts.test_melody_hook import evaluate_memorability
-from hook_ml.run_generator import render_hook_for_eval, hill_climbing_refine
+from hook_ml.run_generator import render_hook_for_eval, hill_climbing_refine, enforce_resolution
 
 PORT = 8081
 MODE_MAP = {
@@ -60,6 +60,10 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
             
     scale_pitches_list = [base_midi + step for step in scale_intervals]
     scale_pitches = mx.array(scale_pitches_list, dtype=mx.float32)
+    
+    # Target resolution midis for continuous loss function
+    target_root_midi = base_midi + root
+    target_dominant_midi = base_midi + root + 7
     
     # 1. Instantiate Model and Trainable Latents (Batch of 64 for elite, 8 for standard)
     model = MelodyDecoder(num_notes=5, scale_size=7)
@@ -91,7 +95,10 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
             temp = 0.3  # Low temp = collapse
             
         def loss_fn(lat_mod):
-            return batch_differentiable_loss(model, lat_mod.z, scale_pitches, temp)
+            return batch_differentiable_loss(
+                model, lat_mod.z, scale_pitches,
+                target_root_midi, target_dominant_midi, temp
+            )
             
         loss_and_grad = nn.value_and_grad(latent, loss_fn)
         loss, grads = loss_and_grad(latent)
@@ -123,6 +130,9 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
                         "duration": cand_durations[j]
                     } for j in range(5)
                 ], key=lambda n: n["start"])
+                
+                # Apply forced discrete resolution override
+                notes_list = enforce_resolution(notes_list, key)
                 
                 rendered = render_hook_for_eval(notes_list, 128.0)
                 eval_res = evaluate_memorability(rendered, key, 128.0)
@@ -158,6 +168,8 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
                 } for j in range(5)
             ], key=lambda n: n["start"])
             
+            notes_list = enforce_resolution(notes_list, key)
+            
             rendered = render_hook_for_eval(notes_list, 128.0)
             eval_res = evaluate_memorability(rendered, key, 128.0)
             
@@ -171,6 +183,11 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True) -> tuple
         refined_notes, refined_metrics = hill_climbing_refine(best_candidate_notes, key, scale_pitches_list)
         best_candidate_notes = refined_notes
         best_candidate_score = refined_metrics['score']
+    else:
+        # For standard non-elite hook, apply forced discrete resolution override at the end
+        best_candidate_notes = enforce_resolution(best_candidate_notes, key)
+        rendered = render_hook_for_eval(best_candidate_notes, 128.0)
+        best_candidate_score = evaluate_memorability(rendered, key, 128.0)['score']
     
     # Fallback to perfect 100/100 parameters if optimization fails to hit 95 (only for elite)
     if elite and best_candidate_score < 95:

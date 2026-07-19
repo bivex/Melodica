@@ -79,12 +79,14 @@ def batch_differentiable_loss(
     model: MelodyDecoder,
     z: mx.array,
     scale_pitches: mx.array,
+    target_root_midi: float,
+    target_dominant_midi: float,
     temperature: float = 1.0
 ) -> mx.array:
     """
     Batch-vectorized fully continuous loss function.
     Rewards syncopations (targeted ratio), duration variance, step-leap balance (soft ratios),
-    resolutions, and entropy exploration.
+    resolutions (aligned with key), and entropy exploration.
     """
     logits, onsets, durations = model(z)
     
@@ -94,7 +96,6 @@ def batch_differentiable_loss(
     
     # 2. Rhythm Loss
     # Soft syncopation ratio target: keep syncopated notes around 40% (inside target 15%-60%)
-    # Using 20.0 factor inside sigmoid to make it act as a sharp step function
     sync_soft = mx.sum(mx.sigmoid(20.0 * (mx.sin(mx.pi * onsets) ** 2 - 0.15)), axis=1)
     sync_ratio = sync_soft / 5.0
     syncopation_loss = mx.square(sync_ratio - 0.40)
@@ -118,10 +119,10 @@ def batch_differentiable_loss(
     # Quadratic targets: 70% steps, 30% leaps
     contour_loss = mx.square(step_ratio - 0.70) + mx.square(leap_ratio - 0.30)
     
-    # 4. Resolution Loss (last note resolves to stable C5=60 or G5=67)
+    # 4. Resolution Loss (last note resolves to stable key root/dominant midi)
     last_pitch = expected_pitches[:, -1]
-    dist_c = mx.square(last_pitch - 60.0)
-    dist_g = mx.square(last_pitch - 67.0)
+    dist_c = mx.square(last_pitch - target_root_midi)
+    dist_g = mx.square(last_pitch - target_dominant_midi)
     resolution_loss = mx.minimum(dist_c, dist_g)
     
     # 5. Entropy Regularization
@@ -129,12 +130,12 @@ def batch_differentiable_loss(
     entropy = -mx.mean(mx.sum(p * mx.log(p + 1e-9), axis=-1), axis=1)
     entropy_loss = -0.15 * entropy
     
-    # Combine losses per candidate (all terms minimized or maximized correctly)
+    # Combine losses per candidate
     total_loss = (
-        12.0 * syncopation_loss +  # Heavily weighted to target sync ratio
+        12.0 * syncopation_loss +
         3.0 * duration_loss +
         15.0 * contour_loss +
-        8.0 * resolution_loss +  # Heavily weighted to force stable resolution
+        8.0 * resolution_loss +  # Pulled to the target root/dominant key pitch
         1.0 * entropy_loss
     )
     

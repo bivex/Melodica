@@ -7,7 +7,8 @@ hook_ml/run_generator.py — MLX Training & Generation Pipeline.
 
 Runs batch-vectorized latent space optimization using Gumbel-Softmax relaxation,
 temperature annealing (curriculum), and stochastic perturbations.
-Includes discrete local hill-climbing refinement and fitness-aware early stopping.
+Includes discrete local hill-climbing refinement, fitness-aware early stopping,
+and forced final note resolution matching the target key.
 """
 
 import sys
@@ -25,8 +26,8 @@ except ImportError:
     print("\n[!] Error: Apple MLX is not installed. Run 'pip install mlx' to execute this script.")
     sys.exit(1)
 
-from melodica.types import Scale, Mode, NoteInfo
-from scripts.test_melody_hook import evaluate_memorability
+from melodica.types import Scale, NoteInfo
+from scripts.test_melody_hook import Mode, evaluate_memorability
 
 
 def render_hook_for_eval(notes_list: list[dict], duration_beats: float) -> list[NoteInfo]:
@@ -78,12 +79,48 @@ def render_hook_for_eval(notes_list: list[dict], duration_beats: float) -> list[
     return notes
 
 
+def enforce_resolution(notes_list: list[dict], key: Scale) -> list[dict]:
+    """
+    Forcibly shifts the last note of the hook to the nearest octave of the
+    scale's tonic (root) or dominant (5th) to guarantee 5/5 resolution score.
+    """
+    if len(notes_list) == 0:
+        return notes_list
+        
+    res_notes = [dict(n) for n in notes_list]
+    last_idx = -1
+    last_note = res_notes[last_idx]
+    
+    # Target pitch classes (tonic and dominant)
+    tonic_pc = key.root % 12
+    dominant_pc = (key.root + 7) % 12
+    
+    current_pitch = last_note["pitch"]
+    current_pc = current_pitch % 12
+    
+    # If already stable tonic or dominant, return
+    if current_pc == tonic_pc or current_pc == dominant_pc:
+        return res_notes
+        
+    # Find nearest octave for tonic and dominant (MIDI octaves 3 to 7)
+    tonic_pitch_options = [tonic_pc + 12 * oct for oct in range(3, 8)]
+    dominant_pitch_options = [dominant_pc + 12 * oct for oct in range(3, 8)]
+    
+    all_options = tonic_pitch_options + dominant_pitch_options
+    # Sort by proximity to current pitch to minimize melodic distortion
+    best_pitch = min(all_options, key=lambda p: abs(p - current_pitch))
+    
+    res_notes[last_idx]["pitch"] = best_pitch
+    return res_notes
+
+
 def hill_climbing_refine(notes_list: list[dict], key: Scale, scale_pitches_list: list[int]) -> tuple[list[dict], dict]:
     """
     Performs discrete hill-climbing local search on a generated melody hook
     to close the continuous-discrete gap and hit exactly 100/100.
     """
     best_notes = [dict(n) for n in notes_list]
+    best_notes = enforce_resolution(best_notes, key)  # lock resolution first
     rendered = render_hook_for_eval(best_notes, 128.0)
     best_metrics = evaluate_memorability(rendered, key, 128.0)
     best_score = best_metrics['score']
@@ -99,8 +136,8 @@ def hill_climbing_refine(notes_list: list[dict], key: Scale, scale_pitches_list:
         improved = False
         passes += 1
         
-        # 1. Mutate pitch degrees
-        for idx in range(len(best_notes)):
+        # 1. Mutate pitch degrees (skipping the last note to preserve resolved tonic/dominant)
+        for idx in range(len(best_notes) - 1):
             original_pitch = best_notes[idx]["pitch"]
             for step_pitch in scale_pitches_list:
                 if step_pitch == original_pitch:
@@ -181,6 +218,10 @@ def main():
     scale_pitches_list = [base_midi + step for step in scale_intervals]
     scale_pitches = mx.array(scale_pitches_list, dtype=mx.float32)
     
+    # Target resolution midis for continuous loss function
+    target_root_midi = base_midi + root
+    target_dominant_midi = base_midi + root + 7
+    
     print(f"Scale: C Phrygian | Scale Degrees: {scale_pitches_list}")
     
     # 2. Instantiate Model and Trainable Latents (Batch of 64 candidates)
@@ -213,7 +254,10 @@ def main():
             temp = 0.3  # Low temp = collapse
             
         def loss_fn(lat_mod):
-            return batch_differentiable_loss(model, lat_mod.z, scale_pitches, temp)
+            return batch_differentiable_loss(
+                model, lat_mod.z, scale_pitches,
+                target_root_midi, target_dominant_midi, temp
+            )
             
         loss_and_grad = nn.value_and_grad(latent, loss_fn)
         loss, grads = loss_and_grad(latent)
@@ -245,6 +289,9 @@ def main():
                         "duration": cand_durations[j]
                     } for j in range(5)
                 ], key=lambda n: n["start"])
+                
+                # Apply forced discrete resolution override
+                notes_list = enforce_resolution(notes_list, key)
                 
                 rendered = render_hook_for_eval(notes_list, 128.0)
                 eval_res = evaluate_memorability(rendered, key, 128.0)
@@ -283,6 +330,8 @@ def main():
                     "duration": cand_durations[j]
                 } for j in range(5)
             ], key=lambda n: n["start"])
+            
+            notes_list = enforce_resolution(notes_list, key)
             
             rendered = render_hook_for_eval(notes_list, 128.0)
             eval_res = evaluate_memorability(rendered, key, 128.0)
