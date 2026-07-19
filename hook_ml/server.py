@@ -36,6 +36,8 @@ from hook_ml.run_generator import render_hook_for_eval, hill_climbing_refine, en
 
 PORT = 8081
 MODE_MAP = {
+    "major": Mode.MAJOR,
+    "ionian": Mode.IONIAN,
     "phrygian": Mode.PHRYGIAN,
     "aeolian": Mode.AEOLIAN,
     "locrian": Mode.LOCRIAN,

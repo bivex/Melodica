@@ -585,6 +585,7 @@
             <div class="control-group">
                 <label>Scale Mode</label>
                 <select id="ctrl-mode">
+                    <option value="major">Major (Ionian)</option>
                     <option value="phrygian">Phrygian</option>
                     <option value="aeolian">Aeolian (Natural Minor)</option>
                     <option value="locrian">Locrian</option>
@@ -708,6 +709,7 @@
     <script>
         // Scales definition
         const SCALE_MODES = {
+            major: [0, 2, 4, 5, 7, 9, 11],
             phrygian: [0, 1, 3, 5, 7, 8, 10],
             aeolian: [0, 2, 3, 5, 7, 8, 10],
             locrian: [0, 1, 3, 5, 6, 8, 10],
