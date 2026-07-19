@@ -114,7 +114,7 @@ def batch_differentiable_loss(
     leaps_soft = mx.sum(mx.sigmoid(abs_diffs - 2.5), axis=1)
     
     # Ratios
-    total_intervals = 4.0
+    total_intervals = float(abs_diffs.shape[1])
     step_ratio = steps_soft / total_intervals
     leap_ratio = leaps_soft / total_intervals
     

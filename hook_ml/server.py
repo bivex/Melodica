@@ -75,9 +75,10 @@ GENRE_PROFILES = {
     "afrobeats": {"sync_target": 0.45, "step_target": 0.70, "leap_target": 0.30, "resolve_to": "tonic"},
     "drill":     {"sync_target": 0.65, "step_target": 0.50, "leap_target": 0.50, "resolve_to": "dominant"},
     "drop":      {"sync_target": 0.20, "step_target": 0.40, "leap_target": 0.60, "resolve_to": "tonic"},
+    "transition":{"sync_target": 0.30, "step_target": 0.80, "leap_target": 0.20, "resolve_to": "dominant"},
 }
 
-def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_name: str = "pop", seed: int = 101) -> tuple[list[dict], int, int]:
+def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_name: str = "pop", seed: int = 101, length: int = 5) -> tuple[list[dict], int, int]:
     """Optimizes melody parameters on-the-fly for the requested scale using parallel MLX batch search with genre profile targets."""
     mx.random.seed(seed)
     sel_mode = MODE_MAP.get(mode_name.lower(), Mode.PHRYGIAN)
@@ -110,11 +111,11 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
         target_resolution_midi = scale_pitches_list[0]
         
     # 1. Instantiate Model and Trainable Latents (Batch of 64 for elite, 8 for standard)
-    model = MelodyDecoder(num_notes=5, scale_size=7)
+    model = MelodyDecoder(num_notes=length, scale_size=7)
     
-    # Load pre-trained weights if they exist
+    # Load pre-trained weights if they exist and shape matches (length == 5)
     weights_path = "hook_ml/memorability99_model.npz"
-    if os.path.exists(weights_path):
+    if length == 5 and os.path.exists(weights_path):
         try:
             flat_params = mx.load(weights_path)
             params = {}
@@ -190,7 +191,7 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
                         "pitch": pitches[j],
                         "start": cand_onsets[j],
                         "duration": cand_durations[j]
-                    } for j in range(5)
+                    } for j in range(length)
                 ], key=lambda n: n["start"])
                 
                 # Apply forced discrete resolution override
@@ -227,7 +228,7 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
                     "pitch": pitches[j],
                     "start": cand_onsets[j],
                     "duration": cand_durations[j]
-                } for j in range(5)
+                } for j in range(length)
             ], key=lambda n: n["start"])
             
             notes_list = enforce_resolution(notes_list, key, scale_pitches_list, resolve_to)
@@ -288,9 +289,10 @@ class MLXAPIHandler(BaseHTTPRequestHandler):
                 elite = elite_str.lower() == 'true'
                 genre = query.get('genre', ['pop'])[0]
                 seed = int(query.get('seed', [101])[0])
+                length = int(query.get('length', [5])[0])
                 
-                print(f"[API] Batch optimizing (GPU/Metal) for root={root}, mode={mode}, elite={elite}, genre={genre}, seed={seed}...")
-                notes, steps, score = run_mlx_optimization(root, mode, elite, genre, seed)
+                print(f"[API] Batch optimizing (GPU/Metal) for root={root}, mode={mode}, elite={elite}, genre={genre}, seed={seed}, length={length}...")
+                notes, steps, score = run_mlx_optimization(root, mode, elite, genre, seed, length)
                 
                 response = {
                     "status": "success",
