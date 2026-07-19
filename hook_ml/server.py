@@ -22,6 +22,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 try:
     import mlx.core as mx
     import mlx.nn as nn
+    import mlx.optimizers as optim
     from hook_ml.generator_model import HookGeneratorMLX, differentiable_loss
 except ImportError:
     print("[!] MLX not installed. API Server cannot run.")
@@ -63,15 +64,14 @@ def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, in
     model = HookGeneratorMLX(num_notes=5, scale_size=7)
     mx.eval(model.parameters())
     
-    # Pre-train parameters
+    # Pre-train parameters using Adam optimizer
     x_base = mx.random.normal((16,))
+    model_opt = optim.Adam(learning_rate=0.03)
     loss_and_grad_model = nn.value_and_grad(model, differentiable_loss)
     
     for _ in range(80):
         loss, grads = loss_and_grad_model(model, x_base, scale_pitches)
-        # Quick update
-        for p, g in zip(model.parameters().values(), grads.values()):
-            p.update(p - 0.05 * g)
+        model_opt.update(model, grads)
         mx.eval(model.parameters(), loss)
         
     # Multi-start parameter optimization
