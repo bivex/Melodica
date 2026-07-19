@@ -1547,15 +1547,29 @@
             filterNode.type = "lowpass";
             filterNode.Q.value = 3.5;
             filterNode.frequency.setValueAtTime(300, time);
-            filterNode.frequency.exponentialRampToValueAtTime(1400, time + 0.1);
-            filterNode.frequency.exponentialRampToValueAtTime(450, time + duration);
+            if (duration > 0.15) {
+                filterNode.frequency.exponentialRampToValueAtTime(1400, time + 0.08);
+                filterNode.frequency.exponentialRampToValueAtTime(450, time + duration);
+            } else {
+                filterNode.frequency.exponentialRampToValueAtTime(1000, time + duration);
+            }
 
-            // Envelope volume ramp ADSR
-            gainNode.gain.setValueAtTime(0, time);
-            gainNode.gain.linearRampToValueAtTime(0.35, time + 0.08); // attack
-            gainNode.gain.exponentialRampToValueAtTime(0.20, time + 0.3); // decay
-            gainNode.gain.setValueAtTime(0.20, time + duration - 0.05);
-            gainNode.gain.linearRampToValueAtTime(0, time + duration); // release
+            // Envelope volume ramp ADSR (click-free)
+            gainNode.gain.setValueAtTime(0.001, time);
+            if (duration > 0.15) {
+                const attackTime = 0.03;
+                const decayTime = 0.06;
+                const releaseTime = 0.03;
+                gainNode.gain.linearRampToValueAtTime(0.25, time + attackTime);
+                gainNode.gain.linearRampToValueAtTime(0.18, time + attackTime + decayTime);
+                gainNode.gain.setValueAtTime(0.18, time + duration - releaseTime);
+                gainNode.gain.linearRampToValueAtTime(0.001, time + duration);
+            } else {
+                // Short note: simple attack/release triangle envelope
+                const attackTime = duration * 0.3;
+                gainNode.gain.linearRampToValueAtTime(0.25, time + attackTime);
+                gainNode.gain.linearRampToValueAtTime(0.001, time + duration);
+            }
 
             // Route audio graph
             osc1.connect(filterNode);
@@ -1571,9 +1585,10 @@
             osc2.start(time);
             subOsc.start(time);
 
-            osc1.stop(time + duration);
-            osc2.stop(time + duration);
-            subOsc.stop(time + duration);
+            // Stop oscillators slightly later (silently) to let release tail fade out
+            osc1.stop(time + duration + 0.05);
+            osc2.stop(time + duration + 0.05);
+            subOsc.stop(time + duration + 0.05);
         }
 
         // Synthesizer playback loop
