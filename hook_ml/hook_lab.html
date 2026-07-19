@@ -1195,6 +1195,7 @@
             generatedNotes = notes.sort((a, b) => a.start - b.start);
             evaluateHookMemorability(generatedNotes, root, modeIntervals, actualHookLen, hookPitches);
             drawPianoRoll();
+            startIdleAnim();
         }
 
         // ----------------------------------------------------
@@ -1583,115 +1584,283 @@
         // ----------------------------------------------------
         // Rendering the Piano Roll Canvas
         // ----------------------------------------------------
-        function drawPianoRoll() {
-            const width = canvas.width = canvas.parentElement.clientWidth;
-            const height = canvas.height = canvas.parentElement.clientHeight;
+        // -------------------------------------------------------
+        // Piano Roll — fully-animated canvas renderer
+        // -------------------------------------------------------
+        // Per-note animation state
+        const noteAnimState = {};   // { idx: { born, glowPhase, entryProgress } }
+        let lastDrawnNotes = [];    // detect when generatedNotes changes → reset state
 
-            ctx.clearRect(0, 0, width, height);
-
-            if (generatedNotes.length === 0) return;
-
-            // Pitch bounds mapping
-            const pitches = generatedNotes.map(n => n.pitch);
-            const minPitch = Math.min(...pitches) - 2;
-            const maxPitch = Math.max(...pitches) + 2;
-            const pitchRange = maxPitch - minPitch;
-
-            const gridRows = pitchRange;
-            const gridCols = 128; // 128 beats total
-
-            const rowHeight = height / gridRows;
-            const colWidth = width / gridCols;
-
-            // 1. Draw grid background lines
-            ctx.strokeStyle = "rgba(168, 85, 247, 0.05)";
-            ctx.lineWidth = 1;
-            for (let r = 0; r < gridRows; r++) {
-                ctx.beginPath();
-                ctx.moveTo(0, r * rowHeight);
-                ctx.lineTo(width, r * rowHeight);
-                ctx.stroke();
-            }
-
-            // Draw beat partition grid
-            for (let c = 0; c < gridCols; c += 4) { // Bar boundaries
-                ctx.strokeStyle = c % 16 === 0 ? "rgba(168, 85, 247, 0.2)" : "rgba(168, 85, 247, 0.05)";
-                ctx.lineWidth = c % 16 === 0 ? 2 : 1;
-                ctx.beginPath();
-                ctx.moveTo(c * colWidth, 0);
-                ctx.lineTo(c * colWidth, height);
-                ctx.stroke();
-            }
-
-            // 2. Draw hover guide highlights
-            if (mouseX !== -1 && mouseY !== -1) {
-                const hoveredCol = Math.floor(mouseX / colWidth);
-                const hoveredRow = Math.floor(mouseY / rowHeight);
-                ctx.fillStyle = "rgba(168, 85, 247, 0.05)";
-                ctx.fillRect(hoveredCol * colWidth, 0, colWidth, height);
-                ctx.fillRect(0, hoveredRow * rowHeight, width, rowHeight);
-            }
-
-            // 3. Draw note blocks
+        function initNoteAnim() {
+            const now = performance.now();
             generatedNotes.forEach((n, idx) => {
-                const pitchY = height - ((n.pitch - minPitch) * rowHeight) - rowHeight;
-                const startX = n.start * colWidth;
-                const blockWidth = n.duration * colWidth;
-
-                const isCurrent = idx === currentNoteIdx && isPlaying;
-                
-                // Color and glow effects
-                if (isCurrent) {
-                    ctx.fillStyle = "#10b981";
-                    ctx.shadowColor = "#10b981";
-                    ctx.shadowBlur = 20;
-                } else {
-                    const grad = ctx.createLinearGradient(startX, pitchY, startX + blockWidth, pitchY);
-                    grad.addColorStop(0, "#3b82f6");
-                    grad.addColorStop(1, "#a855f7");
-                    ctx.fillStyle = grad;
-                    ctx.shadowColor = "#a855f7";
-                    ctx.shadowBlur = 10;
-                }
-
-                ctx.beginPath();
-                ctx.roundRect(startX, pitchY, blockWidth - 2, rowHeight - 2, 4);
-                ctx.fill();
-
-                // Draw pitch note label inside block
-                if (blockWidth > 35) {
-                    ctx.shadowBlur = 0;
-                    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-                    ctx.font = "bold 9px 'Space Grotesk'";
-                    ctx.fillText(n.label, startX + 5, pitchY + rowHeight / 1.4);
+                if (!noteAnimState[idx]) {
+                    noteAnimState[idx] = { born: now, glowPhase: Math.random() * Math.PI * 2 };
                 }
             });
-            
-            // 4. Draw moving playhead line during playback
-            if (isPlaying && audioCtx) {
-                const bpm = 120.0;
-                const beatDur = 60.0 / bpm;
-                const elapsedSec = audioCtx.currentTime - playbackStartTime;
-                const elapsedBeats = elapsedSec / beatDur;
-                const playheadX = elapsedBeats * colWidth;
-                
-                if (playheadX <= width) {
-                    ctx.strokeStyle = "#10b981";
-                    ctx.lineWidth = 2;
-                    ctx.shadowColor = "#10b981";
-                    ctx.shadowBlur = 15;
-                    ctx.beginPath();
-                    ctx.moveTo(playheadX, 0);
-                    ctx.lineTo(playheadX, height);
-                    ctx.stroke();
+            // clean up stale entries
+            Object.keys(noteAnimState).forEach(k => {
+                if (k >= generatedNotes.length) delete noteAnimState[k];
+            });
+        }
+
+        // Tooltip state
+        let hoveredNoteIdx = -1;
+
+        function drawPianoRoll() {
+            const W = canvas.width  = canvas.parentElement.clientWidth;
+            const H = canvas.height = canvas.parentElement.clientHeight;
+            const now = performance.now();
+
+            // Detect new note set → boot animations
+            if (generatedNotes !== lastDrawnNotes) {
+                lastDrawnNotes = generatedNotes;
+                Object.keys(noteAnimState).forEach(k => delete noteAnimState[k]);
+                initNoteAnim();
+            }
+
+            ctx.clearRect(0, 0, W, H);
+            if (generatedNotes.length === 0) return;
+
+            // ── Layout ────────────────────────────────────────────
+            const pitches   = generatedNotes.map(n => n.pitch);
+            const minPitch  = Math.min(...pitches) - 2;
+            const maxPitch  = Math.max(...pitches) + 2;
+            const pitchRange = maxPitch - minPitch;
+            const TOTAL_BEATS = 128;
+            const rowH  = H / pitchRange;
+            const colW  = W / TOTAL_BEATS;
+
+            // ── 1. Background pitch lanes ─────────────────────────
+            for (let r = 0; r < pitchRange; r++) {
+                const pitch = maxPitch - r;
+                const pc    = pitch % 12;
+                const isBlack = [1,3,6,8,10].includes(pc);
+                ctx.fillStyle = isBlack
+                    ? "rgba(255,255,255,0.018)"
+                    : "rgba(255,255,255,0.006)";
+                ctx.fillRect(0, r * rowH, W, rowH);
+            }
+
+            // ── 2. Beat grid ──────────────────────────────────────
+            for (let b = 0; b <= TOTAL_BEATS; b++) {
+                const x      = b * colW;
+                const isBar  = b % 4 === 0;
+                const isPhrase = b % 16 === 0;
+                ctx.strokeStyle = isPhrase
+                    ? "rgba(168,85,247,0.30)"
+                    : isBar
+                        ? "rgba(168,85,247,0.10)"
+                        : "rgba(168,85,247,0.03)";
+                ctx.lineWidth = isPhrase ? 1.5 : 1;
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+
+                // Bar number label every 4 bars
+                if (isPhrase && b > 0) {
+                    ctx.fillStyle = "rgba(168,85,247,0.45)";
+                    ctx.font = "9px 'Space Grotesk'";
+                    ctx.fillText(`${b/4}`, x + 3, 11);
                 }
             }
-            
-            ctx.shadowBlur = 0; // reset glow
+
+            // Horizontal lane separators
+            ctx.lineWidth = 1;
+            for (let r = 0; r <= pitchRange; r++) {
+                ctx.strokeStyle = "rgba(168,85,247,0.04)";
+                ctx.beginPath(); ctx.moveTo(0, r*rowH); ctx.lineTo(W, r*rowH); ctx.stroke();
+            }
+
+            // ── 3. Hover cross-hair ───────────────────────────────
+            if (mouseX !== -1 && mouseY !== -1) {
+                // column highlight
+                const hovCol = Math.floor(mouseX / colW);
+                ctx.fillStyle = "rgba(168,85,247,0.05)";
+                ctx.fillRect(hovCol * colW, 0, colW, H);
+                // row highlight
+                const hovRow = Math.floor(mouseY / rowH);
+                ctx.fillStyle = "rgba(168,85,247,0.04)";
+                ctx.fillRect(0, hovRow * rowH, W, rowH);
+                // thin cross lines
+                ctx.strokeStyle = "rgba(168,85,247,0.25)";
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 6]);
+                ctx.beginPath(); ctx.moveTo(mouseX, 0); ctx.lineTo(mouseX, H); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, mouseY); ctx.lineTo(W, mouseY); ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // ── 4. Note blocks ────────────────────────────────────
+            hoveredNoteIdx = -1;
+            generatedNotes.forEach((n, idx) => {
+                const st  = noteAnimState[idx] || { born: now, glowPhase: 0 };
+                noteAnimState[idx] = st;
+
+                // Entry animation: slide-in from left + fade over 400 ms
+                const age     = now - st.born;
+                const entryT  = Math.min(1, age / 400);
+                const eased   = 1 - Math.pow(1 - entryT, 3); // ease-out cubic
+
+                const pitchY  = H - ((n.pitch - minPitch) * rowH) - rowH;
+                const startX  = n.start * colW;
+                const bw      = Math.max(4, n.duration * colW - 2);
+
+                // slide-in offset
+                const slideX  = startX - (1 - eased) * 30;
+
+                const isCurrent = idx === currentNoteIdx && isPlaying;
+
+                // Glow pulse: breathing at ~1.2 Hz when active
+                const pulse = 0.5 + 0.5 * Math.sin(now * 0.0075 + st.glowPhase);
+                const glowR = isCurrent ? 20 + pulse * 14 : 8 + pulse * 4;
+
+                // Hovered?
+                if (mouseX >= startX && mouseX <= startX + bw &&
+                    mouseY >= pitchY  && mouseY <= pitchY + rowH) {
+                    hoveredNoteIdx = idx;
+                }
+                const isHover = hoveredNoteIdx === idx;
+
+                ctx.save();
+                ctx.globalAlpha = eased;
+
+                // Glow
+                ctx.shadowColor = isCurrent ? "#10b981" : isHover ? "#f59e0b" : "#a855f7";
+                ctx.shadowBlur  = isCurrent ? glowR : isHover ? 16 : glowR * 0.5;
+
+                // Fill gradient
+                const grad = ctx.createLinearGradient(slideX, pitchY, slideX + bw, pitchY + rowH);
+                if (isCurrent) {
+                    grad.addColorStop(0, "#10b981");
+                    grad.addColorStop(1, "#059669");
+                } else if (isHover) {
+                    grad.addColorStop(0, "#f59e0b");
+                    grad.addColorStop(1, "#d97706");
+                } else {
+                    grad.addColorStop(0, "#3b82f6");
+                    grad.addColorStop(1, "#a855f7");
+                }
+                ctx.fillStyle = grad;
+
+                // Rounded rect
+                const r4 = Math.min(4, rowH * 0.35);
+                ctx.beginPath();
+                ctx.roundRect(slideX, pitchY + 1, bw, rowH - 2, r4);
+                ctx.fill();
+
+                // Sheen highlight
+                const sheen = ctx.createLinearGradient(slideX, pitchY, slideX, pitchY + rowH * 0.5);
+                sheen.addColorStop(0, "rgba(255,255,255,0.18)");
+                sheen.addColorStop(1, "rgba(255,255,255,0)");
+                ctx.fillStyle = sheen;
+                ctx.beginPath();
+                ctx.roundRect(slideX, pitchY + 1, bw, rowH * 0.5, r4);
+                ctx.fill();
+
+                // Label inside block
+                ctx.shadowBlur = 0;
+                if (bw > 28 && rowH > 10) {
+                    ctx.fillStyle = "rgba(255,255,255,0.85)";
+                    ctx.font = `bold ${Math.min(10, rowH * 0.65)}px 'Space Grotesk'`;
+                    ctx.fillText(n.label || "", slideX + 4, pitchY + rowH * 0.72);
+                }
+
+                // Pulse ring on currently-playing note
+                if (isCurrent) {
+                    const ringR = pulse;
+                    ctx.strokeStyle = `rgba(16,185,129,${0.6 - ringR * 0.4})`;
+                    ctx.lineWidth   = 1.5;
+                    ctx.shadowColor = "#10b981";
+                    ctx.shadowBlur  = 10;
+                    ctx.beginPath();
+                    ctx.roundRect(
+                        slideX - 3 - ringR * 5, pitchY - 1 - ringR * 3,
+                        bw + 6 + ringR * 10,    rowH + 2 + ringR * 6,
+                        r4 + 2
+                    );
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            });
+
+            // ── 5. Playhead ───────────────────────────────────────
+            if (isPlaying && audioCtx) {
+                const elapsed = audioCtx.currentTime - playbackStartTime;
+                const elapsedBeats = elapsed / (60.0 / 120.0);
+                const px = elapsedBeats * colW;
+
+                if (px >= 0 && px <= W) {
+                    // Faint glow fill ahead of playhead
+                    const headGrad = ctx.createLinearGradient(px - 30, 0, px, 0);
+                    headGrad.addColorStop(0, "rgba(16,185,129,0)");
+                    headGrad.addColorStop(1, "rgba(16,185,129,0.06)");
+                    ctx.fillStyle = headGrad;
+                    ctx.fillRect(px - 30, 0, 30, H);
+
+                    // Main line
+                    ctx.strokeStyle = "#10b981";
+                    ctx.lineWidth   = 2;
+                    ctx.shadowColor = "#10b981";
+                    ctx.shadowBlur  = 20;
+                    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+
+                    // Triangle head marker
+                    ctx.fillStyle   = "#10b981";
+                    ctx.shadowBlur  = 8;
+                    ctx.beginPath();
+                    ctx.moveTo(px - 5, 0);
+                    ctx.lineTo(px + 5, 0);
+                    ctx.lineTo(px,     8);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+
+            // ── 6. Hover tooltip ──────────────────────────────────
+            if (hoveredNoteIdx !== -1 && mouseX !== -1) {
+                const n    = generatedNotes[hoveredNoteIdx];
+                const text = `${n.label}  beat ${n.start.toFixed(2)}  dur ${n.duration.toFixed(2)}`;
+                const pad  = 7;
+                ctx.font   = "11px 'Space Grotesk'";
+                const tw   = ctx.measureText(text).width;
+                let tx = mouseX + 12;
+                let ty = mouseY - 14;
+                if (tx + tw + pad * 2 > W) tx = mouseX - tw - pad * 2 - 4;
+                if (ty < 0) ty = mouseY + 20;
+
+                ctx.fillStyle   = "rgba(15,15,25,0.88)";
+                ctx.shadowColor = "#a855f7";
+                ctx.shadowBlur  = 12;
+                ctx.beginPath();
+                ctx.roundRect(tx, ty, tw + pad * 2, 22, 5);
+                ctx.fill();
+
+                ctx.shadowBlur  = 0;
+                ctx.fillStyle   = "#e0d7ff";
+                ctx.fillText(text, tx + pad, ty + 15);
+            }
+
+            ctx.shadowBlur = 0;
         }
 
         // Resize window triggers piano roll redraw
         window.addEventListener("resize", drawPianoRoll);
+
+        // Persistent idle animation loop — keeps glow/entry animations alive at all times
+        let idleAnimFrameId = null;
+        function startIdleAnim() {
+            if (idleAnimFrameId) return; // already running
+            function idleLoop() {
+                if (generatedNotes.length === 0) {
+                    idleAnimFrameId = null;
+                    return; // stop looping when no notes
+                }
+                drawPianoRoll();
+                idleAnimFrameId = requestAnimationFrame(idleLoop);
+            }
+            idleAnimFrameId = requestAnimationFrame(idleLoop);
+        }
+
 
         // ----------------------------------------------------
         // Web Audio Synthesizer (Detuned Lorn-style Synths)
@@ -2167,6 +2336,7 @@ ${notesMdTable}
                         
                         evaluateHookMemorability(generatedNotes, parseInt(root), scaleIntervals, optNotesList.length, optNotesList.map(n => n.pitch));
                         drawPianoRoll();
+                        startIdleAnim();
                         
                         startPlayback();
                     } else {
