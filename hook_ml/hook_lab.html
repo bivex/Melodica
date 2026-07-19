@@ -7,6 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <!-- pixi-piano-roll dependencies (exact versions required by the library) -->
+    <script src="https://unpkg.com/pixi.js@3.0.7/bin/pixi.min.js"></script>
+    <script src="https://unpkg.com/teoria@2.1.1/teoria.js"></script>
+    <script src="https://unpkg.com/musical-scale-colors@2.0.1/dist/musicalScaleColors.js"></script>
+    <script src="https://unpkg.com/pixi-piano-roll@1.2.3/dist/pixiPianoRoll.js"></script>
     <style>
         :root {
             --bg-color: #030008;
@@ -862,9 +867,7 @@
             <!-- Piano Roll visualization -->
             <div class="visualizer-card">
                 <h3 class="section-title">Interactive Piano Roll</h3>
-                <div class="piano-roll-container">
-                    <canvas id="piano-roll"></canvas>
-                </div>
+                <div class="piano-roll-container" id="pixi-piano-roll-mount"></div>
             </div>
 
             <!-- Score and Evaluation metrics -->
@@ -977,9 +980,103 @@
         let playbackStartTime = 0;
         let playbackAnimFrameId = null;
         
-        // Canvas & Visualization
-        const canvas = document.getElementById("piano-roll");
-        const ctx = canvas.getContext("2d");
+        // -------------------------------------------------------
+        // pixi-piano-roll integration
+        // -------------------------------------------------------
+        // We keep a stub canvas reference so existing code that calls
+        // canvas.width / canvas.height doesn't throw (it's never drawn to).
+        const canvas = document.createElement('canvas');
+        const ctx    = canvas.getContext('2d');
+
+        let pixiRoll = null;          // pixi-piano-roll instance
+        let pixiRollContainer = null; // the mount div
+
+        function buildNoteData(notes) {
+            // Convert our {pitch, start, duration} to pixi-piano-roll noteData:
+            // [["bars:quarters:sixteenths", midiNoteNumber, durationString], ...]
+            // BPM=120 → 1 beat = 0.5 s → 1 bar = 4 beats
+            return notes.map(n => {
+                const beatStart = n.start;            // float beats
+                const bar   = Math.floor(beatStart / 4);
+                const qtr   = Math.floor(beatStart % 4);
+                const sixteenth = Math.round(((beatStart % 1)) * 4);
+                const tTime = `${bar}:${qtr}:${sixteenth}`;
+
+                // Duration as a fraction of a whole note (4 beats)
+                const durWhole = n.duration / 4.0;
+
+                return [tTime, n.pitch, durWhole];
+            });
+        }
+
+        function initPixiRoll(notes) {
+            const mount = document.getElementById('pixi-piano-roll-mount');
+            if (!mount) return;
+
+            // Destroy previous instance if re-generating
+            if (pixiRoll) {
+                try { pixiRoll.pianoRollAPI.pause(); } catch(e) {}
+                mount.innerHTML = '';
+                pixiRoll = null;
+            }
+
+            if (!notes || notes.length === 0) return;
+
+            const W = mount.clientWidth  || 900;
+            const H = mount.clientHeight || 300;
+
+            pixiRoll = pixiPianoRoll({
+                width:          W,
+                height:         H,
+                bpm:            120,
+                noteColor:      0x3b82f6,    // blue base
+                noteColorHues:  true,        // color notes by scale degree
+                backgroundColor: 0x030008,
+                gridLineColor:  0x2d1b69,
+                zoom:           4,           // bars visible
+                resolution:     4,           // quarter-note grid
+                antialias:      true,
+                noteData:       buildNoteData(notes)
+            });
+
+            // Mount the PixiJS canvas into our container
+            mount.appendChild(pixiRoll.renderer.view);
+
+            // Style the pixi canvas to fill the container
+            const pixiCanvas = pixiRoll.renderer.view;
+            pixiCanvas.style.width  = '100%';
+            pixiCanvas.style.height = '100%';
+            pixiCanvas.style.display = 'block';
+        }
+
+        // Stubs for old canvas-based functions (kept so callers don't throw)
+        function drawPianoRoll()  { /* pixi-piano-roll renders on its own rAF */ }
+        function startIdleAnim() { /* no-op: pixi handles its own loop */ }
+
+        // Sync pixi playback with our Web Audio clock
+        function syncPixiPlayhead() {
+            if (!pixiRoll || !isPlaying || !audioCtx) return;
+            const elapsed = audioCtx.currentTime - playbackStartTime;
+            const elapsedBeats = elapsed / (60.0 / 120.0);
+            const bar = Math.floor(elapsedBeats / 4);
+            const qtr = Math.floor(elapsedBeats % 4);
+            const s   = Math.round((elapsedBeats % 1) * 4);
+            try {
+                pixiRoll.pianoRollAPI.seek(`${bar}:${qtr}:${s}`);
+            } catch(e) {}
+        }
+
+        // Poll playhead position at ~30fps during playback
+        let pixiSyncId = null;
+        function startPixiSync() {
+            if (pixiSyncId) return;
+            function loop() {
+                syncPixiPlayhead();
+                if (isPlaying) pixiSyncId = requestAnimationFrame(loop);
+                else           pixiSyncId = null;
+            }
+            pixiSyncId = requestAnimationFrame(loop);
+        }
 
         canvas.addEventListener("mousemove", (e) => {
             const rect = canvas.getBoundingClientRect();
@@ -1196,6 +1293,7 @@
             evaluateHookMemorability(generatedNotes, root, modeIntervals, actualHookLen, hookPitches);
             drawPianoRoll();
             startIdleAnim();
+            initPixiRoll(generatedNotes);
         }
 
         // ----------------------------------------------------
@@ -2008,6 +2106,12 @@
                 playbackAnimFrameId = requestAnimationFrame(animLoop);
             }
             playbackAnimFrameId = requestAnimationFrame(animLoop);
+
+            // Start pixi-piano-roll playback and sync
+            if (pixiRoll) {
+                try { pixiRoll.pianoRollAPI.seek('0:0:0'); pixiRoll.pianoRollAPI.play(); } catch(e) {}
+            }
+            startPixiSync();
             
             // Process note schedules
             generatedNotes.forEach((n, idx) => {
@@ -2047,6 +2151,8 @@
             currentNoteIdx = -1;
             playbackSchedulers.forEach(clearTimeout);
             playbackSchedulers = [];
+            // Pause pixi-piano-roll playhead
+            if (pixiRoll) { try { pixiRoll.pianoRollAPI.pause(); } catch(e) {} }
             drawPianoRoll();
         }
 
@@ -2337,6 +2443,7 @@ ${notesMdTable}
                         evaluateHookMemorability(generatedNotes, parseInt(root), scaleIntervals, optNotesList.length, optNotesList.map(n => n.pitch));
                         drawPianoRoll();
                         startIdleAnim();
+                        initPixiRoll(generatedNotes);
                         
                         startPlayback();
                     } else {
