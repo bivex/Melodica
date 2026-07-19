@@ -788,6 +788,7 @@
                     <option value="afrobeats">Afrobeats (Tonic, 70/30, Swung)</option>
                     <option value="drill">Drill (Dominant, 50/50, Aggressive)</option>
                     <option value="drop">Drop Bass (Tonic, 40/60, Heavy)</option>
+                    <option value="transition">Transition (Dominant, 80/20, Rising)</option>
                 </select>
             </div>
 
@@ -833,6 +834,7 @@
                             <button class="btn btn-mlx-random" id="btn-mlx-random">Random Hook</button>
                             <button class="btn btn-mlx-random-elite" id="btn-mlx-random-elite">Random Elite</button>
                             <button class="btn btn-mlx-random-elite" id="btn-mlx-random-drop" style="background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%) !important;">Random Drop</button>
+                            <button class="btn btn-mlx-random-elite" id="btn-mlx-random-transition" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;">Random Transition</button>
                         </div>
                     </div>
 
@@ -2120,7 +2122,7 @@ ${notesMdTable}
             return notes;
         }
 
-        function triggerMLXGeneration(elite = false, btnId = null) {
+        function triggerMLXGeneration(elite = false, btnId = null, length = null) {
             stopPlayback();
             
             const targetBtnId = btnId || (elite ? "btn-mlx-elite" : "btn-mlx-api");
@@ -2135,8 +2137,9 @@ ${notesMdTable}
             const mode = document.getElementById("ctrl-mode").value;
             const genre = document.getElementById("ctrl-genre").value;
             const seed = parseInt(document.getElementById("ctrl-seed").value) || 101;
+            const hookLen = length || parseInt(document.getElementById("ctrl-hooklen").value) || 5;
             
-            fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}&elite=${elite}&genre=${genre}&seed=${seed}`)
+            fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}&elite=${elite}&genre=${genre}&seed=${seed}&length=${hookLen}`)
                 .then(res => res.json())
                 .then(data => {
                     btn.textContent = originalText;
@@ -2275,6 +2278,37 @@ ${notesMdTable}
             
             // Trigger MLX API button optimization automatically (elite)
             triggerMLXGeneration(true, "btn-mlx-random-drop");
+        });
+
+        // MLX API Random Transition Generator button
+        document.getElementById("btn-mlx-random-transition").addEventListener("click", () => {
+            stopPlayback();
+
+            // Pick a random root and bright/rising-feeling mode
+            const randRoot = Math.floor(Math.random() * 12);
+            const risingModes = ["major", "ionian", "lydian", "mixolydian", "dorian", "lydian_dominant", "melodic_minor"];
+            const randMode = risingModes[Math.floor(Math.random() * risingModes.length)];
+            const randOctave = 4 + Math.floor(Math.random() * 2); // octaves 4 or 5
+            const randSeed  = 1 + Math.floor(Math.random() * 99999);
+            // Transitions are short — 6 to 8 fast rising notes
+            const randLen   = 6 + Math.floor(Math.random() * 3);
+
+            document.getElementById("ctrl-root").value    = randRoot;
+            document.getElementById("ctrl-mode").value    = randMode;
+            document.getElementById("ctrl-genre").value   = "transition";
+            document.getElementById("ctrl-octave").value  = randOctave;
+            document.getElementById("ctrl-hooklen").value = randLen;
+            document.getElementById("ctrl-seed").value    = randSeed;
+
+            // Sync labels
+            document.getElementById("val-root").textContent    = NOTE_NAMES[randRoot];
+            document.getElementById("val-octave").textContent  = randOctave;
+            document.getElementById("val-hooklen").textContent = randLen;
+
+            document.querySelectorAll(".preset-tab").forEach(t => t.classList.remove("active"));
+
+            // Trigger elite MLX optimization, force length override
+            triggerMLXGeneration(true, "btn-mlx-random-transition", randLen);
         });
 
         // Dropdowns slider label sync
