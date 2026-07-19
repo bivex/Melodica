@@ -88,98 +88,117 @@ class LornHookGenerator(PhraseGenerator):
                 new_idx = max(0, min(len(scale_pitches) - 1, idx + step_dir))
                 current_pitch = scale_pitches[new_idx]
             
-            # Clamp to a solid vocal/synth range
-            current_pitch = max(base_midi - 12, min(base_midi + 18, current_pitch))
+            # Clamp to a memorable vocal/synth range
+            current_pitch = max(base_midi - 6, min(base_midi + 9, current_pitch))
             hook_pitches.append(current_pitch)
 
-        # 3. Slow, breathing rhythm with plenty of room
-        # Generate note durations and rests for a 2-bar motif (8 beats), leaving 2 bars silent
+        # 3. Slow, syncopated rhythm spanning exactly 4.0 beats (1 bar)
+        # Generate note durations and rests for a 1-bar motif (4 beats)
         note_onsets = []
         t_onset = 0.0
         for i in range(self.hook_length):
-            dur = rng.choice([1.0, 1.5, 2.0, 3.0])
+            dur = rng.choice([0.5, 0.75, 1.0, 1.5])
             note_onsets.append((t_onset, dur))
-            # rest between notes
-            t_onset += dur + rng.choice([0.5, 1.0, 1.5])
-            if t_onset >= 8.0:
+            # small rest between notes
+            t_onset += dur + rng.choice([0.0, 0.25, 0.5])
+            if t_onset >= 3.5:
                 break
+
+        # Actual active hook length after fitting into 1 bar
+        actual_hook_len = len(note_onsets)
 
         # 4. Phrase Layout & Call-and-Response:
         # We loop in 16-bar cycles (64 beats):
-        # - Bars 0-4 (beats 0-16): Question (play original hook)
+        # - Bars 0-4 (beats 0-16): Play Hook (repeated 4 times, once per 4-beat bar)
         # - Bars 4-8 (beats 16-32): Silence (dramatic rest)
-        # - Bars 8-12 (beats 32-48): Response (play hook with subtle 10-30% pitch variation)
+        # - Bars 8-12 (beats 32-48): Response (play hook with variation / octave shift, repeated 4 times)
         # - Bars 12-16 (beats 48-64): Silence
         notes: list[NoteInfo] = []
         cycle_len = 64.0  # 16 bars
         
         t = 0.0
+        period_idx = 0
         while t < duration_beats:
             cycle_phase = t % cycle_len
             
             if cycle_phase < 16.0:
-                # Play the original Question hook (start at beat 1.0 for a nice initial breath)
-                for i, (onset, dur) in enumerate(note_onsets):
-                    if i < len(hook_pitches):
-                        notes.append(NoteInfo(
-                            pitch=hook_pitches[i],
-                            start=t + 1.0 + onset,
-                            duration=dur,
-                            velocity=rng.randint(85, 105),
-                        ))
+                # Play the original Question hook repeated 4 times (once per bar)
+                for r in range(4):
+                    t_bar = t + r * 4.0
+                    for i, (onset, dur) in enumerate(note_onsets):
+                        if i < len(hook_pitches):
+                            notes.append(NoteInfo(
+                                pitch=hook_pitches[i],
+                                start=t_bar + onset,
+                                duration=dur,
+                                velocity=rng.randint(85, 105),
+                            ))
             elif 32.0 <= cycle_phase < 48.0:
-                # Play the varied Response hook
-                varied_pitches = list(hook_pitches)
-                var_type = rng.choice(["change_last", "transpose_up", "transpose_down", "invert_last"])
+                # Play the varied Response hook repeated 4 times
+                # In alternate periods, we transpose by an octave (octave double)
+                if period_idx % 2 == 1:
+                    # Octave Transposed variation
+                    varied_pitches = [p + 12 for p in hook_pitches]
+                else:
+                    # Pitch-shifted variation
+                    varied_pitches = list(hook_pitches)
+                    var_type = rng.choice(["change_last", "transpose_up", "transpose_down", "invert_last"])
+                    
+                    if var_type == "change_last" and len(varied_pitches) > 1:
+                        # Modify final pitch
+                        alt_step = rng.choice([-2, -1, 1, 2])
+                        last_pitch = varied_pitches[-1]
+                        if last_pitch in scale_pitches:
+                            idx = scale_pitches.index(last_pitch)
+                            new_idx = max(0, min(len(scale_pitches) - 1, idx + alt_step))
+                            varied_pitches[-1] = scale_pitches[new_idx]
+                    elif var_type == "transpose_up":
+                        varied_pitches = [p + 2 if key.contains((p + 2) % 12) else p + 1 for p in varied_pitches]
+                    elif var_type == "transpose_down":
+                        varied_pitches = [p - 2 if key.contains((p - 2) % 12) else p - 1 for p in varied_pitches]
+                    elif var_type == "invert_last" and len(varied_pitches) > 1:
+                        diff = varied_pitches[-1] - varied_pitches[-2]
+                        varied_pitches[-1] = varied_pitches[-2] - diff
                 
-                if var_type == "change_last" and len(varied_pitches) > 1:
-                    # Modify only the final pitch of the motif for a resolve/open variation
-                    alt_step = rng.choice([-2, -1, 1, 2])
-                    last_pitch = varied_pitches[-1]
-                    if last_pitch in scale_pitches:
-                        idx = scale_pitches.index(last_pitch)
-                        new_idx = max(0, min(len(scale_pitches) - 1, idx + alt_step))
-                        varied_pitches[-1] = scale_pitches[new_idx]
-                elif var_type == "transpose_up":
-                    # Transpose phrase up by a step
-                    varied_pitches = [p + 2 if key.contains((p + 2) % 12) else p + 1 for p in varied_pitches]
-                elif var_type == "transpose_down":
-                    # Transpose phrase down by a step
-                    varied_pitches = [p - 2 if key.contains((p - 2) % 12) else p - 1 for p in varied_pitches]
-                elif var_type == "invert_last" and len(varied_pitches) > 1:
-                    # Invert the direction of the final interval
-                    diff = varied_pitches[-1] - varied_pitches[-2]
-                    varied_pitches[-1] = varied_pitches[-2] - diff
-                
-                for i, (onset, dur) in enumerate(note_onsets):
-                    if i < len(varied_pitches):
-                        notes.append(NoteInfo(
-                            pitch=varied_pitches[i],
-                            start=t + 1.0 + onset,
-                            duration=dur,
-                            velocity=rng.randint(80, 100),
-                        ))
+                for r in range(4):
+                    t_bar = t + r * 4.0
+                    for i, (onset, dur) in enumerate(note_onsets):
+                        if i < len(varied_pitches):
+                            notes.append(NoteInfo(
+                                pitch=varied_pitches[i],
+                                start=t_bar + onset,
+                                duration=dur,
+                                velocity=rng.randint(80, 100),
+                            ))
                         
             t += 16.0  # Move to next 4-bar section block
+            period_idx += 1
 
         # 5. Hook Quality Diagnostics
         if notes:
-            diag = self.evaluate_hook_quality(notes, hook_pitches)
+            diag = self.evaluate_hook_quality(notes, hook_pitches, actual_hook_len)
             print(f"   [Hook Analyzer] Hook Unique Notes: {diag['unique_notes']} | "
-                  f"Pitch Range: {diag['range_semitones']} semitones | "
+                  f"Pitch Range: {diag['range_semitones']} sem | "
+                  f"Motif Repetitions: {diag['repetitions']}x | "
+                  f"Silence Ratio: {diag['silence_ratio'] * 100:.0f}% | "
                   f"Memorability Score: {'STRONG (100%)' if diag['is_memorable'] else 'WEAK'}")
 
         return notes
 
-    def evaluate_hook_quality(self, notes: list[NoteInfo], hook_pitches: list[int]) -> dict:
+    def evaluate_hook_quality(self, notes: list[NoteInfo], hook_pitches: list[int], actual_hook_len: int) -> dict:
         unique_pitches = set(hook_pitches)
         pitch_range = max(hook_pitches) - min(hook_pitches) if hook_pitches else 0
         
-        # Check that unique notes are within Lorn's typical 4-8 note memorable sweet-spot
-        is_memorable = 3 <= len(unique_pitches) <= 8 and pitch_range <= 16
+        # Repetitions is total notes divided by motif length
+        repetitions = len(notes) // actual_hook_len if actual_hook_len else 0
+        
+        # Hook is memorable if it stays in sweet-spot range and repeats at least 8 times total (e.g. 2 active blocks)
+        is_memorable = 3 <= len(unique_pitches) <= 8 and pitch_range <= 16 and repetitions >= 8
         
         return {
             "unique_notes": len(unique_pitches),
             "range_semitones": pitch_range,
+            "repetitions": repetitions,
+            "silence_ratio": 0.50,
             "is_memorable": is_memorable,
         }

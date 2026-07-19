@@ -549,7 +549,7 @@ def produce_dystopia():
     pads = keep_in_range(pads, 0.0, 256.0)
     bass = keep_in_range(bass, 0.0, 224.0) + keep_in_range(bass, 256.0, 288.0)
     drums = keep_in_range(drums, 64.0, 224.0) + keep_in_range(drums, 256.0, 288.0)
-    leads = keep_in_range(leads, 144.0, 224.0)
+    leads = keep_in_range(leads, 64.0, 224.0)
 
     for n in pads:
         n.scale_velocity(1.4)
