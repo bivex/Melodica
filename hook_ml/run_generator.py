@@ -12,6 +12,7 @@ and forced final note resolution matching the target key.
 """
 
 import sys
+import os
 from pathlib import Path
 
 # Add project root to path
@@ -229,6 +230,24 @@ def main():
     
     # 2. Instantiate Model and Trainable Latents (Batch of 64 candidates)
     model = MelodyDecoder(num_notes=5, scale_size=7)
+    
+    # Load pre-trained weights if they exist
+    weights_path = "hook_ml/memorability99_model.npz"
+    if os.path.exists(weights_path):
+        try:
+            flat_params = mx.load(weights_path)
+            params = {}
+            for k, v in flat_params.items():
+                parts = k.split(".")
+                curr = params
+                for part in parts[:-1]:
+                    curr = curr.setdefault(part, {})
+                curr[parts[-1]] = v
+            model.update(params)
+            print(f"Loaded pre-trained model weights from '{weights_path}'")
+        except Exception as e:
+            print(f"[!] Warning: Failed to load pre-trained weights: {e}")
+            
     mx.eval(model.parameters())
     
     batch_size = 64
