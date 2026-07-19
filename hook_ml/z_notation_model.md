@@ -13,7 +13,7 @@ $$
   & [MIDI] \subseteq \mathbb{N} && \text{Domain of MIDI pitch values } (0 \dots 127) \\
   & [Time] == \mathbb{R}_{\ge 0} && \text{Time beats domain} \\
   & [Latent] == \mathbb{R}^{32} && \text{Latent space dimension} \\
-  & Mode == \{ PHRYGIAN, AEOLIAN, LOCRIAN, HARMONIC\_MINOR, HUNGARIAN\_MINOR \}
+  & Mode == \{ MAJOR, PHRYGIAN, AEOLIAN, LOCRIAN, HARMONIC\_MINOR, HUNGARIAN\_MINOR \}
 \end{align*}
 $$
 
@@ -38,6 +38,7 @@ $$
 \begin{axdef}
   scale\_intervals: Mode \rightarrow \mathbb{P} (0 \dots 11)
 \where
+  scale\_intervals(MAJOR) = \{0, 2, 4, 5, 7, 9, 11\} \land \\
   scale\_intervals(PHRYGIAN) = \{0, 1, 3, 5, 7, 8, 10\} \land \\
   scale\_intervals(AEOLIAN) = \{0, 2, 3, 5, 7, 8, 10\} \land \\
   scale\_intervals(LOCRIAN) = \{0, 1, 3, 5, 6, 8, 10\} \land \\
