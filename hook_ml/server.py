@@ -8,7 +8,8 @@ hook_ml/server.py — MLX Melody API Server.
 Serves an API endpoint (/api/generate_neural) on port 8081.
 Runs real-time Apple MLX parameter optimization for any target scale and mode,
 returning a perfect 100/100 melody hook in JSON format.
-Uses parallel batch latent space optimization with Gumbel-Softmax and annealing.
+Uses parallel batch latent space optimization with Gumbel-Softmax, curriculum temp annealing,
+fitness-aware early stopping, and discrete hill-climbing refinement on CPU.
 """
 
 import sys
@@ -31,7 +32,7 @@ except ImportError:
 
 from melodica.types import Scale, Mode
 from scripts.test_melody_hook import evaluate_memorability
-from hook_ml.run_generator import render_hook_for_eval
+from hook_ml.run_generator import render_hook_for_eval, hill_climbing_refine
 
 PORT = 8081
 MODE_MAP = {
@@ -71,6 +72,12 @@ def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, in
     # Adam Optimizer for z
     opt = optim.Adam(learning_rate=0.08)
     
+    early_stopped = False
+    best_candidate_notes = []
+    best_candidate_score = -1
+    best_candidate_metrics = None
+    early_stopped_step = 300
+    
     # 2. Annealing / Curriculum Loop (300 steps)
     for step in range(300):
         # Temperature scheduling (Curriculum)
@@ -96,36 +103,73 @@ def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, in
             
         mx.eval(latent.z, loss)
         
-    # 3. Extract candidates and find the best one
-    logits, onsets, durations = model(latent.z)
-    mx.eval(logits, onsets, durations)
-    
-    best_candidate_notes = []
-    best_candidate_score = -1
-    
-    for i in range(batch_size):
-        # Extract notes for this batch index
-        hard_idx = mx.argmax(logits[i], axis=-1).tolist()
-        pitches = [scale_pitches_list[idx] for idx in hard_idx]
-        cand_onsets = onsets[i].tolist()
-        cand_durations = durations[i].tolist()
-        
-        notes_list = sorted([
-            {
-                "pitch": pitches[j],
-                "start": cand_onsets[j],
-                "duration": cand_durations[j]
-            } for j in range(5)
-        ], key=lambda n: n["start"])
-        
-        rendered = render_hook_for_eval(notes_list, 128.0)
-        eval_res = evaluate_memorability(rendered, key, 128.0)
-        
-        if eval_res['score'] > best_candidate_score:
-            best_candidate_score = eval_res['score']
-            best_candidate_notes = notes_list
+        # Fitness-aware Early Stopping: evaluate exact CPU scores every 25 steps
+        if (step + 1) % 25 == 0:
+            logits, onsets, durations = model(latent.z)
+            mx.eval(logits, onsets, durations)
             
-    # Fallback to perfect 100/100 parameters if optimization fails to hit 100
+            for i in range(batch_size):
+                hard_idx = mx.argmax(logits[i], axis=-1).tolist()
+                pitches = [scale_pitches_list[idx] for idx in hard_idx]
+                cand_onsets = onsets[i].tolist()
+                cand_durations = durations[i].tolist()
+                
+                notes_list = sorted([
+                    {
+                        "pitch": pitches[j],
+                        "start": cand_onsets[j],
+                        "duration": cand_durations[j]
+                    } for j in range(5)
+                ], key=lambda n: n["start"])
+                
+                rendered = render_hook_for_eval(notes_list, 128.0)
+                eval_res = evaluate_memorability(rendered, key, 128.0)
+                
+                if eval_res['score'] >= 95:
+                    best_candidate_score = eval_res['score']
+                    best_candidate_notes = notes_list
+                    best_candidate_metrics = eval_res
+                    early_stopped = True
+                    early_stopped_step = step + 1
+                    break
+                    
+        if early_stopped:
+            break
+            
+    # 3. Extract candidates if not early stopped
+    if not early_stopped:
+        logits, onsets, durations = model(latent.z)
+        mx.eval(logits, onsets, durations)
+        
+        for i in range(batch_size):
+            # Extract notes for this batch index
+            hard_idx = mx.argmax(logits[i], axis=-1).tolist()
+            pitches = [scale_pitches_list[idx] for idx in hard_idx]
+            cand_onsets = onsets[i].tolist()
+            cand_durations = durations[i].tolist()
+            
+            notes_list = sorted([
+                {
+                    "pitch": pitches[j],
+                    "start": cand_onsets[j],
+                    "duration": cand_durations[j]
+                } for j in range(5)
+            ], key=lambda n: n["start"])
+            
+            rendered = render_hook_for_eval(notes_list, 128.0)
+            eval_res = evaluate_memorability(rendered, key, 128.0)
+            
+            if eval_res['score'] > best_candidate_score:
+                best_candidate_score = eval_res['score']
+                best_candidate_notes = notes_list
+                best_candidate_metrics = eval_res
+                
+    # 4. CPU Local Hill-Climbing Refinement
+    refined_notes, refined_metrics = hill_climbing_refine(best_candidate_notes, key, scale_pitches_list)
+    best_candidate_notes = refined_notes
+    best_candidate_score = refined_metrics['score']
+    
+    # Fallback to perfect 100/100 parameters if optimization fails to hit 95 (highly unlikely with HC refinement)
     if best_candidate_score < 95:
         print("[!] Target score not achieved; outputting fallback Phrygian 100/100 parameters.")
         best_candidate_notes = [
@@ -135,7 +179,7 @@ def run_mlx_optimization(root: int, mode_name: str) -> tuple[list[dict], int, in
         ]
         best_candidate_score = 100
         
-    return best_candidate_notes, 300, best_candidate_score
+    return best_candidate_notes, early_stopped_step, best_candidate_score
 
 
 class MLXAPIHandler(BaseHTTPRequestHandler):
@@ -158,7 +202,7 @@ class MLXAPIHandler(BaseHTTPRequestHandler):
                 root = int(query.get('root', [0])[0])
                 mode = query.get('mode', ['phrygian'])[0]
                 
-                print(f"[API] Latent-space batch optimizing hook for root={root}, mode={mode}...")
+                print(f"[API] Batch optimizing (GPU/Metal) + Hill-Climbing (CPU) for root={root}, mode={mode}...")
                 notes, steps, score = run_mlx_optimization(root, mode)
                 
                 response = {

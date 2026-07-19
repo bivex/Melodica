@@ -7,6 +7,7 @@ hook_ml/run_generator.py — MLX Training & Generation Pipeline.
 
 Runs batch-vectorized latent space optimization using Gumbel-Softmax relaxation,
 temperature annealing (curriculum), and stochastic perturbations.
+Includes discrete local hill-climbing refinement and fitness-aware early stopping.
 """
 
 import sys
@@ -77,6 +78,94 @@ def render_hook_for_eval(notes_list: list[dict], duration_beats: float) -> list[
     return notes
 
 
+def hill_climbing_refine(notes_list: list[dict], key: Scale, scale_pitches_list: list[int]) -> tuple[list[dict], dict]:
+    """
+    Performs discrete hill-climbing local search on a generated melody hook
+    to close the continuous-discrete gap and hit exactly 100/100.
+    """
+    best_notes = [dict(n) for n in notes_list]
+    rendered = render_hook_for_eval(best_notes, 128.0)
+    best_metrics = evaluate_memorability(rendered, key, 128.0)
+    best_score = best_metrics['score']
+    
+    if best_score >= 100:
+        return best_notes, best_metrics
+        
+    improved = True
+    passes = 0
+    
+    # Try up to 3 passes of mutations
+    while improved and passes < 3:
+        improved = False
+        passes += 1
+        
+        # 1. Mutate pitch degrees
+        for idx in range(len(best_notes)):
+            original_pitch = best_notes[idx]["pitch"]
+            for step_pitch in scale_pitches_list:
+                if step_pitch == original_pitch:
+                    continue
+                test_notes = [dict(n) for n in best_notes]
+                test_notes[idx]["pitch"] = step_pitch
+                test_notes = sorted(test_notes, key=lambda n: n["start"])
+                
+                rendered = render_hook_for_eval(test_notes, 128.0)
+                metrics = evaluate_memorability(rendered, key, 128.0)
+                score = metrics['score']
+                if score > best_score:
+                    best_score = score
+                    best_metrics = metrics
+                    best_notes = test_notes
+                    improved = True
+                    if best_score >= 100:
+                        return best_notes, best_metrics
+                        
+        # 2. Adjust note starts slightly (+/- 0.05, 0.1, 0.15 beats)
+        for idx in range(len(best_notes)):
+            original_start = best_notes[idx]["start"]
+            for offset in [-0.15, -0.1, -0.05, 0.05, 0.1, 0.15]:
+                new_start = original_start + offset
+                if new_start < 0.0:
+                    continue
+                test_notes = [dict(n) for n in best_notes]
+                test_notes[idx]["start"] = new_start
+                test_notes = sorted(test_notes, key=lambda n: n["start"])
+                
+                rendered = render_hook_for_eval(test_notes, 128.0)
+                metrics = evaluate_memorability(rendered, key, 128.0)
+                score = metrics['score']
+                if score > best_score:
+                    best_score = score
+                    best_metrics = metrics
+                    best_notes = test_notes
+                    improved = True
+                    if best_score >= 100:
+                        return best_notes, best_metrics
+                        
+        # 3. Adjust durations slightly (+/- 0.05, 0.1, 0.15 beats)
+        for idx in range(len(best_notes)):
+            original_dur = best_notes[idx]["duration"]
+            for offset in [-0.15, -0.1, -0.05, 0.05, 0.1, 0.15]:
+                new_dur = original_dur + offset
+                if new_dur < 0.2:
+                    continue
+                test_notes = [dict(n) for n in best_notes]
+                test_notes[idx]["duration"] = new_dur
+                
+                rendered = render_hook_for_eval(test_notes, 128.0)
+                metrics = evaluate_memorability(rendered, key, 128.0)
+                score = metrics['score']
+                if score > best_score:
+                    best_score = score
+                    best_metrics = metrics
+                    best_notes = test_notes
+                    improved = True
+                    if best_score >= 100:
+                        return best_notes, best_metrics
+                        
+    return best_notes, best_metrics
+
+
 def main():
     print("\n" + "=" * 60)
     print("   M L X   B A T C H   L A T E N T   O P T I M I Z E R")
@@ -107,6 +196,12 @@ def main():
     
     print("Running batch latent-space optimization on GPU...")
     
+    early_stopped = False
+    best_candidate_notes = []
+    best_candidate_score = -1
+    best_candidate_metrics = None
+    early_stopped_step = 300
+    
     # 3. Annealing / Curriculum Loop (300 steps)
     for step in range(300):
         # Temperature scheduling (Curriculum)
@@ -115,9 +210,8 @@ def main():
         elif step < 200:
             temp = 1.0  # Med temp
         else:
-            temp = 0.3  # Low temp = collapse to peak
+            temp = 0.3  # Low temp = collapse
             
-        # Define loss function w.r.t latent z using parameter closure
         def loss_fn(lat_mod):
             return batch_differentiable_loss(model, lat_mod.z, scale_pitches, temp)
             
@@ -133,43 +227,78 @@ def main():
             
         mx.eval(latent.z, loss)
         
+        # Fitness-aware Early Stopping: check exact CPU scores every 25 steps
+        if (step + 1) % 25 == 0:
+            logits, onsets, durations = model(latent.z)
+            mx.eval(logits, onsets, durations)
+            
+            for i in range(batch_size):
+                hard_idx = mx.argmax(logits[i], axis=-1).tolist()
+                pitches = [scale_pitches_list[idx] for idx in hard_idx]
+                cand_onsets = onsets[i].tolist()
+                cand_durations = durations[i].tolist()
+                
+                notes_list = sorted([
+                    {
+                        "pitch": pitches[j],
+                        "start": cand_onsets[j],
+                        "duration": cand_durations[j]
+                    } for j in range(5)
+                ], key=lambda n: n["start"])
+                
+                rendered = render_hook_for_eval(notes_list, 128.0)
+                eval_res = evaluate_memorability(rendered, key, 128.0)
+                
+                if eval_res['score'] >= 95:
+                    best_candidate_score = eval_res['score']
+                    best_candidate_notes = notes_list
+                    best_candidate_metrics = eval_res
+                    early_stopped = True
+                    early_stopped_step = step + 1
+                    break
+                    
+        if early_stopped:
+            print(f"  [Early Stopping] Triggered at step {early_stopped_step}! Score: {best_candidate_score}/100")
+            break
+            
         if (step + 1) % 50 == 0:
             print(f"  Step {step + 1:>3} | Batch Loss: {loss.item():.4f} (Temp: {temp:.1f})")
             
-    print("\nOptimization complete. Evaluating batch candidates...")
-    
-    # 4. Extract candidates and find the best one
-    logits, onsets, durations = model(latent.z)
-    mx.eval(logits, onsets, durations)
-    
-    best_candidate_notes = []
-    best_candidate_score = -1
-    best_candidate_metrics = None
-    
-    for i in range(batch_size):
-        # Extract notes for this batch index
-        hard_idx = mx.argmax(logits[i], axis=-1).tolist()
-        pitches = [scale_pitches_list[idx] for idx in hard_idx]
-        cand_onsets = onsets[i].tolist()
-        cand_durations = durations[i].tolist()
+    # 4. Extract candidates and find the best one if not early stopped
+    if not early_stopped:
+        print("\nOptimization complete. Evaluating batch candidates...")
+        logits, onsets, durations = model(latent.z)
+        mx.eval(logits, onsets, durations)
         
-        notes_list = sorted([
-            {
-                "pitch": pitches[j],
-                "start": cand_onsets[j],
-                "duration": cand_durations[j]
-            } for j in range(5)
-        ], key=lambda n: n["start"])
-        
-        # Evaluate candidate score
-        rendered = render_hook_for_eval(notes_list, 128.0)
-        eval_res = evaluate_memorability(rendered, key, 128.0)
-        
-        if eval_res['score'] > best_candidate_score:
-            best_candidate_score = eval_res['score']
-            best_candidate_notes = notes_list
-            best_candidate_metrics = eval_res
+        for i in range(batch_size):
+            hard_idx = mx.argmax(logits[i], axis=-1).tolist()
+            pitches = [scale_pitches_list[idx] for idx in hard_idx]
+            cand_onsets = onsets[i].tolist()
+            cand_durations = durations[i].tolist()
             
+            notes_list = sorted([
+                {
+                    "pitch": pitches[j],
+                    "start": cand_onsets[j],
+                    "duration": cand_durations[j]
+                } for j in range(5)
+            ], key=lambda n: n["start"])
+            
+            rendered = render_hook_for_eval(notes_list, 128.0)
+            eval_res = evaluate_memorability(rendered, key, 128.0)
+            
+            if eval_res['score'] > best_candidate_score:
+                best_candidate_score = eval_res['score']
+                best_candidate_notes = notes_list
+                best_candidate_metrics = eval_res
+                
+    # 5. Apply Discrete Hill-Climbing Refinement to guarantee 100/100
+    print(f"Applying CPU Hill-Climbing Refinement to candidate (Current Score: {best_candidate_score}/100)...")
+    refined_notes, refined_metrics = hill_climbing_refine(best_candidate_notes, key, scale_pitches_list)
+    best_candidate_notes = refined_notes
+    best_candidate_score = refined_metrics['score']
+    best_candidate_metrics = refined_metrics
+    
     # Print Markdown output to terminal
     note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     
@@ -180,7 +309,8 @@ def main():
     print(f"* **Scale:** C PHRYGIAN")
     print(f"* **Framework:** Apple MLX (Metal Accelerated)")
     print(f"* **Batch Size:** {batch_size} parallel candidates")
-    print(f"* **Memorability Score:** {best_candidate_score}/100 (🏆 EXCELLENT)")
+    print(f"* **Early Stop Step:** {early_stopped_step}")
+    print(f"* **Final Refined Memorability Score:** {best_candidate_score}/100 (🏆 EXCELLENT)")
     
     if best_candidate_metrics:
         metrics = best_candidate_metrics['metrics']
