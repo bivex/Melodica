@@ -747,6 +747,17 @@
             drawPianoRoll();
         });
 
+        canvas.addEventListener("click", (e) => {
+            if (generatedNotes.length === 0) return;
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const width = canvas.width;
+            
+            // Calculate beat clicked (0 to 128)
+            const clickedBeat = (clickX / width) * 128.0;
+            seekToBeat(clickedBeat);
+        });
+
         // Simple Random LCG class to make seed deterministic
         class SeededRandom {
             constructor(seed) {
@@ -1585,6 +1596,62 @@
             currentNoteIdx = -1;
             playbackSchedulers.forEach(clearTimeout);
             playbackSchedulers = [];
+            drawPianoRoll();
+        }
+
+        // Seek (scrub) to a specific beat and resume playback from there
+        function seekToBeat(beat) {
+            getAudioContext();
+            
+            // Clear all scheduled timeouts
+            playbackSchedulers.forEach(clearTimeout);
+            playbackSchedulers = [];
+            
+            const bpm = 120.0;
+            const beatDur = 60.0 / bpm;
+            const seekTimeSec = beat * beatDur;
+            
+            if (!isPlaying) {
+                isPlaying = true;
+                document.getElementById("btn-play").textContent = "Stop Playback (JS)";
+                document.getElementById("btn-play").classList.add("playing");
+                
+                function animLoop() {
+                    if (!isPlaying) return;
+                    drawPianoRoll();
+                    playbackAnimFrameId = requestAnimationFrame(animLoop);
+                }
+                playbackAnimFrameId = requestAnimationFrame(animLoop);
+            }
+            
+            playbackStartTime = audioCtx.currentTime - seekTimeSec;
+            currentNoteIdx = -1;
+            
+            // Re-schedule only the remaining future notes
+            generatedNotes.forEach((n, idx) => {
+                if (n.start < beat) return;
+                
+                const relativeStartSec = (n.start - beat) * beatDur;
+                const noteDurSec = n.duration * beatDur;
+                
+                const schedId = setTimeout(() => {
+                    if (!isPlaying) return;
+                    currentNoteIdx = idx;
+                    drawPianoRoll();
+                    playSynthNote(n.pitch, noteDurSec);
+                }, relativeStartSec * 1000);
+                
+                playbackSchedulers.push(schedId);
+            });
+            
+            // Re-schedule final playback stop
+            const totalDurBeats = 128.0;
+            const remainingBeats = totalDurBeats - beat;
+            const stopSchedId = setTimeout(() => {
+                stopPlayback();
+            }, remainingBeats * beatDur * 1000);
+            playbackSchedulers.push(stopSchedId);
+            
             drawPianoRoll();
         }
 
