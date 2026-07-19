@@ -528,6 +528,20 @@
             border-color: rgba(168, 85, 247, 0.4);
             color: white;
         }
+
+        select:hover, input[type="number"]:hover {
+            border-color: rgba(168, 85, 247, 0.5);
+            background: rgba(20, 15, 30, 0.85);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.15);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
@@ -712,9 +726,26 @@
         let synthNode = null;
         let delayNode = null;
         
+        let mouseX = -1;
+        let mouseY = -1;
+        let playbackStartTime = 0;
+        let playbackAnimFrameId = null;
+        
         // Canvas & Visualization
         const canvas = document.getElementById("piano-roll");
         const ctx = canvas.getContext("2d");
+
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            drawPianoRoll();
+        });
+        canvas.addEventListener("mouseleave", () => {
+            mouseX = -1;
+            mouseY = -1;
+            drawPianoRoll();
+        });
 
         // Simple Random LCG class to make seed deterministic
         class SeededRandom {
@@ -1335,7 +1366,16 @@
                 ctx.stroke();
             }
 
-            // 2. Draw note blocks
+            // 2. Draw hover guide highlights
+            if (mouseX !== -1 && mouseY !== -1) {
+                const hoveredCol = Math.floor(mouseX / colWidth);
+                const hoveredRow = Math.floor(mouseY / rowHeight);
+                ctx.fillStyle = "rgba(168, 85, 247, 0.05)";
+                ctx.fillRect(hoveredCol * colWidth, 0, colWidth, height);
+                ctx.fillRect(0, hoveredRow * rowHeight, width, rowHeight);
+            }
+
+            // 3. Draw note blocks
             generatedNotes.forEach((n, idx) => {
                 const pitchY = height - ((n.pitch - minPitch) * rowHeight) - rowHeight;
                 const startX = n.start * colWidth;
@@ -1369,6 +1409,26 @@
                     ctx.fillText(n.label, startX + 5, pitchY + rowHeight / 1.4);
                 }
             });
+            
+            // 4. Draw moving playhead line during playback
+            if (isPlaying && audioCtx) {
+                const bpm = 120.0;
+                const beatDur = 60.0 / bpm;
+                const elapsedSec = audioCtx.currentTime - playbackStartTime;
+                const elapsedBeats = elapsedSec / beatDur;
+                const playheadX = elapsedBeats * colWidth;
+                
+                if (playheadX <= width) {
+                    ctx.strokeStyle = "#10b981";
+                    ctx.lineWidth = 2;
+                    ctx.shadowColor = "#10b981";
+                    ctx.shadowBlur = 15;
+                    ctx.beginPath();
+                    ctx.moveTo(playheadX, 0);
+                    ctx.lineTo(playheadX, height);
+                    ctx.stroke();
+                }
+            }
             
             ctx.shadowBlur = 0; // reset glow
         }
@@ -1473,10 +1533,19 @@
             document.getElementById("btn-play").classList.add("playing");
 
             const startTime = audioCtx.currentTime;
+            playbackStartTime = startTime;
             const bpm = 120.0;
             const beatDur = 60.0 / bpm; // 0.5 seconds per beat
 
             currentNoteIdx = -1;
+
+            // Anim loop to update moving playhead in real-time
+            function animLoop() {
+                if (!isPlaying) return;
+                drawPianoRoll();
+                playbackAnimFrameId = requestAnimationFrame(animLoop);
+            }
+            playbackAnimFrameId = requestAnimationFrame(animLoop);
             
             // Process note schedules
             generatedNotes.forEach((n, idx) => {
@@ -1506,6 +1575,10 @@
 
         function stopPlayback() {
             isPlaying = false;
+            if (playbackAnimFrameId) {
+                cancelAnimationFrame(playbackAnimFrameId);
+                playbackAnimFrameId = null;
+            }
             document.getElementById("btn-play").textContent = "Play Hook Synthesizer (JS)";
             document.getElementById("btn-play").classList.add("btn-play");
             document.getElementById("btn-play").classList.remove("playing");
