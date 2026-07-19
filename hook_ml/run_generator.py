@@ -83,32 +83,33 @@ def enforce_resolution(notes_list: list[dict], key: Scale) -> list[dict]:
     """
     Forcibly shifts the last note of the hook to the nearest octave of the
     scale's tonic (root) or dominant (5th) to guarantee 5/5 resolution score.
+    Limits leaps from the preceding note to avoid breaking the contour score.
     """
-    if len(notes_list) == 0:
+    if len(notes_list) < 2:
         return notes_list
         
     res_notes = [dict(n) for n in notes_list]
     last_idx = -1
     last_note = res_notes[last_idx]
+    prev_note = res_notes[-2]
     
     # Target pitch classes (tonic and dominant)
     tonic_pc = key.root % 12
     dominant_pc = (key.root + 7) % 12
     
     current_pitch = last_note["pitch"]
-    current_pc = current_pitch % 12
+    prev_pitch = prev_note["pitch"]
     
-    # If already stable tonic or dominant, return
-    if current_pc == tonic_pc or current_pc == dominant_pc:
-        return res_notes
-        
     # Find nearest octave for tonic and dominant (MIDI octaves 3 to 7)
     tonic_pitch_options = [tonic_pc + 12 * oct for oct in range(3, 8)]
     dominant_pitch_options = [dominant_pc + 12 * oct for oct in range(3, 8)]
     
     all_options = tonic_pitch_options + dominant_pitch_options
-    # Sort by proximity to current pitch to minimize melodic distortion
-    best_pitch = min(all_options, key=lambda p: abs(p - current_pitch))
+    # Sort by proximity to current pitch, heavily penalizing leaps > 8 semitones from prev note
+    best_pitch = min(
+        all_options,
+        key=lambda p: abs(p - current_pitch) + 4.0 * max(0, abs(p - prev_pitch) - 8)
+    )
     
     res_notes[last_idx]["pitch"] = best_pitch
     return res_notes
