@@ -7,8 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
-    <!-- pixi-piano-roll: all deps (PIXI 3, teoria, musical-scale-colors) bundled locally -->
-    <script src="vendor/pixi-piano-roll.bundle.js"></script>
     <style>
         :root {
             --bg-color: #030008;
@@ -864,7 +862,9 @@
             <!-- Piano Roll visualization -->
             <div class="visualizer-card">
                 <h3 class="section-title">Interactive Piano Roll</h3>
-                <div class="piano-roll-container" id="pixi-piano-roll-mount"></div>
+                <div class="piano-roll-container">
+                    <canvas id="piano-roll"></canvas>
+                </div>
             </div>
 
             <!-- Score and Evaluation metrics -->
@@ -978,118 +978,213 @@
         let playbackAnimFrameId = null;
         
         // -------------------------------------------------------
-        // pixi-piano-roll integration
+        // Custom animated canvas piano roll
         // -------------------------------------------------------
-        // We keep a stub canvas reference so existing code that calls
-        // canvas.width / canvas.height doesn't throw (it's never drawn to).
-        const canvas = document.createElement('canvas');
-        const ctx    = canvas.getContext('2d');
+        const canvas = document.getElementById("piano-roll");
+        const ctx    = canvas.getContext("2d");
 
-        let pixiRoll = null;          // pixi-piano-roll instance
-        let pixiRollContainer = null; // the mount div
-        // pixi-piano-roll only accepts string note names; raw MIDI integers cause .match() crash
-        const MIDI_NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-        function midiToScientific(midi) {
-            const pc  = midi % 12;
-            const oct = Math.floor(midi / 12) - 1;
-            return MIDI_NOTE_NAMES[pc] + oct;          // e.g. "G4"
-        }
+        // Per-note animation state
+        const noteAnimState = {};
+        let lastDrawnNotes  = [];
 
-        function buildNoteData(notes) {
-            // noteData format: [["bars:quarters:sixteenths", "C4", durationDenominator], ...]
-            // durationDenominator: integer — 1=whole, 2=half, 4=quarter, 8=eighth, 16=sixteenth
-            // (the library does barWidth / parseInt(duration), so floats = invisible notes)
-            return notes.map(n => {
-                const beatStart  = Math.max(0, n.start);
-                const bar        = Math.floor(beatStart / 4);
-                const qtr        = Math.floor(beatStart % 4);
-                const sixteenth  = Math.floor((beatStart % 1) * 4); // 0-3
-                const tTime      = `${bar}:${qtr}:${sixteenth}`;
-
-                const noteName   = midiToScientific(n.pitch);
-
-                // Convert beat-duration to nearest standard denominator integer
-                // 4 beats=1, 2=2, 1=4, 0.5=8, 0.25=16
-                const beatsPerWhole = 4;
-                const raw = beatsPerWhole / Math.max(0.125, n.duration);
-                // Snap to nearest power-of-two denominator: 1,2,4,8,16
-                const snapped = [1,2,4,8,16].reduce((prev,cur) =>
-                    Math.abs(cur - raw) < Math.abs(prev - raw) ? cur : prev
-                );
-
-                return [tTime, noteName, snapped];
+        function initNoteAnim() {
+            const now = performance.now();
+            generatedNotes.forEach((n, idx) => {
+                if (!noteAnimState[idx]) {
+                    noteAnimState[idx] = { born: now, glowPhase: Math.random() * Math.PI * 2 };
+                }
+            });
+            Object.keys(noteAnimState).forEach(k => {
+                if (k >= generatedNotes.length) delete noteAnimState[k];
             });
         }
 
+        let hoveredNoteIdx = -1;
 
-        function initPixiRoll(notes) {
-            const mount = document.getElementById('pixi-piano-roll-mount');
-            if (!mount) return;
+        function drawPianoRoll() {
+            if (!canvas.parentElement) return;
+            const W = canvas.width  = canvas.parentElement.clientWidth;
+            const H = canvas.height = canvas.parentElement.clientHeight;
+            const now = performance.now();
 
-            // Destroy previous instance
-            if (pixiRoll) {
-                try { pixiRoll.playback.pause(); } catch(e) {}
-                mount.innerHTML = '';
-                pixiRoll = null;
+            if (generatedNotes !== lastDrawnNotes) {
+                lastDrawnNotes = generatedNotes;
+                Object.keys(noteAnimState).forEach(k => delete noteAnimState[k]);
+                initNoteAnim();
             }
 
-            if (!notes || notes.length === 0) return;
+            ctx.clearRect(0, 0, W, H);
+            if (generatedNotes.length === 0) return;
 
-            const W = mount.clientWidth  || 900;
-            const H = mount.clientHeight || 300;
+            const pitches    = generatedNotes.map(n => n.pitch);
+            const minPitch   = Math.min(...pitches) - 2;
+            const maxPitch   = Math.max(...pitches) + 2;
+            const pitchRange = maxPitch - minPitch;
+            const TOTAL_BEATS = 128;
+            const rowH = H / pitchRange;
+            const colW = W / TOTAL_BEATS;
 
-            const noteData = buildNoteData(notes);
-
-            try {
-                pixiRoll = pixiPianoRoll({
-                    width:           W,
-                    height:          H,
-                    bpm:             120,
-                    noteColor:       0xa855f7,   // single hex — library uses it directly
-                    backgroundColor: 0x030008,
-                    gridLineColor:   0x2d1b69,
-                    zoom:            2,
-                    resolution:      4,
-                    antialias:       true,
-                    noteData:        noteData
-                });
-
-                // pixiPianoRoll() returns the pianoRollAPI directly; canvas is at .view
-                const pixiCanvas = pixiRoll.view;
-                pixiCanvas.style.width   = '100%';
-                pixiCanvas.style.height  = '100%';
-                pixiCanvas.style.display = 'block';
-                mount.appendChild(pixiCanvas);
-            } catch(err) {
-                console.warn('[pixi-piano-roll] init error:', err);
+            // Black-key lane shading
+            for (let r = 0; r < pitchRange; r++) {
+                const pitch = maxPitch - r;
+                const isBlack = [1,3,6,8,10].includes(pitch % 12);
+                ctx.fillStyle = isBlack ? "rgba(255,255,255,0.018)" : "rgba(255,255,255,0.006)";
+                ctx.fillRect(0, r * rowH, W, rowH);
             }
+
+            // Beat / bar / phrase grid
+            for (let b = 0; b <= TOTAL_BEATS; b++) {
+                const x = b * colW;
+                const isPhrase = b % 16 === 0;
+                const isBar    = b % 4  === 0;
+                ctx.strokeStyle = isPhrase ? "rgba(168,85,247,0.30)"
+                                : isBar    ? "rgba(168,85,247,0.10)"
+                                           : "rgba(168,85,247,0.03)";
+                ctx.lineWidth = isPhrase ? 1.5 : 1;
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+                if (isPhrase && b > 0) {
+                    ctx.fillStyle = "rgba(168,85,247,0.45)";
+                    ctx.font = "9px 'Space Grotesk'";
+                    ctx.fillText(`${b/4}`, x + 3, 11);
+                }
+            }
+            ctx.lineWidth = 1;
+            for (let r = 0; r <= pitchRange; r++) {
+                ctx.strokeStyle = "rgba(168,85,247,0.04)";
+                ctx.beginPath(); ctx.moveTo(0, r*rowH); ctx.lineTo(W, r*rowH); ctx.stroke();
+            }
+
+            // Hover crosshair
+            if (mouseX !== -1 && mouseY !== -1) {
+                const hovCol = Math.floor(mouseX / colW);
+                ctx.fillStyle = "rgba(168,85,247,0.05)";
+                ctx.fillRect(hovCol * colW, 0, colW, H);
+                const hovRow = Math.floor(mouseY / rowH);
+                ctx.fillStyle = "rgba(168,85,247,0.04)";
+                ctx.fillRect(0, hovRow * rowH, W, rowH);
+                ctx.strokeStyle = "rgba(168,85,247,0.25)";
+                ctx.setLineDash([4, 6]);
+                ctx.beginPath(); ctx.moveTo(mouseX, 0); ctx.lineTo(mouseX, H); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, mouseY); ctx.lineTo(W, mouseY); ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Note blocks
+            hoveredNoteIdx = -1;
+            generatedNotes.forEach((n, idx) => {
+                const st  = noteAnimState[idx] || { born: now, glowPhase: 0 };
+                noteAnimState[idx] = st;
+
+                const age    = now - st.born;
+                const entryT = Math.min(1, age / 400);
+                const eased  = 1 - Math.pow(1 - entryT, 3);
+
+                const pitchY = H - ((n.pitch - minPitch) * rowH) - rowH;
+                const startX = n.start * colW;
+                const bw     = Math.max(4, n.duration * colW - 2);
+                const slideX = startX - (1 - eased) * 30;
+
+                const isCurrent = idx === currentNoteIdx && isPlaying;
+                const pulse = 0.5 + 0.5 * Math.sin(now * 0.0075 + st.glowPhase);
+                const glowR = isCurrent ? 20 + pulse * 14 : 8 + pulse * 4;
+
+                if (mouseX >= startX && mouseX <= startX + bw &&
+                    mouseY >= pitchY  && mouseY <= pitchY + rowH) {
+                    hoveredNoteIdx = idx;
+                }
+                const isHover = hoveredNoteIdx === idx;
+
+                ctx.save();
+                ctx.globalAlpha = eased;
+                ctx.shadowColor = isCurrent ? "#10b981" : isHover ? "#f59e0b" : "#a855f7";
+                ctx.shadowBlur  = isCurrent ? glowR : isHover ? 16 : glowR * 0.5;
+
+                const grad = ctx.createLinearGradient(slideX, pitchY, slideX + bw, pitchY + rowH);
+                if (isCurrent)      { grad.addColorStop(0,"#10b981"); grad.addColorStop(1,"#059669"); }
+                else if (isHover)   { grad.addColorStop(0,"#f59e0b"); grad.addColorStop(1,"#d97706"); }
+                else                { grad.addColorStop(0,"#3b82f6"); grad.addColorStop(1,"#a855f7"); }
+                ctx.fillStyle = grad;
+
+                const r4 = Math.min(4, rowH * 0.35);
+                ctx.beginPath(); ctx.roundRect(slideX, pitchY + 1, bw, rowH - 2, r4); ctx.fill();
+
+                // Sheen
+                const sheen = ctx.createLinearGradient(slideX, pitchY, slideX, pitchY + rowH * 0.5);
+                sheen.addColorStop(0, "rgba(255,255,255,0.18)");
+                sheen.addColorStop(1, "rgba(255,255,255,0)");
+                ctx.fillStyle = sheen;
+                ctx.beginPath(); ctx.roundRect(slideX, pitchY + 1, bw, rowH * 0.5, r4); ctx.fill();
+
+                ctx.shadowBlur = 0;
+                if (bw > 28 && rowH > 10) {
+                    ctx.fillStyle = "rgba(255,255,255,0.85)";
+                    ctx.font = `bold ${Math.min(10, rowH * 0.65)}px 'Space Grotesk'`;
+                    ctx.fillText(n.label || "", slideX + 4, pitchY + rowH * 0.72);
+                }
+
+                // Pulse ring on active note
+                if (isCurrent) {
+                    ctx.strokeStyle = `rgba(16,185,129,${0.6 - pulse * 0.4})`;
+                    ctx.lineWidth   = 1.5;
+                    ctx.shadowColor = "#10b981"; ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.roundRect(slideX - 3 - pulse*5, pitchY - 1 - pulse*3,
+                                  bw + 6 + pulse*10,   rowH + 2 + pulse*6, r4 + 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            });
+
+            // Playhead
+            if (isPlaying && audioCtx) {
+                const elapsed = audioCtx.currentTime - playbackStartTime;
+                const px = (elapsed / (60.0 / 120.0)) * colW;
+                if (px >= 0 && px <= W) {
+                    const hg = ctx.createLinearGradient(px - 30, 0, px, 0);
+                    hg.addColorStop(0, "rgba(16,185,129,0)");
+                    hg.addColorStop(1, "rgba(16,185,129,0.06)");
+                    ctx.fillStyle = hg; ctx.fillRect(px - 30, 0, 30, H);
+
+                    ctx.strokeStyle = "#10b981"; ctx.lineWidth = 2;
+                    ctx.shadowColor = "#10b981"; ctx.shadowBlur = 20;
+                    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+
+                    ctx.fillStyle = "#10b981"; ctx.shadowBlur = 8;
+                    ctx.beginPath(); ctx.moveTo(px-5,0); ctx.lineTo(px+5,0); ctx.lineTo(px,8);
+                    ctx.closePath(); ctx.fill();
+                }
+            }
+
+            // Hover tooltip
+            if (hoveredNoteIdx !== -1 && mouseX !== -1) {
+                const n = generatedNotes[hoveredNoteIdx];
+                const text = `${n.label}  beat ${n.start.toFixed(2)}  dur ${n.duration.toFixed(2)}`;
+                const pad = 7;
+                ctx.font = "11px 'Space Grotesk'";
+                const tw = ctx.measureText(text).width;
+                let tx = mouseX + 12, ty = mouseY - 14;
+                if (tx + tw + pad*2 > W) tx = mouseX - tw - pad*2 - 4;
+                if (ty < 0) ty = mouseY + 20;
+                ctx.fillStyle = "rgba(15,15,25,0.88)";
+                ctx.shadowColor = "#a855f7"; ctx.shadowBlur = 12;
+                ctx.beginPath(); ctx.roundRect(tx, ty, tw + pad*2, 22, 5); ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = "#e0d7ff";
+                ctx.fillText(text, tx + pad, ty + 15);
+            }
+            ctx.shadowBlur = 0;
         }
 
-        // Stubs for old canvas-based functions (kept so callers don't throw)
-        function drawPianoRoll()  { /* pixi-piano-roll renders on its own rAF */ }
-        function startIdleAnim() { /* no-op: pixi handles its own loop */ }
-        function syncPixiPlayhead() {
-            if (!pixiRoll || !isPlaying || !audioCtx) return;
-            const elapsed = audioCtx.currentTime - playbackStartTime;
-            const elapsedBeats = elapsed / (60.0 / 120.0);
-            const bar = Math.floor(elapsedBeats / 4);
-            const qtr = Math.floor(elapsedBeats % 4);
-            const s   = Math.round((elapsedBeats % 1) * 4);
-            try {
-                pixiRoll.playback.seek(`${bar}:${qtr}:${s}`);
-            } catch(e) {}
-        }
-
-        // Poll playhead position at ~30fps during playback
-        let pixiSyncId = null;
-        function startPixiSync() {
-            if (pixiSyncId) return;
+        // Idle anim loop — keeps glow/entry alive when not playing
+        let idleAnimFrameId = null;
+        function startIdleAnim() {
+            if (idleAnimFrameId) return;
             function loop() {
-                syncPixiPlayhead();
-                if (isPlaying) pixiSyncId = requestAnimationFrame(loop);
-                else           pixiSyncId = null;
+                if (generatedNotes.length === 0) { idleAnimFrameId = null; return; }
+                drawPianoRoll();
+                idleAnimFrameId = requestAnimationFrame(loop);
             }
-            pixiSyncId = requestAnimationFrame(loop);
+            idleAnimFrameId = requestAnimationFrame(loop);
         }
 
         canvas.addEventListener("mousemove", (e) => {
@@ -1307,7 +1402,6 @@
             evaluateHookMemorability(generatedNotes, root, modeIntervals, actualHookLen, hookPitches);
             drawPianoRoll();
             startIdleAnim();
-            initPixiRoll(generatedNotes);
         }
 
         // ----------------------------------------------------
@@ -1694,10 +1788,7 @@
         }
 
 
-        // Resize window → re-initialize pixi roll with new dimensions
-        window.addEventListener("resize", () => {
-            if (generatedNotes.length > 0) initPixiRoll(generatedNotes);
-        });
+        window.addEventListener("resize", drawPianoRoll);
 
 
 
@@ -1849,12 +1940,7 @@
             }
             playbackAnimFrameId = requestAnimationFrame(animLoop);
 
-            // Drive pixi-piano-roll scroll via seek() from our Web Audio clock
-            // Do NOT call pixiRoll.playback.play() — its internal rAF conflicts with our sync loop
-            if (pixiRoll) {
-                try { pixiRoll.playback.seek('0:0:0'); } catch(e) {}
-            }
-            startPixiSync();
+
             
             // Process note schedules
             generatedNotes.forEach((n, idx) => {
@@ -1894,8 +1980,6 @@
             currentNoteIdx = -1;
             playbackSchedulers.forEach(clearTimeout);
             playbackSchedulers = [];
-            // Pause pixi-piano-roll playhead
-            if (pixiRoll) { try { pixiRoll.playback.pause(); } catch(e) {} }
             drawPianoRoll();
         }
 
@@ -2186,8 +2270,7 @@ ${notesMdTable}
                         evaluateHookMemorability(generatedNotes, parseInt(root), scaleIntervals, optNotesList.length, optNotesList.map(n => n.pitch));
                         drawPianoRoll();
                         startIdleAnim();
-                        initPixiRoll(generatedNotes);
-                        
+                                    
                         startPlayback();
                     } else {
                         alert("MLX Optimization failed: " + data.message);
