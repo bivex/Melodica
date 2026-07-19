@@ -38,11 +38,31 @@ PORT = 8081
 MODE_MAP = {
     "major": Mode.MAJOR,
     "ionian": Mode.IONIAN,
-    "phrygian": Mode.PHRYGIAN,
+    "natural_minor": Mode.NATURAL_MINOR,
     "aeolian": Mode.AEOLIAN,
-    "locrian": Mode.LOCRIAN,
     "harmonic_minor": Mode.HARMONIC_MINOR,
-    "hungarian_minor": Mode.HUNGARIAN_MINOR
+    "melodic_minor": Mode.MELODIC_MINOR,
+    "dorian": Mode.DORIAN,
+    "phrygian": Mode.PHRYGIAN,
+    "lydian": Mode.LYDIAN,
+    "mixolydian": Mode.MIXOLYDIAN,
+    "locrian": Mode.LOCRIAN,
+    "whole_tone": Mode.WHOLE_TONE,
+    "diminished": Mode.DIMINISHED,
+    "blues": Mode.BLUES,
+    "hungarian_minor": Mode.HUNGARIAN_MINOR,
+    "hungarian_major": Mode.HUNGARIAN_MAJOR,
+    "gypsy": Mode.GYPSY,
+    "hirojoshi": Mode.HIROJOSHI,
+    "japanese": Mode.JAPANESE,
+    "spanish_8_tone": Mode.SPANISH_8_TONE,
+    "byzantine": Mode.BYZANTINE,
+    "persian": Mode.PERSIAN,
+    "arabian": Mode.ARABIAN,
+    "altered": Mode.ALTERED,
+    "lydian_dominant": Mode.LYDIAN_DOMINANT,
+    "phrygian_dominant": Mode.PHRYGIAN_DOMINANT,
+    "double_harmonic": Mode.DOUBLE_HARMONIC
 }
 
 
