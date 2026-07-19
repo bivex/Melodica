@@ -129,3 +129,24 @@ def test_global_timeline_generation():
     assert ts1.denominator == 4
 
 
+def test_tempo_modulator_profiles():
+    parts = [
+        IdeaPart(name="Verse", bars=16, tempo=100, time_signature=(4, 4))
+    ]
+
+    profiles = ["rubato", "agitato", "industrial", "chaotic", "combat", "madness", "requiem"]
+    for profile in profiles:
+        modulator = TempoModulator(
+            default_tempo=100,
+            tempo_profile=profile
+        )
+        events = modulator.generate_events(parts)
+        
+        # Verify events are generated
+        assert len(events) > 0
+        # Verify tempo is dynamic and changes (not just flat 100.0)
+        bpms = [e[1] for e in events]
+        assert len(set(bpms)) > 1
+
+
+

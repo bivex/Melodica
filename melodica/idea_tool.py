@@ -298,6 +298,8 @@ class IdeaPart:
     variation_type: str | None = None
     # Antiphonic call-and-response settings for this part.
     antiphony: dict[str, Any] | None = None
+    # Dynamic tempo profile (e.g., "rubato", "agitato", "industrial", "chaotic", "combat", "madness", "requiem")
+    tempo_profile: str | None = None
 
     @property
     def section_role(self) -> SectionRole | None:
@@ -378,6 +380,7 @@ class IdeaToolConfig:
     ritardando_factor: float = 0.85
     use_tension_tempo: bool = False
     tension_tempo_range: float = 15.0
+    tempo_profile: str = "default"  # "default", "tension", "rubato", "agitato", "industrial", "chaotic", "combat", "madness", "requiem"
 
     # For "harmonize_melody" workflow: caller-supplied melody to harmonize
     seed_melody: list[NoteInfo] | None = None
@@ -474,6 +477,7 @@ class IdeaTool:
                         track_mute=p.track_mute,
                         track_velocity_scale=p.track_velocity_scale,
                         track_phrase_schedules=p.track_phrase_schedules,
+                        tempo_profile=p.tempo_profile,
                     )
                 )
             return parts
@@ -488,6 +492,7 @@ class IdeaTool:
                     style=self.config.style,
                     progression_type=self.config.progression_type,
                     progression_list=self.config.progression_list,
+                    tempo_profile=self.config.tempo_profile,
                 )
             ]
 
@@ -999,7 +1004,8 @@ class IdeaTool:
                 ritardando_beats=self.config.ritardando_beats,
                 ritardando_factor=self.config.ritardando_factor,
                 use_tension_tempo=self.config.use_tension_tempo,
-                tension_tempo_range=self.config.tension_tempo_range
+                tension_tempo_range=self.config.tension_tempo_range,
+                tempo_profile=self.config.tempo_profile,
             )
             result["_tempo_events"] = modulator.generate_events(parts, tension_curve=t_curve)
 
