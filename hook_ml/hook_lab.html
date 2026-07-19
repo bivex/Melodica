@@ -828,6 +828,7 @@
                         <span class="group-label">Apple MLX GPU Engine</span>
                         <div class="action-buttons-row">
                             <button class="btn btn-mlx-api" id="btn-mlx-api">Generate Hook</button>
+                            <button class="btn btn-mlx-random-elite" id="btn-mlx-elite">Generate Elite</button>
                             <button class="btn btn-mlx-random" id="btn-mlx-random">Random Hook</button>
                             <button class="btn btn-mlx-random-elite" id="btn-mlx-random-elite">Random Elite</button>
                         </div>
@@ -2099,7 +2100,9 @@ ${notesMdTable}
         function triggerMLXGeneration(elite = false) {
             stopPlayback();
             
-            const btn = document.getElementById("btn-mlx-api");
+            const btnId = elite ? "btn-mlx-elite" : "btn-mlx-api";
+            const btn = document.getElementById(btnId);
+            const originalText = elite ? "Generate Elite" : "Generate Hook";
             btn.textContent = elite ? "Optimizing Elite..." : "Optimizing...";
             btn.style.background = "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)";
             btn.style.boxShadow = "0 4px 20px rgba(168, 85, 247, 0.6)";
@@ -2113,7 +2116,7 @@ ${notesMdTable}
             fetch(`http://localhost:8081/api/generate_neural?root=${root}&mode=${mode}&elite=${elite}&genre=${genre}&seed=${seed}`)
                 .then(res => res.json())
                 .then(data => {
-                    btn.textContent = "Generate Hook";
+                    btn.textContent = originalText;
                     btn.style.background = "";
                     btn.style.boxShadow = "";
                     btn.disabled = false;
@@ -2145,7 +2148,7 @@ ${notesMdTable}
                     }
                 })
                 .catch(err => {
-                    btn.textContent = "Generate Hook";
+                    btn.textContent = originalText;
                     btn.style.background = "";
                     btn.style.boxShadow = "";
                     btn.disabled = false;
@@ -2156,6 +2159,11 @@ ${notesMdTable}
         // MLX API Neural Generator button
         document.getElementById("btn-mlx-api").addEventListener("click", () => {
             triggerMLXGeneration(false);
+        });
+
+        // MLX API Elite Neural Generator button (for current chosen parameters)
+        document.getElementById("btn-mlx-elite").addEventListener("click", () => {
+            triggerMLXGeneration(true);
         });
 
         // MLX API Random Neural Generator button
