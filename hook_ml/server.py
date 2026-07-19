@@ -84,16 +84,29 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
     sel_mode = MODE_MAP.get(mode_name.lower(), Mode.PHRYGIAN)
     key = Scale(root=root, mode=sel_mode)
     
-    base_midi = 60 # C5
-    # Gather scale intervals from engine
-    scale_intervals = [step for step in range(12) if key.contains(step)]
-    if len(scale_intervals) > 7:
-        scale_intervals = scale_intervals[:7]
-    elif len(scale_intervals) < 7:
-        while len(scale_intervals) < 7:
-            scale_intervals.append(scale_intervals[-1] + 1)
-            
-    scale_pitches_list = [base_midi + step for step in scale_intervals]
+    base_midi = 60  # C5
+    # Real scale pitch classes present in the key (ordered within one octave).
+    scale_pcs = [step for step in range(12) if key.contains(step)]
+    if not scale_pcs:
+        scale_pcs = [0]
+
+    # Preserve the real scale: never drop real notes, never pad with out-of-scale
+    # chromatics. For scales with <=7 pitch classes we present exactly 7 options to
+    # the decoder (matches the pre-trained weights) by cycling real tones into the
+    # next octave. For >7-note scales we keep every real tone and skip weight load.
+    if len(scale_pcs) <= 7:
+        scale_size = 7
+        scale_pitches_list = []
+        octave = 0
+        while len(scale_pitches_list) < 7:
+            for pc in scale_pcs:
+                scale_pitches_list.append(base_midi + pc + 12 * octave)
+            octave += 1
+        scale_pitches_list = scale_pitches_list[:7]
+    else:
+        scale_size = len(scale_pcs)
+        scale_pitches_list = [base_midi + pc for pc in scale_pcs]
+
     scale_pitches = mx.array(scale_pitches_list, dtype=mx.float32)
     
     # Genre profile targets
@@ -111,11 +124,11 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
         target_resolution_midi = scale_pitches_list[0]
         
     # 1. Instantiate Model and Trainable Latents (Batch of 64 for elite, 8 for standard)
-    model = MelodyDecoder(num_notes=length, scale_size=7)
-    
-    # Load pre-trained weights if they exist and shape matches (length == 5)
+    model = MelodyDecoder(num_notes=length, scale_size=scale_size)
+
+    # Load pre-trained weights if they exist and shape matches (length == 5, scale_size == 7)
     weights_path = "hook_ml/memorability99_model.npz"
-    if length == 5 and os.path.exists(weights_path):
+    if length == 5 and scale_size == 7 and os.path.exists(weights_path):
         try:
             flat_params = mx.load(weights_path)
             params = {}
@@ -253,9 +266,8 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
         rendered = render_hook_for_eval(best_candidate_notes, 128.0)
         best_candidate_score = evaluate_memorability(rendered, key, 128.0)['score']
     
-    # Fallback to safe parameters if optimization fails to hit 95 (only for elite)
-    # BUG FIX: generate fallback dynamically matching requested length
-    if elite and best_candidate_score < 95:
+    # Fallback to safe parameters if optimization produced nothing, or (elite) failed to hit 95
+    if not best_candidate_notes or (elite and best_candidate_score < 95):
         print("[!] Target score not achieved; outputting fallback parameters.")
         fp = int(target_resolution_midi)
         fallback_pattern = [

@@ -459,3 +459,4 @@ melodica/harmonize/corpus_t5harmony/songlist.txt
 /melodica/harmonize/corpus_synth_balanced
 .http_server.pid
 .api_server.pid
+hook_ml/memorability99_model.npz
