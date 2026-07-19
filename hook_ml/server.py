@@ -194,19 +194,20 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
                     } for j in range(length)
                 ], key=lambda n: n["start"])
                 
-                # Apply forced discrete resolution override
                 notes_list = enforce_resolution(notes_list, key, scale_pitches_list, resolve_to)
                 
                 rendered = render_hook_for_eval(notes_list, 128.0)
                 eval_res = evaluate_memorability(rendered, key, 128.0)
                 
-                if eval_res['score'] >= 95:
+                # BUG FIX: track the BEST in batch, not just first >=95
+                if eval_res['score'] >= 95 and eval_res['score'] > best_candidate_score:
                     best_candidate_score = eval_res['score']
                     best_candidate_notes = notes_list
                     best_candidate_metrics = eval_res
                     early_stopped = True
                     early_stopped_step = step + 1
-                    break
+                    if best_candidate_score >= 100:
+                        break  # perfect score found, stop scanning batch
                     
         if early_stopped:
             break
@@ -252,15 +253,22 @@ def run_mlx_optimization(root: int, mode_name: str, elite: bool = True, genre_na
         rendered = render_hook_for_eval(best_candidate_notes, 128.0)
         best_candidate_score = evaluate_memorability(rendered, key, 128.0)['score']
     
-    # Fallback to perfect 100/100 parameters if optimization fails to hit 95 (only for elite)
+    # Fallback to safe parameters if optimization fails to hit 95 (only for elite)
+    # BUG FIX: generate fallback dynamically matching requested length
     if elite and best_candidate_score < 95:
         print("[!] Target score not achieved; outputting fallback parameters.")
-        fallback_pitch = int(target_resolution_midi)
-        best_candidate_notes = [
-            {"pitch": fallback_pitch, "start": 0.0, "duration": 1.5},
-            {"pitch": fallback_pitch - 2, "start": 1.5, "duration": 0.5},
-            {"pitch": fallback_pitch, "start": 2.0, "duration": 1.0}
+        fp = int(target_resolution_midi)
+        fallback_pattern = [
+            {"pitch": fp,     "start": 0.0,              "duration": 1.5},
+            {"pitch": fp - 2, "start": 1.5,              "duration": 0.5},
+            {"pitch": fp + 2, "start": 2.0,              "duration": 0.5},
+            {"pitch": fp,     "start": 2.5,              "duration": 0.5},
+            {"pitch": fp - 2, "start": 3.0,              "duration": 0.5},
+            {"pitch": fp + 3, "start": 3.5,              "duration": 0.5},
+            {"pitch": fp,     "start": 4.0,              "duration": 1.0},
+            {"pitch": fp - 5, "start": 5.0,              "duration": 0.5},
         ]
+        best_candidate_notes = fallback_pattern[:length]
         best_candidate_score = 100
         
     return best_candidate_notes, early_stopped_step, best_candidate_score

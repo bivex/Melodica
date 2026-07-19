@@ -278,7 +278,9 @@ def main():
         def loss_fn(lat_mod):
             return batch_differentiable_loss(
                 model, lat_mod.z, scale_pitches,
-                target_root_midi, target_dominant_midi, temp
+                target_root_midi,   # tonic resolution
+                0.40, 0.70, 0.30,   # default pop-style targets
+                temp
             )
             
         loss_and_grad = nn.value_and_grad(latent, loss_fn)
@@ -318,13 +320,15 @@ def main():
                 rendered = render_hook_for_eval(notes_list, 128.0)
                 eval_res = evaluate_memorability(rendered, key, 128.0)
                 
-                if eval_res['score'] >= 95:
+                # BUG FIX: track the BEST in the batch, not just first >=95
+                if eval_res['score'] >= 95 and eval_res['score'] > best_candidate_score:
                     best_candidate_score = eval_res['score']
                     best_candidate_notes = notes_list
                     best_candidate_metrics = eval_res
                     early_stopped = True
                     early_stopped_step = step + 1
-                    break
+                    if best_candidate_score >= 100:
+                        break  # perfect — stop scanning remainder of batch
                     
         if early_stopped:
             print(f"  [Early Stopping] Triggered at step {early_stopped_step}! Score: {best_candidate_score}/100")

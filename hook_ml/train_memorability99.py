@@ -69,8 +69,10 @@ def train_model(epochs=600, batch_size=128):
     for epoch in range(epochs):
         # 1. Randomly sample key, mode, and genre parameters for this step
         root = mx.random.randint(0, 12).item()
-        mode_name = mode_names[mx.random.randint(0, len(mode_names)).item()]
-        genre_name = genre_names[mx.random.randint(0, len(genre_names)).item()]
+        # BUG FIX: mx.random.randint upper bound is exclusive but .item() can
+        # theoretically hit len() on boundary — use modulo for safety
+        mode_name  = mode_names[mx.random.randint(0, 10000).item() % len(mode_names)]
+        genre_name = genre_names[mx.random.randint(0, 10000).item() % len(genre_names)]
         
         # 2. Get scale pitches list
         intervals = mode_intervals_map[mode_name]
