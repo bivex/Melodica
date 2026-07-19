@@ -71,114 +71,162 @@ class LornHookGenerator(PhraseGenerator):
                     scale_pitches.append(p)
         scale_pitches = sorted(list(set(scale_pitches)))
 
-        # 2. Hook Generation: step-wise movements combined with wide leaps (5ths, 7ths, octaves)
-        hook_pitches = []
-        current_pitch = base_midi
-        hook_pitches.append(current_pitch)
-        
-        for _ in range(self.hook_length - 1):
-            if rng.random() < 0.35:
-                # Wide expressive leap (Perfect 5th, Octave, Minor 7th)
-                leap_interval = rng.choice([-12, -7, -5, 5, 7, 12])
-                current_pitch = current_pitch + leap_interval
-            else:
-                # Melodic step to adjacent scale note
-                idx = scale_pitches.index(current_pitch) if current_pitch in scale_pitches else len(scale_pitches) // 2
-                step_dir = rng.choice([-2, -1, 1, 2])
-                new_idx = max(0, min(len(scale_pitches) - 1, idx + step_dir))
-                current_pitch = scale_pitches[new_idx]
-            
-            # Clamp to a memorable vocal/synth range
-            current_pitch = max(base_midi - 6, min(base_midi + 9, current_pitch))
-            hook_pitches.append(current_pitch)
+        # 2. Helper to generate base hook sequence using dynamic leaps
+        def generate_base_hook(length: int, leap_prob: float) -> list[int]:
+            hook = [base_midi]
+            curr = base_midi
+            for _ in range(length - 1):
+                if rng.random() < leap_prob:
+                    # Wide expressive leap (Perfect 5th, Octave, Minor 7th)
+                    leap_interval = rng.choice([-12, -7, -5, 5, 7, 12])
+                    curr = curr + leap_interval
+                else:
+                    # Melodic step
+                    idx = scale_pitches.index(curr) if curr in scale_pitches else len(scale_pitches) // 2
+                    step_dir = rng.choice([-2, -1, 1, 2])
+                    curr = scale_pitches[max(0, min(len(scale_pitches) - 1, idx + step_dir))]
+                
+                # Clamp to memorable range
+                curr = max(base_midi - 6, min(base_midi + 9, curr))
+                hook.append(curr)
+            return hook
+
+        # Generate base hook with moderate initial leaps
+        base_hook_pitches = generate_base_hook(self.hook_length, 0.25)
 
         # 3. Slow, syncopated rhythm spanning exactly 4.0 beats (1 bar)
         # Generate note durations and rests for a 1-bar motif (4 beats)
-        note_onsets = []
+        base_onsets = []
         t_onset = 0.0
         for i in range(self.hook_length):
             dur = rng.choice([0.5, 0.75, 1.0, 1.5])
-            note_onsets.append((t_onset, dur))
+            base_onsets.append({"onset": t_onset, "duration": dur})
             # small rest between notes
             t_onset += dur + rng.choice([0.0, 0.25, 0.5])
             if t_onset >= 3.5:
                 break
 
-        # Actual active hook length after fitting into 1 bar
-        actual_hook_len = len(note_onsets)
+        actual_hook_len = len(base_onsets)
 
-        # 4. Phrase Layout & Call-and-Response:
-        # We loop in 16-bar cycles (64 beats):
-        # - Bars 0-4 (beats 0-16): Play Hook (repeated 4 times, once per 4-beat bar)
-        # - Bars 4-8 (beats 16-32): Silence (dramatic rest)
-        # - Bars 8-12 (beats 32-48): Response (play hook with variation / octave shift, repeated 4 times)
-        # - Bars 12-16 (beats 48-64): Silence
+        # Track cumulative mutations
+        current_pitches = list(base_hook_pitches)
+        current_onsets = [dict(o) for o in base_onsets]
+
         notes: list[NoteInfo] = []
-        cycle_len = 64.0  # 16 bars
         
+        # 4. Long-term Dramaturgy & Phrasing:
+        # We loop in 4-bar blocks (16 beats).
+        # We analyze track progress (0.0 to 1.0) to select the composition phase:
+        # - Exposition (0.0 - 0.2): Simple hook, low octave, sparse schema (A pause A pause), 10% leaps
+        # - Development (0.2 - 0.45): Schema A A pause A', cumulative variations (20% mutation), normal octave
+        # - Tension (0.45 - 0.70): Schema A A A pause, syncopated rhythm mutation, 45% leaps
+        # - Climax (0.70 - 0.85): Schema A A A A, octave-doubled wall of sound (+12 semitones layer), 60% leaps
+        # - Decay (0.85 - 1.0): Schema A pause pause pause, memory errors (drop last 1-2 notes), low octave
         t = 0.0
-        period_idx = 0
         while t < duration_beats:
-            cycle_phase = t % cycle_len
+            progress = t / duration_beats
             
-            if cycle_phase < 16.0:
-                # Play the original Question hook repeated 4 times (once per bar)
-                for r in range(4):
-                    t_bar = t + r * 4.0
-                    for i, (onset, dur) in enumerate(note_onsets):
-                        if i < len(hook_pitches):
-                            notes.append(NoteInfo(
-                                pitch=hook_pitches[i],
-                                start=t_bar + onset,
-                                duration=dur,
-                                velocity=rng.randint(85, 105),
-                            ))
-            elif 32.0 <= cycle_phase < 48.0:
-                # Play the varied Response hook repeated 4 times
-                # In alternate periods, we transpose by an octave (octave double)
-                if period_idx % 2 == 1:
-                    # Octave Transposed variation
-                    varied_pitches = [p + 12 for p in hook_pitches]
-                else:
-                    # Pitch-shifted variation
-                    varied_pitches = list(hook_pitches)
-                    var_type = rng.choice(["change_last", "transpose_up", "transpose_down", "invert_last"])
-                    
-                    if var_type == "change_last" and len(varied_pitches) > 1:
-                        # Modify final pitch
-                        alt_step = rng.choice([-2, -1, 1, 2])
-                        last_pitch = varied_pitches[-1]
-                        if last_pitch in scale_pitches:
-                            idx = scale_pitches.index(last_pitch)
-                            new_idx = max(0, min(len(scale_pitches) - 1, idx + alt_step))
-                            varied_pitches[-1] = scale_pitches[new_idx]
-                    elif var_type == "transpose_up":
-                        varied_pitches = [p + 2 if key.contains((p + 2) % 12) else p + 1 for p in varied_pitches]
-                    elif var_type == "transpose_down":
-                        varied_pitches = [p - 2 if key.contains((p - 2) % 12) else p - 1 for p in varied_pitches]
-                    elif var_type == "invert_last" and len(varied_pitches) > 1:
-                        diff = varied_pitches[-1] - varied_pitches[-2]
-                        varied_pitches[-1] = varied_pitches[-2] - diff
+            if progress < 0.2:
+                # Phase 1: Exposition
+                schema = ["play", "silence", "play", "silence"]
+                octave_shift = -12
+                double_octave = False
+                mutate_rhythm = False
+                memory_errors = False
+                var_rate = 0.0
+            elif progress < 0.45:
+                # Phase 2: Development
+                schema = ["play", "play", "silence", "play"]
+                octave_shift = 0
+                double_octave = False
+                mutate_rhythm = False
+                memory_errors = False
+                var_rate = 0.2
+            elif progress < 0.70:
+                # Phase 3: Tension
+                schema = ["play", "play", "play", "silence"]
+                octave_shift = 0
+                double_octave = False
+                mutate_rhythm = True
+                memory_errors = False
+                var_rate = 0.3
+            elif progress < 0.85:
+                # Phase 4: Climax
+                schema = ["play", "play", "play", "play"]
+                octave_shift = 0
+                double_octave = True
+                mutate_rhythm = False
+                memory_errors = False
+                var_rate = 0.1
+            else:
+                # Phase 5: Decay
+                schema = ["play", "silence", "silence", "silence"]
+                octave_shift = -12
+                double_octave = False
+                mutate_rhythm = False
+                memory_errors = True
+                var_rate = 0.0
                 
-                for r in range(4):
-                    t_bar = t + r * 4.0
-                    for i, (onset, dur) in enumerate(note_onsets):
-                        if i < len(varied_pitches):
-                            notes.append(NoteInfo(
-                                pitch=varied_pitches[i],
-                                start=t_bar + onset,
-                                duration=dur,
-                                velocity=rng.randint(80, 100),
-                            ))
+            # Render the 4-bar section block
+            for bar in range(4):
+                action = schema[bar]
+                if action == "silence":
+                    continue
+                
+                t_bar = t + bar * 4.0
+                if t_bar >= duration_beats:
+                    break
+                
+                # Apply cumulative pitch variation (mutates the previous state of the hook)
+                if var_rate > 0.0 and rng.random() < 0.5:
+                    mut_idx = rng.randint(0, len(current_pitches) - 1)
+                    alt_step = rng.choice([-2, -1, 1, 2])
+                    curr = current_pitches[mut_idx]
+                    if curr in scale_pitches:
+                        idx = scale_pitches.index(curr)
+                        new_idx = max(0, min(len(scale_pitches) - 1, idx + alt_step))
+                        current_pitches[mut_idx] = scale_pitches[new_idx]
                         
-            t += 16.0  # Move to next 4-bar section block
-            period_idx += 1
+                # Apply rhythmic mutation (syncopation shift during tension)
+                block_onsets = [dict(o) for o in current_onsets]
+                if mutate_rhythm and rng.random() < 0.5:
+                    shift = rng.choice([-0.25, 0.25])
+                    for o in block_onsets:
+                        o["onset"] = max(0.0, min(3.5, o["onset"] + shift))
+                        
+                # Apply memory errors (drops notes in decay)
+                if memory_errors:
+                    keep_notes = max(1, len(block_onsets) - rng.randint(1, 2))
+                    block_onsets = block_onsets[:keep_notes]
+                    
+                # Append notes to output
+                for i, o in enumerate(block_onsets):
+                    if i < len(current_pitches):
+                        p = current_pitches[i] + octave_shift
+                        
+                        pitches = [p]
+                        velocities = [rng.randint(85, 105)]
+                        
+                        # Massive wall of sound double octave setup
+                        if double_octave:
+                            pitches.append(p + 12)
+                            velocities.append(rng.randint(70, 90))
+                            
+                        for final_p, final_v in zip(pitches, velocities):
+                            notes.append(NoteInfo(
+                                pitch=final_p,
+                                start=t_bar + o["onset"],
+                                duration=o["duration"],
+                                velocity=final_v,
+                            ))
+                            
+            t += 16.0  # Move to next 4-bar block
 
         # 5. Hook Quality Diagnostics
         if notes:
-            diag = self.evaluate_hook_quality(notes, hook_pitches, actual_hook_len)
+            diag = self.evaluate_hook_quality(notes, base_hook_pitches, actual_hook_len)
             print(f"   [Hook Analyzer] Hook Unique Notes: {diag['unique_notes']} | "
-                  f"Pitch Range: {diag['range_semitones']} sem | "
+                  f"Base Range: {diag['range_semitones']} sem | "
                   f"Motif Repetitions: {diag['repetitions']}x | "
                   f"Silence Ratio: {diag['silence_ratio'] * 100:.0f}% | "
                   f"Memorability Score: {'STRONG (100%)' if diag['is_memorable'] else 'WEAK'}")
