@@ -815,6 +815,11 @@
             </div>
 
             <div class="control-group">
+                <label for="ctrl-bpm">Tempo (BPM) <span id="val-bpm">120</span></label>
+                <input type="range" id="ctrl-bpm" min="60" max="200" step="1" value="120">
+            </div>
+
+            <div class="control-group">
                 <label for="ctrl-seed">Random Seed</label>
                 <input type="number" id="ctrl-seed" value="101" min="1" max="99999">
             </div>
@@ -980,6 +985,7 @@
         let isPlaying = false;
         let playInterval = null;
         let currentNoteIdx = -1;
+        let currentBpm = 120; // playback tempo — driven by #ctrl-bpm
         let audioCtx = null;
         let synthNode = null;
         let delayNode = null;
@@ -1208,7 +1214,7 @@
 
             // ── 5. Playhead ───────────────────────────────────────
             if (isPlaying && audioCtx) {
-                const px = ((audioCtx.currentTime - playbackStartTime) / (60.0 / 120.0)) * colW;
+                const px = ((audioCtx.currentTime - playbackStartTime) / (60.0 / currentBpm)) * colW;
                 if (px >= 0 && px <= W) {
                     // Glow trail (no shadow — just gradient fill)
                     const hg = ctx.createLinearGradient(px - 30, 0, px, 0);
@@ -2013,7 +2019,7 @@
 
             const startTime = audioCtx.currentTime;
             playbackStartTime = startTime;
-            const bpm = 120.0;
+            const bpm = currentBpm;
             const beatDur = 60.0 / bpm; // 0.5 seconds per beat
 
             currentNoteIdx = -1;
@@ -2077,7 +2083,7 @@
             playbackSchedulers.forEach(clearTimeout);
             playbackSchedulers = [];
             
-            const bpm = 120.0;
+            const bpm = currentBpm;
             const beatDur = 60.0 / bpm;
             const seekTimeSec = beat * beatDur;
             
@@ -2506,6 +2512,20 @@ ${notesMdTable}
         });
         document.getElementById("ctrl-hooklen").addEventListener("input", (e) => {
             document.getElementById("val-hooklen").textContent = e.target.value;
+        });
+        document.getElementById("ctrl-bpm").addEventListener("input", (e) => {
+            const newBpm = parseInt(e.target.value);
+            document.getElementById("val-bpm").textContent = newBpm;
+            if (isPlaying && audioCtx) {
+                // Hold the playhead at the same beat, then re-sync scheduling to the new tempo
+                const oldBeatDur = 60.0 / currentBpm;
+                const currentBeat = Math.max(0, Math.min(127.5,
+                    (audioCtx.currentTime - playbackStartTime) / oldBeatDur));
+                currentBpm = newBpm;
+                seekToBeat(currentBeat);
+            } else {
+                currentBpm = newBpm;
+            }
         });
         document.getElementById("ctrl-root").addEventListener("change", (e) => {
             document.getElementById("val-root").textContent = NOTE_NAMES[e.target.value];
