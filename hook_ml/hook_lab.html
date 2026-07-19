@@ -37,7 +37,18 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+            font-optical-sizing: auto;
+            line-height: 1.55;
         }
+
+        ::selection { background: rgba(168, 85, 247, 0.35); color: #fff; }
+
+        /* Even heading line breaks + jitter-free numeric readouts */
+        h1, h2, h3 { text-wrap: balance; }
+        .score-value, .meter-label span.score { font-variant-numeric: tabular-nums; }
 
         /* Animated Glowing Neon Orbs in Background */
         .glow-bg {

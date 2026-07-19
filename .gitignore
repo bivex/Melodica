@@ -460,3 +460,4 @@ melodica/harmonize/corpus_t5harmony/songlist.txt
 .http_server.pid
 .api_server.pid
 hook_ml/memorability99_model.npz
+/.playwright-mcp
