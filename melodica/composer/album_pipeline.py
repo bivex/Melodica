@@ -1672,6 +1672,7 @@ def _stage_articulations(kw):
 def _stage_harmonic_verify(kw):
     """Run harmonic verifier: detect & fix m2/tritone clashes across tracks."""
     from melodica.composer.harmonic_verifier import verify_and_fix, VerifierConfig
+    from melodica.form_validator import _is_percussion
     config = VerifierConfig(
         dissonance_tolerance=0.6,
         fix_transpose=True,
@@ -1680,7 +1681,22 @@ def _stage_harmonic_verify(kw):
         fix_shorten=True,
         apply_shading=True,
     )
-    fixed_tracks, report = verify_and_fix(kw["tracks"], config)
+    
+    # Separate percussion tracks to protect them
+    tracks_to_verify = {}
+    percussion_tracks = {}
+    for tname, notes in kw["tracks"].items():
+        if _is_percussion(tname):
+            percussion_tracks[tname] = notes
+        else:
+            tracks_to_verify[tname] = notes
+
+    fixed_tracks, report = verify_and_fix(tracks_to_verify, config)
+    
+    # Merge percussion tracks back unchanged
+    for tname, notes in percussion_tracks.items():
+        fixed_tracks[tname] = notes
+
     kw["tracks"] = fixed_tracks
     kw["_harmonic_report"] = report
     if kw.get("verbose") and report.clashes_detected > 0:
@@ -2281,6 +2297,7 @@ def produce_track(
     rhythm: str | object | None = None,
     time_signature: tuple[int, int] | None = None,
     feature_flags: dict | None = None,
+    skip_stages: list[str] | None = None,
 ) -> dict:
     """
     Full production pipeline: analyze → mix → dynamics → psycho → master → export.
@@ -2380,6 +2397,8 @@ def produce_track(
 
     # Build pipeline
     stages = pipeline if pipeline is not None else DEFAULT_PIPELINE
+    if skip_stages:
+        stages = [s for s in stages if s.name not in skip_stages]
 
     # Resolve the feature-flag view that gates stages (config_flag). Callers may
     # pass an IdeaToolConfig-derived dict; otherwise we fall back to the config
