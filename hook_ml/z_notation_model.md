@@ -141,17 +141,17 @@ Injects normal noise into the batch variables to escape local minima.
 └────────────────────────────────────────────────
 
 ### Select Best Candidate
-Selects the candidate vector from the batch that maximizes the exact discrete fitness score.
+Selects the candidate vector from the batch that maximizes the exact discrete fitness score, outputting it to the aligned port `melody!`.
 
 ┌─ SelectBest ───────────────────────────────────
 │ \Xi OptimizationState
 │ fitness: \text{seq } Note \rightarrow 0 \dots 100
-│ best\_notes! : \text{seq } Note
+│ melody! : \text{seq } Note
 ├────────────────────────────────────────────────
 │ \exists i_{best}: 1 \dots batch\_size \bullet
 │   \text{Let } candidate\_melody = Decode(z\_batch(i_{best})) \bullet
-│     best\_notes! = candidate\_melody \land
-│     (\forall j: 1 \dots batch\_size \bullet fitness(Decode(z\_batch(j))) \le fitness(best\_notes!))
+│     melody! = candidate\_melody \land
+│     (\forall j: 1 \dots batch\_size \bullet fitness(Decode(z\_batch(j))) \le fitness(melody!))
 └────────────────────────────────────────────────
 
 ### Discrete Enforce Resolution
@@ -195,8 +195,14 @@ Performs discrete local search to maximize exact fitness while maintaining resol
 
 ## 4. Complete Optimization Pipeline
 
-We define the complete generation pipeline as a relational composition of the operational schemas:
+We define the 300-step generation loop with interleaved diversity injection every 30 steps using sequential schema composition:
 
 $$
-GenerateMelody == InitOptimization \circ (OptimizationStep)^{300} \circ SelectBest \circ EnforceResolution \circ DiscreteRefinement
+\text{GenerationLoop} == \big( (\text{OptimizationStep})^{29} \Semi \text{OptimizationStep} \Semi \text{DiversityInjection} \big)^{10}
+$$
+
+The complete Generation Pipeline is defined as the relational sequential composition ($\Semi$) from left to right:
+
+$$
+GenerateMelody == InitOptimization \Semi \text{GenerationLoop} \Semi SelectBest \Semi EnforceResolution \Semi DiscreteRefinement
 $$
