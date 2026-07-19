@@ -94,7 +94,7 @@ Defines the parallel search space containing the batch variables and objectives.
 │ \text{dom } z\_batch = 1 \dots batch\_size
 │ \forall z: Latent \bullet
 │   loss(z, degrees, \text{tonic}, \text{dominant}, temp) = \\
-│     \quad L_{sync} + L_{duration} + L_{contour} + L_{res} + L_{entropy}
+│     \quad L_{sync} + L_{duration} + L_{contour} + L_{res} + L_{motif} + L_{entropy}
 └────────────────────────────────────────────────
 
 ---
@@ -130,8 +130,32 @@ Updates the batch latent vectors using continuous gradients from the relaxed Gum
 │ temp' = \text{Anneal}(temp, step)
 └────────────────────────────────────────────────
 
-### Discrete Enforcement (Post-Processing Override)
-Applies the discrete tonic/dominant constraint to the final note to guarantee 5/5 resolution.
+### Diversity Injection (Stochastic Perturbation)
+Injects normal noise into the batch variables to escape local minima.
+
+┌─ DiversityInjection ───────────────────────────
+│ \Delta OptimizationState
+├────────────────────────────────────────────────
+│ \forall i: 1 \dots batch\_size \bullet
+│   \exists \delta: Latent \bullet \delta \sim \mathcal{N}(0, 0.05 \cdot I_{32}) \land z\_batch'(i) = z\_batch(i) + \delta
+└────────────────────────────────────────────────
+
+### Select Best Candidate
+Selects the candidate vector from the batch that maximizes the exact discrete fitness score.
+
+┌─ SelectBest ───────────────────────────────────
+│ \Xi OptimizationState
+│ fitness: \text{seq } Note \rightarrow 0 \dots 100
+│ best\_notes! : \text{seq } Note
+├────────────────────────────────────────────────
+│ \exists i_{best}: 1 \dots batch\_size \bullet
+│   \text{Let } candidate\_melody = Decode(z\_batch(i_{best})) \bullet
+│     best\_notes! = candidate\_melody \land
+│     (\forall j: 1 \dots batch\_size \bullet fitness(Decode(z\_batch(j))) \le fitness(best\_notes!))
+└────────────────────────────────────────────────
+
+### Discrete Enforce Resolution
+Forcibly shifts the last note to the nearest stable octave of tonic or dominant while minimizing melodic jump distance to note 4.
 
 ┌─ EnforceResolution ────────────────────────────
 │ \Xi OptimizationState
@@ -142,9 +166,37 @@ Applies the discrete tonic/dominant constraint to the final note to guarantee 5/
 │ \forall i: 1 \dots 4 \bullet melody!(i) = melody?(i)
 │ 
 │ \text{Let } last = melody?(5) \bullet
+│ \text{Let } prev = melody?(4) \bullet
 │ \text{Let } t\_pc = pc(tonic) \bullet
 │ \text{Let } d\_pc = pc(dominant) \bullet
+│ \text{Let } OctavesStable == \{ p: MIDI \mid pc(p) \in \{ t\_pc, d\_pc \} \} \bullet
+│ \text{Let } Cost == \lambda p: MIDI \bullet |p - last.pitch| + 4.0 \times \max(0, |p - prev.pitch| - 8) \bullet
 │ 
 │ (pc(melody!(5).pitch) \in \{ t\_pc, d\_pc \}) \land
-│ (melody!(5).pitch = \arg\min_{p \in Octaves(t\_pc) \cup Octaves(d\_pc)} |p - last.pitch|)
+│ (melody!(5).pitch = \arg\min_{p \in OctavesStable} Cost(p))
 └────────────────────────────────────────────────
+
+### Discrete Refinement (Hill-Climbing)
+Performs discrete local search to maximize exact fitness while maintaining resolution of the last note.
+
+┌─ DiscreteRefinement ───────────────────────────
+│ \Xi Scale
+│ melody?: \text{seq } Note
+│ melody! : \text{seq } Note
+│ fitness: \text{seq } Note \rightarrow 0 \dots 100
+├────────────────────────────────────────────────
+│ \# melody? = 5
+│ \# melody! = 5
+│ fitness(melody?) \le fitness(melody!)
+│ melody!(5).pitch = melody?(5).pitch \quad \text{[Preserves resolved last note]}
+└────────────────────────────────────────────────
+
+---
+
+## 4. Complete Optimization Pipeline
+
+We define the complete generation pipeline as a relational composition of the operational schemas:
+
+$$
+GenerateMelody == InitOptimization \circ (OptimizationStep)^{300} \circ SelectBest \circ EnforceResolution \circ DiscreteRefinement
+$$
