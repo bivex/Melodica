@@ -70,7 +70,9 @@ _PASSTHROUGH_RHYTHM = PassThroughRhythmGenerator()
 
 
 # ------------------------------------------------------------------
-# Custom Pipeline excluding texture and polyphony stages & protecting drums from harmonic_verify
+# Custom Pipeline:
+# - Exclude texture, polyphony, and sections stages to prevent note deletion.
+# - Protect percussion from transpositions/truncations in harmonic_verify.
 # ------------------------------------------------------------------
 def custom_harmonic_verify(kw):
     drums = kw["tracks"].pop("drums", None)
@@ -83,7 +85,7 @@ def custom_harmonic_verify(kw):
 
 LORN_PIPELINE = []
 for stage in DEFAULT_PIPELINE:
-    if stage.name in ("texture", "polyphony"):
+    if stage.name in ("texture", "polyphony", "sections"):
         continue
     elif stage.name == "harmonic_verify":
         LORN_PIPELINE.append(Stage("harmonic_verify", custom_harmonic_verify, config_flag="use_harmonic_verifier"))
