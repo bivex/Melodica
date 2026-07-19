@@ -996,22 +996,31 @@
         }
 
         function buildNoteData(notes) {
-            // Convert {pitch(MIDI), start(beats), duration(beats)} →
-            // pixi-piano-roll noteData: [["bars:quarters:sixteenths", "C4", wholeFraction], ...]
-            // BPM=120 → 1 bar = 4 beats, 1 beat = 4 sixteenths
+            // noteData format: [["bars:quarters:sixteenths", "C4", durationDenominator], ...]
+            // durationDenominator: integer — 1=whole, 2=half, 4=quarter, 8=eighth, 16=sixteenth
+            // (the library does barWidth / parseInt(duration), so floats = invisible notes)
             return notes.map(n => {
                 const beatStart  = Math.max(0, n.start);
                 const bar        = Math.floor(beatStart / 4);
                 const qtr        = Math.floor(beatStart % 4);
-                const sixteenth  = Math.floor((beatStart % 1) * 4); // 0-3 within a beat
+                const sixteenth  = Math.floor((beatStart % 1) * 4); // 0-3
                 const tTime      = `${bar}:${qtr}:${sixteenth}`;
 
-                const noteName   = midiToScientific(n.pitch);  // "C4" not 60
-                const durWhole   = Math.max(0.0625, n.duration / 4.0); // min 1/16th note
+                const noteName   = midiToScientific(n.pitch);
 
-                return [tTime, noteName, durWhole];
+                // Convert beat-duration to nearest standard denominator integer
+                // 4 beats=1, 2=2, 1=4, 0.5=8, 0.25=16
+                const beatsPerWhole = 4;
+                const raw = beatsPerWhole / Math.max(0.125, n.duration);
+                // Snap to nearest power-of-two denominator: 1,2,4,8,16
+                const snapped = [1,2,4,8,16].reduce((prev,cur) =>
+                    Math.abs(cur - raw) < Math.abs(prev - raw) ? cur : prev
+                );
+
+                return [tTime, noteName, snapped];
             });
         }
+
 
         function initPixiRoll(notes) {
             const mount = document.getElementById('pixi-piano-roll-mount');
@@ -1036,12 +1045,11 @@
                     width:           W,
                     height:          H,
                     bpm:             120,
-                    noteColor:       0x3b82f6,
-                    noteColorHues:   true,
+                    noteColor:       0xa855f7,   // single hex — library uses it directly
                     backgroundColor: 0x030008,
                     gridLineColor:   0x2d1b69,
-                    zoom:            2,          // 2 bars visible at once
-                    resolution:      4,          // quarter-note grid
+                    zoom:            2,
+                    resolution:      4,
                     antialias:       true,
                     noteData:        noteData
                 });
@@ -1841,9 +1849,10 @@
             }
             playbackAnimFrameId = requestAnimationFrame(animLoop);
 
-            // Start pixi-piano-roll playback and sync
+            // Drive pixi-piano-roll scroll via seek() from our Web Audio clock
+            // Do NOT call pixiRoll.playback.play() — its internal rAF conflicts with our sync loop
             if (pixiRoll) {
-                try { pixiRoll.playback.seek('0:0:0'); pixiRoll.playback.play(); } catch(e) {}
+                try { pixiRoll.playback.seek('0:0:0'); } catch(e) {}
             }
             startPixiSync();
             
