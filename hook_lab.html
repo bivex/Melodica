@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lorn Melody Hook Laboratory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #030008;
+            --panel-bg: rgba(13, 8, 22, 0.45);
+            --panel-border: rgba(168, 85, 247, 0.2);
+            --text-color: #f3e8ff;
+            --accent-purple: #a855f7;
+            --accent-blue: #3b82f6;
+            --accent-pink: #ec4899;
+            --accent-glow: rgba(168, 85, 247, 0.5);
+            --font-main: 'Outfit', sans-serif;
+            --font-mono: 'Space Grotesk', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Animated Glowing Neon Orbs in Background */
+        .glow-bg {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            top: 0;
+            left: 0;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(150px);
+            opacity: 0.45;
+            animation: float 25s infinite alternate ease-in-out;
+        }
+
+        .orb-1 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, var(--accent-purple) 0%, rgba(0,0,0,0) 70%);
+            top: -100px;
+            right: -100px;
+        }
+
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--accent-blue) 0%, rgba(0,0,0,0) 70%);
+            bottom: -150px;
+            left: -150px;
+            animation-delay: -5s;
+            animation-duration: 35s;
+        }
+
+        .orb-3 {
+            width: 350px;
+            height: 350px;
+            background: radial-gradient(circle, var(--accent-pink) 0%, rgba(0,0,0,0) 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -10s;
+            animation-duration: 30s;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(50px, 80px) scale(1.2); }
+            100% { transform: translate(-30px, -50px) scale(0.9); }
+        }
+
+        /* Layout Grid */
+        header {
+            padding: 2rem 4rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(168, 85, 247, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 30%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+            font-family: var(--font-mono);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        header h1 span {
+            font-size: 0.8rem;
+            border: 1px solid var(--accent-purple);
+            padding: 3px 8px;
+            border-radius: 20px;
+            color: var(--accent-purple);
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+            padding: 2rem 4rem;
+            flex-grow: 1;
+            max-width: 1800px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Left Control Panel */
+        .controls-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            height: fit-content;
+        }
+
+        .section-title {
+            font-family: var(--font-mono);
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-purple);
+            border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-group label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(243, 232, 255, 0.6);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .control-group label span {
+            color: var(--accent-purple);
+            font-weight: 600;
+        }
+
+        select, input[type="range"], input[type="number"] {
+            width: 100%;
+            background: rgba(13, 8, 22, 0.8);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            color: var(--text-color);
+            font-family: var(--font-main);
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        select:focus, input[type="number"]:focus {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 6px;
+            background: rgba(168, 85, 247, 0.2);
+            border: none;
+            padding: 0;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-purple);
+            box-shadow: 0 0 10px var(--accent-glow);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 1rem;
+            border-radius: 16px;
+            font-family: var(--font-mono);
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-purple) 0%, #7e22ce 100%);
+            border: none;
+            color: #fff;
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 30px rgba(168, 85, 247, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: rgba(168, 85, 247, 0.1);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            color: var(--accent-purple);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(168, 85, 247, 0.2);
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
+        }
+
+        .btn-play {
+            background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+            border: none;
+            color: white;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-play:hover {
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .btn-play.playing {
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+        }
+
+        /* Right Content Panel */
+        .workspace {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .visualizer-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .piano-roll-container {
+            position: relative;
+            background: rgba(5, 2, 10, 0.9);
+            border: 1px solid rgba(168, 85, 247, 0.15);
+            border-radius: 16px;
+            height: 320px;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Scoreboard & Suggestions */
+        .dashboard-row {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+        }
+
+        .score-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .score-circle {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .score-circle svg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .score-circle circle {
+            fill: none;
+            stroke-width: 12;
+            stroke-linecap: round;
+        }
+
+        .score-circle circle.bg {
+            stroke: rgba(168, 85, 247, 0.1);
+        }
+
+        .score-circle circle.progress {
+            stroke: url(#purple-glow);
+            stroke-dasharray: 527.7;
+            stroke-dashoffset: 527.7;
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        .score-value {
+            font-family: var(--font-mono);
+            font-size: 3rem;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(168, 85, 247, 0.8);
+        }
+
+        .rating-label {
+            font-family: var(--font-mono);
+            font-size: 1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 6px 16px;
+            border-radius: 20px;
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
+            border: 1px solid rgba(168, 85, 247, 0.4);
+        }
+
+        .rating-excellent {
+            color: #10b981;
+            border-color: #10b981;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+        }
+
+        .rating-good {
+            color: #3b82f6;
+            border-color: #3b82f6;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+        }
+
+        .rating-weak {
+            color: #ef4444;
+            border-color: #ef4444;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+        }
+
+        /* Detailed Breakdown meters */
+        .breakdown-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .meter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .meter-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(243, 232, 255, 0.7);
+        }
+
+        .meter-label span.score {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            color: var(--accent-purple);
+        }
+
+        .meter-track {
+            height: 10px;
+            background: rgba(168, 85, 247, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid rgba(168, 85, 247, 0.05);
+        }
+
+        .meter-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+            border-radius: 5px;
+            width: 0%;
+            transition: width 1s cubic-bezier(0.1, 0.8, 0.2, 1);
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+        }
+
+        /* Suggestions List */
+        .suggestions-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .suggestions-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .suggestions-list li {
+            position: relative;
+            padding-left: 1.5rem;
+            font-size: 0.95rem;
+            color: rgba(243, 232, 255, 0.85);
+            line-height: 1.5;
+        }
+
+        .suggestions-list li::before {
+            content: "✦";
+            position: absolute;
+            left: 0;
+            color: var(--accent-purple);
+            text-shadow: 0 0 5px var(--accent-purple);
+        }
+
+        footer {
+            padding: 2rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: rgba(243, 232, 255, 0.4);
+            border-top: 1px solid rgba(168, 85, 247, 0.05);
+            font-family: var(--font-mono);
+        }
+
+        /* Preset selector tabs */
+        .presets-row {
+            display: flex;
+            gap: 0.8rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+        }
+
+        .preset-tab {
+            background: rgba(168, 85, 247, 0.05);
+            border: 1px solid rgba(168, 85, 247, 0.15);
+            color: rgba(243, 232, 255, 0.7);
+            padding: 8px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .preset-tab.active {
+            background: rgba(168, 85, 247, 0.2);
+            border-color: var(--accent-purple);
+            color: white;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+        }
+
+        .preset-tab:hover:not(.active) {
+            border-color: rgba(168, 85, 247, 0.4);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="glow-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <header>
+        <h1>LORN HOOK LABORATORY <span>v2.0</span></h1>
+        <div style="font-family: var(--font-mono); font-size: 0.9rem; color: rgba(243,232,255,0.6)">
+            2026 BIVEX COMPOSER ENGINE
+        </div>
+    </header>
+
+    <main>
+        <!-- Left Sidebar Controls -->
+        <div class="controls-panel">
+            <h2 class="section-title">Melody Config</h2>
+            
+            <div class="control-group">
+                <label>Scale Root Pitch <span id="val-root">C</span></label>
+                <select id="ctrl-root">
+                    <option value="0">C</option>
+                    <option value="1">C#</option>
+                    <option value="2">D</option>
+                    <option value="3">D#</option>
+                    <option value="4">E</option>
+                    <option value="5">F</option>
+                    <option value="6">F#</option>
+                    <option value="7">G</option>
+                    <option value="8">G#</option>
+                    <option value="9">A</option>
+                    <option value="10">A#</option>
+                    <option value="11">B</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Scale Mode</label>
+                <select id="ctrl-mode">
+                    <option value="phrygian">Phrygian</option>
+                    <option value="aeolian">Aeolian (Natural Minor)</option>
+                    <option value="locrian">Locrian</option>
+                    <option value="harmonic_minor">Harmonic Minor</option>
+                    <option value="hungarian_minor">Hungarian Minor</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>MIDI Octave <span id="val-octave">5</span></label>
+                <input type="range" id="ctrl-octave" min="3" max="7" value="5">
+            </div>
+
+            <div class="control-group">
+                <label>Hook Length (Notes) <span id="val-hooklen">5</span></label>
+                <input type="range" id="ctrl-hooklen" min="3" max="8" value="5">
+            </div>
+
+            <div class="control-group">
+                <label>Random Seed</label>
+                <input type="number" id="ctrl-seed" value="101" min="1" max="99999">
+            </div>
+
+            <button class="btn btn-secondary" id="btn-randomize">Randomize Config</button>
+            <button class="btn btn-primary" id="btn-elite" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border: none; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); margin-top: -0.5rem;">Generate Elite Hook (95+)</button>
+            <button class="btn btn-secondary" id="btn-copy-md" style="margin-top: -0.5rem; background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #3b82f6;">Copy Hook Markdown</button>
+            <button class="btn btn-primary" id="btn-generate">Generate New Hook</button>
+            <button class="btn btn-play" id="btn-play">Play Hook Synthesizer</button>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="workspace">
+            <!-- Preset selector -->
+            <div class="visualizer-card" style="padding: 1.5rem 2rem; gap: 1rem;">
+                <h3 class="section-title" style="font-size: 0.9rem; margin: 0; border: none; padding: 0;">Decay Album Presets</h3>
+                <div class="presets-row">
+                    <button class="preset-tab active" data-track="1">01. Acid Rain (C Phrygian)</button>
+                    <button class="preset-tab" data-track="2">02. Grave Dirt (D Aeolian)</button>
+                    <button class="preset-tab" data-track="3">03. Iron Lungs (E Locrian)</button>
+                    <button class="preset-tab" data-track="4">04. Sega Sunset (A Harmonic Min)</button>
+                    <button class="preset-tab" data-track="5">05. Dystopia (F Hungarian Min)</button>
+                    <button class="preset-tab" data-track="6">06. Decay (B Phrygian Outro)</button>
+                </div>
+            </div>
+
+            <!-- Piano Roll visualization -->
+            <div class="visualizer-card">
+                <h3 class="section-title">Interactive Piano Roll</h3>
+                <div class="piano-roll-container">
+                    <canvas id="piano-roll"></canvas>
+                </div>
+            </div>
+
+            <!-- Score and Evaluation metrics -->
+            <div class="dashboard-row">
+                <div class="score-card">
+                    <h3 class="section-title" style="margin-bottom: 0;">Memorability</h3>
+                    <div class="score-circle">
+                        <svg>
+                            <defs>
+                                <linearGradient id="purple-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#3b82f6" />
+                                    <stop offset="100%" stop-color="#a855f7" />
+                                </linearGradient>
+                            </defs>
+                            <circle class="bg" cx="90" cy="90" r="84" />
+                            <circle class="progress" id="score-ring" cx="90" cy="90" r="84" />
+                        </svg>
+                        <div class="score-value" id="score-val">0</div>
+                    </div>
+                    <div class="rating-label rating-good" id="rating-text">Analyzing</div>
+                </div>
+
+                <div class="breakdown-card">
+                    <h3 class="section-title">Breakdown Metrics</h3>
+                    
+                    <div class="meter-group">
+                        <div class="meter-label">Rhythm (Weight 40%) <span class="score" id="break-rhythm">0/40</span></div>
+                        <div class="meter-track"><div class="meter-fill" id="fill-rhythm"></div></div>
+                    </div>
+
+                    <div class="meter-group">
+                        <div class="meter-label">Contour & Silhouette (Weight 25%) <span class="score" id="break-contour">0/25</span></div>
+                        <div class="meter-track"><div class="meter-fill" id="fill-contour"></div></div>
+                    </div>
+
+                    <div class="meter-group">
+                        <div class="meter-label">Motivic Repetitions (Weight 20%) <span class="score" id="break-repetition">0/20</span></div>
+                        <div class="meter-track"><div class="meter-fill" id="fill-repetition"></div></div>
+                    </div>
+
+                    <div class="meter-group">
+                        <div class="meter-label">Unexpectedness / Leaps (Weight 10%) <span class="score" id="break-unexpected">0/10</span></div>
+                        <div class="meter-track"><div class="meter-fill" id="fill-unexpected"></div></div>
+                    </div>
+
+                    <div class="meter-group">
+                        <div class="meter-label">Stable Scale Resolution (Weight 5%) <span class="score" id="break-resolution">0/5</span></div>
+                        <div class="meter-track"><div class="meter-fill" id="fill-resolution"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Suggestions -->
+            <div class="suggestions-card">
+                <h3 class="section-title">AI Composition Suggestions</h3>
+                <ul class="suggestions-list" id="suggestions-box">
+                    <li>Generate a hook to analyze suggestions.</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        2026 BIVEX MELODICA WORKSPACE. MIT LICENSED CORE ENGINE.
+    </footer>
+
+    <script>
+        // Scales definition
+        const SCALE_MODES = {
+            phrygian: [0, 1, 3, 5, 7, 8, 10],
+            aeolian: [0, 2, 3, 5, 7, 8, 10],
+            locrian: [0, 1, 3, 5, 6, 8, 10],
+            harmonic_minor: [0, 2, 3, 5, 7, 8, 11],
+            hungarian_minor: [0, 2, 3, 6, 7, 8, 11]
+        };
+
+        const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+        // State variables
+        let generatedNotes = [];
+        let isPlaying = false;
+        let playInterval = null;
+        let currentNoteIdx = -1;
+        let audioCtx = null;
+        let synthNode = null;
+        let delayNode = null;
+        
+        // Canvas & Visualization
+        const canvas = document.getElementById("piano-roll");
+        const ctx = canvas.getContext("2d");
+
+        // Simple Random LCG class to make seed deterministic
+        class SeededRandom {
+            constructor(seed) {
+                this.seed = seed || 101;
+            }
+            next() {
+                this.seed = (this.seed * 9301 + 49297) % 233280;
+                return this.seed / 233280.0;
+            }
+            choice(arr) {
+                const idx = Math.floor(this.next() * arr.length);
+                return arr[idx];
+            }
+            randint(min, max) {
+                return min + Math.floor(this.next() * (max - min + 1));
+            }
+        }
+
+        // ----------------------------------------------------
+        // LornHookGenerator implementation in Javascript
+        // ----------------------------------------------------
+        function generateLornHook() {
+            const root = parseInt(document.getElementById("ctrl-root").value);
+            const modeName = document.getElementById("ctrl-mode").value;
+            const modeIntervals = SCALE_MODES[modeName];
+            const octave = parseInt(document.getElementById("ctrl-octave").value);
+            const hookLen = parseInt(document.getElementById("ctrl-hooklen").value);
+            const seed = parseInt(document.getElementById("ctrl-seed").value);
+
+            const rng = new SeededRandom(seed);
+            const baseMidi = 12 * octave + root;
+
+            // Generate scale pitches in range
+            const scalePitches = [];
+            for (const offset of [-12, 0, 12]) {
+                for (const step of modeIntervals) {
+                    scalePitches.push(baseMidi + offset + step);
+                }
+            }
+            const sortedScalePitches = [...new Set(scalePitches)].sort((a, b) => a - b);
+
+            // Generate hook pitch sequence
+            let hookPitches = [baseMidi];
+            let curr = baseMidi;
+            for (let i = 0; i < hookLen - 1; i++) {
+                if (rng.next() < 0.35) {
+                    const leap = rng.choice([-12, -7, -5, 5, 7, 12]);
+                    curr += leap;
+                } else {
+                    const idx = sortedScalePitches.indexOf(curr);
+                    const step = rng.choice([-2, -1, 1, 2]);
+                    curr = sortedScalePitches[Math.max(0, Math.min(sortedScalePitches.length - 1, idx + step))];
+                }
+                // Clamp to memorable range
+                curr = Math.max(baseMidi - 6, Math.min(baseMidi + 9, curr));
+                hookPitches.push(curr);
+            }
+
+            // Generate rhythmic onsets
+            const baseOnsets = [];
+            let tOnset = 0.0;
+            for (let i = 0; i < hookLen; i++) {
+                const dur = rng.choice([0.5, 0.75, 1.0, 1.5]);
+                baseOnsets.push({ onset: tOnset, duration: dur });
+                tOnset += dur + rng.choice([0.0, 0.25, 0.5]);
+                if (tOnset >= 3.5) break;
+            }
+
+            const actualHookLen = baseOnsets.length;
+            const durationBeats = 128.0; // 32 bars in 4/4
+            const cycleLen = 64.0; // 16 bars
+
+            let notes = [];
+            let t = 0.0;
+            let periodIdx = 0;
+            
+            let currentPitches = [...hookPitches];
+            let currentOnsets = baseOnsets.map(o => ({...o}));
+
+            while (t < durationBeats) {
+                const cyclePhase = t % cycleLen;
+                
+                // Determine Phase
+                const progress = t / durationBeats;
+                let schema, octaveShift, doubleOctave, mutateRhythm, memoryErrors, varRate;
+                
+                if (progress < 0.2) {
+                    schema = ["play", "silence", "play", "silence"];
+                    octaveShift = -12;
+                    doubleOctave = false;
+                    mutateRhythm = false;
+                    memoryErrors = false;
+                    varRate = 0.0;
+                } else if (progress < 0.45) {
+                    schema = ["play", "play", "silence", "play"];
+                    octaveShift = 0;
+                    doubleOctave = false;
+                    mutateRhythm = false;
+                    memoryErrors = false;
+                    varRate = 0.2;
+                } else if (progress < 0.70) {
+                    schema = ["play", "play", "play", "silence"];
+                    octaveShift = 0;
+                    doubleOctave = false;
+                    mutateRhythm = true;
+                    memoryErrors = false;
+                    varRate = 0.3;
+                } else if (progress < 0.85) {
+                    schema = ["play", "play", "play", "play"];
+                    octaveShift = 0;
+                    doubleOctave = true;
+                    mutateRhythm = false;
+                    memoryErrors = false;
+                    varRate = 0.1;
+                } else {
+                    schema = ["play", "silence", "silence", "silence"];
+                    octaveShift = -12;
+                    doubleOctave = false;
+                    mutateRhythm = false;
+                    memoryErrors = true;
+                    varRate = 0.0;
+                }
+
+                // Render 4-bar section block
+                for (let bar = 0; bar < 4; bar++) {
+                    const action = schema[bar];
+                    if (action === "silence") continue;
+
+                    const tBar = t + bar * 4.0;
+                    if (tBar >= durationBeats) break;
+
+                    // Apply pitch variations
+                    if (varRate > 0.0 && rng.next() < 0.5) {
+                        const mutIdx = rng.randint(0, currentPitches.length - 1);
+                        const altStep = rng.choice([-2, -1, 1, 2]);
+                        const curPitch = currentPitches[mutIdx];
+                        const idx = sortedScalePitches.indexOf(curPitch);
+                        if (idx !== -1) {
+                            const newIdx = Math.max(0, Math.min(sortedScalePitches.length - 1, idx + altStep));
+                            currentPitches[mutIdx] = sortedScalePitches[newIdx];
+                        }
+                    }
+
+                    // Apply rhythm syncopations
+                    let blockOnsets = currentOnsets.map(o => ({...o}));
+                    if (mutateRhythm && rng.next() < 0.5) {
+                        const shift = rng.choice([-0.25, 0.25]);
+                        blockOnsets.forEach(o => {
+                            o.onset = Math.max(0.0, Math.min(3.5, o.onset + shift));
+                        });
+                    }
+
+                    // Apply memory decay errors
+                    if (memoryErrors) {
+                        const keep = Math.max(1, blockOnsets.length - rng.randint(1, 2));
+                        blockOnsets = blockOnsets.slice(0, keep);
+                    }
+
+                    // Push to final note list
+                    for (let i = 0; i < blockOnsets.length; i++) {
+                        if (i < currentPitches.length) {
+                            const p = currentPitches[i] + octaveShift;
+                            
+                            notes.push({
+                                pitch: p,
+                                start: tBar + blockOnsets[i].onset,
+                                duration: blockOnsets[i].duration,
+                                velocity: rng.randint(85, 105),
+                                label: NOTE_NAMES[p % 12] + Math.floor(p / 12)
+                            });
+
+                            if (doubleOctave) {
+                                notes.push({
+                                    pitch: p + 12,
+                                    start: tBar + blockOnsets[i].onset,
+                                    duration: blockOnsets[i].duration,
+                                    velocity: rng.randint(70, 90),
+                                    label: NOTE_NAMES[(p + 12) % 12] + Math.floor((p + 12) / 12)
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                t += 16.0;
+                periodIdx++;
+            }
+
+            generatedNotes = notes.sort((a, b) => a.start - b.start);
+            evaluateHookMemorability(generatedNotes, root, modeIntervals, actualHookLen, hookPitches);
+            drawPianoRoll();
+        }
+
+        // ----------------------------------------------------
+        // Memorability Scoring Engine
+        // ----------------------------------------------------
+        function evaluateHookMemorability(notes, root, modeIntervals, actualHookLen, hookPitches) {
+            let rhythm = 0;
+            let contour = 0;
+            let repetition = 0;
+            let unexpected = 0;
+            let resolution = 0;
+            const suggestions = [];
+
+            if (notes.length === 0) return;
+
+            // Group notes by bars
+            const bars = {};
+            notes.forEach(n => {
+                const idx = Math.floor(n.start / 4.0);
+                if (!bars[idx]) bars[idx] = [];
+                bars[idx].push(n);
+            });
+            const activeBars = Object.keys(bars).length;
+            const totalBars = 32;
+
+            // 1. RHYTHM (40%)
+            const durations = notes.map(n => Math.round(n.duration * 100) / 100);
+            const uniqueDurs = new Set(durations);
+            const syncopated = notes.filter(n => (n.start % 1.0) !== 0).length;
+            const syncRatio = syncopated / notes.length;
+            const silenceRatio = (totalBars - activeBars) / totalBars;
+
+            if (uniqueDurs.size >= 2) rhythm += 15;
+            else suggestions.push("Rhythm: Add variety to note durations (currently too uniform).");
+
+            if (syncRatio >= 0.15 && syncRatio <= 0.6) rhythm += 15;
+            else suggestions.push("Rhythm: Adjust syncopations to create a grooving offbeat pulse.");
+
+            if (silenceRatio >= 0.3 && silenceRatio <= 0.65) rhythm += 10;
+            else {
+                if (silenceRatio < 0.3) suggestions.push("Rhythm: Add more silent bars to provide breathing space for the listener.");
+                else suggestions.push("Rhythm: Silent periods are too long, breaking the thread of the melody.");
+            }
+
+            // 2. CONTOUR (25%)
+            let dirChanges = 0;
+            let steps = 0;
+            let leaps = 0;
+            const intervals = [];
+            const directions = [];
+
+            for (let i = 0; i < notes.length - 1; i++) {
+                const diff = notes[i+1].pitch - notes[i].pitch;
+                intervals.push(Math.abs(diff));
+                if (diff > 0) directions.push(1);
+                else if (diff < 0) directions.push(-1);
+            }
+
+            for (let i = 0; i < directions.length - 1; i++) {
+                if (directions[i] !== directions[i+1]) dirChanges++;
+            }
+
+            intervals.forEach(ivl => {
+                if (ivl >= 1 && ivl <= 2) steps++;
+                else if (ivl > 2) leaps++;
+            });
+
+            const leapRatio = leaps / (steps + leaps || 1);
+
+            if (dirChanges >= 5) contour += 10;
+            else suggestions.push("Contour: The silhouette is too flat. Add clear directional waves (up/down).");
+
+            if (leapRatio >= 0.15 && leapRatio <= 0.45) contour += 15;
+            else {
+                if (leapRatio < 0.15) suggestions.push("Contour: Add a signature interval leap (like a perfect 5th) to give the theme a focal point.");
+                else suggestions.push("Contour: Reduce leaps; steps are needed to make the intervals sing together.");
+            }
+
+            // 3. REPETITION (20%)
+            const barProfiles = [];
+            Object.keys(bars).forEach(bIdx => {
+                const bNotes = bars[bIdx];
+                const count = bNotes.length;
+                const avgPitch = bNotes.reduce((sum, n) => sum + n.pitch, 0) / count;
+                barProfiles.push(`${count}-${Math.round(avgPitch * 10) / 10}`);
+            });
+            const uniqueProfiles = new Set(barProfiles);
+            const repetitions = barProfiles.length - uniqueProfiles.size;
+
+            if (barProfiles.length >= 8) repetition += 10;
+            else suggestions.push("Repetition: Let the theme return more frequently throughout the timeline.");
+
+            if (uniqueProfiles.size >= 2 && uniqueProfiles.size <= 5) repetition += 10;
+            else {
+                if (uniqueProfiles.size === 1) suggestions.push("Repetition: Use cumulative variations (don't play a literal carbon-copy loop).");
+                else suggestions.push("Repetition: Too many disconnected motifs. Re-anchor the melody to the original theme.");
+            }
+
+            // 4. UNEXPECTEDNESS (10%)
+            const signatureLeaps = [5, 7, 8, 10, 12];
+            const hasSurprise = intervals.some(ivl => signatureLeaps.includes(ivl));
+
+            if (hasSurprise) unexpected += 10;
+            else suggestions.push("Unexpectedness: Inject a dramatic signature leap (fourth, fifth, or octave) inside the phrase.");
+
+            // 5. RESOLUTION (5%)
+            const lastNote = notes[notes.length - 1];
+            if (lastNote) {
+                const lastDegree = lastNote.pitch % 12;
+                const stableDegrees = [root, (root + 7) % 12, (root + 4) % 12];
+                if (stableDegrees.includes(lastDegree)) resolution += 5;
+                else suggestions.push("Resolution: End the melody on a stable tonic (root) or dominant (fifth) degree to resolve tension.");
+            }
+
+            const totalScore = rhythm + contour + repetition + unexpected + resolution;
+
+            // Update UI elements with animations
+            document.getElementById("score-val").textContent = totalScore;
+            
+            const dashoffset = 527.7 - (527.7 * totalScore) / 100;
+            document.getElementById("score-ring").style.strokeDashoffset = dashoffset;
+
+            const ratingLabel = document.getElementById("rating-text");
+            ratingLabel.className = "rating-label";
+            if (totalScore >= 80) {
+                ratingLabel.textContent = "🏆 EXCELLENT";
+                ratingLabel.classList.add("rating-excellent");
+            } else if (totalScore >= 60) {
+                ratingLabel.textContent = "👍 GOOD";
+                ratingLabel.classList.add("rating-good");
+            } else {
+                ratingLabel.textContent = "⚠️ WEAK";
+                ratingLabel.classList.add("rating-weak");
+            }
+
+            // Update breakdown text and fills
+            document.getElementById("break-rhythm").textContent = `${rhythm}/40`;
+            document.getElementById("fill-rhythm").style.width = `${(rhythm / 40) * 100}%`;
+
+            document.getElementById("break-contour").textContent = `${contour}/25`;
+            document.getElementById("fill-contour").style.width = `${(contour / 25) * 100}%`;
+
+            document.getElementById("break-repetition").textContent = `${repetition}/20`;
+            document.getElementById("fill-repetition").style.width = `${(repetition / 20) * 100}%`;
+
+            document.getElementById("break-unexpected").textContent = `${unexpected}/10`;
+            document.getElementById("fill-unexpected").style.width = `${(unexpected / 10) * 100}%`;
+
+            document.getElementById("break-resolution").textContent = `${resolution}/5`;
+            document.getElementById("fill-resolution").style.width = `${(resolution / 5) * 100}%`;
+
+            // Suggestions box
+            const suggestionsBox = document.getElementById("suggestions-box");
+            suggestionsBox.innerHTML = "";
+            if (suggestions.length === 0) {
+                const li = document.createElement("li");
+                li.textContent = "No recommendations. The hook matches all stylistic and memorability requirements perfectly!";
+                suggestionsBox.appendChild(li);
+            } else {
+                suggestions.forEach(s => {
+                    const li = document.createElement("li");
+                    li.textContent = s;
+                    suggestionsBox.appendChild(li);
+                });
+            }
+        }
+
+        // ----------------------------------------------------
+        // Pure calculation helper for search loop
+        // ----------------------------------------------------
+        function computeHookDataAndScore(root, modeName, octave, hookLen, seed) {
+            const modeIntervals = SCALE_MODES[modeName];
+            const rng = new SeededRandom(seed);
+            const baseMidi = 12 * octave + root;
+
+            const scalePitches = [];
+            for (const offset of [-12, 0, 12]) {
+                for (const step of modeIntervals) {
+                    scalePitches.push(baseMidi + offset + step);
+                }
+            }
+            const sortedScalePitches = [...new Set(scalePitches)].sort((a, b) => a - b);
+
+            let hookPitches = [baseMidi];
+            let curr = baseMidi;
+            for (let i = 0; i < hookLen - 1; i++) {
+                if (rng.next() < 0.35) {
+                    curr += rng.choice([-12, -7, -5, 5, 7, 12]);
+                } else {
+                    const idx = sortedScalePitches.indexOf(curr);
+                    const step = rng.choice([-2, -1, 1, 2]);
+                    curr = sortedScalePitches[Math.max(0, Math.min(sortedScalePitches.length - 1, idx + step))];
+                }
+                curr = Math.max(baseMidi - 6, Math.min(baseMidi + 9, curr));
+                hookPitches.push(curr);
+            }
+
+            const baseOnsets = [];
+            let tOnset = 0.0;
+            for (let i = 0; i < hookLen; i++) {
+                const dur = rng.choice([0.5, 0.75, 1.0, 1.5]);
+                baseOnsets.push({ onset: tOnset, duration: dur });
+                tOnset += dur + rng.choice([0.0, 0.25, 0.5]);
+                if (tOnset >= 3.5) break;
+            }
+
+            const actualHookLen = baseOnsets.length;
+            const durationBeats = 128.0;
+
+            let notes = [];
+            let t = 0.0;
+            let currentPitches = [...hookPitches];
+            let currentOnsets = baseOnsets.map(o => ({...o}));
+
+            while (t < durationBeats) {
+                const progress = t / durationBeats;
+                let schema, octaveShift, doubleOctave, mutateRhythm, memoryErrors, varRate;
+                
+                if (progress < 0.2) {
+                    schema = ["play", "silence", "play", "silence"];
+                    octaveShift = -12;
+                    doubleOctave = false;
+                    mutateRhythm = false;
+                    memoryErrors = false;
+                    varRate = 0.0;
+                } else if (progress < 0.45) {
+                    schema = ["play", "play", "silence", "play"];
+                    octaveShift = 0;
+                    doubleOctave = false;
+                    mutateRhythm = false;
+                    memoryErrors = false;
+                    varRate = 0.2;
+                } else if (progress < 0.70) {
+                    schema = ["play", "play", "play", "silence"];
+                    octaveShift = 0;
+                    doubleOctave = false;
+                    mutateRhythm = true;
+                    memoryErrors = false;
+                    varRate = 0.3;
+                } else if (progress < 0.85) {
+                    schema = ["play", "play", "play", "play"];
+                    octaveShift = 0;
+                    doubleOctave = true;
+                    mutateRhythm = false;
+                    memoryErrors = false;
+                    varRate = 0.1;
+                } else {
+                    schema = ["play", "silence", "silence", "silence"];
+                    octaveShift = -12;
+                    doubleOctave = false;
+                    mutateRhythm = false;
+                    memoryErrors = true;
+                    varRate = 0.0;
+                }
+
+                for (let bar = 0; bar < 4; bar++) {
+                    const action = schema[bar];
+                    if (action === "silence") continue;
+
+                    const tBar = t + bar * 4.0;
+                    if (tBar >= durationBeats) break;
+
+                    if (varRate > 0.0 && rng.next() < 0.5) {
+                        const mutIdx = rng.randint(0, currentPitches.length - 1);
+                        const altStep = rng.choice([-2, -1, 1, 2]);
+                        const curPitch = currentPitches[mutIdx];
+                        const idx = sortedScalePitches.indexOf(curPitch);
+                        if (idx !== -1) {
+                            currentPitches[mutIdx] = sortedScalePitches[Math.max(0, Math.min(sortedScalePitches.length - 1, idx + altStep))];
+                        }
+                    }
+
+                    let blockOnsets = currentOnsets.map(o => ({...o}));
+                    if (mutateRhythm && rng.next() < 0.5) {
+                        const shift = rng.choice([-0.25, 0.25]);
+                        blockOnsets.forEach(o => {
+                            o.onset = Math.max(0.0, Math.min(3.5, o.onset + shift));
+                        });
+                    }
+
+                    if (memoryErrors) {
+                        blockOnsets = blockOnsets.slice(0, Math.max(1, blockOnsets.length - rng.randint(1, 2)));
+                    }
+
+                    for (let i = 0; i < blockOnsets.length; i++) {
+                        if (i < currentPitches.length) {
+                            const p = currentPitches[i] + octaveShift;
+                            notes.push({
+                                pitch: p,
+                                start: tBar + blockOnsets[i].onset,
+                                duration: blockOnsets[i].duration
+                            });
+                            if (doubleOctave) {
+                                notes.push({
+                                    pitch: p + 12,
+                                    start: tBar + blockOnsets[i].onset,
+                                    duration: blockOnsets[i].duration
+                                });
+                            }
+                        }
+                    }
+                }
+                t += 16.0;
+            }
+
+            let rhythm = 0;
+            let contour = 0;
+            let repetition = 0;
+            let unexpected = 0;
+            let resolution = 0;
+
+            if (notes.length === 0) return 0;
+
+            const bars = {};
+            notes.forEach(n => {
+                const idx = Math.floor(n.start / 4.0);
+                if (!bars[idx]) bars[idx] = [];
+                bars[idx].push(n);
+            });
+            const activeBars = Object.keys(bars).length;
+            const totalBars = 32;
+
+            const durations = notes.map(n => Math.round(n.duration * 100) / 100);
+            const uniqueDurs = new Set(durations);
+            const syncopated = notes.filter(n => (n.start % 1.0) !== 0).length;
+            const syncRatio = syncopated / notes.length;
+            const silenceRatio = (totalBars - activeBars) / totalBars;
+
+            if (uniqueDurs.size >= 2) rhythm += 15;
+            if (syncRatio >= 0.15 && syncRatio <= 0.6) rhythm += 15;
+            if (silenceRatio >= 0.3 && silenceRatio <= 0.65) rhythm += 10;
+
+            let dirChanges = 0;
+            let steps = 0;
+            let leaps = 0;
+            const intervals = [];
+            const directions = [];
+
+            for (let i = 0; i < notes.length - 1; i++) {
+                const diff = notes[i+1].pitch - notes[i].pitch;
+                intervals.push(Math.abs(diff));
+                if (diff > 0) directions.push(1);
+                else if (diff < 0) directions.push(-1);
+            }
+
+            for (let i = 0; i < directions.length - 1; i++) {
+                if (directions[i] !== directions[i+1]) dirChanges++;
+            }
+
+            intervals.forEach(ivl => {
+                if (ivl >= 1 && ivl <= 2) steps++;
+                else if (ivl > 2) leaps++;
+            });
+
+            const leapRatio = leaps / (steps + leaps || 1);
+
+            if (dirChanges >= 5) contour += 10;
+            if (leapRatio >= 0.15 && leapRatio <= 0.45) contour += 15;
+
+            const barProfiles = [];
+            Object.keys(bars).forEach(bIdx => {
+                const bNotes = bars[bIdx];
+                const count = bNotes.length;
+                const avgPitch = bNotes.reduce((sum, n) => sum + n.pitch, 0) / count;
+                barProfiles.push(`${count}-${Math.round(avgPitch * 10) / 10}`);
+            });
+            const uniqueProfiles = new Set(barProfiles);
+
+            if (barProfiles.length >= 8) repetition += 10;
+            if (uniqueProfiles.size >= 2 && uniqueProfiles.size <= 5) repetition += 10;
+
+            const signatureLeaps = [5, 7, 8, 10, 12];
+            const hasSurprise = intervals.some(ivl => signatureLeaps.includes(ivl));
+            if (hasSurprise) unexpected += 10;
+
+            const lastNote = notes[notes.length - 1];
+            if (lastNote) {
+                const lastDegree = lastNote.pitch % 12;
+                const stableDegrees = [root, (root + 7) % 12, (root + 4) % 12];
+                if (stableDegrees.includes(lastDegree)) resolution += 5;
+            }
+
+            return rhythm + contour + repetition + unexpected + resolution;
+        }
+
+        // ----------------------------------------------------
+        // Rendering the Piano Roll Canvas
+        // ----------------------------------------------------
+        function drawPianoRoll() {
+            const width = canvas.width = canvas.parentElement.clientWidth;
+            const height = canvas.height = canvas.parentElement.clientHeight;
+
+            ctx.clearRect(0, 0, width, height);
+
+            if (generatedNotes.length === 0) return;
+
+            // Pitch bounds mapping
+            const pitches = generatedNotes.map(n => n.pitch);
+            const minPitch = Math.min(...pitches) - 2;
+            const maxPitch = Math.max(...pitches) + 2;
+            const pitchRange = maxPitch - minPitch;
+
+            const gridRows = pitchRange;
+            const gridCols = 128; // 128 beats total
+
+            const rowHeight = height / gridRows;
+            const colWidth = width / gridCols;
+
+            // 1. Draw grid background lines
+            ctx.strokeStyle = "rgba(168, 85, 247, 0.05)";
+            ctx.lineWidth = 1;
+            for (let r = 0; r < gridRows; r++) {
+                ctx.beginPath();
+                ctx.moveTo(0, r * rowHeight);
+                ctx.lineTo(width, r * rowHeight);
+                ctx.stroke();
+            }
+
+            // Draw beat partition grid
+            for (let c = 0; c < gridCols; c += 4) { // Bar boundaries
+                ctx.strokeStyle = c % 16 === 0 ? "rgba(168, 85, 247, 0.2)" : "rgba(168, 85, 247, 0.05)";
+                ctx.lineWidth = c % 16 === 0 ? 2 : 1;
+                ctx.beginPath();
+                ctx.moveTo(c * colWidth, 0);
+                ctx.lineTo(c * colWidth, height);
+                ctx.stroke();
+            }
+
+            // 2. Draw note blocks
+            generatedNotes.forEach((n, idx) => {
+                const pitchY = height - ((n.pitch - minPitch) * rowHeight) - rowHeight;
+                const startX = n.start * colWidth;
+                const blockWidth = n.duration * colWidth;
+
+                const isCurrent = idx === currentNoteIdx && isPlaying;
+                
+                // Color and glow effects
+                if (isCurrent) {
+                    ctx.fillStyle = "#10b981";
+                    ctx.shadowColor = "#10b981";
+                    ctx.shadowBlur = 20;
+                } else {
+                    const grad = ctx.createLinearGradient(startX, pitchY, startX + blockWidth, pitchY);
+                    grad.addColorStop(0, "#3b82f6");
+                    grad.addColorStop(1, "#a855f7");
+                    ctx.fillStyle = grad;
+                    ctx.shadowColor = "#a855f7";
+                    ctx.shadowBlur = 10;
+                }
+
+                ctx.beginPath();
+                ctx.roundRect(startX, pitchY, blockWidth - 2, rowHeight - 2, 4);
+                ctx.fill();
+
+                // Draw pitch note label inside block
+                if (blockWidth > 35) {
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+                    ctx.font = "bold 9px 'Space Grotesk'";
+                    ctx.fillText(n.label, startX + 5, pitchY + rowHeight / 1.4);
+                }
+            });
+            
+            ctx.shadowBlur = 0; // reset glow
+        }
+
+        // Resize window triggers piano roll redraw
+        window.addEventListener("resize", drawPianoRoll);
+
+        // ----------------------------------------------------
+        // Web Audio Synthesizer (Detuned Lorn-style Synths)
+        // ----------------------------------------------------
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Setup Tape Delay node for ambient spatial width
+                delayNode = audioCtx.createDelay(2.0);
+                delayNode.delayTime.value = 0.35; // 350ms delay
+                
+                const feedbackNode = audioCtx.createGain();
+                feedbackNode.gain.value = 0.45; // delay repeats feedback
+                
+                const delayVolume = audioCtx.createGain();
+                delayVolume.gain.value = 0.25; // delay volume in mix
+
+                // Connect delay loops
+                delayNode.connect(feedbackNode);
+                feedbackNode.connect(delayNode);
+                
+                delayVolume.connect(audioCtx.destination);
+                delayNode.connect(delayVolume);
+            }
+            if (audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        function playSynthNote(pitch, duration) {
+            const ctx = getAudioContext();
+            const time = ctx.currentTime;
+            
+            // Lorn's classic raw detuned synth setup:
+            // 2 detuned sawtooth waves + 1 sub-bass triangle wave
+            const osc1 = ctx.createOscillator();
+            const osc2 = ctx.createOscillator();
+            const subOsc = ctx.createOscillator();
+            
+            const gainNode = ctx.createGain();
+            const filterNode = ctx.createBiquadFilter();
+
+            const freq = 440 * Math.pow(2, (pitch - 69) / 12);
+            
+            osc1.type = "sawtooth";
+            osc1.frequency.value = freq;
+            osc1.detune.value = -8; // Detuning left oscillator
+
+            osc2.type = "sawtooth";
+            osc2.frequency.value = freq;
+            osc2.detune.value = 8; // Detuning right oscillator
+
+            subOsc.type = "triangle";
+            subOsc.frequency.value = freq / 2.0; // Octave below sub
+
+            // Filter sweeps
+            filterNode.type = "lowpass";
+            filterNode.Q.value = 3.5;
+            filterNode.frequency.setValueAtTime(300, time);
+            filterNode.frequency.exponentialRampToValueAtTime(1400, time + 0.1);
+            filterNode.frequency.exponentialRampToValueAtTime(450, time + duration);
+
+            // Envelope volume ramp ADSR
+            gainNode.gain.setValueAtTime(0, time);
+            gainNode.gain.linearRampToValueAtTime(0.35, time + 0.08); // attack
+            gainNode.gain.exponentialRampToValueAtTime(0.20, time + 0.3); // decay
+            gainNode.gain.setValueAtTime(0.20, time + duration - 0.05);
+            gainNode.gain.linearRampToValueAtTime(0, time + duration); // release
+
+            // Route audio graph
+            osc1.connect(filterNode);
+            osc2.connect(filterNode);
+            subOsc.connect(filterNode);
+            
+            filterNode.connect(gainNode);
+            
+            gainNode.connect(ctx.destination);
+            gainNode.connect(delayNode); // feed into tape delay
+
+            osc1.start(time);
+            osc2.start(time);
+            subOsc.start(time);
+
+            osc1.stop(time + duration);
+            osc2.stop(time + duration);
+            subOsc.stop(time + duration);
+        }
+
+        // Synthesizer playback loop
+        function startPlayback() {
+            getAudioContext();
+            isPlaying = true;
+            document.getElementById("btn-play").textContent = "Stop Playback";
+            document.getElementById("btn-play").classList.add("playing");
+
+            const startTime = audioCtx.currentTime;
+            const bpm = 120.0;
+            const beatDur = 60.0 / bpm; // 0.5 seconds per beat
+
+            currentNoteIdx = -1;
+            
+            // Process note schedules
+            generatedNotes.forEach((n, idx) => {
+                const noteStartSec = n.start * beatDur;
+                const noteDurSec = n.duration * beatDur;
+
+                // Schedule note synth play
+                const schedId = setTimeout(() => {
+                    if (!isPlaying) return;
+                    currentNoteIdx = idx;
+                    drawPianoRoll();
+                    playSynthNote(n.pitch, noteDurSec);
+                }, noteStartSec * 1000);
+
+                playbackSchedulers.push(schedId);
+            });
+
+            // Schedule ending stop
+            const totalDurBeats = 128.0;
+            const stopSchedId = setTimeout(() => {
+                stopPlayback();
+            }, totalDurBeats * beatDur * 1000);
+            playbackSchedulers.push(stopSchedId);
+        }
+
+        let playbackSchedulers = [];
+
+        function stopPlayback() {
+            isPlaying = false;
+            document.getElementById("btn-play").textContent = "Play Hook Synthesizer";
+            document.getElementById("btn-play").classList.add("btn-play");
+            document.getElementById("btn-play").classList.remove("playing");
+            currentNoteIdx = -1;
+            playbackSchedulers.forEach(clearTimeout);
+            playbackSchedulers = [];
+            drawPianoRoll();
+        }
+
+        // Toggle playback button
+        document.getElementById("btn-play").addEventListener("click", () => {
+            if (isPlaying) stopPlayback();
+            else startPlayback();
+        });
+
+        // Generate button
+        document.getElementById("btn-generate").addEventListener("click", () => {
+            stopPlayback();
+            generateLornHook();
+        });
+
+        // Randomize button
+        document.getElementById("btn-randomize").addEventListener("click", () => {
+            stopPlayback();
+            
+            const randRoot = Math.floor(Math.random() * 12);
+            const modes = Object.keys(SCALE_MODES);
+            const randMode = modes[Math.floor(Math.random() * modes.length)];
+            const randOctave = 4 + Math.floor(Math.random() * 3); // 4 to 6
+            const randHooklen = 4 + Math.floor(Math.random() * 4); // 4 to 7
+            const randSeed = 1 + Math.floor(Math.random() * 99999);
+            
+            document.getElementById("ctrl-root").value = randRoot;
+            document.getElementById("ctrl-mode").value = randMode;
+            document.getElementById("ctrl-octave").value = randOctave;
+            document.getElementById("ctrl-hooklen").value = randHooklen;
+            document.getElementById("ctrl-seed").value = randSeed;
+            
+            // Sync labels
+            document.getElementById("val-root").textContent = NOTE_NAMES[randRoot];
+            document.getElementById("val-octave").textContent = randOctave;
+            document.getElementById("val-hooklen").textContent = randHooklen;
+            
+            // Remove active class from presets
+            document.querySelectorAll(".preset-tab").forEach(t => t.classList.remove("active"));
+            
+            generateLornHook();
+        });
+
+        // Elite Hook search loop
+        document.getElementById("btn-elite").addEventListener("click", () => {
+            stopPlayback();
+            
+            let found = false;
+            let iterations = 0;
+            const maxIterations = 3000;
+            
+            while (!found && iterations < maxIterations) {
+                const testRoot = Math.floor(Math.random() * 12);
+                const modes = Object.keys(SCALE_MODES);
+                const testMode = modes[Math.floor(Math.random() * modes.length)];
+                const testOctave = 4 + Math.floor(Math.random() * 3); // 4 to 6
+                const testHooklen = 5 + Math.floor(Math.random() * 3); // 5 to 7
+                const testSeed = 1 + Math.floor(Math.random() * 99999);
+                
+                const score = computeHookDataAndScore(testRoot, testMode, testOctave, testHooklen, testSeed);
+                
+                if (score >= 95) {
+                    // Set inputs to these values
+                    document.getElementById("ctrl-root").value = testRoot;
+                    document.getElementById("ctrl-mode").value = testMode;
+                    document.getElementById("ctrl-octave").value = testOctave;
+                    document.getElementById("ctrl-hooklen").value = testHooklen;
+                    document.getElementById("ctrl-seed").value = testSeed;
+                    
+                    // Sync labels
+                    document.getElementById("val-root").textContent = NOTE_NAMES[testRoot];
+                    document.getElementById("val-octave").textContent = testOctave;
+                    document.getElementById("val-hooklen").textContent = testHooklen;
+                    
+                    // Remove active state from preset buttons
+                    document.querySelectorAll(".preset-tab").forEach(t => t.classList.remove("active"));
+                    
+                    generateLornHook(); // Actually render and draw
+                    found = true;
+                }
+                iterations++;
+            }
+            
+            if (!found) {
+                alert("Could not find a 95+ hook. Try clicking again!");
+            }
+        });
+
+        // Copy Markdown button
+        document.getElementById("btn-copy-md").addEventListener("click", () => {
+            if (generatedNotes.length === 0) {
+                alert("No hook generated to copy.");
+                return;
+            }
+            
+            const rootIdx = parseInt(document.getElementById("ctrl-root").value);
+            const rootName = NOTE_NAMES[rootIdx];
+            const modeName = document.getElementById("ctrl-mode").value;
+            const octave = document.getElementById("ctrl-octave").value;
+            const seed = document.getElementById("ctrl-seed").value;
+            const score = document.getElementById("score-val").textContent;
+            const rating = document.getElementById("rating-text").textContent;
+            
+            // Filter base hook notes (first 4 beats)
+            const baseNotes = generatedNotes.filter(n => n.start < 4.0);
+            
+            let notesMdTable = "| Note | Pitch (MIDI) | Start (Beat) | Duration |\n|------|--------------|--------------|----------|\n";
+            baseNotes.forEach(n => {
+                notesMdTable += `| ${n.label} | ${n.pitch} | ${n.start.toFixed(2)} | ${n.duration.toFixed(2)} |\n`;
+            });
+            
+            const markdownText = `### 🎼 Lorn Melody Hook
+* **Scale:** ${rootName} ${modeName.replace("_", " ").toUpperCase()}
+* **Seed:** ${seed} | **Octave:** ${octave}
+* **Memorability Score:** ${score}/100 (${rating})
+
+#### Motif Notes (1 Bar):
+${notesMdTable}
+
+*Generated via Bivex Melodica Engine — Lorn Hook Generator*`;
+
+            navigator.clipboard.writeText(markdownText).then(() => {
+                const btn = document.getElementById("btn-copy-md");
+                const originalText = btn.textContent;
+                btn.textContent = "Copied to Clipboard! ✓";
+                btn.style.color = "#10b981";
+                btn.style.borderColor = "#10b981";
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.color = "#3b82f6";
+                    btn.style.borderColor = "rgba(59, 130, 246, 0.3)";
+                }, 1500);
+            }).catch(err => {
+                alert("Failed to copy markdown: " + err);
+            });
+        });
+
+        // Dropdowns slider label sync
+        document.getElementById("ctrl-octave").addEventListener("input", (e) => {
+            document.getElementById("val-octave").textContent = e.target.value;
+        });
+        document.getElementById("ctrl-hooklen").addEventListener("input", (e) => {
+            document.getElementById("val-hooklen").textContent = e.target.value;
+        });
+        document.getElementById("ctrl-root").addEventListener("change", (e) => {
+            document.getElementById("val-root").textContent = NOTE_NAMES[e.target.value];
+        });
+
+        // Preset select logic
+        const PRESET_TRACKS = {
+            "1": { root: 0, mode: "phrygian", octave: 5, hooklen: 5, seed: 101 },
+            "2": { root: 2, mode: "aeolian", octave: 4, hooklen: 4, seed: 202 },
+            "3": { root: 4, mode: "locrian", octave: 5, hooklen: 6, seed: 303 },
+            "4": { root: 9, mode: "harmonic_minor", octave: 5, hooklen: 5, seed: 404 },
+            "5": { root: 5, mode: "hungarian_minor", octave: 6, hooklen: 6, seed: 505 },
+            "6": { root: 11, mode: "phrygian", octave: 4, hooklen: 4, seed: 606 }
+        };
+
+        document.querySelectorAll(".preset-tab").forEach(tab => {
+            tab.addEventListener("click", (e) => {
+                stopPlayback();
+                document.querySelectorAll(".preset-tab").forEach(t => t.classList.remove("active"));
+                e.target.classList.add("active");
+
+                const config = PRESET_TRACKS[e.target.dataset.track];
+                
+                // Set controls value
+                document.getElementById("ctrl-root").value = config.root;
+                document.getElementById("ctrl-mode").value = config.mode;
+                document.getElementById("ctrl-octave").value = config.octave;
+                document.getElementById("ctrl-hooklen").value = config.hooklen;
+                document.getElementById("ctrl-seed").value = config.seed;
+
+                // Sync labels
+                document.getElementById("val-root").textContent = NOTE_NAMES[config.root];
+                document.getElementById("val-octave").textContent = config.octave;
+                document.getElementById("val-hooklen").textContent = config.hooklen;
+
+                generateLornHook();
+            });
+        });
+
+        // Initial generation run
+        generateLornHook();
+    </script>
+</body>
+</html>
