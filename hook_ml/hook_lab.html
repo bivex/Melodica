@@ -594,14 +594,14 @@
                 <input type="number" id="ctrl-seed" value="101" min="1" max="99999">
             </div>
 
-            <button class="btn btn-secondary" id="btn-randomize">Randomize Config</button>
-            <button class="btn btn-primary" id="btn-elite" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border: none; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); margin-top: -0.5rem;">Generate Elite Hook (95+)</button>
+            <button class="btn btn-secondary" id="btn-randomize">Randomize Config (JS)</button>
+            <button class="btn btn-primary" id="btn-elite" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border: none; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); margin-top: -0.5rem;">Generate Elite Hook (95+) (JS)</button>
             <button class="btn btn-primary" id="btn-mlx-api" style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%); border: none; box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); margin-top: -0.5rem;">Generate Neural Hook (MLX)</button>
-            <button class="btn btn-secondary" id="btn-mlx-random" style="margin-top: -0.5rem; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #10b981;">Random Neural Hook</button>
-            <button class="btn btn-primary" id="btn-mlx-random-elite" style="background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%); border: none; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); margin-top: -0.5rem;">Random Neural Hook Elite</button>
-            <button class="btn btn-secondary" id="btn-copy-md" style="margin-top: -0.5rem; background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #3b82f6;">Copy Hook Markdown</button>
-            <button class="btn btn-primary" id="btn-generate">Generate New Hook</button>
-            <button class="btn btn-play" id="btn-play">Play Hook Synthesizer</button>
+            <button class="btn btn-secondary" id="btn-mlx-random" style="margin-top: -0.5rem; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #10b981;">Random Neural Hook (MLX)</button>
+            <button class="btn btn-primary" id="btn-mlx-random-elite" style="background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%); border: none; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); margin-top: -0.5rem;">Random Neural Hook Elite (MLX)</button>
+            <button class="btn btn-secondary" id="btn-copy-md" style="margin-top: -0.5rem; background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #3b82f6;">Copy Hook Markdown (JS)</button>
+            <button class="btn btn-primary" id="btn-generate">Generate New Hook (JS)</button>
+            <button class="btn btn-play" id="btn-play">Play Hook Synthesizer (JS)</button>
         </div>
 
         <!-- Main Workspace -->
@@ -1469,7 +1469,7 @@
         function startPlayback() {
             getAudioContext();
             isPlaying = true;
-            document.getElementById("btn-play").textContent = "Stop Playback";
+            document.getElementById("btn-play").textContent = "Stop Playback (JS)";
             document.getElementById("btn-play").classList.add("playing");
 
             const startTime = audioCtx.currentTime;
@@ -1506,7 +1506,7 @@
 
         function stopPlayback() {
             isPlaying = false;
-            document.getElementById("btn-play").textContent = "Play Hook Synthesizer";
+            document.getElementById("btn-play").textContent = "Play Hook Synthesizer (JS)";
             document.getElementById("btn-play").classList.add("btn-play");
             document.getElementById("btn-play").classList.remove("playing");
             currentNoteIdx = -1;
