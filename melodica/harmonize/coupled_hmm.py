@@ -321,8 +321,7 @@ if _MICROTONAL_MODES:
     warnings.warn(
         "CoupledHMMHarmonizer: the following modes contain microtonal "
         "intervals; their Layer-2 distinctness is preserved via fuzzy 24-EDO "
-        "membership, but output chords remain 12-TET (quarter-tone pitches "
-        "are not synthesized): "
+        "membership, but harmony remains 12-TET: "
         + ", ".join(sorted(m.value for m in _MICROTONAL_MODES)),
         stacklevel=1,
     )
