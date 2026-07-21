@@ -369,7 +369,7 @@ def export_multitrack_midi(
     validate_form: bool = True,
     form: "MusicalForm | None" = None,
     strict_validation: bool = False,
-    postprocess_arr: bool = False,
+    postprocess_arr: bool = True,
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
@@ -400,7 +400,7 @@ def export_multitrack_midi(
         stages.  Tracks are selected by GM program number: programs 0–79
         (piano, strings, brass, woodwinds, etc.) are processed; programs
         80–127 (pads, percussion, SFX) are left untouched.  Defaults to
-        False to preserve backward-compatibility.
+        True.
     """
     from melodica.types import TICKS_PER_BEAT, MIDI_MAX
 
