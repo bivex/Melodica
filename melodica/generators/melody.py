@@ -468,7 +468,14 @@ class MelodyGenerator(PhraseGenerator):
                         context=context,
                     )
 
-            pitch = snap_to_scale(max(effective_low, min(effective_high, pitch)), active_key)
+            pitch = max(effective_low, min(effective_high, pitch))
+            # Only snap to scale when the note is not already a chord tone.
+            # Applied dominants (E7, C7, A7 …) have tones outside the parent
+            # scale (G#, Bb, C# …); snapping them would destroy the chord-tone
+            # bias built up in pick_pitch / get_pitch_pool.
+            _chord_pcs = set(chord.pitch_classes()) if chord else set()
+            if pitch % 12 not in _chord_pcs:
+                pitch = snap_to_scale(pitch, active_key)
 
             # Velocity: phrase contour + beat strength + dramatic arc
             base_vel = _velocity_from_params(self.params)
