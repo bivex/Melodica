@@ -58,17 +58,21 @@ class PolyphonicVoiceCoordinator:
                                 degs = [int(round(d)) for d in self.scale.degrees()]
                                 n_degs = len(degs)
                                 
-                                # Convert pitch_b to continuous degree index
-                                oct_b = note_b.pitch // 12
-                                pc_b = note_b.pitch % 12
+                                # Convert pitch_b to continuous degree index.
+                                # Coerce to int — pitch can arrive as numpy.float64,
+                                # which would make divmod() below return floats and
+                                # crash on degs[new_pc_idx] (list index must be int).
+                                _pitch_b = int(note_b.pitch)
+                                oct_b = _pitch_b // 12
+                                pc_b = _pitch_b % 12
                                 idx_b = min(range(n_degs), key=lambda i: min(abs(degs[i] - pc_b), 12 - abs(degs[i] - pc_b)))
                                 deg_idx_b = oct_b * n_degs + idx_b
-                                
+
                                 # Try shifting by different scale degree offsets until we find one that does not clash
                                 resolved = False
                                 for offset in (2, -2, 3, -3, 4, -4, 1, -1):
                                     new_deg_idx = deg_idx_b + offset
-                                    new_oct, new_pc_idx = divmod(new_deg_idx, n_degs)
+                                    new_oct, new_pc_idx = divmod(int(new_deg_idx), n_degs)
                                     candidate_pitch = max(0, min(127, new_oct * 12 + degs[new_pc_idx]))
                                     
                                     if abs(candidate_pitch - note_a.pitch) % 12 not in (0, 1, 2, 6):
