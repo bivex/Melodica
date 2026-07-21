@@ -49,10 +49,12 @@ from melodica.types import Scale, Mode, BarGrid
 _REGISTER_BANDS: dict[str, tuple[int, int]] = {
     "Sub Bass": (24, 40),          # sole sub-bass voice
     "Tension Pad": (40, 55),       # low drone, below the mid cluster
-    "Timpani": (40, 60),
+    # ARR-11: raised to (48,64) — fully clears MIDI<45 overlap with Sub Bass (tops at 40)
+    "Timpani": (48, 64),
     "Solo Cello": (48, 67),        # tenor
     "French Horn": (48, 64),       # tenor
-    "Piano": (48, 84),             # wide-range comp
+    # ARR-10: narrowed high from 84→72 — keeps Piano below Violin register
+    "Piano": (48, 72),             # comp, stays below strings
     "Choir": (52, 70),             # mid
     "Brass Section": (52, 74),     # mid
     "Cathedral Organ": (55, 79),   # mid
@@ -63,10 +65,24 @@ _REGISTER_BANDS: dict[str, tuple[int, int]] = {
 }
 
 # Periodic rest for melodic leads so a line never runs 100+ beats without
-# breathing room. Tiles play/rest across the whole part.
+# breathing room. ARR-13: reduced play window from 8→4 bars so rests fire
+# every ~20 beats instead of every ~40 beats.
 _LEAD_REST_SCHEDULE = PhraseSchedule(
-    slots=[PhraseSlot(kind="play", bars=8), PhraseSlot(kind="rest", bars=1)],
+    slots=[PhraseSlot(kind="play", bars=4), PhraseSlot(kind="rest", bars=1)],
     loop=True,
+)
+
+# ARR-1: Staggered entrances — accompaniment tracks start with 2 bars of
+# silence so the texture builds up instead of everything entering at beat 0.
+_INTRO_REST_2 = PhraseSchedule(
+    slots=[PhraseSlot(kind="rest", bars=2), PhraseSlot(kind="play", bars=999)],
+    loop=False,
+)
+# ARR-5: Snare / driving percussion delayed 4 bars — prevents percussion
+# from entering in the first 10% of intro movements.
+_INTRO_REST_4 = PhraseSchedule(
+    slots=[PhraseSlot(kind="rest", bars=4), PhraseSlot(kind="play", bars=999)],
+    loop=False,
 )
 
 # Hand-authored functional progressions per movement ("master's voice"). Used as
@@ -163,6 +179,11 @@ from melodica.generators.drone import DroneGenerator
 from melodica.generators.brass_section import BrassSectionGenerator
 from melodica.generators.snare_drum import SnareDrumGenerator
 from melodica.generators.piano_comp import PianoCompGenerator
+from melodica.generators import GeneratorParams
+
+# ARR-12: Low leap probability forces ViolinGenerator's internal stepwise
+# smoother to kick in more aggressively (triggers when leap_probability < 0.5).
+_LOW_LEAP_PARAMS = GeneratorParams(leap_probability=0.15)
 
 
 def generate_pursuit_album_tempo_map():
@@ -317,7 +338,11 @@ def generate_pursuit_album_tempo_map():
         track_list.append(
             TrackConfig(
                 name=violins_name,
+                # ARR-12: _LOW_LEAP_PARAMS sets leap_probability=0.15 so the
+                # ViolinGenerator stepwise smoother (abs > 7 semitones) fires
+                # more often, resolving large leaps by step contrary motion.
                 generator=ViolinGenerator(
+                    params=_LOW_LEAP_PARAMS,
                     articulation="legato",
                     vibrato=True,
                     dynamic_curve=violins_curve,
@@ -352,7 +377,9 @@ def generate_pursuit_album_tempo_map():
             track_list.append(
                 TrackConfig(
                     name="Brass Section",
-                    generator=BrassSectionGenerator(),
+                    # ARR-13: breath_gap=0.5 inserts natural breathing gaps
+                    # between phrase events so the line isn't continuous.
+                    generator=BrassSectionGenerator(breath_gap=0.5),
                     instrument="brass",
                     arrangement="AABC",
                     density=0.65,
@@ -374,7 +401,8 @@ def generate_pursuit_album_tempo_map():
             track_list.append(
                 TrackConfig(
                     name="Piano",
-                    generator=PianoCompGenerator(),
+                    # ARR-12: low leap probability to reduce unresolved jumps
+                    generator=PianoCompGenerator(params=_LOW_LEAP_PARAMS),
                     instrument="piano",
                     arrangement="AAAA",
                     density=0.45,
@@ -437,9 +465,34 @@ def generate_pursuit_album_tempo_map():
         # Lead breathing room + accompaniment thinning (clash/density reduction).
         _accomp = {"Brass Section": 0.6, "Choir": 0.6, "Cathedral Organ": 0.6,
                    "French Horn": 0.5, "Tension Pad": 0.55}
+        # Movements where ARR-1 fires: stagger non-bass accompaniment entrances.
+        _needs_stagger = hint in ("disquiet", "fleeing_shadow", "crooked_path", "open_horizon")
+        # Snare delay: ARR-5 (fleeing_shadow, open_horizon)
+        _needs_snare_delay = hint in ("fleeing_shadow", "open_horizon")
         for _t in track_list:
-            if _t.name in ("Anxious Violins", "Violins", "Bright Violins", "Vocal Lead"):
+            # ARR-13: breathing rests for all melodic leads + Brass
+            if _t.name in ("Anxious Violins", "Violins", "Bright Violins",
+                           "Vocal Lead", "Brass Section"):
                 _t.phrase_schedule = _LEAD_REST_SCHEDULE
+            # ARR-1: stagger mid/high accompaniment tracks by 2 bars
+            if _needs_stagger and _t.name in (
+                "Choir", "Cathedral Organ", "French Horn",
+                "Piano", "Solo Cello", "Tension Pad",
+            ):
+                _t.phrase_schedule = _INTRO_REST_2
+            # ARR-1: also stagger Timpani and Violin leads by 1 bar
+            if _needs_stagger and _t.name in (
+                "Timpani", "Anxious Violins", "Violins", "Bright Violins",
+            ):
+                _t.phrase_schedule = PhraseSchedule(
+                    slots=[PhraseSlot(kind="rest", bars=1),
+                           PhraseSlot(kind="play", bars=4),
+                           PhraseSlot(kind="rest", bars=1)],
+                    loop=True,
+                )
+            # ARR-5: delay snare/march percussion 4 bars
+            if _needs_snare_delay and _t.name == "Military Snare":
+                _t.phrase_schedule = _INTRO_REST_4
             _r = _accomp.get(_t.name)
             if _r is not None:
                 _t.rhythm_rests = _r
