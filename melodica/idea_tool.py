@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from melodica.types import (
     BarGrid,
@@ -261,6 +261,25 @@ class TrackConfig:
     # Set to a track name to enable. Post-processing step — the source track must already be rendered.
     follow_rhythm_track: str | None = None
 
+    def __post_init__(self) -> None:
+        # Infer generator_type from a passed generator INSTANCE. Without this,
+        # every track built as TrackConfig(generator=SomeGenerator()) silently
+        # keeps the default generator_type="melody", which mis-triggers type-
+        # gated logic (voice-leading / non-chord-tones / percussion routing) on
+        # pads, brass, drums, etc. The instance is already the dispatch ground
+        # truth (_get_generator returns it regardless of the string), so letting
+        # the type label follow it is consistent. Classes not in the reverse
+        # index fall through to whatever generator_type was set (default melody).
+        if self.generator is not None:
+            try:
+                from melodica.factory._class_index import GENERATOR_CLASS_TO_TYPE
+                _inferred = GENERATOR_CLASS_TO_TYPE.get(type(self.generator))
+                if _inferred is not None:
+                    self.generator_type = _inferred
+            except Exception:
+                # Never let inference break construction.
+                pass
+
 
 @dataclass
 class IdeaPart:
@@ -393,6 +412,9 @@ class IdeaToolConfig:
     # composition (Letter Rule) but different keys / different runs diverge.
     seed: int | None = None
 
+    # Pluggable progression enrichers applied in sequence to the generated chord labels
+    progression_enrichers: list[Callable[[list[ChordLabel], list[IdeaPart]], list[ChordLabel]]] = field(default_factory=list)
+
     def __post_init__(self) -> None:
         import warnings
         for flag in _DEAD_IDEA_FLAGS:
@@ -519,6 +541,14 @@ class IdeaTool:
             offset += part_beats
         return points
 
+    def _enrich_progression(self, chords: list[ChordLabel], parts: list[IdeaPart]) -> list[ChordLabel]:
+        for enricher in self.config.progression_enrichers:
+            try:
+                chords = enricher(chords, parts)
+            except Exception as e:
+                logger.error("Error in progression enricher %s: %s", enricher, e, exc_info=True)
+        return chords
+
     def generate(self) -> dict[str, Any]:
         """
         Generate full composition. Returns dict of track_name → notes.
@@ -597,6 +627,7 @@ class IdeaTool:
                 if seed
                 else self._generate_progression(parts)
             )
+            chords = self._enrich_progression(chords, parts)
             self._chords = chords
             result["_chords"] = chords
 
@@ -675,22 +706,57 @@ class IdeaTool:
 
             # Step 2: harmonize the combined melody output.
             # Use CoupledHMMHarmonizer (Tymoczko/Newman, the same engine the
-            # progression path uses) rather than the older HMM3Harmonizer:
-            # both expose harmonize(melody, scale, duration), so the melody-first
-            # workflow should not silently degrade to the weaker harmonizer.
+            # progression path uses) rather than the older HMM3Harmonizer.
+            # If parts carry constrained_hmm/from_list progression_list, collect
+            # them as time-offset constraints so the template anchors stay active
+            # during harmonization — giving best-of-both: melody contour shapes
+            # voice-leading, progression_list keeps the harmonic skeleton.
             bar_grid = BarGrid(
                 numerator=self.config.time_signature[0], denominator=self.config.time_signature[1]
             )
             from melodica.harmonize.coupled_hmm import CoupledHMMHarmonizer
+            from melodica.types import parse_progression
+
+            # Build offset-aware constraint list from all parts that have a
+            # progression_list and are either constrained_hmm or from_list.
+            _constraints: list[ChordLabel] = []
+            _offset = 0.0
+            for _part in parts:
+                _ptype = _part.progression_type or self.config.progression_type
+                if _ptype in ("constrained_hmm", "from_list") and _part.progression_list:
+                    _bpb = (_part.time_signature or self.config.time_signature)[0]
+                    _prog_str = " ".join(_part.progression_list)
+                    if _bpb != 4.0 and not any(":" in t for t in _part.progression_list):
+                        _prog_str = " - ".join(f"{t}:{_bpb}" for t in _part.progression_list)
+                    _part_scale = _part.scale or scale
+                    try:
+                        _part_cons = parse_progression(_prog_str, _part_scale)
+                        for _c in _part_cons:
+                            _constraints.append(ChordLabel(
+                                root=_c.root, quality=_c.quality,
+                                start=_c.start + _offset, duration=_c.duration,
+                                extensions=list(_c.extensions), bass=_c.bass,
+                                inversion=_c.inversion, degree=_c.degree,
+                                function=_c.function,
+                            ))
+                    except Exception:
+                        pass
+                _part_beats = (_part.bars or self.config.bars) * (
+                    (_part.time_signature or self.config.time_signature)[0]
+                )
+                _offset += _part_beats
+
             harmonizer = CoupledHMMHarmonizer(bar_grid=bar_grid)
             chords = harmonizer.harmonize(
                 sorted(all_melody_notes, key=lambda n: n.start),
                 self.config.scale,
                 total_beats,
+                constraints=_constraints or None,
                 tension_curve=tension_curve,
             )
             if not chords:
                 chords = bootstrap_chords
+            chords = self._enrich_progression(chords, parts)
             self._chords = chords
             result["_chords"] = chords
 
@@ -701,6 +767,7 @@ class IdeaTool:
         else:
             # "generate_all" — default
             chords = self._generate_progression(parts)
+            chords = self._enrich_progression(chords, parts)
             self._chords = chords
             result["_chords"] = chords
 
@@ -1068,13 +1135,13 @@ class IdeaTool:
         """
         notes_map = self.generate()
         tracks: dict[str, Track] = {}
-        percussion_types = {"percussion", "drums"}
+        from melodica.factory._class_index import PERCUSSION_TYPES as _PERCUSSION_TYPES
 
         non_perc_channel = 0
         for i, track_cfg in enumerate(self.config.tracks):
             if track_cfg.name not in notes_map:
                 continue
-            is_percussion = track_cfg.generator_type in percussion_types
+            is_percussion = track_cfg.generator_type in _PERCUSSION_TYPES
             if is_percussion:
                 channel = 9
             else:
@@ -1567,9 +1634,19 @@ class IdeaTool:
         )
 
         if self.config.use_voice_leading and cfg.generator_type in (
+            # Melodic leads + harmonic/pad/section voices benefit from
+            # voice-leading. (VoiceLeadingModifier keys on chords, not scale,
+            # so including pads here is safe.) See factory/_class_index.py
+            # HARMONIC_VL_TYPES — kept in sync there.
             "melody",
             "chord",
             "arpeggiator",
+            "piano_comp",
+            "choir_ahhs",
+            "brass_section",
+            "strings_ensemble",
+            "woodwinds_ensemble",
+            "organ_drawbars",
         ):
             all_notes = apply_voice_leading(
                 all_notes, cfg, chords, scale, self.config.time_signature, total_beats
