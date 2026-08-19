@@ -93,7 +93,7 @@ class RhythmProcessor:
         return sorted(shifted, key=lambda x: x.onset)
 
     @staticmethod
-    def apply_dotted(events: list[RhythmEvent]) -> list[NoteInfo]:
+    def apply_dotted(events: list[RhythmEvent]) -> list[RhythmEvent]:
         """Transform pairs of equal adjacent notes into dotted-rhythm pairs (3:1 length ratio)."""
         if len(events) < 2:
             return events

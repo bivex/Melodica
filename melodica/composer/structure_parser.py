@@ -37,7 +37,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from melodica.types import Scale
 
 if TYPE_CHECKING:
     from melodica.idea_tool import PhraseSlot

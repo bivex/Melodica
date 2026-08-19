@@ -25,10 +25,13 @@ from __future__ import annotations
 
 import math
 import random
-from enum import Enum
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import TYPE_CHECKING, Dict, List, Tuple
+
+if TYPE_CHECKING:
+    from melodica.idea_tool import TrackConfig
 
 from melodica.types import NoteInfo, Scale
 from melodica.midi import export_multitrack_midi

@@ -112,7 +112,7 @@ def _segment_by_rhythm(
         return []
 
     end_time = max(n.start + n.duration for n in melody)
-    windows: list[tuple[list[Note], float, float]] = []
+    windows: list[tuple[list[types.Note], float, float]] = []
     t = 0.0
     while t < end_time:
         window_notes = [

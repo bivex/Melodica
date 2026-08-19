@@ -73,6 +73,7 @@ from melodica.composer import (
 )
 from melodica.modifiers import ModifierContext, VoiceLeadingModifier
 from melodica.render_context import RenderContext
+from melodica.composer.structure_parser import PhrasePool
 
 logger = logging.getLogger(__name__)
 

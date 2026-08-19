@@ -19,8 +19,10 @@ from __future__ import annotations
 import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from melodica.types_pkg._theory import Scale
 
 from melodica.theory import Mode, Quality, CHORD_TEMPLATES, MODE_DATABASE, get_mode_intervals
 

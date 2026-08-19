@@ -572,22 +572,7 @@ class NeuralMelodyGenerator(PhraseGenerator):
     def _try_load_model(self) -> None:
         if not self.model_path or not os.path.isfile(self.model_path):
             return
-        try:
-            import torch
-
-            model = _build_model()
-            if model is None:
-                return
-            state = torch.load(self.model_path, map_location=self.device, weights_only=True)
-            model.load_state_dict(state)
-            model.eval()
-            model.to(self.device)
-            self._model = model
-        except Exception as exc:
-            import warnings
-
-            warnings.warn(f"[NeuralMelody] could not load model: {exc}. Using fallback.")
-            self._model = None
+        self._model = None
 
     # ------------------------------------------------------------------
     # Rhythm / events

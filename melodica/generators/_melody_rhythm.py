@@ -11,8 +11,12 @@ from __future__ import annotations
 
 import math
 import random
+from typing import TYPE_CHECKING
 
 from melodica.rhythm import RhythmEvent, RhythmGenerator, Tuplet, TRIPLET
+
+if TYPE_CHECKING:
+    from melodica.generators._melody_drama import DramaticArc
 
 
 # ---------------------------------------------------------------------------

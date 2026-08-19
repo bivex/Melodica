@@ -29,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from melodica import types
+from melodica.types import ChordLabel
 from melodica.utils import (
     chord_pitches_closed,
     compute_simplicity,

@@ -8,8 +8,12 @@ Responsibilities:
 from __future__ import annotations
 
 import random
+from typing import TYPE_CHECKING
 
 from melodica.types import NoteInfo, Scale
+
+if TYPE_CHECKING:
+    from melodica.generators._melody_drama import DramaticArc
 
 
 class OrnamentProcessor:
