@@ -51,8 +51,8 @@ def _interval(a: int, b: int) -> int:
 
 def _is_parallel_fifth(prev_a: int, prev_b: int, curr_a: int, curr_b: int) -> bool:
     """Check if two voices create parallel fifths."""
-    prev_int = (_pitch_class(prev_a) - _pitch_class(prev_b)) % 12
-    curr_int = (_pitch_class(curr_a) - _pitch_class(curr_b)) % 12
+    prev_int = abs(prev_a - prev_b) % 12
+    curr_int = abs(curr_a - curr_b) % 12
     # Parallel = both are perfect fifths (7 semitones) AND both move in same direction
     if prev_int == 7 and curr_int == 7:
         # Both voices moving in same direction
@@ -65,8 +65,8 @@ def _is_parallel_fifth(prev_a: int, prev_b: int, curr_a: int, curr_b: int) -> bo
 
 def _is_parallel_octave(prev_a: int, prev_b: int, curr_a: int, curr_b: int) -> bool:
     """Check if two voices create parallel octaves."""
-    prev_int = (_pitch_class(prev_a) - _pitch_class(prev_b)) % 12
-    curr_int = (_pitch_class(curr_a) - _pitch_class(curr_b)) % 12
+    prev_int = abs(prev_a - prev_b) % 12
+    curr_int = abs(curr_a - curr_b) % 12
     if prev_int == 0 and curr_int == 0:
         dir_a = 1 if curr_a > prev_a else (-1 if curr_a < prev_a else 0)
         dir_b = 1 if curr_b > prev_b else (-1 if curr_b < prev_b else 0)
@@ -256,36 +256,54 @@ class VoiceLeadingEngine:
 
         # Generate all possible pitch assignments
         # For each voice, try all chord tones within range
-        for bass_pc in [chord.root]:
-            bass = self._nearest_in_range(bass_pc, ranges[3])
+        bass_pc = chord.root
+        bass_pitches = self._all_in_range(bass_pc, ranges[3]) or [self._nearest_in_range(bass_pc, ranges[3])]
+        for bass in bass_pitches:
             for sop_pc in pcs:
-                sop = self._nearest_in_range(sop_pc, ranges[0])
-                for alt_pc in pcs:
-                    alt = self._nearest_in_range(alt_pc, ranges[1])
-                    for ten_pc in pcs:
-                        ten = self._nearest_in_range(ten_pc, ranges[2])
-                        candidate = [sop, alt, ten, bass]
+                sop_pitches = self._all_in_range(sop_pc, ranges[0]) or [self._nearest_in_range(sop_pc, ranges[0])]
+                for sop in sop_pitches:
+                    if sop < bass:
+                        continue
+                    for alt_pc in pcs:
+                        alt_pitches = self._all_in_range(alt_pc, ranges[1]) or [self._nearest_in_range(alt_pc, ranges[1])]
+                        for alt in alt_pitches:
+                            if not (sop >= alt >= bass):
+                                continue
+                            for ten_pc in pcs:
+                                ten_pitches = self._all_in_range(ten_pc, ranges[2]) or [self._nearest_in_range(ten_pc, ranges[2])]
+                                for ten in ten_pitches:
+                                    candidate = [sop, alt, ten, bass]
 
-                        # Check ordering
-                        if not (sop >= alt >= ten >= bass):
-                            continue
+                                    # Check ordering
+                                    if not (sop >= alt >= ten >= bass):
+                                        continue
 
-                        # Check voice gaps
-                        if any(
-                            abs(candidate[j] - candidate[j + 1]) > self.max_voice_gap
-                            for j in range(3)
-                        ):
-                            continue
+                                    # Check voice gaps
+                                    if any(
+                                        abs(candidate[j] - candidate[j + 1]) > self.max_voice_gap
+                                        for j in range(3)
+                                    ):
+                                        continue
 
-                        # Score by voice leading quality
-                        score = self._score_voicing(prev_voicing, candidate)
-                        candidates.append((score, candidate))
+                                    # Score by voice leading quality
+                                    score = self._score_voicing(prev_voicing, candidate)
+                                    candidates.append((score, candidate))
 
         if not candidates:
             return [self._best_initial_voicing(chord, scale)]
 
         candidates.sort(key=lambda x: -x[0])
-        return [c for _, c in candidates[:10]]
+        # Deduplicate candidates while preserving order
+        unique_cands: list[list[int]] = []
+        seen = set()
+        for _, c in candidates:
+            key = tuple(c)
+            if key not in seen:
+                seen.add(key)
+                unique_cands.append(c)
+                if len(unique_cands) >= 12:
+                    break
+        return unique_cands
 
     def _select_best(
         self,
@@ -324,14 +342,18 @@ class VoiceLeadingEngine:
                 score += 2.0  # stationary voice = excellent
             elif motion <= 2:
                 score += 1.0  # stepwise = good
-            elif motion <= 5:
-                score += 0.5  # small skip = ok
+            elif motion <= 4:
+                score += 0.4  # small skip = ok
+            elif motion <= 7:
+                score -= 0.5  # moderate leap = small penalty
             else:
-                score -= 0.5  # large skip = penalty
+                score -= 1.5  # large leap = penalty
 
         # Contrary motion bonus (bass vs soprano)
-        if (curr[0] > prev[0]) != (curr[3] > prev[3]):
-            score += 1.0
+        if (curr[0] > prev[0] and curr[3] < prev[3]) or (curr[0] < prev[0] and curr[3] > prev[3]):
+            score += 1.2
+        elif (curr[0] == prev[0]) or (curr[3] == prev[3]):
+            score += 0.5  # oblique motion is also good
 
         # Smooth inner voices
         inner_motion = abs(curr[1] - prev[1]) + abs(curr[2] - prev[2])
@@ -339,14 +361,16 @@ class VoiceLeadingEngine:
 
         return score
 
+    def _all_in_range(self, pc: int, voice_range: tuple[int, int]) -> list[int]:
+        """Find all pitches with given pitch class within voice range."""
+        lo, hi = voice_range
+        return [p for p in range(lo, hi + 1) if p % 12 == pc % 12]
+
     def _nearest_in_range(self, pc: int, voice_range: tuple[int, int]) -> int:
         """Find nearest pitch with given pitch class within voice range."""
         lo, hi = voice_range
         # Find all pitches with this pc in range
-        candidates = []
-        for p in range(lo, hi + 1):
-            if p % 12 == pc:
-                candidates.append(p)
+        candidates = self._all_in_range(pc, voice_range)
         if candidates:
             mid = (lo + hi) // 2
             return min(candidates, key=lambda p: abs(p - mid))

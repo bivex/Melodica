@@ -247,6 +247,14 @@ def voice_chord(
         snapped    = max(inst_range[0], min(inst_range[1], snapped))
         result[inst] = snapped
 
+    # Ensure monotonic ordering for inner voices to prevent accidental voice crossings
+    for k in range(1, len(instruments) - 1):
+        prev_inst = instruments[k - 1]
+        curr_inst = instruments[k]
+        if result[curr_inst] < result[prev_inst]:
+            if result[curr_inst] + 12 <= _range(curr_inst)[1]:
+                result[curr_inst] += 12
+
     # Drop-2 transformation: swap second-highest voice down an octave
     if spacing == "drop2" and n >= 4:
         second_highest = instruments[-2]
@@ -333,17 +341,22 @@ class ChordVoicingLayout:
         tones = chord_tones(chord)
         result: dict[str, int] = dict(current)
 
-        for inst in self.instruments:
+        for idx, inst in enumerate(self.instruments):
             if inst not in previous or inst not in current:
                 continue
             prev_pitch = previous[inst]
-            curr_pitch = current[inst]
             inst_range = _range(inst)
 
-            # Try all octave placements of the current pitch class
-            pc = curr_pitch % 12
-            candidates = [pc + 12 * o for o in range(0, 11)
-                          if inst_range[0] <= pc + 12 * o <= inst_range[1]]
+            # Bass voice (lowest instrument) stays anchored to root pitch class
+            target_pcs = [tones[0]] if idx == 0 else tones
+
+            # Try all candidate chord tone pitches within instrument range
+            candidates = [
+                pc + 12 * o
+                for pc in target_pcs
+                for o in range(0, 11)
+                if inst_range[0] <= pc + 12 * o <= inst_range[1]
+            ]
             if candidates:
                 best = min(candidates, key=lambda c: abs(c - prev_pitch))
                 result[inst] = best
