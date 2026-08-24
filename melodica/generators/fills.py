@@ -44,7 +44,6 @@ from melodica.utils import nearest_pitch, chord_at
 BLUES = [0, 3, 5, 6, 7, 10]
 
 
-@dataclass
 class FillGenerator(PhraseGenerator):
     """
     Fill / turnaround / ending generator.
@@ -65,12 +64,6 @@ class FillGenerator(PhraseGenerator):
     """
 
     name: str = "Fill Generator"
-    fill_type: str = "descending"
-    fill_length: float = 2.0
-    position: str = "end"
-    velocity_curve: str = "crescendo"
-    rhythm: RhythmGenerator | None = None
-    _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
         self,
@@ -415,4 +408,4 @@ class FillGenerator(PhraseGenerator):
         return events
 
     def _velocity(self) -> int:
-        return int(60 + self.params.density * 35)
+        return self.base_velocity()
