@@ -94,7 +94,6 @@ class _VoiceState:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
 class ChoraleGenerator(PhraseGenerator):
     """
     Four-part chorale harmonization generator.
@@ -117,13 +116,6 @@ class ChoraleGenerator(PhraseGenerator):
     """
 
     name: str = "Chorale Generator"
-    voice_spacing: int = 12
-    soprano_motion: str = "stepwise"
-    rhythmic_unit: float = 1.0
-    voice_crossing: bool = False
-    doubling_preference: str = "auto"
-    rhythm: RhythmGenerator | None = None
-    _last_context: RenderContext | None = field(default=None, init=False, repr=False)
 
     def __init__(
         self,

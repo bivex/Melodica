@@ -11,7 +11,13 @@ import math
 import random
 from typing import TYPE_CHECKING
 
-from melodica.utils import nearest_pitch, nearest_pitch_above, pitch_class
+from melodica.utils import (
+    all_pitches_in_range as _all_pitches_in_range,
+    all_pitches_for_pitch_classes as _all_pitches_in_range_pc_list,
+    nearest_pitch,
+    nearest_pitch_above,
+    pitch_class,
+)
 
 if TYPE_CHECKING:
     from melodica.generators.melody import MelodyGenerator
@@ -32,30 +38,6 @@ ALL_INTERVALS: frozenset[int] = STEP_SEMITONES | LEAP_SEMITONES
 
 DEFAULT_UP_INTERVALS: frozenset[int] = frozenset({1, 2, 3, 4, 5, 7, 9, 12})
 DEFAULT_DOWN_INTERVALS: frozenset[int] = frozenset({1, 2, 3, 4, 5, 7, 9, 12})
-
-
-# ---------------------------------------------------------------------------
-# Utility helpers
-# ---------------------------------------------------------------------------
-
-
-def _all_pitches_in_range(pc: int, low: int, high: int) -> list[int]:
-    """All MIDI pitches with the given pitch class in [low, high]."""
-    pc = pc % 12
-    result = []
-    start = pc + ((low - pc + 11) // 12) * 12
-    p = start
-    while p <= high:
-        result.append(p)
-        p += 12
-    return result
-
-
-def _all_pitches_in_range_pc_list(pcs: list[int], low: int, high: int) -> list[int]:
-    result = []
-    for pc in pcs:
-        result.extend(_all_pitches_in_range(pc, low, high))
-    return result
 
 
 # ---------------------------------------------------------------------------

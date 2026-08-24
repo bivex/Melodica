@@ -589,3 +589,23 @@ def is_textural_track_name(name: str) -> bool:
     """Check if a track name indicates an accompaniment / textural layer."""
     low = name.lower()
     return any(k in low for k in TEXTURAL_KEYWORDS)
+
+
+def all_pitches_in_range(pc: int, low: int, high: int) -> list[int]:
+    """All MIDI pitches with the given pitch class in [low, high]."""
+    pc = pc % 12
+    start = pc + ((low - pc + 11) // 12) * 12
+    result = []
+    p = start
+    while p <= high:
+        result.append(p)
+        p += 12
+    return result
+
+
+def all_pitches_for_pitch_classes(pcs: list[int] | set[int], low: int, high: int) -> list[int]:
+    """All MIDI pitches for the given pitch classes in [low, high]."""
+    result = []
+    for pc in pcs:
+        result.extend(all_pitches_in_range(pc, low, high))
+    return sorted(result)
