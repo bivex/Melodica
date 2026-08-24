@@ -26,7 +26,7 @@ from melodica.harmonize._hmm_helpers import (
     _CADENCE_BONUSES, _FUNCTION_MAP, _FUNCTION_RULES_HMM2, _EXTENSIONS,
     _get_cadence_bonus, MODAL_GRAVITY, STYLE_MATRICES,
 )
-from melodica.harmonize._observation import HarmonizationSegmentation
+from melodica.harmonize._observation import HarmonizationSegmentation, _HarmonizerSegmentationMixin
 from melodica.types import BarGrid, ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
 
 class SecondaryDominantDegree(int):
@@ -54,7 +54,7 @@ class ChromaticMediantDegree(int):
         return obj
 
 @dataclass
-class HMMHarmonizer:
+class HMMHarmonizer(_HarmonizerSegmentationMixin):
     """
     Hidden Markov Model harmonizer.
 
@@ -231,18 +231,9 @@ class HMMHarmonizer:
         path.reverse()
         return path
 
-    def _extract_observations(
-        self,
-        melody: list[NoteInfo],
-        change_points: list[float],
-    ) -> list[list[int]]:
-        """Extract pitch classes for each chord change interval."""
-        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
-    def _get_change_points(self, duration: float) -> list[float]:
-        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
-class HMM2Harmonizer:
+class HMM2Harmonizer(_HarmonizerSegmentationMixin):
     """
     Pro-level HMM with functional layer, cadence bonuses, and repetition penalty.
 
@@ -420,13 +411,9 @@ class HMM2Harmonizer:
                     mat[i][j] = w
         return mat
 
-    def _extract_observations(self, melody, change_points):
-        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
-    def _get_change_points(self, duration):
-        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
-class HMM3Harmonizer:
+class HMM3Harmonizer(_HarmonizerSegmentationMixin):
     """
     Pro-level harmonizer with beam search, secondary dominants, extensions,
     and rhythm-aware scoring.
@@ -731,14 +718,9 @@ class HMM3Harmonizer:
         else:
             return 0.8  # weak beats
 
-    def _extract_observations(self, melody, change_points):
-        return HarmonizationSegmentation.extract_observations(melody, change_points)
-
-    def _get_change_points(self, duration):
-        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 
 @dataclass
-class HMM4Harmonizer:
+class HMM4Harmonizer(_HarmonizerSegmentationMixin):
     """
     HMM 4.0 — High-level music cognition engine.
     
@@ -909,9 +891,3 @@ class HMM4Harmonizer:
 
     def _build_catalog(self, chords_def, scale):
         return HMM3Harmonizer()._build_catalog(chords_def, scale)
-
-    def _extract_observations(self, melody, change_points):
-        return HarmonizationSegmentation.extract_observations(melody, change_points)
-
-    def _get_change_points(self, duration):
-        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)

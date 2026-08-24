@@ -67,20 +67,21 @@ _PERC_KW      = ("drum", "percussion", "perc", "kit", "taiko", "ghost",
                  "timpani", "snare", "kick", "cymbal", "hihat")
 
 
+_FAMILY_KEYWORDS = (
+    ("percussion", _PERC_KW),
+    ("bass", _BASS_KW),
+    ("strings", _STRINGS_KW),
+    ("brass", _BRASS_KW),
+    ("woodwinds", _WOODWINDS_KW),
+    ("keys", _KEYS_KW),
+)
+
+
 def _instrument_family(name: str) -> str:
     low = name.lower()
-    if any(k in low for k in _PERC_KW):
-        return "percussion"
-    if any(k in low for k in _BASS_KW):
-        return "bass"
-    if any(k in low for k in _STRINGS_KW):
-        return "strings"
-    if any(k in low for k in _BRASS_KW):
-        return "brass"
-    if any(k in low for k in _WOODWINDS_KW):
-        return "woodwinds"
-    if any(k in low for k in _KEYS_KW):
-        return "keys"
+    for family, keywords in _FAMILY_KEYWORDS:
+        if any(k in low for k in keywords):
+            return family
     return "other"
 
 

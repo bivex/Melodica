@@ -305,10 +305,8 @@ class VSTPlayer:
     # ------------------------------------------------------------------
 
     def _normalize_audio(self, audio: np.ndarray) -> np.ndarray:
-        if not self._normalize:
-            return audio
         from melodica.dsp_effects import normalize_peak
-        return normalize_peak(audio, peak_target=0.9)
+        return normalize_peak(audio, peak_target=0.9) if self._normalize else audio
 
     def render_notes(
         self,

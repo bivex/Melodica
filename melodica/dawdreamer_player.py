@@ -145,10 +145,8 @@ class DawDreamerPlayer:
     # ------------------------------------------------------------------
 
     def _normalize_audio(self, audio: np.ndarray) -> np.ndarray:
-        if not self._normalize:
-            return audio
         from melodica.dsp_effects import normalize_peak
-        return normalize_peak(audio, peak_target=0.9)
+        return normalize_peak(audio, peak_target=0.9) if self._normalize else audio
 
     def _load_notes(self, notes: list[NoteInfo], bpm: float, channel: int = 0) -> None:
         """Push NoteInfo events into the plugin in absolute seconds."""

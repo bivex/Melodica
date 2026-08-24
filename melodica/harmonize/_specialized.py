@@ -25,11 +25,11 @@ from dataclasses import dataclass, field
 from melodica.harmonize._hmm_helpers import (
     _chord_pcs_for_degree, _voice_leading_cost, _build_diatonic_chords,
 )
-from melodica.harmonize._observation import HarmonizationSegmentation
+from melodica.harmonize._observation import HarmonizationSegmentation, _HarmonizerSegmentationMixin
 from melodica.types import BarGrid, ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
 
 @dataclass
-class GraphSearchHarmonizer:
+class GraphSearchHarmonizer(_HarmonizerSegmentationMixin):
     """
     Dijkstra-based harmonization over chord graph.
 
@@ -159,17 +159,9 @@ class GraphSearchHarmonizer:
                 mat[i][j] = w
         return mat
 
-    def _extract_observations(
-        self,
-        melody: list[NoteInfo],
-        change_points: list[float],
-    ) -> list[list[int]]:
-        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
-    def _get_change_points(self, duration: float) -> list[float]:
-        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
-class GeneticHarmonizer:
+class GeneticHarmonizer(_HarmonizerSegmentationMixin):
     """Evolves chord progressions using genetic algorithm."""
 
     population_size: int = 50
@@ -272,13 +264,9 @@ class GeneticHarmonizer:
             )
         return result
 
-    def _extract_obs(self, melody, change_points):
-        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
-    def _get_cp(self, duration):
-        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
-class ChromaticMediantHarmonizer:
+class ChromaticMediantHarmonizer(_HarmonizerSegmentationMixin):
     """Dramatic cinematic chords: I→bVI, I→bIII, I→III, etc."""
 
     chromatic_prob: float = 0.4
@@ -330,10 +318,8 @@ class ChromaticMediantHarmonizer:
             prev_root = root
         return result
 
-    def _get_cp(self, duration):
-        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
-class ModalInterchangeHarmonizer:
+class ModalInterchangeHarmonizer(_HarmonizerSegmentationMixin):
     """Borrows chords from parallel minor (iv, bVI, bVII)."""
 
     borrow_prob: float = 0.3
@@ -379,6 +365,3 @@ class ModalInterchangeHarmonizer:
                 )
             )
         return result
-
-    def _get_cp(self, duration):
-        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)

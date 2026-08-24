@@ -69,3 +69,31 @@ class HarmonizationSegmentation:
             pcs = [n.pitch % 12 for n in sorted_m if cp <= n.start < next_cp]
             observations.append(pcs if pcs else [default_pc])
         return observations
+
+
+class _HarmonizerSegmentationMixin:
+    """Provides change points and observation extraction methods for harmonizers."""
+
+    def _get_change_points(self, duration: float) -> list[float]:
+        chord_change = getattr(self, "chord_change", "bars")
+        bar_grid = getattr(self, "bar_grid", None)
+        return HarmonizationSegmentation.get_change_points(duration, chord_change, bar_grid)
+
+    def _get_cp(self, duration: float) -> list[float]:
+        return self._get_change_points(duration)
+
+    def _extract_observations(
+        self,
+        melody: Sequence[NoteInfo],
+        change_points: Sequence[float],
+        default_pc: int = 0,
+    ) -> list[list[int]]:
+        return HarmonizationSegmentation.extract_observations(melody, change_points, default_pc)
+
+    def _extract_obs(
+        self,
+        melody: Sequence[NoteInfo],
+        change_points: Sequence[float],
+        default_pc: int = 0,
+    ) -> list[list[int]]:
+        return self._extract_observations(melody, change_points, default_pc)
