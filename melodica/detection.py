@@ -216,6 +216,29 @@ _KS_MINOR = np.array([
 ])
 
 
+def _correlate_ks_histogram(histogram: np.ndarray) -> Scale:
+    """Correlate a 12-pitch-class histogram against Krumhansl-Schmuckler profiles."""
+    total = histogram.sum()
+    if total > 0:
+        histogram = histogram / total
+
+    best_corr = -2.0
+    best_root = 0
+    best_mode = Mode.MAJOR
+
+    for root in range(12):
+        rotated = np.roll(histogram, -root)
+        corr_major = float(np.corrcoef(rotated, _KS_MAJOR)[0, 1])
+        corr_minor = float(np.corrcoef(rotated, _KS_MINOR)[0, 1])
+
+        if corr_major > best_corr:
+            best_corr, best_root, best_mode = corr_major, root, Mode.MAJOR
+        if corr_minor > best_corr:
+            best_corr, best_root, best_mode = corr_minor, root, Mode.NATURAL_MINOR
+
+    return Scale(root=best_root, mode=best_mode)
+
+
 def detect_scale(notes: list[Note]) -> Scale:
     """
     Krumhansl-Schmuckler key-finding algorithm.
@@ -231,32 +254,7 @@ def detect_scale(notes: list[Note]) -> Scale:
     for n in notes:
         histogram[pitch_class(n.pitch)] += n.duration
 
-    # Normalise
-    total = histogram.sum()
-    if total > 0:
-        histogram /= total
-
-    best_corr = -2.0
-    best_root = 0
-    best_mode = Mode.MAJOR
-
-    for root in range(12):
-        rotated = np.roll(histogram, -root)
-
-        corr_major = float(np.corrcoef(rotated, _KS_MAJOR)[0, 1])
-        corr_minor = float(np.corrcoef(rotated, _KS_MINOR)[0, 1])
-
-        if corr_major > best_corr:
-            best_corr = corr_major
-            best_root = root
-            best_mode = Mode.MAJOR
-
-        if corr_minor > best_corr:
-            best_corr = corr_minor
-            best_root = root
-            best_mode = Mode.NATURAL_MINOR
-
-    return Scale(root=best_root, mode=best_mode)
+    return _correlate_ks_histogram(histogram)
 
 
 # ---------------------------------------------------------------------------
@@ -280,24 +278,5 @@ def detect_scale_from_chords(chords: list[ChordLabel]) -> Scale:
         for pc in pcs:
             histogram[pc] += weight
 
-    # 2. Correlate against KS profiles (reusing the same logic as note-based)
-    total = histogram.sum()
-    if total > 0:
-        histogram /= total
-
-    best_corr = -2.0
-    best_root = 0
-    best_mode = Mode.MAJOR
-
-    for root in range(12):
-        rotated = np.roll(histogram, -root)
-        corr_major = float(np.corrcoef(rotated, _KS_MAJOR)[0, 1])
-        corr_minor = float(np.corrcoef(rotated, _KS_MINOR)[0, 1])
-
-        if corr_major > best_corr:
-            best_corr, best_root, best_mode = corr_major, root, Mode.MAJOR
-        if corr_minor > best_corr:
-            best_corr, best_root, best_mode = corr_minor, root, Mode.NATURAL_MINOR
-
-    return Scale(root=best_root, mode=best_mode)
+    return _correlate_ks_histogram(histogram)
 
