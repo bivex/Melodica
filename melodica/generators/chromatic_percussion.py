@@ -45,9 +45,8 @@ class _ChromaticPercussionBase(PhraseGenerator, ABC):
         return max(1, min(127, base_val + random.randint(-8, 8)))
 
     def _resolve_pitch(self, pc: int, anchor: int, key: Scale, low: int, high: int) -> int:
-        pitch = nearest_pitch(int(pc), anchor)
-        pitch = snap_to_scale(pitch, key)
-        return max(low, min(high, pitch))
+        from melodica.utils import resolve_scale_pitch
+        return resolve_scale_pitch(pc, anchor, key, low, high)
 
 
 class CelestaGenerator(_ChromaticPercussionBase):

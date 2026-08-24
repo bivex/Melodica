@@ -210,5 +210,4 @@ class DownbeatRestGenerator(PhraseGenerator):
         return nearest_pitch(random.choice(pcs), 60)
 
     def _vel(self, factor: float = 1.0) -> int:
-        base = self.base_velocity()
-        return max(1, min(127, int(base * factor)))
+        return self.scaled_velocity(factor)

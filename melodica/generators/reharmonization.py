@@ -286,14 +286,5 @@ class ReharmonizationGenerator(PhraseGenerator):
         return chord
 
     def _voice_lead(self, new_voicing: list[int], prev_voicing: list[int]) -> list[int]:
-        if not prev_voicing or not new_voicing:
-            return new_voicing
-        result = []
-        for nv in new_voicing:
-            best = min(prev_voicing, key=lambda pv: abs(nv - pv))
-            while nv - best > 6:
-                nv -= 12
-            while best - nv > 6:
-                nv += 12
-            result.append(nv)
-        return sorted(result)
+        from melodica.utils import voice_lead_minimal_pitch_motion
+        return voice_lead_minimal_pitch_motion(new_voicing, prev_voicing)

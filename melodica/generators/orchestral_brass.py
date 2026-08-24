@@ -112,8 +112,8 @@ class _OrchestralBrassBase(PhraseGenerator):
 
     def _anchor(self) -> int:
         """Center of the instrument's comfortable range, adjusted by register."""
-        mid = (self._range["low"] + self._range["high"]) // 2
-        return mid + (self.register - 2) * 4
+        from melodica.utils import calculate_instrument_anchor
+        return calculate_instrument_anchor(self._range["low"], self._range["high"], register=self.register)
 
     def _velocity(self, progress: float) -> int:
         if self.params.velocity_range:
@@ -131,9 +131,8 @@ class _OrchestralBrassBase(PhraseGenerator):
         return _apply_dynamic_curve(base, progress, self.dynamic_curve, base)
 
     def _resolve_pitch(self, pc: int, anchor: int, key: Scale) -> int:
-        pitch = nearest_pitch(int(pc), anchor)
-        pitch = snap_to_scale(pitch, key)
-        return max(self._range["low"], min(self._range["high"], pitch))
+        from melodica.utils import resolve_scale_pitch
+        return resolve_scale_pitch(pc, anchor, key, self._range["low"], self._range["high"])
 
     def _needs_breath(self, elapsed_in_phrase: float, vel: int) -> bool:
         """Brass instruments need breath pauses. Higher intensity = more frequent."""

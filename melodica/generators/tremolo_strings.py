@@ -298,11 +298,4 @@ class TremoloStringsGenerator(PhraseGenerator):
         return [max(low, min(high, snap_to_scale(nearest_pitch(chord.root, anchor), key)))]
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
-        if self.rhythm is not None:
-            return self.rhythm.generate(duration_beats)
-        t, events = 0.0, []
-        while t < duration_beats:
-            dur = min(4.0, duration_beats - t)
-            events.append(RhythmEvent(onset=round(t, 6), duration=dur))
-            t += 4.0
-        return events
+        return self.build_grid_events(duration_beats, step=4.0, dur=4.0)

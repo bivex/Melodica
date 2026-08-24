@@ -142,6 +142,30 @@ class PhraseGenerator(ABC):
             return (v_min + v_max) // 2
         return int(70 + self.params.density * 30)
 
+    def scaled_velocity(self, factor: float = 1.0) -> int:
+        """Calculate clamped velocity scaled from base_velocity()."""
+        base = self.base_velocity()
+        return max(1, min(127, int(base * factor)))
+
+    def build_grid_events(
+        self,
+        duration_beats: float,
+        step: float = 1.0,
+        dur: float | None = None,
+    ) -> list:
+        """Build regular rhythmic events across duration_beats."""
+        if getattr(self, "rhythm", None) is not None:
+            return self.rhythm.generate(duration_beats)
+        from melodica.rhythm import RhythmEvent
+        t = 0.0
+        events = []
+        actual_dur = dur if dur is not None else step
+        while t < duration_beats:
+            event_dur = min(actual_dur, duration_beats - t)
+            events.append(RhythmEvent(onset=round(t, 6), duration=round(event_dur, 6)))
+            t += step
+        return events
+
     # -- Option introspection ------------------------------------------------
 
     @classmethod

@@ -23,6 +23,7 @@ Rules:
 from __future__ import annotations
 
 import copy
+import math
 
 from melodica.types_pkg._notes import NoteInfo
 from melodica.types_pkg._theory import ChordLabel, Scale
@@ -500,3 +501,64 @@ def compute_simplicity(chord: ChordLabel) -> float:
         if i > 0:
             score -= 0.1  # extra penalty per additional extension
     return max(0.0, min(1.0, score))
+
+
+def apply_phrase_arch(notes: list, duration_beats: float, phrase_position: float = 0.0) -> list:
+    """Apply dynamic velocity arch over a phrase based on progress and phrase position."""
+    if not notes or duration_beats <= 0:
+        return notes
+    arch_height = 0.3 + 0.2 * phrase_position
+    for note in notes:
+        progress = getattr(note, "start", 0.0) / duration_beats
+        arch = 1.0 - arch_height + arch_height * math.sin(progress * math.pi * 0.7)
+        note.velocity = max(1, min(127, int(note.velocity * arch)))
+    return notes
+
+
+def resolve_scale_pitch(pc: int, anchor: int, key: Scale, low: int, high: int) -> int:
+    """Resolve a pitch class to the nearest scale pitch anchored near a given pitch, clamped to [low, high]."""
+    pitch = nearest_pitch(int(pc), anchor)
+    pitch = snap_to_scale(pitch, key)
+    return max(low, min(high, pitch))
+
+
+def calculate_instrument_anchor(low: int, high: int, register: int = 2, step: int = 4) -> int:
+    """Center of the instrument's comfortable range, adjusted by register level."""
+    mid = (low + high) // 2
+    return mid + (register - 2) * step
+
+
+def voice_lead_minimal_pitch_motion(new_voicing: list[int], prev_voicing: list[int]) -> list[int]:
+    """Voice lead new_voicing to minimize motion relative to prev_voicing by octave shifts."""
+    if not prev_voicing or not new_voicing:
+        return new_voicing
+    result = []
+    for nv in new_voicing:
+        best = min(prev_voicing, key=lambda pv: abs(nv - pv))
+        while nv - best > 6:
+            nv -= 12
+        while best - nv > 6:
+            nv += 12
+        result.append(nv)
+    return sorted(result)
+
+
+def filter_and_shift_chords(chords: list[ChordLabel], start: float, duration: float) -> list[ChordLabel]:
+    """Filter chords within [start, start + duration) and shift their start time relative to start."""
+    end = start + duration
+    result: list[ChordLabel] = []
+    for c in chords:
+        if c.start + c.duration > start and c.start < end:
+            shifted = ChordLabel(
+                root=c.root,
+                quality=c.quality,
+                extensions=list(c.extensions) if c.extensions else [],
+                bass=c.bass,
+                inversion=c.inversion,
+                start=c.start - start,
+                duration=c.duration,
+                degree=c.degree,
+                function=c.function,
+            )
+            result.append(shifted)
+    return result

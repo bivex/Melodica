@@ -224,11 +224,5 @@ class DyadGenerator(PhraseGenerator):
         duration_beats: float,
         phrase_position: float = 0.0,
     ) -> list[NoteInfo]:
-        if not notes or duration_beats <= 0:
-            return notes
-        arch_height = 0.3 + 0.2 * phrase_position
-        for note in notes:
-            progress = note.start / duration_beats
-            arch = 1.0 - arch_height + arch_height * math.sin(progress * math.pi * 0.7)
-            note.velocity = max(1, min(127, int(note.velocity * arch)))
-        return notes
+        from melodica.utils import apply_phrase_arch
+        return apply_phrase_arch(notes, duration_beats, phrase_position=phrase_position)

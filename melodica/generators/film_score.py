@@ -884,23 +884,8 @@ class FilmScoreGenerator(PhraseGenerator):
         start: float,
         dur: float,
     ) -> list[ChordLabel]:
-        end = start + dur
-        result: list[ChordLabel] = []
-        for c in chords:
-            if c.start + c.duration > start and c.start < end:
-                shifted = ChordLabel(
-                    root=c.root,
-                    quality=c.quality,
-                    extensions=list(c.extensions) if c.extensions else [],
-                    bass=c.bass,
-                    inversion=c.inversion,
-                    start=c.start - start,
-                    duration=c.duration,
-                    degree=c.degree,
-                    function=c.function,
-                )
-                result.append(shifted)
-        return result
+        from melodica.utils import filter_and_shift_chords
+        return filter_and_shift_chords(chords, start, dur)
 
     def _accumulate(self, inst_name: str, notes: list[NoteInfo]) -> None:
         if inst_name not in self.tracks:

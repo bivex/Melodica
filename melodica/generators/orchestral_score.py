@@ -296,21 +296,8 @@ class OrchestralScoreGenerator(PhraseGenerator):
     def _chords_in_range(
         self, chords: list[ChordLabel], start: float, dur: float,
     ) -> list[ChordLabel]:
-        end = start + dur
-        result: list[ChordLabel] = []
-        for c in chords:
-            if c.start + c.duration > start and c.start < end:
-                # Shift start to be relative to section so sub-generators
-                # see beats starting from 0.0
-                shifted = ChordLabel(
-                    root=c.root, quality=c.quality,
-                    extensions=list(c.extensions) if c.extensions else [],
-                    bass=c.bass, inversion=c.inversion,
-                    start=c.start - start, duration=c.duration,
-                    degree=c.degree, function=c.function,
-                )
-                result.append(shifted)
-        return result
+        from melodica.utils import filter_and_shift_chords
+        return filter_and_shift_chords(chords, start, dur)
 
     def _voices_for_texture(self, texture: str) -> list[tuple[str, str]]:
         voices = list(_TEXTURE_VOICES.get(texture, _TEXTURE_VOICES[Texture.CHAMBER]))
