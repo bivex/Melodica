@@ -837,8 +837,100 @@ def _check_ternary_contrast(
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Public API & Extensible Rule Architecture
 # ---------------------------------------------------------------------------
+
+from typing import Protocol
+
+
+class ValidationRule(Protocol):
+    """Protocol for modular musical arrangement / form validation rules."""
+
+    name: str
+
+    def evaluate(
+        self,
+        tracks_data: dict[str, list[NoteInfo]],
+        bpm: float = 120.0,
+        form: MusicalForm | None = None,
+    ) -> list[FormIssue]: ...
+
+
+class FormValidator:
+    """
+    Extensible rule runner for musical form and arrangement validation.
+    Enables adding/removing rules without editing the monolithic check functions.
+    """
+
+    def __init__(self, rules: list[ValidationRule] | None = None) -> None:
+        self.rules: list[ValidationRule] = list(rules) if rules is not None else []
+        if rules is None:
+            self._register_defaults()
+
+    def _register_defaults(self) -> None:
+        class _ArrangementRule:
+            name = "Arrangement Rules"
+
+            def evaluate(
+                self,
+                tracks_data: dict[str, list[NoteInfo]],
+                bpm: float = 120.0,
+                form: MusicalForm | None = None,
+            ) -> list[FormIssue]:
+                return _check_arrangement(tracks_data, bpm)
+
+        class _FormStructureRule:
+            name = "Form Structure Rules"
+
+            def evaluate(
+                self,
+                tracks_data: dict[str, list[NoteInfo]],
+                bpm: float = 120.0,
+                form: MusicalForm | None = None,
+            ) -> list[FormIssue]:
+                return _check_form(tracks_data, bpm, form) if form is not None else []
+
+        self.rules = [_ArrangementRule(), _FormStructureRule()]
+
+    def add_rule(self, rule: ValidationRule) -> FormValidator:
+        self.rules.append(rule)
+        return self
+
+    def validate(
+        self,
+        tracks_data: dict[str, list[NoteInfo]],
+        bpm: float = 120.0,
+        form: MusicalForm | None = None,
+        *,
+        label: str | None = None,
+        strict: bool = False,
+    ) -> list[FormIssue]:
+        issues: list[FormIssue] = []
+        for rule in self.rules:
+            issues.extend(rule.evaluate(tracks_data, bpm=bpm, form=form))
+
+        if issues:
+            header = f"  {label}" if label else "  (unnamed track)"
+            print()
+            print("┌─ FORM VALIDATOR " + "─" * 60)
+            print(f"│  {header}")
+            print("├" + "─" * 77)
+            for issue in issues:
+                for line in str(issue).split(". "):
+                    print(f"│  {line}.")
+                print("│")
+            print("└" + "─" * 77)
+
+            if strict:
+                warnings = [iss for iss in issues if iss.severity == "WARNING"]
+                if warnings:
+                    issues_str = "\n".join(f"  - {iss}" for iss in warnings)
+                    raise ValueError(
+                        f"Musical validation failed in strict mode:\n{issues_str}"
+                    )
+
+        return issues
+
 
 def validate(
     tracks_data: dict[str, list[NoteInfo]],
@@ -856,31 +948,7 @@ def validate(
 
     label: optional name shown in the header (e.g. the .mid filename).
     """
-    issues = _check_arrangement(tracks_data, bpm)
-    if form is not None:
-        issues += _check_form(tracks_data, bpm, form)
-
-    if issues:
-        header = f"  {label}" if label else "  (unnamed track)"
-        print()
-        print("┌─ FORM VALIDATOR " + "─" * 60)
-        print(f"│  {header}")
-        print("├" + "─" * 77)
-        for issue in issues:
-            for line in str(issue).split(". "):
-                print(f"│  {line}.")
-            print("│")
-        print("└" + "─" * 77)
-
-        if strict:
-            warnings = [iss for iss in issues if iss.severity == "WARNING"]
-            if warnings:
-                issues_str = "\n".join(f"  - {iss}" for iss in warnings)
-                raise ValueError(
-                    f"Musical validation failed in strict mode:\n{issues_str}"
-                )
-
-    return issues
+    return FormValidator().validate(tracks_data, bpm=bpm, form=form, label=label, strict=strict)
 
 
 # ---------------------------------------------------------------------------

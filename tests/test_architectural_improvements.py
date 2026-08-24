@@ -342,3 +342,28 @@ class TestHarmonizationSegmentation:
         assert obs[2] == [0]  # default fallback
 
 
+class TestFormValidator:
+    def test_form_validator_rule_extensibility(self):
+        from melodica.form_validator import FormValidator, FormIssue
+
+        class CustomSilenceRule:
+            name = "Custom Silence Rule"
+
+            def evaluate(self, tracks_data, bpm=120.0, form=None):
+                if not tracks_data:
+                    return [FormIssue(code="CUST-1", severity="WARNING", message="No tracks provided.")]
+                return []
+
+        validator = FormValidator(rules=[CustomSilenceRule()])
+        issues = validator.validate({})
+        assert len(issues) == 1
+        assert issues[0].code == "CUST-1"
+
+        # Default rules with normal track data
+        default_val = FormValidator()
+        track_notes = {"Piano": [Note(pitch=60, start=0.0, duration=4.0)]}
+        issues_def = default_val.validate(track_notes, bpm=120.0)
+        assert isinstance(issues_def, list)
+
+
+
