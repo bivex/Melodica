@@ -165,17 +165,7 @@ class FingerpickingGenerator(PhraseGenerator):
     # ------------------------------------------------------------------
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
-        if self.rhythm is not None:
-            return self.rhythm.generate(duration_beats)
-        # Default fallback: 8th notes
-        t, events = 0.0, []
-        while t < duration_beats:
-            events.append(RhythmEvent(onset=round(t, 6), duration=0.45))
-            t += 0.5
-        return events
+        return self.build_grid_events(duration_beats, step=0.5, dur=0.45)
 
     def _velocity(self) -> int:
-        if self.params.velocity_range:
-            v_min, v_max = self.params.velocity_range
-            return (v_min + v_max) // 2
-        return int(55 + self.params.density * 35)
+        return self.base_velocity()

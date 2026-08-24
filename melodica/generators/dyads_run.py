@@ -33,7 +33,6 @@ from melodica.utils import nearest_pitch, chord_at
 TECHNIQUES = {"up", "down", "up_down", "waterfall"}
 
 
-@dataclass
 class DyadsRunGenerator(PhraseGenerator):
     """
     Two-voice parallel runs (3rds, 6ths, etc).
@@ -45,11 +44,6 @@ class DyadsRunGenerator(PhraseGenerator):
     """
 
     name: str = "Dyads Run Generator"
-    interval: int = 3
-    technique: str = "up"
-    notes_per_run: int = 8
-    scale_steps: bool = False
-    rhythm: RhythmGenerator | None = None
 
     def __init__(
         self,
@@ -182,13 +176,7 @@ class DyadsRunGenerator(PhraseGenerator):
             return list(reversed(pool[max(0, start_idx - self.notes_per_run + 1) : start_idx + 1]))
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
-        if self.rhythm is not None:
-            return self.rhythm.generate(duration_beats)
-        t, events = 0.0, []
-        while t < duration_beats:
-            events.append(RhythmEvent(onset=round(t, 6), duration=3.8))
-            t += 4.0
-        return events
+        return self.build_grid_events(duration_beats, step=4.0, dur=3.8)
 
     def _velocity(self) -> int:
-        return int(65 + self.params.density * 30)
+        return self.base_velocity()

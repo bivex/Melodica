@@ -435,14 +435,7 @@ class PianoRunGenerator(PhraseGenerator):
     # ------------------------------------------------------------------
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
-        if self.rhythm is not None:
-            return self.rhythm.generate(duration_beats)
-        # Default: fire a run once per measure
-        t, events = 0.0, []
-        while t < duration_beats:
-            events.append(RhythmEvent(onset=round(t, 6), duration=3.8))
-            t += 4.0
-        return events
+        return self.build_grid_events(duration_beats, step=4.0, dur=3.8)
 
     def _velocity(self) -> int:
-        return int(70 + self.params.density * 30)
+        return self.base_velocity()

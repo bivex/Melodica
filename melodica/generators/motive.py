@@ -163,13 +163,7 @@ class MotiveGenerator(PhraseGenerator):
         return notes
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
-        if self.rhythm is not None:
-            return self.rhythm.generate(duration_beats)
-        t, events = 0.0, []
-        while t < duration_beats:
-            events.append(RhythmEvent(onset=round(t, 6), duration=0.45))
-            t += 0.5
-        return events
+        return self.build_grid_events(duration_beats, step=0.5, dur=0.45)
 
     def _velocity(self) -> int:
-        return int(65 + self.params.density * 30)
+        return self.base_velocity()
