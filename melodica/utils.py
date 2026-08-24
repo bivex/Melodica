@@ -566,7 +566,7 @@ def filter_and_shift_chords(chords: list[ChordLabel], start: float, duration: fl
 
 PERCUSSION_KEYWORDS = (
     "drum", "percussion", "perc", "kit", "taiko", "ghost",
-    "snare", "kick", "cymbal", "hihat", "groove", "timpani",
+    "snare", "kick", "cymbal", "hihat", "groove",
 )
 
 TEXTURAL_KEYWORDS = (
