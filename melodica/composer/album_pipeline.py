@@ -1876,6 +1876,58 @@ def _stage_diagnostics(kw):
     return kw
 
 
+def _resolve_section_profile(sec_key: Mood | str) -> SectionProfile:
+    """Resolve SectionProfile from a string key or Mood enum."""
+    if isinstance(sec_key, str):
+        return SECTION_PROFILES.get(sec_key, SECTION_PROFILES["Theme"])
+    if isinstance(sec_key, Mood):
+        for p in SECTION_PROFILES.values():
+            if p.mood == sec_key:
+                return p
+    return SECTION_PROFILES["Theme"]
+
+
+def _build_section_cc_automation(
+    tracks: Dict[str, List[NoteInfo]],
+    sections: List[Tuple[float, Mood | str]],
+    cc_events: Dict[str, List[Tuple[float, int, int]]],
+) -> Dict[str, List[Tuple[float, int, int]]]:
+    """Generate CC automation (reverb CC 91 and filter cutoff CC 74) for each section."""
+    total_beats = 0.0
+    for tname, notes in tracks.items():
+        if tname.startswith("_") or not notes:
+            continue
+        end = max(n.start + n.duration for n in notes)
+        if end > total_beats:
+            total_beats = end
+
+    for tname in list(tracks.keys()):
+        if tname.startswith("_"):
+            continue
+        if tname not in cc_events:
+            cc_events[tname] = []
+
+        cc_events[tname] = [evt for evt in cc_events[tname] if evt[1] not in (74, 91)]
+
+        for idx, (sec_start, sec_key) in enumerate(sections):
+            profile = _resolve_section_profile(sec_key)
+            cc_events[tname].append((sec_start, 91, profile.reverb_amount))
+            cc_events[tname].append((sec_start, 74, profile.filter_cutoff))
+
+            if idx < len(sections) - 1:
+                next_start = sections[idx + 1][0]
+                transition_time = max(sec_start, next_start - 1.0)
+                cc_events[tname].append((transition_time, 91, profile.reverb_amount))
+                cc_events[tname].append((transition_time, 74, profile.filter_cutoff))
+            else:
+                cc_events[tname].append((total_beats, 91, profile.reverb_amount))
+                cc_events[tname].append((total_beats, 74, profile.filter_cutoff))
+
+        cc_events[tname].sort(key=lambda x: x[0])
+
+    return cc_events
+
+
 def _stage_sections(kw):
     sections = kw.get("sections")
     tracks = kw.get("tracks")
@@ -1886,51 +1938,7 @@ def _stage_sections(kw):
         kw["tracks"] = _apply_section_moods(tracks, sections, kw["_profiles"])
 
         # 2. Apply section-level CC automation (Reverb & Filter Cutoff)
-        total_beats = 0.0
-        for tname, notes in kw["tracks"].items():
-            if tname.startswith("_") or not notes:
-                continue
-            end = max(n.start + n.duration for n in notes)
-            if end > total_beats:
-                total_beats = end
-
-        # Generate CC automation for every track
-        for tname in list(kw["tracks"].keys()):
-            if tname.startswith("_"):
-                continue
-            if tname not in cc_events:
-                cc_events[tname] = []
-
-            # Clean existing reverb (CC 91) and filter (CC 74) events
-            cc_events[tname] = [evt for evt in cc_events[tname] if evt[1] not in (74, 91)]
-
-            for idx, (sec_start, sec_key) in enumerate(sections):
-                profile = None
-                if isinstance(sec_key, str):
-                    profile = SECTION_PROFILES.get(sec_key)
-                elif isinstance(sec_key, Mood):
-                    for name, p in SECTION_PROFILES.items():
-                        if p.mood == sec_key:
-                            profile = p
-                            break
-                if profile is None:
-                    profile = SECTION_PROFILES["Theme"]
-
-                cc_events[tname].append((sec_start, 91, profile.reverb_amount))
-                cc_events[tname].append((sec_start, 74, profile.filter_cutoff))
-
-                if idx < len(sections) - 1:
-                    next_start = sections[idx + 1][0]
-                    transition_time = max(sec_start, next_start - 1.0)
-                    cc_events[tname].append((transition_time, 91, profile.reverb_amount))
-                    cc_events[tname].append((transition_time, 74, profile.filter_cutoff))
-                else:
-                    cc_events[tname].append((total_beats, 91, profile.reverb_amount))
-                    cc_events[tname].append((total_beats, 74, profile.filter_cutoff))
-
-            cc_events[tname].sort(key=lambda x: x[0])
-
-        kw["cc_events"] = cc_events
+        kw["cc_events"] = _build_section_cc_automation(kw["tracks"], sections, cc_events)
 
     return kw
 
@@ -2341,15 +2349,21 @@ def produce_track(
     -------
     dict with keys: profiles, report
     """
+def _validate_produce_track_args(
+    rhythm: str | object | None,
+    key: Scale | None,
+    chords: list | None,
+    genre: str,
+    time_signature: tuple[int, int] | None,
+) -> None:
+    """Validate required arguments for produce_track."""
     if rhythm is None:
         raise ValueError(
             "rhythm is required for produce_track. Pass a rhythm name (str from "
             "RHYTHM_LIBRARY/DYNAMIC_RHYTHM_REGISTRY) or a RhythmGenerator instance."
         )
     if key is None:
-        raise ValueError(
-            "key is required for produce_track. Pass a Scale instance."
-        )
+        raise ValueError("key is required for produce_track. Pass a Scale instance.")
     if chords is None:
         raise ValueError(
             "chords is required for produce_track. Pass a chord progression "
@@ -2375,55 +2389,124 @@ def produce_track(
             f"got {time_signature!r}."
         )
 
+
+def _resolve_and_validate_sections(
+    sections: List[Tuple[float, Mood | str]] | None,
+    tracks: Dict[str, List[NoteInfo]],
+    bpm: float,
+    time_signature: tuple[int, int],
+    verbose: bool,
+) -> List[Tuple[float, Mood | str]]:
+    """Detect arrangement sections if missing and validate chronological order."""
     if not sections:
         sections = detect_sections_intelligently(tracks, bpm, time_signature)
         if verbose:
-            print(f"   [AI Section Analyzer] Auto-detected arrangement: {', '.join(f'{lbl} (@{start}b)' for start, lbl in sections)}")
+            print(
+                f"   [AI Section Analyzer] Auto-detected arrangement: {', '.join(f'{lbl} (@{start}b)' for start, lbl in sections)}"
+            )
 
-    # Validate section ordering
     last_beat = -1.0
     for idx, sec in enumerate(sections):
         if not isinstance(sec, (list, tuple)) or len(sec) < 2:
             raise ValueError(
                 f"Section at index {idx} must be a tuple/list of (start_beat, mood)."
             )
-        beat, sec_mood = sec
+        beat, _sec_mood = sec
         if beat < last_beat:
             raise ValueError(
                 f"Sections are not in chronological order: section at index {idx} starts at beat {beat}, which is less than preceding beat {last_beat}."
             )
         last_beat = beat
 
+    return sections
+
+
+def _resolve_feature_flags(feature_flags: dict | None) -> dict[str, bool]:
+    """Resolve default feature flags if none provided."""
+    if feature_flags is not None:
+        return feature_flags
+    try:
+        from melodica.idea_tool import IdeaToolConfig
+
+        _cfg = IdeaToolConfig()
+        return {
+            "use_mixing": _cfg.use_mixing,
+            "use_mastering": _cfg.use_mastering,
+            "use_harmonic_verifier": _cfg.use_harmonic_verifier,
+        }
+    except Exception:
+        return {
+            "use_mixing": True,
+            "use_mastering": True,
+            "use_harmonic_verifier": True,
+        }
+
+
+def _run_pipeline_stages(
+    stages: list[Stage],
+    kw: dict,
+    feature_flags: dict,
+    verbose: bool,
+) -> tuple[dict, list[tuple[str, str]]]:
+    """Execute pipeline stages sequentially and collect skipped stages."""
+    skipped: list[tuple[str, str]] = []
+    for stage in stages:
+        reason = _stage_skip_reason(stage, kw, feature_flags)
+        if reason is not None:
+            skipped.append((stage.name, reason))
+            continue
+        kw = stage.fn(kw)
+
+    if verbose and skipped:
+        print("  Stage activation report:")
+        for name, reason in skipped:
+            print(f"    - {name:<18} skipped: {reason}")
+
+    return kw, skipped
+
+
+def produce_track(
+    tracks: Dict[str, List[NoteInfo]],
+    bpm: float,
+    instruments: Dict[str, int],
+    path: str | Path,
+    mood: Mood = Mood.CINEMATIC,
+    key: Scale | None = None,
+    psycho_verify_enabled: bool = True,
+    verbose: bool = True,
+    genre: str = DEFAULT_GENRE,
+    sections: List[Tuple[float, Mood | str]] | None = None,
+    chords: List | None = None,
+    cc_events: Dict[str, List[Tuple[float, int, int]]] | None = None,
+    tempo_events: List[Tuple[float, float]] | None = None,
+    pipeline: list | None = None,
+    engine: str = "hmm",
+    style: str = "academic",
+    section_breaks: List[Tuple[float, str]] | None = None,
+    return_state: bool = False,
+    strict_validation: bool = False,
+    rhythm: str | object | None = None,
+    time_signature: tuple[int, int] | None = None,
+    feature_flags: dict | None = None,
+    skip_stages: list[str] | None = None,
+) -> dict:
+    """
+    Full production pipeline: analyze → mix → dynamics → psycho → master → export.
+    """
+    _validate_produce_track_args(rhythm, key, chords, genre, time_signature)
+    sections = _resolve_and_validate_sections(sections, tracks, bpm, time_signature, verbose)
+
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     mood_profile = _MOOD_PROFILES[mood]
 
-    # Build pipeline
     stages = pipeline if pipeline is not None else DEFAULT_PIPELINE
     if skip_stages:
         stages = [s for s in stages if s.name not in skip_stages]
 
-    # Resolve the feature-flag view that gates stages (config_flag). Callers may
-    # pass an IdeaToolConfig-derived dict; otherwise we fall back to the config
-    # defaults so existing callers that don't pass flags keep working — every
-    # gated stage defaults to ON (matching IdeaToolConfig defaults).
-    if feature_flags is None:
-        try:
-            from melodica.idea_tool import IdeaToolConfig
-            _cfg = IdeaToolConfig()
-            feature_flags = {
-                "use_mixing": _cfg.use_mixing,
-                "use_mastering": _cfg.use_mastering,
-                "use_harmonic_verifier": _cfg.use_harmonic_verifier,
-            }
-        except Exception:
-            feature_flags = {"use_mixing": True, "use_mastering": True,
-                             "use_harmonic_verifier": True}
-
-    # Validate ordering invariants once, loudly.
+    feature_flags = _resolve_feature_flags(feature_flags)
     validate_pipeline_order(stages)
 
-    # Common kwargs passed to every stage
     kw = dict(
         tracks=tracks,
         bpm=bpm,
@@ -2447,21 +2530,7 @@ def produce_track(
         time_signature=time_signature,
     )
 
-    # Run stages sequentially. Activation is the AND of three gates (enabled /
-    # requires_keys / config_flag); the unified check makes skips observable
-    # and reports WHY a stage was skipped, instead of it silently doing nothing.
-    skipped: list[tuple[str, str]] = []
-    for stage in stages:
-        reason = _stage_skip_reason(stage, kw, feature_flags)
-        if reason is not None:
-            skipped.append((stage.name, reason))
-            continue
-        kw = stage.fn(kw)
-
-    if verbose and skipped:
-        print("  Stage activation report:")
-        for name, reason in skipped:
-            print(f"    - {name:<18} skipped: {reason}")
+    kw, _skipped = _run_pipeline_stages(stages, kw, feature_flags, verbose)
 
     if return_state:
         return {
