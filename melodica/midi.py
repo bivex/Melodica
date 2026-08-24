@@ -349,6 +349,149 @@ def notes_to_midi(
     export_multitrack_midi({"Track 1": notes}, path, bpm=bpm, humanize=humanize)
 
 
+def _resolve_track_program(name: str, instruments: dict[str, int] | None = None) -> int:
+    """Resolve GM program number for a track by explicit map or fuzzy lookup."""
+    if instruments and name in instruments:
+        return instruments[name]
+    low_name = name.lower()
+    if low_name in GM_INSTRUMENTS:
+        return GM_INSTRUMENTS[low_name]
+    for key in sorted(GM_INSTRUMENTS.keys(), key=len, reverse=True):
+        if key in low_name:
+            return GM_INSTRUMENTS[key]
+    return 0
+
+
+def _allocate_track_channels(
+    tracks_data: dict[str, list[NoteInfo]],
+    instruments: dict[str, int] | None = None,
+    mpe_set: set[str] | None = None,
+) -> tuple[dict[str, list[int]], list[int]]:
+    """Allocate MIDI channel pools for multi-track export (handles drums, MPE, and microtonal)."""
+    from melodica.utils import is_percussion_track_name
+
+    DRUM_CHANNEL = 9
+    mpe_set = mpe_set or set()
+
+    microtonal_tracks = []
+    for name, notes in tracks_data.items():
+        if any(abs(n.pitch - round(n.pitch)) > 0.001 for n in notes):
+            microtonal_tracks.append(name)
+
+    percussion_tracks = {
+        name for name in tracks_data
+        if not (instruments and name in instruments) and is_percussion_track_name(name)
+    }
+
+    track_channels: dict[str, list[int]] = {}
+    next_chan = 0
+    mpe_zone_channels = []
+
+    for name in tracks_data.keys():
+        if name in percussion_tracks:
+            track_channels[name] = [DRUM_CHANNEL]
+            continue
+
+        if next_chan == DRUM_CHANNEL:
+            next_chan += 1
+
+        is_mpe = name in mpe_set
+        if is_mpe:
+            pool_size = 7
+            remaining_tracks = len(tracks_data) - len(track_channels) - 1
+            if next_chan + pool_size + remaining_tracks > 15:
+                pool_size = max(1, 15 - next_chan - remaining_tracks)
+            pool = list(range(next_chan, next_chan + pool_size))
+            track_channels[name] = pool
+            mpe_zone_channels.extend(pool[1:])
+            next_chan += pool_size
+        elif name in microtonal_tracks:
+            pool_size = 3
+            remaining_tracks = len(tracks_data) - len(track_channels) - 1
+            if next_chan + pool_size + remaining_tracks > 16:
+                pool_size = max(1, 16 - next_chan - remaining_tracks)
+            track_channels[name] = list(range(next_chan, next_chan + pool_size))
+            next_chan += pool_size
+        else:
+            track_channels[name] = [next_chan]
+            next_chan += 1
+
+        track_channels[name] = [min(15, ch) for ch in track_channels[name]]
+
+    return track_channels, mpe_zone_channels
+
+
+def _build_global_meta_track(
+    mid: mido.MidiFile,
+    tempo: int,
+    tempo_events: list[tuple[float, float]] | None,
+    timeline: "MusicTimeline | None",
+    key: "Scale | str | None",
+    time_sig: tuple[int, int],
+    tpb: int,
+) -> None:
+    """Build and append the Type-1 global meta track with tempo, key, time signature, and markers."""
+    meta_track = mido.MidiTrack()
+    mid.tracks.append(meta_track)
+    meta_track.append(mido.MetaMessage("track_name", name="Global", time=0))
+
+    meta_events: list[tuple[int, mido.MetaMessage]] = [
+        (0, mido.MetaMessage("set_tempo", tempo=tempo, time=0))
+    ]
+
+    if tempo_events:
+        for beat, event_bpm in tempo_events:
+            if beat <= 0.0:
+                meta_events[0] = (0, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(event_bpm), time=0))
+            else:
+                tick = round(beat * tpb)
+                meta_events.append((tick, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(event_bpm), time=0)))
+
+    if timeline is not None:
+        for kl in timeline.keys:
+            tick = round(kl.start * tpb)
+            key_str = _scale_to_key_sig(kl.scale)
+            meta_events.append((tick, mido.MetaMessage("key_signature", key=key_str, time=0)))
+        for ts in timeline.time_signatures:
+            tick = round(ts.start * tpb)
+            meta_events.append(
+                (
+                    tick,
+                    mido.MetaMessage(
+                        "time_signature",
+                        numerator=ts.numerator,
+                        denominator=ts.denominator,
+                        time=0,
+                    ),
+                )
+            )
+        for m in timeline.markers:
+            tick = round(m.start * tpb)
+            meta_events.append((tick, mido.MetaMessage("marker", text=m.text, time=0)))
+    else:
+        if key is not None:
+            key_str = key if isinstance(key, str) else _scale_to_key_sig(key)
+            meta_events.append((0, mido.MetaMessage("key_signature", key=key_str, time=0)))
+        meta_events.append(
+            (
+                0,
+                mido.MetaMessage(
+                    "time_signature",
+                    numerator=time_sig[0],
+                    denominator=time_sig[1],
+                    time=0,
+                ),
+            )
+        )
+
+    meta_events.sort(key=lambda x: x[0])
+    last_tick = 0
+    for tick, msg in meta_events:
+        msg.time = max(0, tick - last_tick)
+        meta_track.append(msg)
+        last_tick = tick
+
+
 def export_multitrack_midi(
     tracks_data: dict[str, list[NoteInfo]],
     path: str | Path,
@@ -373,40 +516,9 @@ def export_multitrack_midi(
 ) -> None:
     """
     Write multiple tracks to a Type 1 MIDI file.
-    tracks_data: { "Bass": [NoteInfo...], "Melody": [NoteInfo...] }
-
-    key: Scale object or string like "Am", "C" — writes key signature meta event.
-    time_sig: (numerator, denominator) — writes time signature meta event.
-    timeline: MusicTimeline — full timeline with key/time-signature changes and markers.
-    cc_events: { "TrackName": [(beat, cc_num, cc_val), ...] } — standalone CC events.
-    instruments: { "TrackName": gm_program_number } — GM instrument per track.
-        Default: 0 (Acoustic Grand Piano). Keys not found default to 0.
-    diagnose: if True, run diagnostic analysis on tracks and print fix suggestions.
-    mpe_tracks: set of track names that should get MPE (per-note expression) treatment.
-        These tracks get larger voice pools and MPE zone RPN setup.
-    reaper_project: if True (default), write a .rpp file next to the .mid file
-        with the same stem name. The project contains one MIDI track per
-        instrument, colour-coded by family, ready to open in REAPER for
-        mixing/mastering. Pass False to skip .rpp generation.
-    validate_form: if True, run the form/arrangement validator and print warnings.
-        Defaults to True when form is provided, False otherwise.
-    form: optional MusicalForm — enables form-level checks (sonata, ternary, etc.)
-        in addition to arrangement checks.
-    postprocess_arr: if True, apply lightweight ARR-12/ARR-13 fixes
-        (melodic-leap resolution + breathing-room rests) before writing the
-        MIDI file.  Use this on the compact path (IdeaTool.generate() →
-        export_multitrack_midi()) to get the same correctness guarantees as
-        the full produce_track() pipeline, without requiring rhythm/mixing
-        stages.  Tracks are selected by GM program number: programs 0–79
-        (piano, strings, brass, woodwinds, etc.) are processed; programs
-        80–127 (pads, percussion, SFX) are left untouched.  Defaults to
-        True.
     """
     from melodica.types import TICKS_PER_BEAT, MIDI_MAX
 
-    # Optional: lightweight ARR-12/ARR-13 repair (compact path opt-in).
-    # Runs before the `_`-prefix filter so internal keys are transparently skipped
-    # inside fix_arr_lite itself.
     if postprocess_arr:
         from melodica._postprocess import fix_arr_lite
         tracks_data = fix_arr_lite(tracks_data, instruments=instruments)
@@ -417,150 +529,15 @@ def export_multitrack_midi(
     mid = mido.MidiFile(type=1, ticks_per_beat=tpb)
 
     # 1. Global Meta Track
-    meta_track = mido.MidiTrack()
-    mid.tracks.append(meta_track)
-    meta_track.append(mido.MetaMessage("track_name", name="Global", time=0))
-
-    meta_events: list[tuple[int, mido.MetaMessage]] = []
-
-    # Initial tempo at beat 0
-    meta_events.append((0, mido.MetaMessage("set_tempo", tempo=tempo, time=0)))
-
-    # Additional tempo events
-    if tempo_events:
-        for beat, event_bpm in tempo_events:
-            if beat <= 0.0:
-                meta_events[0] = (0, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(event_bpm), time=0))
-            else:
-                tick = round(beat * tpb)
-                meta_events.append((tick, mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(event_bpm), time=0)))
-
-    if timeline is not None:
-        # Full timeline: key changes, time-signature changes, markers
-        for kl in timeline.keys:
-            tick = round(kl.start * tpb)
-            key_str = _scale_to_key_sig(kl.scale)
-            meta_events.append((tick, mido.MetaMessage("key_signature", key=key_str, time=0)))
-        for ts in timeline.time_signatures:
-            tick = round(ts.start * tpb)
-            meta_events.append(
-                (
-                    tick,
-                    mido.MetaMessage(
-                        "time_signature",
-                        numerator=ts.numerator,
-                        denominator=ts.denominator,
-                        time=0,
-                    ),
-                )
-            )
-        for m in timeline.markers:
-            tick = round(m.start * tpb)
-            meta_events.append((tick, mido.MetaMessage("marker", text=m.text, time=0)))
-    else:
-        # Simple key + time signature
-        if key is not None:
-            key_str = key if isinstance(key, str) else _scale_to_key_sig(key)
-            meta_events.append((0, mido.MetaMessage("key_signature", key=key_str, time=0)))
-        meta_events.append(
-            (
-                0,
-                mido.MetaMessage(
-                    "time_signature",
-                    numerator=time_sig[0],
-                    denominator=time_sig[1],
-                    time=0,
-                ),
-            )
-        )
-
-    # Sort all meta events by tick and append to meta track
-    meta_events.sort(key=lambda x: x[0])
-    last_tick = 0
-    for tick, msg in meta_events:
-        msg.time = max(0, tick - last_tick)
-        meta_track.append(msg)
-        last_tick = tick
-
+    _build_global_meta_track(mid, tempo, tempo_events, timeline, key, time_sig, tpb)
 
     # 1b. Voice-leading correction — resolve parallel fifths/octaves before MIDI write.
     from melodica.voice_leading import correct_parallels as _correct_parallels
     tracks_data = _correct_parallels(tracks_data, instruments=instruments)
 
-    # 2. Dynamic voice channel pool allocation to prevent polyphonic pitch bend overlap.
-    # Identify which tracks in tracks_data contain microtonal notes.
+    # 2. Dynamic voice channel pool allocation
     mpe_set = mpe_tracks or set()
-    microtonal_tracks = []
-    for name, notes in tracks_data.items():
-        has_micro = False
-        for n in notes:
-            if abs(n.pitch - round(n.pitch)) > 0.001:
-                has_micro = True
-                break
-        if has_micro:
-            microtonal_tracks.append(name)
-
-    # Identify percussion tracks — these must live on GM channel 9 (the
-    # dedicated drum channel) so synths/soundfonts play them as the unpitched
-    # drum kit rather than as a pitched instrument. A track is percussion if
-    # its name matches a drum-kit keyword.
-    # IMPORTANT: only UNPITCHED percussion belongs on channel 9. Pitched
-    # tuned percussion (timpani, glockenspiel, marimba, tubular bells, etc.)
-    # plays real notes and must stay on a normal channel with its GM program,
-    # so those keywords are deliberately excluded here.
-    DRUM_CHANNEL = 9
-
-    def _is_percussion(name: str) -> bool:
-        if instruments and name in instruments:
-            return False
-        from melodica.utils import is_percussion_track_name
-        return is_percussion_track_name(name)
-
-    percussion_tracks = {name for name in tracks_data if _is_percussion(name)}
-
-    track_channels: dict[str, list[int]] = {}
-    next_chan = 0
-    mpe_zone_channels = []  # Collect all MPE member channels for zone setup
-
-    def _advance_past_drum_channel() -> None:
-        """Skip channel 9 for pitched tracks — it's reserved for percussion."""
-        nonlocal next_chan
-        if next_chan == DRUM_CHANNEL:
-            next_chan += 1
-
-    for name in tracks_data.keys():
-        # Percussion always goes to the dedicated drum channel.
-        if name in percussion_tracks:
-            track_channels[name] = [DRUM_CHANNEL]
-            continue
-
-        is_mpe = name in mpe_set
-        _advance_past_drum_channel()
-        if is_mpe:
-            # MPE tracks: 7 channels for full polyphonic expression
-            pool_size = 7
-            remaining_tracks = len(tracks_data) - len(track_channels) - 1
-            if next_chan + pool_size + remaining_tracks > 15:
-                pool_size = max(1, 15 - next_chan - remaining_tracks)
-            pool = list(range(next_chan, next_chan + pool_size))
-            track_channels[name] = pool
-            mpe_zone_channels.extend(pool[1:])  # Member channels (not master)
-            next_chan += pool_size
-        elif name in microtonal_tracks:
-            # Give a pool of 3 channels for polyphonic microtonal voice allocation
-            pool_size = 3
-            remaining_tracks = len(tracks_data) - len(track_channels) - 1
-            if next_chan + pool_size + remaining_tracks > 16:
-                pool_size = max(1, 16 - next_chan - remaining_tracks)
-
-            track_channels[name] = list(range(next_chan, next_chan + pool_size))
-            next_chan += pool_size
-        else:
-            # Diatonic tracks only need 1 channel
-            track_channels[name] = [next_chan]
-            next_chan += 1
-        # Clamp channels to range 0-15
-        track_channels[name] = [min(15, ch) for ch in track_channels[name]]
+    track_channels, mpe_zone_channels = _allocate_track_channels(tracks_data, instruments, mpe_set)
 
     # 3. Add individual tracks
     for i, (name, notes) in enumerate(tracks_data.items()):
@@ -576,27 +553,7 @@ def export_multitrack_midi(
         # Program change and controllers: broadcast to all channels in the pool
         is_mpe_track = name in mpe_set
         for ci, channel in enumerate(pool):
-            # Resolve GM program:
-            # 1. Explicit instruments map
-            # 2. Case-insensitive track name lookup in GM_INSTRUMENTS
-            # 3. Substring match in GM_INSTRUMENTS (e.g. "Solo_Oud" -> "oud" if added)
-            # 4. Fallback to 0 (Piano)
-            program = 0
-            if instruments and name in instruments:
-                program = instruments[name]
-            else:
-                low_name = name.lower()
-                # Exact match
-                if low_name in GM_INSTRUMENTS:
-                    program = GM_INSTRUMENTS[low_name]
-                else:
-                    # Fuzzy match: find if any GM key is part of the track name
-                    # Sort keys by length descending to match "dark_pad" before "pad"
-                    for key in sorted(GM_INSTRUMENTS.keys(), key=len, reverse=True):
-                        if key in low_name:
-                            program = GM_INSTRUMENTS[key]
-                            break
-
+            program = _resolve_track_program(name, instruments)
             tr.append(mido.Message("program_change", program=program, channel=channel, time=0))
 
 
