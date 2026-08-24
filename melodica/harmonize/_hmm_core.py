@@ -26,6 +26,7 @@ from melodica.harmonize._hmm_helpers import (
     _CADENCE_BONUSES, _FUNCTION_MAP, _FUNCTION_RULES_HMM2, _EXTENSIONS,
     _get_cadence_bonus, MODAL_GRAVITY, STYLE_MATRICES,
 )
+from melodica.harmonize._observation import HarmonizationSegmentation
 from melodica.types import BarGrid, ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
 
 class SecondaryDominantDegree(int):
@@ -236,29 +237,10 @@ class HMMHarmonizer:
         change_points: list[float],
     ) -> list[list[int]]:
         """Extract pitch classes for each chord change interval."""
-        observations = []
-        sorted_m = sorted(melody, key=lambda n: n.start)
-        for i, cp in enumerate(change_points):
-            next_cp = change_points[i + 1] if i + 1 < len(change_points) else float("inf")
-            pcs = [n.pitch % 12 for n in sorted_m if cp <= n.start < next_cp]
-            observations.append(pcs if pcs else [0])
-        return observations
+        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
     def _get_change_points(self, duration: float) -> list[float]:
-        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
-        points = []
-        step = (
-            bpb
-            if self.chord_change == "bars"
-            else bpb / 2.0
-            if self.chord_change == "strong_beats"
-            else 1.0
-        )
-        t = 0.0
-        while t < duration:
-            points.append(t)
-            t += step
-        return points
+        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
 class HMM2Harmonizer:
     """
@@ -439,27 +421,10 @@ class HMM2Harmonizer:
         return mat
 
     def _extract_observations(self, melody, change_points):
-        sorted_m = sorted(melody, key=lambda n: n.start)
-        obs = []
-        for i, cp in enumerate(change_points):
-            ncp = change_points[i + 1] if i + 1 < len(change_points) else float("inf")
-            obs.append([n.pitch % 12 for n in sorted_m if cp <= n.start < ncp] or [0])
-        return obs
+        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
     def _get_change_points(self, duration):
-        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
-        step = (
-            bpb
-            if self.chord_change == "bars"
-            else bpb / 2.0
-            if self.chord_change == "strong_beats"
-            else 1.0
-        )
-        pts, t = [], 0.0
-        while t < duration:
-            pts.append(t)
-            t += step
-        return pts
+        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
 class HMM3Harmonizer:
     """
@@ -767,27 +732,10 @@ class HMM3Harmonizer:
             return 0.8  # weak beats
 
     def _extract_observations(self, melody, change_points):
-        sorted_m = sorted(melody, key=lambda n: n.start)
-        obs = []
-        for i, cp in enumerate(change_points):
-            ncp = change_points[i + 1] if i + 1 < len(change_points) else float("inf")
-            obs.append([n.pitch % 12 for n in sorted_m if cp <= n.start < ncp] or [0])
-        return obs
+        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
     def _get_change_points(self, duration):
-        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
-        step = (
-            bpb
-            if self.chord_change == "bars"
-            else bpb / 2.0
-            if self.chord_change == "strong_beats"
-            else 1.0
-        )
-        pts, t = [], 0.0
-        while t < duration:
-            pts.append(t)
-            t += step
-        return pts
+        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 
 @dataclass
 class HMM4Harmonizer:
@@ -963,7 +911,7 @@ class HMM4Harmonizer:
         return HMM3Harmonizer()._build_catalog(chords_def, scale)
 
     def _extract_observations(self, melody, change_points):
-        return HMM3Harmonizer()._extract_observations(melody, change_points)
+        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
     def _get_change_points(self, duration):
-        return HMM3Harmonizer(chord_change=self.chord_change, bar_grid=self.bar_grid)._get_change_points(duration)
+        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)

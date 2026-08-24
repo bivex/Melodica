@@ -316,3 +316,29 @@ class TestContextBridge:
         assert rc_back.prev_pitch == 69
         assert rc_back.current_scale == C_MAJOR
 
+
+class TestHarmonizationSegmentation:
+    def test_segmentation_change_points_and_observations(self):
+        from melodica.harmonize._observation import HarmonizationSegmentation
+        from melodica.types import BarGrid
+
+        # Change points
+        cp_bars = HarmonizationSegmentation.get_change_points(16.0, chord_change="bars", bar_grid=BarGrid(numerator=4, denominator=4))
+        assert cp_bars == [0.0, 4.0, 8.0, 12.0]
+
+        cp_strong = HarmonizationSegmentation.get_change_points(8.0, chord_change="strong_beats", bar_grid=BarGrid(numerator=4, denominator=4))
+        assert cp_strong == [0.0, 2.0, 4.0, 6.0]
+
+        # Observation extraction
+        melody = [
+            Note(pitch=60, start=0.0, duration=1.0),  # C (pc 0) in [0, 4)
+            Note(pitch=64, start=2.0, duration=1.0),  # E (pc 4) in [0, 4)
+            Note(pitch=67, start=4.5, duration=1.0),  # G (pc 7) in [4, 8)
+        ]
+        obs = HarmonizationSegmentation.extract_observations(melody, [0.0, 4.0, 8.0])
+        assert len(obs) == 3
+        assert obs[0] == [0, 4]
+        assert obs[1] == [7]
+        assert obs[2] == [0]  # default fallback
+
+

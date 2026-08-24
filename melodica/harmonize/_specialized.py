@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from melodica.harmonize._hmm_helpers import (
     _chord_pcs_for_degree, _voice_leading_cost, _build_diatonic_chords,
 )
+from melodica.harmonize._observation import HarmonizationSegmentation
 from melodica.types import BarGrid, ChordLabel, Quality, HarmonicFunction, Scale, Mode, NoteInfo
 
 @dataclass
@@ -163,29 +164,10 @@ class GraphSearchHarmonizer:
         melody: list[NoteInfo],
         change_points: list[float],
     ) -> list[list[int]]:
-        sorted_m = sorted(melody, key=lambda n: n.start)
-        observations = []
-        for i, cp in enumerate(change_points):
-            next_cp = change_points[i + 1] if i + 1 < len(change_points) else float("inf")
-            pcs = [n.pitch % 12 for n in sorted_m if cp <= n.start < next_cp]
-            observations.append(pcs if pcs else [0])
-        return observations
+        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
     def _get_change_points(self, duration: float) -> list[float]:
-        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
-        points = []
-        step = (
-            bpb
-            if self.chord_change == "bars"
-            else bpb / 2.0
-            if self.chord_change == "strong_beats"
-            else 1.0
-        )
-        t = 0.0
-        while t < duration:
-            points.append(t)
-            t += step
-        return points
+        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
 class GeneticHarmonizer:
     """Evolves chord progressions using genetic algorithm."""
@@ -291,20 +273,10 @@ class GeneticHarmonizer:
         return result
 
     def _extract_obs(self, melody, change_points):
-        sorted_m = sorted(melody, key=lambda n: n.start)
-        obs = []
-        for i, cp in enumerate(change_points):
-            ncp = change_points[i + 1] if i + 1 < len(change_points) else float("inf")
-            obs.append([n.pitch % 12 for n in sorted_m if cp <= n.start < ncp] or [0])
-        return obs
+        return HarmonizationSegmentation.extract_observations(melody, change_points)
 
     def _get_cp(self, duration):
-        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
-        pts, t, step = [], 0.0, bpb if self.chord_change == "bars" else bpb / 2.0
-        while t < duration:
-            pts.append(t)
-            t += step
-        return pts
+        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
 class ChromaticMediantHarmonizer:
     """Dramatic cinematic chords: I→bVI, I→bIII, I→III, etc."""
@@ -359,12 +331,7 @@ class ChromaticMediantHarmonizer:
         return result
 
     def _get_cp(self, duration):
-        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
-        pts, t, step = [], 0.0, bpb if self.chord_change == "bars" else bpb / 2.0
-        while t < duration:
-            pts.append(t)
-            t += step
-        return pts
+        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
 @dataclass
 class ModalInterchangeHarmonizer:
     """Borrows chords from parallel minor (iv, bVI, bVII)."""
@@ -414,9 +381,4 @@ class ModalInterchangeHarmonizer:
         return result
 
     def _get_cp(self, duration):
-        bpb = self.bar_grid.beats_per_bar if self.bar_grid else 4.0
-        pts, t, step = [], 0.0, bpb if self.chord_change == "bars" else bpb / 2.0
-        while t < duration:
-            pts.append(t)
-            t += step
-        return pts
+        return HarmonizationSegmentation.get_change_points(duration, self.chord_change, self.bar_grid)
