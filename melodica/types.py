@@ -137,7 +137,7 @@ from melodica.types_pkg._scenes import (
 
 from melodica.types_pkg._bargrid import BarGrid
 
-from melodica.types_pkg._theory import parse_progression
+from melodica.types_pkg._theory import parse_progression, parallel_scale
 from melodica.theory.modulation import ModulationEngine
 
 # Re-export theory types that were historically in types.py
@@ -175,6 +175,7 @@ __all__ = [
     "Track",
     "Arrangement",
     "parse_progression",
+    "parallel_scale",
     "RomanNumeral",
     "parse_progression_structured",
     "ModulationEngine",

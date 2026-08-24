@@ -137,11 +137,16 @@ class VoiceLeadingModifier(PhraseModifier):
 
         return sorted(modified_notes, key=lambda n: n.start)
 
-    def _find_chord_idx(self, start: float, chords: list) -> int:
-        for i, c in enumerate(reversed(chords)):
-            if c.start <= start:
-                return len(chords) - 1 - i
-        return 0
+    @staticmethod
+    def _find_chord_idx(start: float, chords: list) -> int:
+        return _lookup_chord_index(start, chords)
+
+
+def _lookup_chord_index(start: float, chords: list) -> int:
+    for i, c in enumerate(reversed(chords)):
+        if c.start <= start:
+            return len(chords) - 1 - i
+    return 0
 
 
 class ExactVoiceLeadingModifier(PhraseModifier):
@@ -162,12 +167,7 @@ class ExactVoiceLeadingModifier(PhraseModifier):
         super().__init__()
         self.keep_source_cardinality = keep_source_cardinality
 
-    @staticmethod
-    def _find_chord_idx(start: float, chords: list) -> int:
-        for i, c in enumerate(reversed(chords)):
-            if c.start <= start:
-                return len(chords) - 1 - i
-        return 0
+    _find_chord_idx = staticmethod(_lookup_chord_index)
 
     def modify(self, notes: list[types.NoteInfo], context: ModifierContext) -> list[types.NoteInfo]:
         if not notes or not context.chords or not HAVE_TONALITY:

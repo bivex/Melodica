@@ -64,10 +64,11 @@ def _mediant_scale(scale: Scale) -> Scale:
     return Scale((scale.root + 4) % 12, scale.mode)
 
 
+from melodica.types import parallel_scale
+
+
 def _parallel_minor(scale: Scale) -> Scale:
-    if scale.mode == Mode.MAJOR:
-        return Scale(scale.root, Mode.NATURAL_MINOR)
-    return Scale(scale.root, Mode.MAJOR)
+    return parallel_scale(scale)
 
 
 # ---------------------------------------------------------------------------

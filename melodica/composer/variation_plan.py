@@ -64,10 +64,11 @@ _HARMONIC_PROGRESSIONS: list[str] = [
 ]
 
 
+from melodica.types import parallel_scale
+
+
 def _parallel_key(scale: Scale) -> Scale:
-    if scale.mode == Mode.MAJOR:
-        return Scale(scale.root, Mode.NATURAL_MINOR)
-    return Scale(scale.root, Mode.MAJOR)
+    return parallel_scale(scale)
 
 
 def _dominant(scale: Scale) -> Scale:

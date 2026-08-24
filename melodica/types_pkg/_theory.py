@@ -309,9 +309,19 @@ class Scale:
     def get_parallel_scale(self, new_mode: Mode) -> "Scale":
         return Scale(root=self.root, mode=new_mode)
 
+    def parallel_major_minor(self) -> "Scale":
+        """Toggle between parallel major and natural minor."""
+        new_mode = Mode.NATURAL_MINOR if self.mode == Mode.MAJOR else Mode.MAJOR
+        return Scale(root=self.root, mode=new_mode)
+
     def borrowed_chord(self, degree: int, mode: Mode, seventh: bool = False) -> "ChordLabel":
         parallel_scale = self.get_parallel_scale(mode)
         return parallel_scale.diatonic_chord(degree, seventh=seventh)
+
+
+def parallel_scale(scale: Scale) -> Scale:
+    """Return parallel minor (if major) or parallel major (if minor)."""
+    return scale.parallel_major_minor()
 
 
 def parse_progression(prog_str: str, key: Scale) -> list[ChordLabel]:
