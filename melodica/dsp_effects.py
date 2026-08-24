@@ -10,7 +10,124 @@ for heavy VST plugins. Implements industry-standard secrets like Auto-Ducking
 (Sidechain), the Haas Stereo Effect, and Drum Clipping.
 """
 
+from __future__ import annotations
+
+import typing
+from dataclasses import dataclass, field
 import numpy as np
+
+
+class AudioEffect(typing.Protocol):
+    """Protocol for all DSP audio effects and processors."""
+
+    def process(self, audio: np.ndarray) -> np.ndarray: ...
+
+
+@dataclass
+class EffectSlot:
+    """An effect slot in the DSPPipeline with independent dry/wet and bypass."""
+
+    effect: AudioEffect
+    dry_wet: float = 1.0  # 0.0 = 100% dry, 1.0 = 100% wet
+    bypassed: bool = False
+
+
+class DSPPipeline:
+    """
+    Non-destructive Pipes & Filters chain for audio effects and DSP processors.
+    Supports dynamic reordering, per-effect dry/wet blending, and bypass.
+    """
+
+    def __init__(self, effects: list[AudioEffect | tuple[AudioEffect, float]] | None = None) -> None:
+        self.slots: list[EffectSlot] = []
+        if effects:
+            for item in effects:
+                if isinstance(item, tuple):
+                    self.add(item[0], dry_wet=item[1])
+                else:
+                    self.add(item)
+
+    def add(self, effect: AudioEffect, dry_wet: float = 1.0) -> DSPPipeline:
+        """Appends an effect to the end of the chain. Returns self for fluent chaining."""
+        self.slots.append(EffectSlot(effect=effect, dry_wet=max(0.0, min(1.0, dry_wet))))
+        return self
+
+    def insert(self, index: int, effect: AudioEffect, dry_wet: float = 1.0) -> DSPPipeline:
+        """Inserts an effect at the specified position."""
+        self.slots.insert(index, EffectSlot(effect=effect, dry_wet=max(0.0, min(1.0, dry_wet))))
+        return self
+
+    def remove(self, index: int) -> AudioEffect:
+        """Removes and returns the effect at the specified position."""
+        return self.slots.pop(index).effect
+
+    def set_bypass(self, index: int, bypass: bool = True) -> DSPPipeline:
+        """Toggles bypass state for the effect at index."""
+        if 0 <= index < len(self.slots):
+            self.slots[index].bypassed = bypass
+        return self
+
+    def set_dry_wet(self, index: int, dry_wet: float) -> DSPPipeline:
+        """Sets dry/wet blend factor (0.0 to 1.0) for the effect at index."""
+        if 0 <= index < len(self.slots):
+            self.slots[index].dry_wet = max(0.0, min(1.0, dry_wet))
+        return self
+
+    def clear(self) -> DSPPipeline:
+        """Clears all effects from the pipeline."""
+        self.slots.clear()
+        return self
+
+    def process(self, audio: np.ndarray) -> np.ndarray:
+        """Processes the stereo audio array through all active effect slots."""
+        if audio.size == 0:
+            return audio
+
+        current = audio
+        for slot in self.slots:
+            if slot.bypassed or slot.dry_wet <= 0.0:
+                continue
+
+            processed = slot.effect.process(current)
+
+            if slot.dry_wet >= 1.0:
+                current = processed
+            else:
+                # Dry / Wet linear blend
+                current = (current * (1.0 - slot.dry_wet)) + (processed * slot.dry_wet)
+
+        return current
+
+
+class ParallelDSP:
+    """
+    Parallel signal splitter and summing bus.
+    Applies multiple audio effects to clones of the input signal in parallel and sums the result.
+    """
+
+    def __init__(self, branches: list[tuple[AudioEffect, float]] | None = None) -> None:
+        # List of (effect, gain_multiplier)
+        self.branches: list[tuple[AudioEffect, float]] = list(branches) if branches else []
+
+    def add_branch(self, effect: AudioEffect, mix: float = 1.0) -> ParallelDSP:
+        self.branches.append((effect, mix))
+        return self
+
+    def process(self, audio: np.ndarray) -> np.ndarray:
+        if audio.size == 0 or not self.branches:
+            return audio
+
+        summed = np.zeros_like(audio)
+        for effect, mix in self.branches:
+            branch_out = effect.process(audio) * mix
+            summed += branch_out
+
+        # Peak limiter ceiling to prevent digital clipping
+        peak = np.max(np.abs(summed))
+        if peak > 0.99:
+            summed = summed / peak * 0.99
+
+        return summed
 
 
 class AutoPumper:

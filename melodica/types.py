@@ -118,6 +118,7 @@ from melodica.types_pkg._timeline import (
 
 from melodica.types_pkg._phrases import (
     StaticPhrase,
+    HarmonizationEngine,
     HarmonizationRequest,
     PhraseGeneratorProtocol,
     PhraseInstance,
@@ -165,6 +166,7 @@ __all__ = [
     "MarkerLabel",
     "MusicTimeline",
     "StaticPhrase",
+    "HarmonizationEngine",
     "HarmonizationRequest",
     "PhraseGeneratorProtocol",
     "PhraseInstance",

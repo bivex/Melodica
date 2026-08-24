@@ -231,7 +231,35 @@ def voice_leading_distance(
     if equivalence not in ("register", "pitch_class"):
         raise ValueError(f"unknown equivalence: {equivalence!r}")
 
-    from scipy.optimize import linear_sum_assignment
+    def _solve_assignment(cost_matrix: list[list[float]]) -> tuple[list[int], list[int]]:
+        try:
+            from scipy.optimize import linear_sum_assignment
+            return linear_sum_assignment(cost_matrix)
+        except ImportError:
+            import itertools
+            n_rows = len(cost_matrix)
+            if n_rows == 0:
+                return [], []
+            n_cols = len(cost_matrix[0])
+            if n_rows <= n_cols:
+                best_cost = float("inf")
+                best_cols = list(range(n_rows))
+                for p in itertools.permutations(range(n_cols), n_rows):
+                    cur_cost = sum(cost_matrix[r][c] for r, c in enumerate(p))
+                    if cur_cost < best_cost:
+                        best_cost = cur_cost
+                        best_cols = list(p)
+                return list(range(n_rows)), best_cols
+            else:
+                best_cost = float("inf")
+                best_rows = list(range(n_cols))
+                for p in itertools.permutations(range(n_rows), n_cols):
+                    cur_cost = sum(cost_matrix[r][c] for c, r in enumerate(p))
+                    if cur_cost < best_cost:
+                        best_cost = cur_cost
+                        best_rows = list(p)
+                pairs = sorted(zip(best_rows, range(n_cols)), key=lambda x: x[0])
+                return [p[0] for p in pairs], [p[1] for p in pairs]
 
     prev = [int(p) for p in prev_pitches]
     nxt = [int(p) for p in next_pitches]
@@ -254,7 +282,7 @@ def voice_leading_distance(
             cost[i][j0] = inf
         cost[i0][j0] = cell(prev[i0], nxt[j0])
 
-    rows, cols = linear_sum_assignment(cost)
+    rows, cols = _solve_assignment(cost)
     disp = [cost[r][c] for r, c in zip(rows, cols) if cost[r][c] != inf]
     if not disp:
         return 0.0

@@ -496,12 +496,22 @@ from melodica.generators.trading_fours import TradingFoursGenerator
 from melodica.generators.stop_time import StopTimeGenerator
 from melodica.generators.walking_bass_line import WalkingBassLineGenerator
 from melodica.generators.shell_voicing import ShellVoicingGenerator
+from melodica.generators.decorators import (
+    PitchConstrainedGenerator,
+    HumanizedGenerator,
+    CachedGenerator,
+    PipelineGenerator,
+)
 
 __all__ = [
     "PhraseGenerator",
     "GeneratorParams",
     "RenderContext",
     "freeze",
+    "PitchConstrainedGenerator",
+    "HumanizedGenerator",
+    "CachedGenerator",
+    "PipelineGenerator",
     "MelodyGenerator",
     "RhythmicAccentGenerator",
     "ChordGenerator",

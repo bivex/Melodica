@@ -64,22 +64,26 @@ class GrooveProfile:
 
 
 class RhythmBuilder:
-    """Builds rhythm events for melody generation."""
+    """Builds rhythm events for melody generation. Supports fluent step-by-step assembly."""
 
     def __init__(
         self,
-        params,
-        phrase_length: float,
-        phrase_rest_probability: float,
-        syncopation: float,
-        rhythm_variety: float,
-        rhythm_motif: list[float] | None,
+        params=None,
+        phrase_length: float = 4.0,
+        phrase_rest_probability: float = 0.0,
+        syncopation: float = 0.0,
+        rhythm_variety: float = 0.0,
+        rhythm_motif: list[float] | None = None,
         rhythm: RhythmGenerator | None = None,
         groove: GrooveProfile | None = None,
         density: float | None = None,
         groove_template=None,
     ) -> None:
-        self.params = params
+        if params is None:
+            from melodica.generators import GeneratorParams
+            self.params = GeneratorParams()
+        else:
+            self.params = params
         self.phrase_length = phrase_length
         self.phrase_rest_probability = phrase_rest_probability
         self.syncopation = syncopation
@@ -87,8 +91,59 @@ class RhythmBuilder:
         self.rhythm_motif = rhythm_motif
         self.rhythm = rhythm
         self.groove = groove or GrooveProfile()
-        self.density = density if density is not None else params.density
+        if density is not None:
+            self.density = density
+        elif self.params is not None and hasattr(self.params, "density"):
+            self.density = self.params.density
+        else:
+            self.density = 0.5
         self.groove_template = groove_template
+
+    def with_params(self, params) -> RhythmBuilder:
+        self.params = params
+        if hasattr(params, "density") and self.density is None:
+            self.density = params.density
+        return self
+
+    def with_phrase_length(self, phrase_length: float) -> RhythmBuilder:
+        self.phrase_length = phrase_length
+        return self
+
+    def with_phrase_rest_probability(self, prob: float) -> RhythmBuilder:
+        self.phrase_rest_probability = prob
+        return self
+
+    def with_syncopation(self, syncopation: float) -> RhythmBuilder:
+        self.syncopation = syncopation
+        return self
+
+    def with_rhythm_variety(self, variety: float) -> RhythmBuilder:
+        self.rhythm_variety = variety
+        return self
+
+    def with_rhythm_motif(self, motif: list[float] | None) -> RhythmBuilder:
+        self.rhythm_motif = motif
+        return self
+
+    def with_rhythm(self, rhythm: RhythmGenerator | None) -> RhythmBuilder:
+        self.rhythm = rhythm
+        return self
+
+    def with_groove(self, groove: GrooveProfile | None) -> RhythmBuilder:
+        self.groove = groove or GrooveProfile()
+        return self
+
+    def with_density(self, density: float) -> RhythmBuilder:
+        self.density = density
+        return self
+
+    def with_groove_template(self, template) -> RhythmBuilder:
+        self.groove_template = template
+        return self
+
+    def build(self, duration_beats: float, drama: DramaticArc | None = None) -> list[RhythmEvent]:
+        """Terminal assembly method (alias for build_events)."""
+        return self.build_events(duration_beats, drama=drama)
 
     def build_events(self, duration_beats: float, drama: DramaticArc | None = None) -> list[RhythmEvent]:
         """Generate rhythm events for the given duration."""

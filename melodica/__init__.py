@@ -54,6 +54,7 @@ __all__ = [
     "Mode",
     "Scale",
     "HarmonizationRequest",
+    "HarmonizationEngine",
     "StaticPhrase",
     "PhraseInstance",
     "IdeaTrack",
@@ -83,18 +84,39 @@ __all__ = [
     "VSTPlayer",
     # Live Loopback (requires [live])
     "LiveLoopback",
-    # Shorts Audio Production
+    # Shorts Audio Production & DSP Effects
     "MixingDesk",
     "MasteringDesk",
     "DSPMasteringDesk",
     "NewYorkCompressor",
+    "AudioEffect",
+    "DSPPipeline",
+    "ParallelDSP",
+    "AutoPumper",
+    "HaasWidener",
+    "HardClipper",
+    "TransientShaper",
+    "MultibandSaturator",
 ]
+
+# --- Audio DSP Effects ---
+from melodica.dsp_effects import (
+    AudioEffect,
+    DSPPipeline,
+    ParallelDSP,
+    AutoPumper,
+    HaasWidener,
+    HardClipper,
+    TransientShaper,
+    MultibandSaturator,
+)
 
 # --- Domain types ---
 from melodica.types import (
     ArrangementSlot,
     ChordLabel,
     HarmonicFunction,
+    HarmonizationEngine,
     HarmonizationRequest,
     IdeaTrack,
     Mode,

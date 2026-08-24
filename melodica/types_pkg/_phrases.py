@@ -32,6 +32,43 @@ from melodica.types_pkg._notes import NoteInfo, Note
 from melodica.types_pkg._theory import ChordLabel, Scale, Quality
 from melodica.types_pkg._timeline import MusicTimeline, KeyLabel, TimeSignatureLabel
 
+from enum import IntEnum
+
+class HarmonizationEngine(IntEnum):
+    """Harmonization engine identifier enum."""
+
+    FUNCTIONAL = 0
+    RULE_BASED = 1
+    ADAPTIVE = 2
+    HMM = 3
+    COUPLED_HMM = 4
+
+    @classmethod
+    def from_value(cls, val: int | str | HarmonizationEngine) -> HarmonizationEngine:
+        if isinstance(val, cls):
+            return val
+        if isinstance(val, int) and val in cls._value2member_map_:
+            return cls(val)
+        if isinstance(val, str):
+            s = val.lower().replace("-", "_").replace(" ", "_")
+            mapping = {
+                "0": cls.FUNCTIONAL,
+                "functional": cls.FUNCTIONAL,
+                "1": cls.RULE_BASED,
+                "rule_based": cls.RULE_BASED,
+                "rulebased": cls.RULE_BASED,
+                "2": cls.ADAPTIVE,
+                "adaptive": cls.ADAPTIVE,
+                "3": cls.HMM,
+                "hmm": cls.HMM,
+                "4": cls.COUPLED_HMM,
+                "coupled_hmm": cls.COUPLED_HMM,
+                "coupled": cls.COUPLED_HMM,
+            }
+            if s in mapping:
+                return mapping[s]
+        raise ValueError(f"Invalid HarmonizationEngine: {val!r}")
+
 @dataclass
 class StaticPhrase:
     notes: list[NoteInfo]
@@ -40,7 +77,7 @@ class StaticPhrase:
 class HarmonizationRequest:
     melody: list[Note]
     key: Scale
-    engine: int | str = 4                 # 0=functional, 1=rule_based, 2=adaptive, 3=hmm, 4=coupled_hmm (default)
+    engine: int | str | HarmonizationEngine = 4  # 0=functional, 1=rule_based, 2=adaptive, 3=hmm, 4=coupled_hmm (default)
     chord_rhythm: float = 4.0
     allow_secondary_dominants: bool = True
     allow_borrowed_chords: bool = False
@@ -51,9 +88,8 @@ class HarmonizationRequest:
             raise ValueError("Melody must not be empty.")
         if self.chord_rhythm <= 0:
             raise ValueError("chord_rhythm must be > 0.")
-        valid_engines = {0, 1, 2, 3, 4}
-        if not isinstance(self.engine, str) and self.engine not in valid_engines:
-            raise ValueError(f"Invalid engine: {self.engine}")
+        # Validate engine through HarmonizationEngine resolver
+        HarmonizationEngine.from_value(self.engine)
 
 class PhraseGeneratorProtocol(ABC):
     name: str

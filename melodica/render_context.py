@@ -83,3 +83,25 @@ class RenderContext:
             section_function=section_function if section_function is not None else self.section_function,
             section_index=section_index if section_index is not None else self.section_index,
         )
+
+    def to_modifier_context(
+        self,
+        duration_beats: float,
+        chords: list[ChordLabel],
+        scale: Scale | None = None,
+        timeline: "object | None" = None,
+        tracks: dict[str, list[NoteInfo]] | None = None,
+    ) -> "object":
+        """Convert this RenderContext to a ModifierContext for post-processing."""
+        from melodica.modifiers import ModifierContext
+        from melodica.types import MusicTimeline, Scale as ScaleType
+
+        active_scale = scale or self.current_scale or ScaleType(0, "major")
+        active_timeline = timeline or MusicTimeline(chords=chords)
+        return ModifierContext(
+            duration_beats=duration_beats,
+            chords=chords,
+            timeline=active_timeline,
+            scale=active_scale,
+            tracks=tracks or {},
+        )

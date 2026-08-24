@@ -41,6 +41,22 @@ class ModifierContext:
     scale: Scale
     tracks: dict[str, list[NoteInfo]] = field(default_factory=dict)
 
+    def to_render_context(
+        self,
+        prev_pitch: int | None = None,
+        prev_velocity: int | None = None,
+    ) -> "object":
+        """Convert this ModifierContext to a RenderContext for generator continuity."""
+        from melodica.render_context import RenderContext
+
+        prev_chord = self.chords[-1] if self.chords else None
+        return RenderContext(
+            prev_pitch=prev_pitch,
+            prev_velocity=prev_velocity,
+            prev_chord=prev_chord,
+            current_scale=self.scale,
+        )
+
 
 class PhraseModifier(typing.Protocol):
     """
@@ -138,11 +154,20 @@ from melodica.modifiers.glue import (
     DrumFillModifier,
 )
 
+from melodica.modifiers.melody_processors import (
+    OrnamentModifier,
+    FillLeapsModifier,
+    VelocityContourModifier,
+)
+
 __all__ = [
     "PhraseModifier",
     "ModifierContext",
     "DropSilenceModifier",
     "DrumFillModifier",
+    "OrnamentModifier",
+    "FillLeapsModifier",
+    "VelocityContourModifier",
     "QuantizeModifier",
     "FollowRhythmModifier",
     "HumanizeModifier",
