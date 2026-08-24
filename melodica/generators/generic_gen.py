@@ -157,13 +157,7 @@ class GenericGenerator(PhraseGenerator):
         return notes
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
-        if self.rhythm is not None:
-            return self.rhythm.generate(duration_beats)
-        t, events = 0.0, []
-        while t < duration_beats:
-            events.append(RhythmEvent(onset=round(t, 6), duration=0.9))
-            t += 1.0
-        return events
+        return self.build_grid_events(duration_beats, step=1.0, dur=0.9)
 
     def _velocity(self) -> int:
-        return int(60 + self.params.density * 40)
+        return self.base_velocity()

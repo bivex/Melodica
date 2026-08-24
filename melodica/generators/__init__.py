@@ -147,6 +147,10 @@ class PhraseGenerator(ABC):
         base = self.base_velocity()
         return max(1, min(127, int(base * factor)))
 
+    def mid_pitch(self) -> int:
+        """Midpoint of key range low and high."""
+        return (self.params.key_range_low + self.params.key_range_high) // 2
+
     def build_grid_events(
         self,
         duration_beats: float,

@@ -20,21 +20,14 @@ from melodica.types import ChordLabel, NoteInfo, Scale
 from melodica.utils import nearest_pitch, snap_to_scale
 
 
-from melodica.generators.density import DensityStrategy
+from melodica.generators._solo_base import _SoloInstrumentBase
 
 
-class _BassSoloBase(PhraseGenerator, ABC):
+class _BassSoloBase(_SoloInstrumentBase, ABC):
     """Abstract base class for all solo bass generators."""
-    note_density: float = 1.0
 
-    def _apply_note_density(self, chords: list[ChordLabel]) -> list[ChordLabel]:
-        return DensityStrategy.apply(chords, getattr(self, "note_density", 1.0))
-
-    def _velocity(self, base_val: int) -> int:
-        if self.params.velocity_range:
-            v_min, v_max = self.params.velocity_range
-            return random.randint(v_min, v_max)
-        return max(1, min(127, base_val + random.randint(-6, 6)))
+    def _velocity(self, base_val: int, jitter: int = 6) -> int:
+        return super()._velocity(base_val, jitter=jitter)
 
 
 class BassSoloGenerator(_BassSoloBase):

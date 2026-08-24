@@ -349,20 +349,10 @@ class BassGenerator(PhraseGenerator):
     # ------------------------------------------------------------------
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
-        if self.rhythm is not None:
-            return self.rhythm.generate(duration_beats)
-        # Default fallback: straight quarter notes
-        t, events = 0.0, []
-        while t < duration_beats:
-            events.append(RhythmEvent(onset=round(t, 6), duration=0.9))
-            t += 1.0
-        return events
+        return self.build_grid_events(duration_beats, step=1.0, dur=0.9)
 
     def _velocity(self) -> int:
-        if self.params.velocity_range:
-            v_min, v_max = self.params.velocity_range
-            return (v_min + v_max) // 2
-        return int(70 + self.params.density * 30)
+        return self.base_velocity()
 
     # ------------------------------------------------------------------
     # Pedal tone and chord tone extended styles

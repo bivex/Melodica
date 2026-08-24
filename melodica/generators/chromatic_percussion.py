@@ -20,10 +20,10 @@ from melodica.types import ChordLabel, NoteInfo, Scale
 from melodica.utils import nearest_pitch, snap_to_scale
 
 
-from melodica.generators.density import DensityStrategy
+from melodica.generators._solo_base import _SoloInstrumentBase
 
 
-class _ChromaticPercussionBase(PhraseGenerator, ABC):
+class _ChromaticPercussionBase(_SoloInstrumentBase, ABC):
     """Abstract base class for chromatic and mallet percussion generators."""
 
     def __init__(
@@ -34,15 +34,6 @@ class _ChromaticPercussionBase(PhraseGenerator, ABC):
     ) -> None:
         super().__init__(params)
         self.note_density = note_density
-
-    def _apply_note_density(self, chords: list[ChordLabel]) -> list[ChordLabel]:
-        return DensityStrategy.apply(chords, getattr(self, "note_density", 1.0))
-
-    def _velocity(self, base_val: int) -> int:
-        if self.params.velocity_range:
-            v_min, v_max = self.params.velocity_range
-            return random.randint(v_min, v_max)
-        return max(1, min(127, base_val + random.randint(-8, 8)))
 
     def _resolve_pitch(self, pc: int, anchor: int, key: Scale, low: int, high: int) -> int:
         from melodica.utils import resolve_scale_pitch

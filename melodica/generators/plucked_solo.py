@@ -21,21 +21,11 @@ from melodica.types import ChordLabel, NoteInfo, Scale
 from melodica.utils import nearest_pitch, chord_at, snap_to_scale
 
 
-from melodica.generators.density import DensityStrategy
+from melodica.generators._solo_base import _SoloInstrumentBase
 
 
-class _PluckedSoloBase(PhraseGenerator, ABC):
+class _PluckedSoloBase(_SoloInstrumentBase, ABC):
     """Abstract base class for all plucked and percussive solo generators."""
-    note_density: float = 1.0
-
-    def _apply_note_density(self, chords: list[ChordLabel]) -> list[ChordLabel]:
-        return DensityStrategy.apply(chords, getattr(self, "note_density", 1.0))
-
-    def _velocity(self, base_val: int) -> int:
-        if self.params.velocity_range:
-            v_min, v_max = self.params.velocity_range
-            return random.randint(v_min, v_max)
-        return max(1, min(127, base_val + random.randint(-8, 8)))
 
 
 class PianoSoloGenerator(_PluckedSoloBase):

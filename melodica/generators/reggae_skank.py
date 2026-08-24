@@ -163,14 +163,7 @@ class ReggaeSkankGenerator(PhraseGenerator):
         return True
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
-        if self.rhythm is not None:
-            return self.rhythm.generate(duration_beats)
-        # Fine grid to allow pattern selection
-        t, events = 0.0, []
-        while t < duration_beats:
-            events.append(RhythmEvent(onset=round(t, 6), duration=0.4))
-            t += 0.5
-        return events
+        return self.build_grid_events(duration_beats, step=0.5, dur=0.4)
 
     def _velocity(self) -> int:
-        return int(55 + self.params.density * 30)
+        return self.base_velocity()

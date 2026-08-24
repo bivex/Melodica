@@ -385,7 +385,7 @@ class MontunoGenerator(PhraseGenerator):
     # ------------------------------------------------------------------
 
     def _mid_pitch(self) -> int:
-        return (self.params.key_range_low + self.params.key_range_high) // 2
+        return self.mid_pitch()
 
     def _cycle_length(self, pattern: list[tuple[int, float]]) -> float:
         if self.clave_type != "none":

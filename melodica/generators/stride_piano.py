@@ -291,7 +291,7 @@ class StridePianoGenerator(PhraseGenerator):
     # ------------------------------------------------------------------
 
     def _mid_pitch(self) -> int:
-        return (self.params.key_range_low + self.params.key_range_high) // 2
+        return self.mid_pitch()
 
     def _should_approach(self, state: _StrideState) -> bool:
         return (
@@ -313,13 +313,7 @@ class StridePianoGenerator(PhraseGenerator):
         return approach if approach >= low else None
 
     def _build_events(self, duration_beats: float) -> list[RhythmEvent]:
-        if self.rhythm is not None:
-            return self.rhythm.generate(duration_beats)
-        t, events = 0.0, []
-        while t < duration_beats:
-            events.append(RhythmEvent(onset=round(t, 6), duration=0.9))
-            t += 1.0
-        return events
+        return self.build_grid_events(duration_beats, step=1.0, dur=0.9)
 
 
 # ---------------------------------------------------------------------------
