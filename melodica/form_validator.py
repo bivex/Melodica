@@ -134,7 +134,6 @@ def _pitch_band_fractions_duration(
             else:
                 high_dur += d
     total = max(low_dur + mid_dur + high_dur, 1e-9)
-    print(f"DEBUG: low={low_dur:.2f}, mid={mid_dur:.2f}, high={high_dur:.2f}, ratio={low_dur/total:.4f}")
     return {"low": low_dur / total, "mid": mid_dur / total, "high": high_dur / total}
 
 
@@ -155,17 +154,13 @@ _DYNAMICS_VELOCITY: dict[str, tuple[int, int]] = {
 # Arrangement rules (no MusicalForm needed)
 # ---------------------------------------------------------------------------
 
-def _check_arrangement(
+def _check_arrangement_registers(
     tracks_data: dict[str, list[NoteInfo]],
-    bpm: float,
+    pitched: dict[str, list[NoteInfo]],
+    perc: dict[str, list[NoteInfo]],
+    total_dur: float,
 ) -> list[FormIssue]:
     issues: list[FormIssue] = []
-    total_dur = _total_duration(tracks_data)
-    if total_dur < 1.0:
-        return issues
-
-    pitched = {n: v for n, v in tracks_data.items() if not _is_percussion(n) and v}
-    perc    = {n: v for n, v in tracks_data.items() if _is_percussion(n) and v}
 
     # ARR-1: all pitched instruments enter at beat 0 (no buildup)
     entry_beats = {n: _track_entry_beat(v) for n, v in pitched.items()}
@@ -235,6 +230,15 @@ def _check_arrangement(
                 "Intros typically start without percussion to build tension."
             ))
 
+    return issues
+
+
+def _check_arrangement_dynamics_and_energy(
+    pitched: dict[str, list[NoteInfo]],
+    total_dur: float,
+) -> list[FormIssue]:
+    issues: list[FormIssue] = []
+
     # ARR-6: p5–p95 percentile velocity spread
     all_vels: list[float] = []
     for notes in pitched.values():
@@ -283,6 +287,27 @@ def _check_arrangement(
                 f"(ideal: 55–80% for sonata/arch forms). "
                 "Consider moving the climax later for better dramatic tension."
             ))
+
+    return issues
+
+
+def _check_arrangement(
+    tracks_data: dict[str, list[NoteInfo]],
+    bpm: float,
+) -> list[FormIssue]:
+    issues: list[FormIssue] = []
+    total_dur = _total_duration(tracks_data)
+    if total_dur < 1.0:
+        return issues
+
+    pitched = {n: v for n, v in tracks_data.items() if not _is_percussion(n) and v}
+    perc    = {n: v for n, v in tracks_data.items() if _is_percussion(n) and v}
+
+    # ARR-1 to ARR-5: register and textural buildup checks
+    issues += _check_arrangement_registers(tracks_data, pitched, perc, total_dur)
+
+    # ARR-6 & ARR-7: dynamics and energy curve
+    issues += _check_arrangement_dynamics_and_energy(pitched, total_dur)
 
     # ARR-8: parallel fifths/octaves
     issues += _check_parallel_motion(pitched)
@@ -556,15 +581,11 @@ def _check_parallel_motion(
 # Form rules (require MusicalForm)
 # ---------------------------------------------------------------------------
 
-def _check_form(
-    tracks_data: dict[str, list[NoteInfo]],
-    bpm: float,
+def _check_form_tempo_and_percussion(
     form: MusicalForm,
+    perc: dict[str, list[NoteInfo]],
 ) -> list[FormIssue]:
     issues: list[FormIssue] = []
-
-    pitched = {n: v for n, v in tracks_data.items() if not _is_percussion(n) and v}
-    perc    = {n: v for n, v in tracks_data.items() if _is_percussion(n) and v}
 
     # FORM-7: all tempo multipliers = 1.0 or range too narrow
     multipliers = [s.tempo_multiplier for s in form.sections]
@@ -602,8 +623,15 @@ def _check_form(
                 "during a quiet section — should rest."
             ))
 
-    # FORM-6: no cadential gap before section boundary (tail window = 2 beats)
-    tail_window = 2.0
+    return issues
+
+
+def _check_form_cadential_gap(
+    form: MusicalForm,
+    pitched: dict[str, list[NoteInfo]],
+    tail_window: float = 2.0,
+) -> list[FormIssue]:
+    issues: list[FormIssue] = []
     for sec in form.sections:
         section_end  = sec.end_beat
         window_start = section_end - tail_window
@@ -620,102 +648,137 @@ def _check_form(
                 f"(beat {section_end:.1f}) without a cadential gap. "
                 "Classical form expects silence before section change."
             ))
+    return issues
 
-    # FORM-4: track velocities differ < 15 across sections + dynamics→velocity check
-    if len(form.sections) >= 2:
-        violations: list[str] = []
-        for track_name, notes in pitched.items():
-            sec_vels: list[float] = []
-            for sec in form.sections:
-                sec_notes = [n for n in notes
-                             if sec.start_beat <= float(n.start) < sec.end_beat]
-                if sec_notes:
-                    mean_vel = sum(n.velocity for n in sec_notes) / len(sec_notes)
-                    sec_vels.append(mean_vel)
 
-                    # Check dynamics→velocity mapping
-                    if sec.dynamics and sec.dynamics in _DYNAMICS_VELOCITY:
-                        lo, hi = _DYNAMICS_VELOCITY[sec.dynamics]
-                        if not (lo <= mean_vel <= hi):
-                            issues.append(FormIssue(
-                                "FORM-4", "INFO",
-                                f"Track '{track_name}', section '{sec.name}' "
-                                f"(dynamics={sec.dynamics}): mean velocity {mean_vel:.0f} "
-                                f"outside expected range {lo}–{hi}."
-                            ))
+def _check_form_dynamics_and_velocities(
+    form: MusicalForm,
+    pitched: dict[str, list[NoteInfo]],
+) -> list[FormIssue]:
+    issues: list[FormIssue] = []
+    if len(form.sections) < 2:
+        return issues
 
-            if len(sec_vels) >= 2:
-                spread = max(sec_vels) - min(sec_vels)
-                if spread < 15:
-                    violations.append(track_name)
+    violations: list[str] = []
+    for track_name, notes in pitched.items():
+        sec_vels: list[float] = []
+        for sec in form.sections:
+            sec_notes = [n for n in notes
+                         if sec.start_beat <= float(n.start) < sec.end_beat]
+            if sec_notes:
+                mean_vel = sum(n.velocity for n in sec_notes) / len(sec_notes)
+                sec_vels.append(mean_vel)
 
-        if violations:
+                # Check dynamics→velocity mapping
+                if sec.dynamics and sec.dynamics in _DYNAMICS_VELOCITY:
+                    lo, hi = _DYNAMICS_VELOCITY[sec.dynamics]
+                    if not (lo <= mean_vel <= hi):
+                        issues.append(FormIssue(
+                            "FORM-4", "INFO",
+                            f"Track '{track_name}', section '{sec.name}' "
+                            f"(dynamics={sec.dynamics}): mean velocity {mean_vel:.0f} "
+                            f"outside expected range {lo}–{hi}."
+                        ))
+
+        if len(sec_vels) >= 2:
+            spread = max(sec_vels) - min(sec_vels)
+            if spread < 15:
+                violations.append(track_name)
+
+    if violations:
+        issues.append(FormIssue(
+            "FORM-4", "WARNING",
+            f"Tracks {violations}: mean velocity spread < 15 across sections. "
+            "Section dynamics are not reflected in note velocities — "
+            "apply velocity scaling per section."
+        ))
+
+    return issues
+
+
+def _check_sonata_form(
+    form: MusicalForm,
+    pitched: dict[str, list[NoteInfo]],
+) -> list[FormIssue]:
+    issues: list[FormIssue] = []
+
+    # FORM-1: development modulates through ≥2 keys
+    dev_sections = [s for s in form.sections if "development" in s.name.lower()]
+    if dev_sections:
+        keys_in_dev = set()
+        for dev in dev_sections:
+            if dev.key is not None:
+                keys_in_dev.add(dev.key)
+            for s in form.sections:
+                if s.key is not None and dev.start_beat <= s.start_beat < dev.end_beat:
+                    keys_in_dev.add(s.key)
+        if len(keys_in_dev) < 2:
             issues.append(FormIssue(
-                "FORM-4", "WARNING",
-                f"Tracks {violations}: mean velocity spread < 15 across sections. "
-                "Section dynamics are not reflected in note velocities — "
-                "apply velocity scaling per section."
+                "FORM-1", "WARNING",
+                f"Sonata development has {len(keys_in_dev)} key(s). "
+                "Development should modulate through ≥2 keys "
+                "(relative major/minor, subdominant, dominant)."
             ))
+
+    # FORM-2: recapitulation in tonic
+    recap_sections = [s for s in form.sections
+                      if "recapitulation" in s.name.lower() or "recap" in s.name.lower()]
+    expo_sections  = [s for s in form.sections if "exposition" in s.name.lower()]
+    for recap in recap_sections:
+        if recap.key is not None and expo_sections:
+            expo_key = expo_sections[0].key
+            if expo_key is not None and recap.key.root != expo_key.root:
+                issues.append(FormIssue(
+                    "FORM-2", "WARNING",
+                    f"Sonata recapitulation '{recap.name}' key (root={recap.key.root}) "
+                    f"differs from exposition (root={expo_key.root}). "
+                    "Recapitulation must restate themes in the tonic key."
+                ))
+
+    # FORM-3: exposition has ≥2 melodic voices
+    expo = next((s for s in form.sections if "exposition" in s.name.lower()), None)
+    if expo is not None:
+        active = [
+            name for name, notes in pitched.items()
+            if any(expo.start_beat <= float(n.start) < expo.end_beat for n in notes)
+        ]
+        if len(active) < 2:
+            issues.append(FormIssue(
+                "FORM-3", "WARNING",
+                f"Sonata exposition has only {len(active)} melodic voice(s). "
+                "Classical exposition requires ≥2 distinct themes "
+                "(primary + secondary in contrasting key)."
+            ))
+
+    return issues
+
+
+def _check_form(
+    tracks_data: dict[str, list[NoteInfo]],
+    bpm: float,
+    form: MusicalForm,
+) -> list[FormIssue]:
+    issues: list[FormIssue] = []
+
+    pitched = {n: v for n, v in tracks_data.items() if not _is_percussion(n) and v}
+    perc    = {n: v for n, v in tracks_data.items() if _is_percussion(n) and v}
+
+    # FORM-7 & FORM-5: tempo shaping and percussion in quiet sections
+    issues += _check_form_tempo_and_percussion(form, perc)
+
+    # FORM-6: cadential gap
+    issues += _check_form_cadential_gap(form, pitched)
+
+    # FORM-4: dynamics and velocity spread
+    issues += _check_form_dynamics_and_velocities(form, pitched)
 
     # FORM-1/2/3: sonata-specific checks
     section_names = [s.name.lower() for s in form.sections]
-    is_sonata = any("development" in n or "exposition" in n for n in section_names)
-
-    if is_sonata:
-        # FORM-1: development modulates through ≥2 keys
-        # Group all development sub-sections (development, development_1, development_2, ...)
-        # into a single logical block and count distinct keys across all of them.
-        dev_sections = [s for s in form.sections if "development" in s.name.lower()]
-        if dev_sections:
-            keys_in_dev = set()
-            for dev in dev_sections:
-                if dev.key is not None:
-                    keys_in_dev.add(dev.key)
-                # Also collect keys of any nested sections within this dev range
-                for s in form.sections:
-                    if s.key is not None and dev.start_beat <= s.start_beat < dev.end_beat:
-                        keys_in_dev.add(s.key)
-            if len(keys_in_dev) < 2:
-                issues.append(FormIssue(
-                    "FORM-1", "WARNING",
-                    f"Sonata development has {len(keys_in_dev)} key(s). "
-                    "Development should modulate through ≥2 keys "
-                    "(relative major/minor, subdominant, dominant)."
-                ))
-
-        # FORM-2: recapitulation in tonic
-        recap_sections = [s for s in form.sections
-                          if "recapitulation" in s.name.lower() or "recap" in s.name.lower()]
-        expo_sections  = [s for s in form.sections if "exposition" in s.name.lower()]
-        for recap in recap_sections:
-            if recap.key is not None and expo_sections:
-                expo_key = expo_sections[0].key
-                if expo_key is not None and recap.key.root != expo_key.root:
-                    issues.append(FormIssue(
-                        "FORM-2", "WARNING",
-                        f"Sonata recapitulation '{recap.name}' key (root={recap.key.root}) "
-                        f"differs from exposition (root={expo_key.root}). "
-                        "Recapitulation must restate themes in the tonic key."
-                    ))
-
-        # FORM-3: exposition has ≥2 melodic voices
-        expo = next((s for s in form.sections if "exposition" in s.name.lower()), None)
-        if expo is not None:
-            active = [
-                name for name, notes in pitched.items()
-                if any(expo.start_beat <= float(n.start) < expo.end_beat for n in notes)
-            ]
-            if len(active) < 2:
-                issues.append(FormIssue(
-                    "FORM-3", "WARNING",
-                    f"Sonata exposition has only {len(active)} melodic voice(s). "
-                    "Classical exposition requires ≥2 distinct themes "
-                    "(primary + secondary in contrasting key)."
-                ))
+    if any("development" in n or "exposition" in n for n in section_names):
+        issues += _check_sonata_form(form, pitched)
 
     # FORM-8: Rondo — refrain (A) returns in tonic each time
-    is_rondo = any("rondo" in n or "refrain" in n for n in section_names)
-    if is_rondo:
+    if any("rondo" in n or "refrain" in n for n in section_names):
         issues += _check_rondo_refrain(form)
 
     # FORM-9: Ternary — B section contrast
