@@ -29,49 +29,34 @@ from melodica.types_pkg._theory import ChordLabel, Scale
 from melodica.utils import nearest_pitch, nearest_pitch_above, snap_to_scale
 
 
-@dataclass
 class WalkingBassLineGenerator(PhraseGenerator):
-    """Generate phrase-level walking bass lines through chord changes.
+    """Generate phrase-level walking bass lines through chord changes."""
 
-    Parameters
-    ----------
-    contour : str
-        "ascending" — line generally rises through changes.
-        "descending" — line generally falls.
-        "scalar" — follows scale degrees stepwise.
-        "arpeggiated" — outlines chord shapes.
-        "mixed" — varies contour per phrase.
-    target_note : str
-        "root" — always land on root of each chord.
-        "guide_tones" — land on 3rds and 7ths.
-        "fifths" — emphasize 5ths for movement.
-        "mixed" — vary target notes.
-    passing_tones : str
-        "chromatic" — half-step passing tones.
-        "diatonic" — scale-step passing tones.
-        "enclosure" — chromatic enclosure before targets.
-        "mixed" — combine approaches.
-    phrase_length : int
-        Bars per phrase segment before resetting contour.
-    swing_feel : float
-        Swing ratio for eighth-note subdivision (0.5 = straight, 0.67 = swing).
-    """
+    name: str = "walking_bass_line"
 
-    name: str = field(default="walking_bass_line", init=False)
-    contour: str = "mixed"
-    target_note: str = "root"
-    passing_tones: str = "mixed"
-    phrase_length: int = 4
-    swing_feel: float = 0.67
-    params: GeneratorParams = field(default_factory=GeneratorParams)
-
-    def __post_init__(self) -> None:
+    def __init__(
+        self,
+        params: GeneratorParams | None = None,
+        *,
+        contour: str = "mixed",
+        target_note: str = "root",
+        passing_tones: str = "mixed",
+        phrase_length: int = 4,
+        swing_feel: float = 0.67,
+    ) -> None:
+        super().__init__(params)
         valid_contours = ("ascending", "descending", "scalar", "arpeggiated", "mixed")
-        if self.contour not in valid_contours:
+        if contour not in valid_contours:
             raise ValueError(f"contour must be one of {valid_contours}")
         valid_targets = ("root", "guide_tones", "fifths", "mixed")
-        if self.target_note not in valid_targets:
+        if target_note not in valid_targets:
             raise ValueError(f"target_note must be one of {valid_targets}")
+
+        self.contour = contour
+        self.target_note = target_note
+        self.passing_tones = passing_tones
+        self.phrase_length = phrase_length
+        self.swing_feel = swing_feel
 
     def _chord_target(self, chord: ChordLabel) -> int:
         """Get target pitch class for a chord based on target_note setting."""
