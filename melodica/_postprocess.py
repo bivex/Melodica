@@ -212,6 +212,77 @@ def fix_arr_lite(
     return result
 
 
+def _is_chord_like_track(cfg) -> bool:
+    """Check if a track produces chord-like (polyphonic simultaneous) notes."""
+    if cfg.generator_type in ("chord", "strum", "arpeggiator"):
+        return True
+    if cfg.generator is not None:
+        from melodica.generators.ambient import AmbientPadGenerator
+
+        if isinstance(cfg.generator, AmbientPadGenerator):
+            return True
+    return False
+
+
+def _build_reference_note_index(
+    result: dict[str, list[NoteInfo]], tracks
+) -> tuple[list[tuple[float, float, int]], list[float], float, set[str]]:
+    """Build spatial time index of reference non-chord notes for dissonance checking."""
+    reference_notes: list[tuple[float, float, int]] = []
+    chord_track_names: set[str] = set()
+    max_ref_duration = 0.0
+
+    for track_cfg in tracks:
+        if _is_chord_like_track(track_cfg):
+            chord_track_names.add(track_cfg.name)
+        elif track_cfg.name in result:
+            for n in result[track_cfg.name]:
+                reference_notes.append((n.start, n.start + n.duration, n.pitch))
+                if n.duration > max_ref_duration:
+                    max_ref_duration = n.duration
+
+    reference_notes.sort(key=lambda x: x[0])
+    ref_starts = [x[0] for x in reference_notes]
+    return reference_notes, ref_starts, max_ref_duration, chord_track_names
+
+
+def _has_harmonic_clash(
+    note: NoteInfo,
+    reference_notes: list[tuple[float, float, int]],
+    ref_starts: list[float],
+    max_ref_duration: float,
+) -> bool:
+    """Check if a note creates a harsh clash (m2, tritone, M7) with any overlapping reference note."""
+    import bisect
+
+    lo = bisect.bisect_left(ref_starts, note.start - max_ref_duration - 0.1)
+    hi = bisect.bisect_right(ref_starts, note.start + note.duration)
+    for ref_start, ref_end, ref_pitch in reference_notes[lo:hi]:
+        if note.start < ref_end and (note.start + note.duration) > ref_start:
+            interval = abs(note.pitch - ref_pitch) % 12
+            if interval in (1, 6, 11):
+                return True
+    return False
+
+
+def _filter_chord_track_notes(
+    notes: list[NoteInfo],
+    ctrl: "TextureController",
+    reference_notes: list[tuple[float, float, int]],
+    ref_starts: list[float],
+    max_ref_duration: float,
+) -> list[NoteInfo]:
+    """Filter notes based on tension density curve, prioritizing removal of harsh clashes."""
+    filtered: list[NoteInfo] = []
+    for n in notes:
+        density = ctrl.get_density_at(n.start)
+        clash = _has_harmonic_clash(n, reference_notes, ref_starts, max_ref_duration)
+        keep_prob = density * 0.8 if clash else density
+        if random.random() < keep_prob:
+            filtered.append(n)
+    return filtered
+
+
 def apply_texture_control(
     result: dict[str, list[NoteInfo]],
     tracks,
@@ -227,67 +298,16 @@ def apply_texture_control(
         return
     from melodica.composer import TextureController
 
-    import bisect
-
     ctrl = TextureController(tension_curve=tension_curve)
-
-    def is_chord_track(cfg) -> bool:
-        """Check if a track produces chord-like (polyphonic simultaneous) notes."""
-        if cfg.generator_type in ("chord", "strum", "arpeggiator"):
-            return True
-        if cfg.generator is not None:
-            from melodica.generators.ambient import AmbientPadGenerator
-
-            if isinstance(cfg.generator, AmbientPadGenerator):
-                return True
-        return False
-
-    # Build index of all non-chord notes (melody, bass, etc.) for clash checking
-    reference_notes: list[tuple[float, float, int]] = []
-    chord_track_names = set()
-    max_ref_duration = 0.0
-    for track_cfg in tracks:
-        if is_chord_track(track_cfg):
-            chord_track_names.add(track_cfg.name)
-        elif track_cfg.name in result:
-            for n in result[track_cfg.name]:
-                reference_notes.append((n.start, n.start + n.duration, n.pitch))
-                if n.duration > max_ref_duration:
-                    max_ref_duration = n.duration
-
-    reference_notes.sort(key=lambda x: x[0])
-    ref_starts = [x[0] for x in reference_notes]
+    reference_notes, ref_starts, max_ref_duration, chord_track_names = _build_reference_note_index(
+        result, tracks
+    )
 
     for track_cfg in tracks:
-        if track_cfg.name not in result or track_cfg.name not in chord_track_names:
-            continue
-
-        filtered = []
-        for n in result[track_cfg.name]:
-            density = ctrl.get_density_at(n.start)
-
-            # Check if this note clashes with any reference note
-            creates_clash = False
-            lo = bisect.bisect_left(ref_starts, n.start - max_ref_duration - 0.1)
-            hi = bisect.bisect_right(ref_starts, n.start + n.duration)
-
-            for ref_start, ref_end, ref_pitch in reference_notes[lo:hi]:
-                if n.start < ref_end and (n.start + n.duration) > ref_start:
-                    interval = abs(n.pitch - ref_pitch) % 12
-                    if interval in (1, 6, 11):  # m2, tritone, M7
-                        creates_clash = True
-                        break
-
-            if creates_clash:
-                # Slightly higher chance of dropping clashing notes, but not extreme
-                keep_prob = density * 0.8
-            else:
-                keep_prob = density
-
-            if random.random() < keep_prob:
-                filtered.append(n)
-
-        result[track_cfg.name] = filtered
+        if track_cfg.name in result and track_cfg.name in chord_track_names:
+            result[track_cfg.name] = _filter_chord_track_notes(
+                result[track_cfg.name], ctrl, reference_notes, ref_starts, max_ref_duration
+            )
 
 
 def apply_velocity_shaping(
