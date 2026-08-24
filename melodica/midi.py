@@ -509,19 +509,12 @@ def export_multitrack_midi(
     # plays real notes and must stay on a normal channel with its GM program,
     # so those keywords are deliberately excluded here.
     DRUM_CHANNEL = 9
-    _PERC_KEYWORDS = ("drum", "percussion", "perc", "kit", "taiko", "ghost")
 
     def _is_percussion(name: str) -> bool:
-        low = name.lower()
-        if any(kw in low for kw in _PERC_KEYWORDS):
-            return True
-        # Explicit GM program mapping to a known percussion alias
         if instruments and name in instruments:
-            # GM has no pitched program for raw drum kits; callers signal
-            # percussion by routing through the drums/percussion name path,
-            # so an explicit program means a pitched instrument — not perc.
             return False
-        return False
+        from melodica.utils import is_percussion_track_name
+        return is_percussion_track_name(name)
 
     percussion_tracks = {name for name in tracks_data if _is_percussion(name)}
 

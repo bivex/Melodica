@@ -88,11 +88,7 @@ def _instrument_family(name: str) -> str:
 # MIDI item builder — inline REAPER source chunk
 # ---------------------------------------------------------------------------
 
-_PERC_KEYWORDS = ("drum", "percussion", "perc", "kit", "taiko", "ghost")
-
-
-def _is_percussion(name: str) -> bool:
-    return any(k in name.lower() for k in _PERC_KEYWORDS)
+from melodica.utils import is_percussion_track_name as _is_percussion
 
 
 def _notes_to_reaper_midi_chunk(

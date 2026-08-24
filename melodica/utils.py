@@ -562,3 +562,30 @@ def filter_and_shift_chords(chords: list[ChordLabel], start: float, duration: fl
             )
             result.append(shifted)
     return result
+
+
+PERCUSSION_KEYWORDS = (
+    "drum", "percussion", "perc", "kit", "taiko", "ghost",
+    "snare", "kick", "cymbal", "hihat", "groove", "timpani",
+)
+
+TEXTURAL_KEYWORDS = (
+    "ostinato", "tremolo", "pizz", "pizzicato", "arpeggio",
+    "pedal", "harp", "glock", "bell", "mallet", "timp",
+    "strings", "cello", "viola", "bass", "bass2",
+    "pad", "texture", "chords", "keys", "rhodes", "synth", "wash",
+    "riser", "impact", "sweep", "swell", "noise", "effects",
+    "choir", "organ", "arp",
+)
+
+
+def is_percussion_track_name(name: str) -> bool:
+    """Check if a track name indicates a percussion / drum instrument."""
+    low = name.lower()
+    return any(k in low for k in PERCUSSION_KEYWORDS)
+
+
+def is_textural_track_name(name: str) -> bool:
+    """Check if a track name indicates an accompaniment / textural layer."""
+    low = name.lower()
+    return any(k in low for k in TEXTURAL_KEYWORDS)

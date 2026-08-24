@@ -74,26 +74,7 @@ class FormIssue:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-_PERC_KEYWORDS = ("drum", "percussion", "perc", "kit", "taiko", "ghost",
-                  "snare", "kick", "cymbal", "hihat", "groove")
-
-
-def _is_percussion(name: str) -> bool:
-    low = name.lower()
-    return any(k in low for k in _PERC_KEYWORDS)
-
-
-_TEXTURAL = ("ostinato", "tremolo", "pizz", "pizzicato", "arpeggio",
-             "pedal", "harp", "glock", "bell", "mallet", "timp",
-             "strings", "cello", "viola", "bass", "bass2",
-             "pad", "texture", "chords", "keys", "rhodes", "synth", "wash",
-             "riser", "impact", "sweep", "swell", "noise", "effects",
-             "choir", "organ", "arp")
-
-
-def _is_textural(name: str) -> bool:
-    low = name.lower()
-    return any(k in low for k in _TEXTURAL)
+from melodica.utils import is_percussion_track_name as _is_percussion, is_textural_track_name as _is_textural
 
 
 def _track_density(notes: list[NoteInfo], start: float, end: float) -> float:
