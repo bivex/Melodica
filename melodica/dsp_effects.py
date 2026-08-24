@@ -17,6 +17,16 @@ from dataclasses import dataclass, field
 import numpy as np
 
 
+def normalize_peak(audio: np.ndarray, peak_target: float = 0.9) -> np.ndarray:
+    """Normalize audio array to peak_target (e.g. 0.9 for -0.92 dBFS headroom)."""
+    if audio.size == 0:
+        return audio
+    peak = np.max(np.abs(audio))
+    if peak > 0:
+        return audio / peak * peak_target
+    return audio
+
+
 class AudioEffect(typing.Protocol):
     """Protocol for all DSP audio effects and processors."""
 
