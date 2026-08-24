@@ -83,44 +83,41 @@ def _resolve_leaps_lite(notes: list[NoteInfo]) -> list[NoteInfo]:
             expression=dict(out[idx].expression),
         )
 
-    def _violations() -> int:
-        count = 0
-        for i in range(len(out) - 2):
-            p0, p1, p2 = out[i].pitch, out[i + 1].pitch, out[i + 2].pitch
-            d1, d2 = p1 - p0, p2 - p1
-            if abs(d1) >= 7 and d1 * d2 >= 0:
-                count += 1
-        return count
-
     for _ in range(20):  # bounded passes — guaranteed convergence
-        if _violations() == 0:
-            break
+        changed = False
         for i in range(len(out) - 2):
             p0, p1, p2 = out[i].pitch, out[i + 1].pitch, out[i + 2].pitch
             d1 = p1 - p0
             d2 = p2 - p1
-            if abs(d1) < 7:
-                continue
-            if d1 * d2 < 0:
-                continue  # already resolves by contrary motion
+            if abs(d1) < 7 or d1 * d2 < 0:
+                continue  # no leap or already resolves by contrary motion
+
             # Disjointed run: consecutive same-direction leaps > an octave.
             if d1 * d2 > 0 and abs(d1 + d2) > 12:
                 shift = -12 if d1 > 0 else 12
                 new_p1 = p1 + shift
                 if 0 <= new_p1 <= 127:
                     _set(i + 1, new_p1)
-                continue
+                    changed = True
+                    continue
+
             # Unresolved leap: shift n2 toward n1 across the octave.
             shift = -12 if p2 > p1 else 12
             new_p2 = p2 + shift
             if 0 <= new_p2 <= 127 and (new_p2 - p1) * d1 < 0:
                 _set(i + 2, new_p2)
+                changed = True
                 continue
+
             # Shifting n2 didn't help — shrink the leap itself by shifting n1.
             shift1 = -12 if p1 > p0 else 12
             new_p1 = p1 + shift1
             if 0 <= new_p1 <= 127:
                 _set(i + 1, new_p1)
+                changed = True
+
+        if not changed:
+            break
 
     return out
 
