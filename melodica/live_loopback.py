@@ -195,12 +195,12 @@ class LiveLoopback:
         if self._midiout is None:
             return
         for ch in range(16):
-            self._midiout.send_message(
+            self._send_raw(
                 mido.Message("control_change", control=123, value=0, channel=ch).bytes()
             )
             # Also send note_off for all notes to be safe
             for note in range(128):
-                self._midiout.send_message(
+                self._send_raw(
                     mido.Message("note_off", note=note, velocity=0, channel=ch).bytes()
                 )
 

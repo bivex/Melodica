@@ -120,6 +120,13 @@ class PsychoReport:
     notes_velocity_reduced: int = 0
     events: list[PsychoEvent] = field(default_factory=list)
 
+    def summary(self) -> str:
+        return (
+            f"PsychoVerifier: {self.issues_detected} issues detected, "
+            f"{self.issues_fixed} fixed ({self.notes_velocity_reduced} vel-reduced, "
+            f"{self.notes_transposed} transposed, {self.notes_removed} removed)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Detection functions

@@ -142,9 +142,7 @@ class VirtualMidiOut:
         if self._midiout is None:
             return
         for ch in range(16):
-            self._midiout.send_message(
-                mido.Message("control_change", control=123, value=0, channel=ch).bytes()
-            )
+            self.send(mido.Message("control_change", control=123, value=0, channel=ch))
 
     # ------------------------------------------------------------------
     # Playback control

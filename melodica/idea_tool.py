@@ -817,16 +817,7 @@ class IdeaTool:
             for k, v in fixed_tracks.items():
                 result[k] = v
             if report.clashes_detected > 0 or report.notes_shaded > 0:
-                import logging
-
-                logging.getLogger(__name__).info(
-                    "HarmonicVerifier: %d clashes detected, %d fixed (%d transposed, %d vel-reduced), %d shaded",
-                    report.clashes_detected,
-                    report.clashes_fixed,
-                    report.notes_transposed,
-                    report.notes_velocity_reduced,
-                    report.notes_shaded,
-                )
+                logger.info(report.summary())
 
         # ---- Psychoacoustic verification (perceptual masking check) ----
         if self.config.use_harmonic_verifier:
@@ -835,17 +826,7 @@ class IdeaTool:
             psycho_cfg = PsychoConfig()
             result, psycho_report = psycho_verify(result, psycho_cfg)
             if psycho_report.issues_detected > 0:
-                import logging
-
-                logging.getLogger(__name__).info(
-                    "PsychoVerifier: %d issues detected, %d fixed "
-                    "(%d vel-reduced, %d transposed, %d removed)",
-                    psycho_report.issues_detected,
-                    psycho_report.issues_fixed,
-                    psycho_report.notes_velocity_reduced,
-                    psycho_report.notes_transposed,
-                    psycho_report.notes_removed,
-                )
+                logger.info(psycho_report.summary())
 
         # ---- Mixing Desk (Gain staging & Section faders) ----
         if self.config.use_mixing:
@@ -1053,7 +1034,7 @@ class IdeaTool:
                 "total_issues": total_issues,
             }
             if total_issues > 0:
-                logging.getLogger(__name__).info(
+                logger.info(
                     "MidiDoctor: %d issues (%d psycho, %d harmonic clashes)",
                     total_issues,
                     psycho_total,

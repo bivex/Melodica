@@ -102,6 +102,13 @@ class VerifierReport:
     polyphony_reduced: int = 0
     events: list[ClashEvent] = field(default_factory=list)
 
+    def summary(self) -> str:
+        return (
+            f"HarmonicVerifier: {self.clashes_detected} clashes detected, "
+            f"{self.clashes_fixed} fixed ({self.notes_transposed} transposed, "
+            f"{self.notes_velocity_reduced} vel-reduced), {self.notes_shaded} shaded"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Core detection
