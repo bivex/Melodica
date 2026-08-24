@@ -80,6 +80,9 @@ def _breath_gap_interval(density: float) -> int:
     return 4
 
 
+from melodica.generators.density import DensityStrategy
+
+
 # ---------------------------------------------------------------------------
 # Base class for orchestral woodwinds
 # ---------------------------------------------------------------------------
@@ -89,38 +92,7 @@ class _OrchestralWoodwindBase(PhraseGenerator):
     note_density: float = 1.0
 
     def _apply_note_density(self, chords: list[ChordLabel]) -> list[ChordLabel]:
-        note_density = getattr(self, "note_density", 1.0)
-        if not chords or note_density == 1.0:
-            return chords
-        
-        if note_density <= 0.0:
-            return []
-        
-        if note_density < 1.0:
-            new_chords = []
-            for i, chord in enumerate(chords):
-                prev_val = int((i - 1) * note_density) if i > 0 else -1
-                curr_val = int(i * note_density)
-                if curr_val > prev_val:
-                    new_chords.append(chord)
-            return new_chords
-        
-        subdivisions = max(1, round(note_density))
-        if subdivisions <= 1:
-            return chords
-            
-        import dataclasses
-        new_chords = []
-        for chord in chords:
-            sub_dur = chord.duration / subdivisions
-            for s in range(subdivisions):
-                new_chord = dataclasses.replace(
-                    chord,
-                    start=chord.start + s * sub_dur,
-                    duration=sub_dur
-                )
-                new_chords.append(new_chord)
-        return new_chords
+        return DensityStrategy.apply(chords, getattr(self, "note_density", 1.0))
 
     def _setup_range(self) -> None:
         self._range = WOODWIND_RANGES.get(self.instrument, WOODWIND_RANGES["flute"])
