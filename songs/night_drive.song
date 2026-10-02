@@ -1,0 +1,25 @@
+# songs/night_drive.song
+title: Night Drive
+key: Am
+tempo: 92
+time: 4/4
+feel: swing8
+seed: 42
+
+[Intro] x2
+| Am7 | Fmaj7 | Dm7 | E7sus4 E7 |
+
+[Verse] 8
+| Am7 | Am7 | Fmaj7 | Fmaj7 |
+| Dm7 | G7  | Cmaj7 | E7    |
+
+[Chorus]
+| Fmaj7 | G | Am | Am |
+
+form: Intro Verse Chorus Verse Chorus
+
+arrange:
+  drums: {groove: rock, intensity: 0.6}
+  bass:  {style: walking}
+  pad:   {instrument: ambient_pad}
+  lead:  {style: lyrical, range: C4-A5}
