@@ -4,3 +4,6 @@
 [submodule "vendor/dpx-py"]
 	path = vendor/dpx-py
 	url = https://github.com/bivex/DPX-Py
+[submodule "vendor/birka"]
+	path = vendor/birka
+	url = https://github.com/bivex/Birka
