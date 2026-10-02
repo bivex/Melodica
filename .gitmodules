@@ -1,3 +1,6 @@
 [submodule "vendor/tonality"]
 	path = vendor/tonality
 	url = https://github.com/bivex/Tonality
+[submodule "vendor/dpx-py"]
+	path = vendor/dpx-py
+	url = https://github.com/bivex/DPX-Py
