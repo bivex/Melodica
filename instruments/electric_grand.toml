@@ -1,0 +1,17 @@
+# Electric Grand Piano Instrument Profile
+id = "electric_grand"
+family = "plucked"
+name = "Electric Grand Piano"
+gm_program = 2
+range = { low = "A0", high = "C8" }
+max_polyphony = 8
+base_velocity = 82
+velocity_jitter = 8
+default_pattern = ""
+
+[sustain]
+pedal = true
+factor = 1.3
+
+[features]
+chorus_send = 80

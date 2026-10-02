@@ -1,0 +1,14 @@
+# Bright Acoustic Piano Instrument Profile
+id = "bright_piano"
+family = "plucked"
+name = "Bright Acoustic Piano"
+gm_program = 1
+range = { low = "A0", high = "C8" }
+max_polyphony = 10
+base_velocity = 90
+velocity_jitter = 8
+default_pattern = "lyrical"
+
+[sustain]
+pedal = true
+factor = 1.5

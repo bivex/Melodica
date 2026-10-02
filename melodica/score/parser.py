@@ -245,3 +245,7 @@ def parse_song(source: str | Path) -> Song:
         arrange=arrange,
         metadata=metadata,
     )
+
+
+# Alias
+parse_song_file = parse_song

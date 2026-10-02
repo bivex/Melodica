@@ -1,0 +1,17 @@
+# Synth Brass 1 Instrument Profile
+id = "synth_brass_1"
+family = "wind_brass"
+name = "Synth Brass 1"
+gm_program = 62
+range = { low = "C2", high = "C6" }
+max_polyphony = 4
+base_velocity = 88
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.95
+
+[features]
+cutoff_snap = true

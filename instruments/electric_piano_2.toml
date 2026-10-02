@@ -1,0 +1,18 @@
+# Electric Piano 2 (DX7) Instrument Profile
+id = "electric_piano_2"
+family = "plucked"
+name = "Electric Piano 2 (DX7)"
+gm_program = 5
+range = { low = "E1", high = "C7" }
+max_polyphony = 8
+base_velocity = 72
+velocity_jitter = 8
+default_pattern = ""
+
+[sustain]
+pedal = true
+factor = 2.0
+
+[features]
+chorus_send = 105
+tremolo = true

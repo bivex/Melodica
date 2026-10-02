@@ -1,0 +1,14 @@
+# Blown Bottle Instrument Profile
+id = "blown_bottle"
+family = "wind_brass"
+name = "Blown Bottle"
+gm_program = 76
+range = { low = "C3", high = "C5" }
+max_polyphony = 1
+base_velocity = 64
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.92

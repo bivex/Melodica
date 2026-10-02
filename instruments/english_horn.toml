@@ -1,0 +1,17 @@
+# English Horn Instrument Profile
+id = "english_horn"
+family = "wind_brass"
+name = "English Horn"
+gm_program = 69
+range = { low = "E3", high = "Bb5" }
+max_polyphony = 1
+base_velocity = 72
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.94
+
+[features]
+mod_vibrato = true

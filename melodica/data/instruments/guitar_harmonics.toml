@@ -1,0 +1,14 @@
+# Guitar Harmonics Instrument Profile
+id = "guitar_harmonics"
+family = "plucked"
+name = "Guitar Harmonics"
+gm_program = 31
+range = { low = "E3", high = "E7" }
+max_polyphony = 4
+base_velocity = 80
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.35

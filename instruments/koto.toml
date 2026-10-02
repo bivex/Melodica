@@ -1,0 +1,17 @@
+# Koto Instrument Profile
+id = "koto"
+family = "plucked"
+name = "Koto"
+gm_program = 107
+range = { low = "C3", high = "G6" }
+max_polyphony = 4
+base_velocity = 70
+velocity_jitter = 8
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.3
+
+[features]
+double_pluck = true

@@ -1,0 +1,14 @@
+# Acoustic Steel Guitar Instrument Profile
+id = "steel_guitar"
+family = "plucked"
+name = "Acoustic Steel Guitar"
+gm_program = 25
+range = { low = "E2", high = "C6" }
+max_polyphony = 6
+base_velocity = 85
+velocity_jitter = 8
+default_pattern = "fingerpicking"
+
+[sustain]
+pedal = false
+factor = 0.85

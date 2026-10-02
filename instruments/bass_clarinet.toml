@@ -1,0 +1,17 @@
+# Bass Clarinet Instrument Profile
+id = "bass_clarinet"
+family = "wind_brass"
+name = "Bass Clarinet"
+gm_program = 71
+range = { low = "D2", high = "G5" }
+max_polyphony = 1
+base_velocity = 65
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.9
+
+[features]
+swell = true

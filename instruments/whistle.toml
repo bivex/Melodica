@@ -1,0 +1,17 @@
+# Whistle Instrument Profile
+id = "whistle"
+family = "wind_brass"
+name = "Whistle"
+gm_program = 78
+range = { low = "C5", high = "C7" }
+max_polyphony = 1
+base_velocity = 80
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.78
+
+[features]
+grace_note = true

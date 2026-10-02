@@ -1,0 +1,17 @@
+# Muted Trumpet Instrument Profile
+id = "muted_trumpet"
+family = "wind_brass"
+name = "Muted Trumpet"
+gm_program = 59
+range = { low = "Bb3", high = "C6" }
+max_polyphony = 1
+base_velocity = 76
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.9
+
+[features]
+plunger_wah = true

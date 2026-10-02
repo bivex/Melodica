@@ -1,0 +1,17 @@
+# Flugelhorn Instrument Profile
+id = "flugelhorn"
+family = "wind_brass"
+name = "Flugelhorn"
+gm_program = 56
+range = { low = "Gb3", high = "C6" }
+max_polyphony = 1
+base_velocity = 68
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.92
+
+[features]
+ballad_vibrato = true

@@ -1,381 +1,45 @@
 # Copyright (c) 2026 Bivex
 #
-# Author: Bivex
-# Available for contact via email: support@b-b.top
-# For up-to-date contact information:
-# https://github.com/bivex
-#
-# Created: 2026-04-02 03:04
-# Last Updated: 2026-04-02 03:04
-#
 # Licensed under the MIT License.
-# Commercial licensing available upon request.
 
 """
 composer/voice_leading.py — SATB Voice Leading Engine.
 
-Four independent voices with classical voice leading rules:
-- No parallel fifths/octaves
-- Proper preparation and resolution of dissonances
-- Voice range constraints
-- Minimal motion preference
-- Cross-relation avoidance
+Re-exports unified functionality from melodica.theory.voice_leading for backward compatibility.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from melodica.theory.voice_leading import (
+    VOICE_ORDER,
+    VOICE_RANGES,
+    VoiceLeadingEngine,
+    _interval,
+    _is_parallel_fifth,
+    _is_parallel_octave,
+    _motion_type,
+    _pitch_class,
+    classify_motion,
+    has_parallel_motion,
+    interval,
+    is_parallel_fifth,
+    is_parallel_octave,
+    pitch_class,
+)
 
-from melodica.types import ChordLabel, NoteInfo, Quality, Scale
-
-# SATB voice ranges (MIDI pitches)
-VOICE_RANGES: dict[str, tuple[int, int]] = {
-    "soprano": (60, 81),  # C4 - A5
-    "alto": (53, 74),  # F3 - D5
-    "tenor": (45, 69),  # A2 - C4 (written)
-    "bass": (36, 60),  # C2 - C4
-}
-
-# Voice order for processing (outside-in)
-VOICE_ORDER = ["soprano", "alto", "tenor", "bass"]
-
-
-def _pitch_class(pitch: int) -> int:
-    return pitch % 12
-
-
-def _interval(a: int, b: int) -> int:
-    """Semitone interval from a to b (positive = up)."""
-    return b - a
-
-
-def _is_parallel_fifth(prev_a: int, prev_b: int, curr_a: int, curr_b: int) -> bool:
-    """Check if two voices create parallel fifths."""
-    prev_int = abs(prev_a - prev_b) % 12
-    curr_int = abs(curr_a - curr_b) % 12
-    # Parallel = both are perfect fifths (7 semitones) AND both move in same direction
-    if prev_int == 7 and curr_int == 7:
-        # Both voices moving in same direction
-        dir_a = 1 if curr_a > prev_a else (-1 if curr_a < prev_a else 0)
-        dir_b = 1 if curr_b > prev_b else (-1 if curr_b < prev_b else 0)
-        if dir_a == dir_b and dir_a != 0:
-            return True
-    return False
-
-
-def _is_parallel_octave(prev_a: int, prev_b: int, curr_a: int, curr_b: int) -> bool:
-    """Check if two voices create parallel octaves."""
-    prev_int = abs(prev_a - prev_b) % 12
-    curr_int = abs(curr_a - curr_b) % 12
-    if prev_int == 0 and curr_int == 0:
-        dir_a = 1 if curr_a > prev_a else (-1 if curr_a < prev_a else 0)
-        dir_b = 1 if curr_b > prev_b else (-1 if curr_b < prev_b else 0)
-        if dir_a == dir_b and dir_a != 0:
-            return True
-    return False
-
-
-def _motion_type(a: int, b: int) -> str:
-    """Classify motion between two notes."""
-    if a == b:
-        return "oblique"
-    return "parallel"  # both move same direction (simplified)
-
-
-@dataclass
-class VoiceLeadingEngine:
-    """
-    SATB voice leading engine.
-
-    Takes chord progressions and produces 4-voice voicings with proper
-    voice leading: no parallel fifths/octaves, minimal motion, proper ranges.
-
-    beam_width: number of beam candidates to keep per step.
-        beam_width=1 reproduces the old pairwise greedy behaviour.
-        beam_width>1 enables proper beam search for globally better voice leading.
-    """
-
-    strict_mode: bool = True  # if True, reject parallel fifths/octaves
-    max_voice_gap: int = 12  # max interval between adjacent voices
-    beam_width: int = 3
-
-    def voicize_progression(
-        self,
-        chords: list[ChordLabel],
-        scale: Scale,
-    ) -> dict[str, list[NoteInfo]]:
-        """
-        Convert chord progression to 4-voice SATB voicing.
-
-        Uses beam search when beam_width > 1 for globally optimal voice leading.
-        Returns dict with keys: "soprano", "alto", "tenor", "bass"
-        Each value is a list of NoteInfo for that voice.
-        """
-        if not chords:
-            return {v: [] for v in VOICE_ORDER}
-
-        voice_names = ["soprano", "alto", "tenor", "bass"]
-
-        if self.beam_width <= 1:
-            # Legacy pairwise greedy path
-            return self._voicize_greedy(chords, scale, voice_names)
-
-        # Beam search path
-        first_voicing = self._best_initial_voicing(chords[0], scale)
-        # Each beam: (cumulative_score, [voicing_per_chord])
-        beams: list[tuple[float, list[list[int]]]] = [(0.0, [first_voicing])]
-
-        for i in range(1, len(chords)):
-            new_beams: list[tuple[float, list[list[int]]]] = []
-            for score, path in beams:
-                prev_v = path[-1]
-                candidates = self._generate_candidates(chords[i], scale, prev_v)
-                for cand in candidates:
-                    if self.strict_mode and self._has_parallels(prev_v, cand):
-                        continue
-                    step_score = self._score_voicing(prev_v, cand)
-                    new_beams.append((score + step_score, path + [cand]))
-            if not new_beams:
-                # Fallback: accept all candidates even with parallels
-                for score, path in beams:
-                    prev_v = path[-1]
-                    candidates = self._generate_candidates(chords[i], scale, prev_v)
-                    for cand in candidates:
-                        step_score = self._score_voicing(prev_v, cand)
-                        new_beams.append((score + step_score, path + [cand]))
-            new_beams.sort(key=lambda x: -x[0])
-            beams = new_beams[: self.beam_width]
-
-        if not beams:
-            return self._voicize_greedy(chords, scale, voice_names)
-
-        best_voicings = beams[0][1]
-
-        # Convert to NoteInfo
-        result: dict[str, list[NoteInfo]] = {}
-        for vi, voice in enumerate(voice_names):
-            notes = []
-            for ci, chord in enumerate(chords):
-                pitch = best_voicings[ci][vi]
-                notes.append(
-                    NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start, 6),
-                        duration=chord.duration,
-                        velocity=80,
-                    )
-                )
-            result[voice] = notes
-        return result
-
-    def _has_parallels(self, prev: list[int], curr: list[int]) -> bool:
-        """Check all voice pairs for parallel fifths/octaves."""
-        for i in range(4):
-            for j in range(i + 1, 4):
-                if _is_parallel_fifth(prev[i], prev[j], curr[i], curr[j]):
-                    return True
-                if _is_parallel_octave(prev[i], prev[j], curr[i], curr[j]):
-                    return True
-        return False
-
-    def _voicize_greedy(
-        self,
-        chords: list[ChordLabel],
-        scale: Scale,
-        voice_names: list[str],
-    ) -> dict[str, list[NoteInfo]]:
-        """Legacy pairwise greedy voicize (beam_width=1 equivalent)."""
-        voices: dict[str, list[int]] = {}
-        first_voicing = self._best_initial_voicing(chords[0], scale)
-        for i, vn in enumerate(voice_names):
-            voices[vn] = [first_voicing[i]]
-
-        for i in range(1, len(chords)):
-            prev_voicing = [voices[vn][-1] for vn in voice_names]
-            candidates = self._generate_candidates(chords[i], scale, prev_voicing)
-            best = self._select_best(prev_voicing, candidates)
-            for j, vn in enumerate(voice_names):
-                voices[vn].append(best[j])
-
-        result: dict[str, list[NoteInfo]] = {}
-        for voice in voice_names:
-            notes = []
-            for i, chord in enumerate(chords):
-                pitch = voices[voice][i]
-                notes.append(
-                    NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start, 6),
-                        duration=chord.duration,
-                        velocity=80,
-                    )
-                )
-            result[voice] = notes
-        return result
-
-    def _best_initial_voicing(self, chord: ChordLabel, scale: Scale) -> list[int]:
-        """Find best initial SATB voicing for a chord."""
-        root = chord.root
-        pcs = chord.pitch_classes()
-        if not pcs:
-            return [72, 64, 55, 36]  # C5, E4, G3, C2
-
-        # Each voice gets a chord tone in its range
-        sop = self._nearest_in_range(pcs[0], VOICE_RANGES["soprano"])
-        alt = self._nearest_in_range(pcs[min(1, len(pcs) - 1)], VOICE_RANGES["alto"])
-        ten = self._nearest_in_range(pcs[min(2, len(pcs) - 1)], VOICE_RANGES["tenor"])
-        bass = self._nearest_in_range(root, VOICE_RANGES["bass"])
-
-        # Ensure ordering: soprano > alto > tenor > bass
-        if ten >= alt:
-            ten -= 12
-        if alt >= sop:
-            alt -= 12
-
-        # Clamp
-        sop = max(VOICE_RANGES["soprano"][0], min(VOICE_RANGES["soprano"][1], sop))
-        alt = max(VOICE_RANGES["alto"][0], min(VOICE_RANGES["alto"][1], alt))
-        ten = max(VOICE_RANGES["tenor"][0], min(VOICE_RANGES["tenor"][1], ten))
-        bass = max(VOICE_RANGES["bass"][0], min(VOICE_RANGES["bass"][1], bass))
-
-        return [sop, alt, ten, bass]
-
-    def _generate_candidates(
-        self,
-        chord: ChordLabel,
-        scale: Scale,
-        prev_voicing: list[int],
-    ) -> list[list[int]]:
-        """Generate candidate voicings for next chord."""
-        pcs = chord.pitch_classes()
-        if not pcs:
-            return [prev_voicing]
-
-        candidates = []
-        ranges = [VOICE_RANGES[v] for v in VOICE_ORDER]
-
-        # Generate all possible pitch assignments
-        # For each voice, try all chord tones within range
-        bass_pc = chord.root
-        bass_pitches = self._all_in_range(bass_pc, ranges[3]) or [self._nearest_in_range(bass_pc, ranges[3])]
-        for bass in bass_pitches:
-            for sop_pc in pcs:
-                sop_pitches = self._all_in_range(sop_pc, ranges[0]) or [self._nearest_in_range(sop_pc, ranges[0])]
-                for sop in sop_pitches:
-                    if sop < bass:
-                        continue
-                    for alt_pc in pcs:
-                        alt_pitches = self._all_in_range(alt_pc, ranges[1]) or [self._nearest_in_range(alt_pc, ranges[1])]
-                        for alt in alt_pitches:
-                            if not (sop >= alt >= bass):
-                                continue
-                            for ten_pc in pcs:
-                                ten_pitches = self._all_in_range(ten_pc, ranges[2]) or [self._nearest_in_range(ten_pc, ranges[2])]
-                                for ten in ten_pitches:
-                                    candidate = [sop, alt, ten, bass]
-
-                                    # Check ordering
-                                    if not (sop >= alt >= ten >= bass):
-                                        continue
-
-                                    # Check voice gaps
-                                    if any(
-                                        abs(candidate[j] - candidate[j + 1]) > self.max_voice_gap
-                                        for j in range(3)
-                                    ):
-                                        continue
-
-                                    # Score by voice leading quality
-                                    score = self._score_voicing(prev_voicing, candidate)
-                                    candidates.append((score, candidate))
-
-        if not candidates:
-            return [self._best_initial_voicing(chord, scale)]
-
-        candidates.sort(key=lambda x: -x[0])
-        # Deduplicate candidates while preserving order
-        unique_cands: list[list[int]] = []
-        seen = set()
-        for _, c in candidates:
-            key = tuple(c)
-            if key not in seen:
-                seen.add(key)
-                unique_cands.append(c)
-                if len(unique_cands) >= 12:
-                    break
-        return unique_cands
-
-    def _select_best(
-        self,
-        prev: list[int],
-        candidates: list[list[int]],
-    ) -> list[int]:
-        """Select best candidate avoiding parallel fifths/octaves."""
-        for candidate in candidates:
-            if self.strict_mode:
-                # Check all voice pairs for parallel fifths/octaves
-                has_parallels = False
-                for i in range(4):
-                    for j in range(i + 1, 4):
-                        if _is_parallel_fifth(prev[i], prev[j], candidate[i], candidate[j]):
-                            has_parallels = True
-                            break
-                        if _is_parallel_octave(prev[i], prev[j], candidate[i], candidate[j]):
-                            has_parallels = True
-                            break
-                    if has_parallels:
-                        break
-                if has_parallels:
-                    continue
-            return candidate
-        # Fallback: return best even if has parallels
-        return candidates[0] if candidates else prev
-
-    def _score_voicing(self, prev: list[int], curr: list[int]) -> float:
-        """Score a voicing transition (higher = better voice leading)."""
-        score = 0.0
-
-        # Minimal motion bonus
-        for i in range(4):
-            motion = abs(curr[i] - prev[i])
-            if motion == 0:
-                score += 2.0  # stationary voice = excellent
-            elif motion <= 2:
-                score += 1.0  # stepwise = good
-            elif motion <= 4:
-                score += 0.4  # small skip = ok
-            elif motion <= 7:
-                score -= 0.5  # moderate leap = small penalty
-            else:
-                score -= 1.5  # large leap = penalty
-
-        # Contrary motion bonus (bass vs soprano)
-        if (curr[0] > prev[0] and curr[3] < prev[3]) or (curr[0] < prev[0] and curr[3] > prev[3]):
-            score += 1.2
-        elif (curr[0] == prev[0]) or (curr[3] == prev[3]):
-            score += 0.5  # oblique motion is also good
-
-        # Smooth inner voices
-        inner_motion = abs(curr[1] - prev[1]) + abs(curr[2] - prev[2])
-        score -= inner_motion * 0.1
-
-        return score
-
-    def _all_in_range(self, pc: int, voice_range: tuple[int, int]) -> list[int]:
-        """Find all pitches with given pitch class within voice range."""
-        lo, hi = voice_range
-        return [p for p in range(lo, hi + 1) if p % 12 == pc % 12]
-
-    def _nearest_in_range(self, pc: int, voice_range: tuple[int, int]) -> int:
-        """Find nearest pitch with given pitch class within voice range."""
-        lo, hi = voice_range
-        # Find all pitches with this pc in range
-        candidates = self._all_in_range(pc, voice_range)
-        if candidates:
-            mid = (lo + hi) // 2
-            return min(candidates, key=lambda p: abs(p - mid))
-        # Fallback: clamp
-        pitch = lo + (pc - lo % 12) % 12
-        while pitch > hi:
-            pitch -= 12
-        return max(lo, pitch)
+__all__ = [
+    "VOICE_RANGES",
+    "VOICE_ORDER",
+    "VoiceLeadingEngine",
+    "pitch_class",
+    "interval",
+    "is_parallel_fifth",
+    "is_parallel_octave",
+    "classify_motion",
+    "has_parallel_motion",
+    "_pitch_class",
+    "_interval",
+    "_is_parallel_fifth",
+    "_is_parallel_octave",
+    "_motion_type",
+]

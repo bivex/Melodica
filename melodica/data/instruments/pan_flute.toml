@@ -1,0 +1,17 @@
+# Pan Flute Instrument Profile
+id = "pan_flute"
+family = "wind_brass"
+name = "Pan Flute"
+gm_program = 75
+range = { low = "G3", high = "E6" }
+max_polyphony = 1
+base_velocity = 72
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.8
+
+[features]
+breath_puff = true

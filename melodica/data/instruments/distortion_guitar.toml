@@ -1,0 +1,19 @@
+# Distortion Guitar Instrument Profile
+id = "distortion_guitar"
+family = "plucked"
+name = "Distortion Guitar"
+gm_program = 30
+range = { low = "E2", high = "C6" }
+max_polyphony = 6
+base_velocity = 98
+velocity_jitter = 8
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.85
+
+[features]
+vibrato = true
+power_chords = true
+chorus_send = 85

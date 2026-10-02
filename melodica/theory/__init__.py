@@ -24,3 +24,10 @@ from .tonality_bridge import (
     voice_lead_progression,
     voice_leading_distance,
 )
+from .voice_leading import (
+    VoiceLeadingEngine,
+    classify_motion,
+    correct_parallels,
+    is_parallel_fifth,
+    is_parallel_octave,
+)

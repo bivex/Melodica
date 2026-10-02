@@ -1,0 +1,14 @@
+# Harpsichord Instrument Profile
+id = "harpsichord"
+family = "plucked"
+name = "Harpsichord"
+gm_program = 6
+range = { low = "F1", high = "F6" }
+max_polyphony = 6
+base_velocity = 80
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.4

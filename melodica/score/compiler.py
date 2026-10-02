@@ -20,7 +20,7 @@ from typing import Any
 
 import mido
 
-from melodica.generate.family import MalletFamily
+from melodica.generate.family import MalletFamily, PluckedFamily, WindBrassFamily
 from melodica.generate.profile import get_profile
 from melodica.generators import (
     AmbientPadGenerator,
@@ -43,12 +43,26 @@ def _try_profile_generator(track: TrackArrange, params: GeneratorParams) -> tupl
     inst_name = (track.instrument or track.name or "").lower().strip()
     try:
         prof = get_profile(inst_name)
-        gen = MalletFamily(
-            prof,
-            params=params,
-            pattern=track.params.get("pattern"),
-            note_density=track.density,
-        )
+        if prof.family == "plucked":
+            gen = PluckedFamily(
+                prof,
+                params=params,
+                style=track.style or track.params.get("style"),
+                note_density=track.density,
+            )
+        elif prof.family == "wind_brass":
+            gen = WindBrassFamily(
+                prof,
+                params=params,
+                note_density=track.density,
+            )
+        else:
+            gen = MalletFamily(
+                prof,
+                params=params,
+                pattern=track.params.get("pattern"),
+                note_density=track.density,
+            )
         return gen, prof.gm_program
     except (KeyError, FileNotFoundError):
         return None
@@ -230,3 +244,8 @@ def song_to_midi(
     )
 
     return mido.MidiFile(save_path)
+
+
+# Aliases for convenience
+compile_song_to_midi = song_to_midi
+compile_song_to_tracks = compile_song_tracks

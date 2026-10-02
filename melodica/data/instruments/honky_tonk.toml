@@ -1,0 +1,18 @@
+# Honky-tonk Piano Instrument Profile
+id = "honky_tonk"
+family = "plucked"
+name = "Honky-tonk Piano"
+gm_program = 3
+range = { low = "A0", high = "C8" }
+max_polyphony = 8
+base_velocity = 80
+velocity_jitter = 8
+default_pattern = ""
+
+[sustain]
+pedal = true
+factor = 1.6
+
+[features]
+chorus_send = 95
+double_strike = true

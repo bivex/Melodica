@@ -1,0 +1,14 @@
+# Clavinet Instrument Profile
+id = "clavinet"
+family = "plucked"
+name = "Clavinet"
+gm_program = 7
+range = { low = "F1", high = "F6" }
+max_polyphony = 6
+base_velocity = 80
+velocity_jitter = 8
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.6

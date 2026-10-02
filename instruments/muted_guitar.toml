@@ -1,0 +1,14 @@
+# Muted Electric Guitar Instrument Profile
+id = "muted_guitar"
+family = "plucked"
+name = "Muted Electric Guitar"
+gm_program = 28
+range = { low = "E2", high = "C6" }
+max_polyphony = 6
+base_velocity = 75
+velocity_jitter = 8
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.15

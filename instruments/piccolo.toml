@@ -1,0 +1,17 @@
+# Piccolo Instrument Profile
+id = "piccolo"
+family = "wind_brass"
+name = "Piccolo"
+gm_program = 72
+range = { low = "C5", high = "C8" }
+max_polyphony = 1
+base_velocity = 84
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.85
+
+[features]
+grace_note = true

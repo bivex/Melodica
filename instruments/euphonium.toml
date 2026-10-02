@@ -1,0 +1,17 @@
+# Euphonium Instrument Profile
+id = "euphonium"
+family = "wind_brass"
+name = "Euphonium"
+gm_program = 58
+range = { low = "Bb1", high = "Bb4" }
+max_polyphony = 1
+base_velocity = 70
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.94
+
+[features]
+marcato_swell = true

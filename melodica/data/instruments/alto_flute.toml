@@ -1,0 +1,17 @@
+# Alto Flute Instrument Profile
+id = "alto_flute"
+family = "wind_brass"
+name = "Alto Flute"
+gm_program = 73
+range = { low = "G3", high = "G6" }
+max_polyphony = 1
+base_velocity = 66
+velocity_jitter = 6
+default_pattern = ""
+
+[sustain]
+pedal = false
+factor = 0.9
+
+[features]
+breathy_vibrato = true

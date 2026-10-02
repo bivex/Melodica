@@ -1,0 +1,14 @@
+# Grand Piano Instrument Profile
+id = "grand_piano"
+family = "plucked"
+name = "Grand Piano"
+gm_program = 0
+range = { low = "A0", high = "C8" }
+max_polyphony = 10
+base_velocity = 80
+velocity_jitter = 8
+default_pattern = "lyrical"
+
+[sustain]
+pedal = true
+factor = 1.8
