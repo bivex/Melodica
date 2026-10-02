@@ -7,3 +7,4 @@
 [submodule "vendor/birka"]
 	path = vendor/birka
 	url = https://github.com/bivex/Birka
+	ignore = dirty

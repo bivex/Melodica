@@ -1,0 +1,18 @@
+# Xylophone Instrument Profile
+id = "xylophone"
+family = "mallet"
+name = "Xylophone"
+gm_program = 13
+range = { low = "F4", high = "C7" }  # 65 - 96
+max_polyphony = 2
+default_pattern = "dry_staccato_run"
+base_velocity = 84
+velocity_jitter = 8
+
+[sustain]
+pedal = false
+factor = 0.3
+
+[defaults]
+pattern = "dry_staccato_run"
+note_density = 1.0

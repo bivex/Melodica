@@ -1,0 +1,18 @@
+# Hammered Dulcimer Instrument Profile
+id = "dulcimer"
+family = "mallet"
+name = "Hammered Dulcimer"
+gm_program = 15
+range = { low = "C3", high = "C6" }  # 48 - 84
+max_polyphony = 4
+default_pattern = "rapid_arpeggio"
+base_velocity = 76
+velocity_jitter = 8
+
+[sustain]
+pedal = false
+factor = 1.0
+
+[defaults]
+pattern = "rapid_arpeggio"
+note_density = 1.0

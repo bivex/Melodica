@@ -1,0 +1,19 @@
+# Marimba Instrument Profile
+id = "marimba"
+family = "mallet"
+name = "Marimba"
+gm_program = 12
+range = { low = "A2", high = "C7" }  # 45 - 84
+max_polyphony = 4
+default_pattern = "woody_arpeggio"
+base_velocity = 68
+velocity_jitter = 8
+
+[sustain]
+pedal = false
+factor = 0.5
+
+[defaults]
+pattern = "woody_arpeggio"
+mallets = 4
+note_density = 1.0

@@ -1,0 +1,18 @@
+# Celesta Instrument Profile
+id = "celesta"
+family = "mallet"
+name = "Celesta"
+gm_program = 8
+range = { low = "C4", high = "C8" }  # 60 - 108
+max_polyphony = 8
+default_pattern = "dreamy_arpeggio"
+base_velocity = 72
+velocity_jitter = 8
+
+[sustain]
+pedal = true
+factor = 1.6
+
+[defaults]
+pattern = "dreamy_arpeggio"
+note_density = 1.0

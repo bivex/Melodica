@@ -1,0 +1,18 @@
+# Music Box Instrument Profile
+id = "music_box"
+family = "mallet"
+name = "Music Box"
+gm_program = 10
+range = { low = "C4", high = "E6" }  # 60 - 88
+max_polyphony = 4
+default_pattern = "clockwork_ostinato"
+base_velocity = 68
+velocity_jitter = 4
+
+[sustain]
+pedal = false
+factor = 0.7
+
+[defaults]
+pattern = "clockwork_ostinato"
+note_density = 1.0

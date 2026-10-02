@@ -4,40 +4,44 @@
 
 """
 generators/chromatic_percussion.py — Chromatic and Mallet Percussion instruments.
-Implements dedicated, highly professional generators for Celesta (8), Glockenspiel (9),
-Music Box (10), Vibraphone (11), Marimba (12), Xylophone (13), and Dulcimer (15).
+
+Layer 2/3: Celesta (8), Glockenspiel (9), Music Box (10), Vibraphone (11),
+Marimba (12), Xylophone (13), and Dulcimer (15).
+Refactored to inherit from MalletFamily, backed by Layer 1 TOML profiles and kernel functions.
 """
 
 from __future__ import annotations
 
-import random
-import math
-from abc import ABC, abstractmethod
+from abc import ABC
 
-from melodica.generators import GeneratorParams, PhraseGenerator
-from melodica.render_context import RenderContext
-from melodica.types import ChordLabel, NoteInfo, Scale
-from melodica.utils import nearest_pitch, snap_to_scale
-
-
+from melodica.generate.family import MalletFamily
+from melodica.generators import GeneratorParams
 from melodica.generators._solo_base import _SoloInstrumentBase
 
 
-class _ChromaticPercussionBase(_SoloInstrumentBase, ABC):
+class _ChromaticPercussionBase(MalletFamily, _SoloInstrumentBase, ABC):
     """Abstract base class for chromatic and mallet percussion generators."""
 
     def __init__(
         self,
+        profile_id: str,
         params: GeneratorParams | None = None,
         *,
+        pattern: str | None = None,
+        pedal: bool | None = None,
+        motor_speed_hz: float | None = None,
+        mallets: int | None = None,
         note_density: float = 1.0,
     ) -> None:
-        super().__init__(params)
-        self.note_density = note_density
-
-    def _resolve_pitch(self, pc: int, anchor: int, key: Scale, low: int, high: int) -> int:
-        from melodica.utils import resolve_scale_pitch
-        return resolve_scale_pitch(pc, anchor, key, low, high)
+        super().__init__(
+            profile=profile_id,
+            params=params,
+            pattern=pattern,
+            pedal=pedal,
+            motor_speed_hz=motor_speed_hz,
+            mallets=mallets,
+            note_density=note_density,
+        )
 
 
 class CelestaGenerator(_ChromaticPercussionBase):
@@ -55,56 +59,13 @@ class CelestaGenerator(_ChromaticPercussionBase):
         pedal: bool = True,
         note_density: float = 1.0,
     ) -> None:
-        super().__init__(params, note_density=note_density)
-        self.pattern = pattern
-        self.pedal = pedal
-
-    def render(
-        self,
-        chords: list[ChordLabel],
-        key: Scale,
-        duration_beats: float,
-        context: RenderContext | None = None,
-    ) -> list[NoteInfo]:
-        chords = self._apply_note_density(chords)
-        if not chords:
-            return []
-
-        notes: list[NoteInfo] = []
-        low = max(60, self.params.key_range_low)
-        high = min(108, self.params.key_range_high)
-        mid = (low + high) // 2
-
-        dur_mult = 1.6 if self.pedal else 0.8
-
-        for chord in chords:
-            pcs = chord.pitch_classes()
-            if not pcs:
-                continue
-
-            if self.pattern == "dreamy_arpeggio" and len(pcs) >= 2:
-                # Flowing ascending pearly run
-                sub_dur = chord.duration / len(pcs)
-                for i, pc in enumerate(pcs):
-                    pitch = self._resolve_pitch(pc, mid + (i - len(pcs)//2)*4, key, low, high)
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start + i * sub_dur, 6),
-                        duration=round(max(0.1, sub_dur * dur_mult), 6),
-                        velocity=self._velocity(72),
-                    ))
-            else:
-                # Sparkling chords (plays up to 3 chord tones at high registers)
-                for pc in pcs[:3]:
-                    pitch = self._resolve_pitch(pc, mid + 12, key, low, high)
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start, 6),
-                        duration=round(max(0.1, chord.duration * dur_mult), 6),
-                        velocity=self._velocity(75),
-                    ))
-
-        return sorted(notes, key=lambda x: x.start)
+        super().__init__(
+            "celesta",
+            params=params,
+            pattern=pattern,
+            pedal=pedal,
+            note_density=note_density,
+        )
 
 
 class GlockenspielGenerator(_ChromaticPercussionBase):
@@ -121,57 +82,12 @@ class GlockenspielGenerator(_ChromaticPercussionBase):
         pattern: str = "melodic_accent",  # melodic_accent, sparkling_run
         note_density: float = 1.0,
     ) -> None:
-        super().__init__(params, note_density=note_density)
-        self.pattern = pattern
-
-    def render(
-        self,
-        chords: list[ChordLabel],
-        key: Scale,
-        duration_beats: float,
-        context: RenderContext | None = None,
-    ) -> list[NoteInfo]:
-        chords = self._apply_note_density(chords)
-        if not chords:
-            return []
-
-        notes: list[NoteInfo] = []
-        low = max(72, self.params.key_range_low)
-        high = min(108, self.params.key_range_high)
-        mid = (low + high) // 2
-
-        prev_pitch = mid + 12
-
-        for chord in chords:
-            pcs = chord.pitch_classes()
-            if not pcs:
-                continue
-
-            if self.pattern == "sparkling_run" and len(pcs) >= 3:
-                # Fast high-pitched run
-                sub_dur = chord.duration / 4.0
-                for s in range(4):
-                    pc = pcs[s % len(pcs)]
-                    pitch = self._resolve_pitch(pc, mid + 12 + s * 2, key, low, high)
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start + s * sub_dur, 6),
-                        duration=0.3,
-                        velocity=self._velocity(76),
-                    ))
-            else:
-                # Sparse ringing melodic accent on the first chord tone
-                pc = pcs[0]
-                pitch = self._resolve_pitch(pc, prev_pitch, key, low, high)
-                prev_pitch = pitch
-                notes.append(NoteInfo(
-                    pitch=pitch,
-                    start=round(chord.start, 6),
-                    duration=0.6,
-                    velocity=self._velocity(82),
-                ))
-
-        return sorted(notes, key=lambda x: x.start)
+        super().__init__(
+            "glockenspiel",
+            params=params,
+            pattern=pattern,
+            note_density=note_density,
+        )
 
 
 class MusicBoxGenerator(_ChromaticPercussionBase):
@@ -188,58 +104,12 @@ class MusicBoxGenerator(_ChromaticPercussionBase):
         pattern: str = "clockwork_ostinato",  # clockwork_ostinato, gentle_melody
         note_density: float = 1.0,
     ) -> None:
-        super().__init__(params, note_density=note_density)
-        self.pattern = pattern
-
-    def render(
-        self,
-        chords: list[ChordLabel],
-        key: Scale,
-        duration_beats: float,
-        context: RenderContext | None = None,
-    ) -> list[NoteInfo]:
-        chords = self._apply_note_density(chords)
-        if not chords:
-            return []
-
-        notes: list[NoteInfo] = []
-        low = max(60, self.params.key_range_low)
-        high = min(88, self.params.key_range_high)
-        mid = (low + high) // 2
-
-        for chord in chords:
-            pcs = chord.pitch_classes()
-            if not pcs:
-                continue
-
-            if self.pattern == "clockwork_ostinato":
-                # Continuous, rigid mechanical arpeggio (e.g. 1 & 2 & 3 & 4 &)
-                sub_dur = 0.5  # eighth notes
-                steps = max(1, int(chord.duration / sub_dur))
-                for s in range(steps):
-                    pc = pcs[s % len(pcs)]
-                    octave = (s // len(pcs)) * 12
-                    pitch = self._resolve_pitch(pc, mid + octave, key, low, high)
-                    
-                    # High mechanical precision: strict velocity, tiny release decay
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start + s * sub_dur, 6),
-                        duration=0.35,
-                        velocity=self._velocity(68),
-                    ))
-            else:
-                # Gentle high melody
-                pc = random.choice(pcs)
-                pitch = self._resolve_pitch(pc, mid + 6, key, low, high)
-                notes.append(NoteInfo(
-                    pitch=pitch,
-                    start=round(chord.start, 6),
-                    duration=0.4,
-                    velocity=self._velocity(72),
-                ))
-
-        return sorted(notes, key=lambda x: x.start)
+        super().__init__(
+            "music_box",
+            params=params,
+            pattern=pattern,
+            note_density=note_density,
+        )
 
 
 class VibraphoneGenerator(_ChromaticPercussionBase):
@@ -254,83 +124,18 @@ class VibraphoneGenerator(_ChromaticPercussionBase):
         params: GeneratorParams | None = None,
         *,
         pattern: str = "warm_chords",  # warm_chords, motor_arpeggio
-        motor_speed_hz: float = 6.0,  # motor tremolo speed
-        pedal: bool = True,           # sustain pedaling (CC 64)
+        motor_speed_hz: float = 6.0,   # motor tremolo speed
+        pedal: bool = True,            # sustain pedaling (CC 64)
         note_density: float = 1.0,
     ) -> None:
-        super().__init__(params, note_density=note_density)
-        self.pattern = pattern
-        self.motor_speed_hz = motor_speed_hz
-        self.pedal = pedal
-
-    def render(
-        self,
-        chords: list[ChordLabel],
-        key: Scale,
-        duration_beats: float,
-        context: RenderContext | None = None,
-    ) -> list[NoteInfo]:
-        chords = self._apply_note_density(chords)
-        if not chords:
-            return []
-
-        notes: list[NoteInfo] = []
-        low = max(53, self.params.key_range_low)
-        high = min(89, self.params.key_range_high)
-        mid = (low + high) // 2
-
-        for chord in chords:
-            pcs = chord.pitch_classes()
-            if not pcs:
-                continue
-
-            if self.pattern == "warm_chords":
-                # Lush sustained chords, up to 4 mallet voices
-                for idx, pc in enumerate(pcs[:4]):
-                    pitch = self._resolve_pitch(pc, mid, key, low, high)
-                    duration = chord.duration * 0.95
-                    
-                    # Generate dynamic LFO expression sweeps (simulates spinning motor disc tremolo)
-                    expression = {}
-                    step = 0.05
-                    expr_points = []
-                    t = 0.0
-                    while t < duration:
-                        # 6Hz LFO sweep on CC 11
-                        lfo_val = int(85 + 15 * math.sin(t * self.motor_speed_hz * 2.0 * math.pi))
-                        expr_points.append((t, lfo_val))
-                        t += step
-                    if expr_points:
-                        expression[11] = expr_points
-
-                    # If pedal is enabled, inject sustain pedal CC 64 messages
-                    if self.pedal:
-                        # Send pedal release and re-press at start of chord to clear resonance
-                        expression[64] = [(0.0, 0), (0.04, 127)]
-
-                    note = NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start, 6),
-                        duration=round(duration, 6),
-                        velocity=self._velocity(70),
-                    )
-                    if expression:
-                        note.expression = expression
-                    notes.append(note)
-            else:
-                # Motor-driven arpeggiating run
-                sub_dur = chord.duration / 3.0
-                for s in range(3):
-                    pc = pcs[s % len(pcs)]
-                    pitch = self._resolve_pitch(pc, mid, key, low, high)
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start + s * sub_dur, 6),
-                        duration=round(sub_dur * 1.5, 6),
-                        velocity=self._velocity(74),
-                    ))
-
-        return sorted(notes, key=lambda x: x.start)
+        super().__init__(
+            "vibraphone",
+            params=params,
+            pattern=pattern,
+            pedal=pedal,
+            motor_speed_hz=motor_speed_hz,
+            note_density=note_density,
+        )
 
 
 class MarimbaGenerator(_ChromaticPercussionBase):
@@ -348,63 +153,13 @@ class MarimbaGenerator(_ChromaticPercussionBase):
         mallets: int = 4,
         note_density: float = 1.0,
     ) -> None:
-        super().__init__(params, note_density=note_density)
-        self.pattern = pattern
-        self.mallets = max(2, min(4, mallets))
-
-    def render(
-        self,
-        chords: list[ChordLabel],
-        key: Scale,
-        duration_beats: float,
-        context: RenderContext | None = None,
-    ) -> list[NoteInfo]:
-        chords = self._apply_note_density(chords)
-        if not chords:
-            return []
-
-        notes: list[NoteInfo] = []
-        low = max(45, self.params.key_range_low)
-        high = min(84, self.params.key_range_high)
-        mid = (low + high) // 2
-
-        for chord in chords:
-            pcs = chord.pitch_classes()
-            if not pcs:
-                continue
-
-            if self.pattern == "rolling_tremolo":
-                # Continuous high-speed tremolo rolls
-                roll_speed = 0.125  # 32nd note rolls
-                steps = max(1, int(chord.duration / roll_speed))
-                for s in range(steps):
-                    pc = pcs[s % min(len(pcs), 2)]  # Roll on root/third
-                    pitch = self._resolve_pitch(pc, mid, key, low, high)
-                    
-                    # Beautiful sinusoidal volume shape on the roll
-                    t_frac = s / max(1, steps - 1)
-                    swell = int(math.sin(t_frac * math.pi) * 12)
-                    
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start + s * roll_speed, 6),
-                        duration=roll_speed * 0.95,
-                        velocity=max(1, min(127, self._velocity(60) + swell)),
-                    ))
-            else:
-                # Woody chordal arpeggiating blocks (up to active mallet count)
-                sub_dur = chord.duration / self.mallets
-                for s in range(self.mallets):
-                    pc = pcs[s % len(pcs)]
-                    pitch = self._resolve_pitch(pc, mid - 6 + s * 4, key, low, high)
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start + s * sub_dur, 6),
-                        duration=0.22,  # Dry woody decay
-                        velocity=self._velocity(68),
-                    ))
-
-        return sorted(notes, key=lambda x: x.start)
+        super().__init__(
+            "marimba",
+            params=params,
+            pattern=pattern,
+            mallets=mallets,
+            note_density=note_density,
+        )
 
 
 class XylophoneGenerator(_ChromaticPercussionBase):
@@ -421,55 +176,12 @@ class XylophoneGenerator(_ChromaticPercussionBase):
         pattern: str = "dry_staccato_run",  # dry_staccato_run, skeletal_accents
         note_density: float = 1.0,
     ) -> None:
-        super().__init__(params, note_density=note_density)
-        self.pattern = pattern
-
-    def render(
-        self,
-        chords: list[ChordLabel],
-        key: Scale,
-        duration_beats: float,
-        context: RenderContext | None = None,
-    ) -> list[NoteInfo]:
-        chords = self._apply_note_density(chords)
-        if not chords:
-            return []
-
-        notes: list[NoteInfo] = []
-        low = max(65, self.params.key_range_low)
-        high = min(96, self.params.key_range_high)
-        mid = (low + high) // 2
-
-        for chord in chords:
-            pcs = chord.pitch_classes()
-            if not pcs:
-                continue
-
-            if self.pattern == "dry_staccato_run":
-                # Rapid 16th note dry wood runs
-                sub_dur = 0.25
-                steps = max(1, int(chord.duration / sub_dur))
-                for s in range(steps):
-                    pc = pcs[s % len(pcs)]
-                    pitch = self._resolve_pitch(pc, mid + (s % 3) * 3, key, low, high)
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start + s * sub_dur, 6),
-                        duration=0.12,  # Extremely short staccato
-                        velocity=self._velocity(84),
-                    ))
-            else:
-                # Dry skeletal accent hits on root/fifth
-                for i, pc in enumerate(pcs[:2]):
-                    pitch = self._resolve_pitch(pc, mid + i * 7, key, low, high)
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start, 6),
-                        duration=0.15,
-                        velocity=self._velocity(90),
-                    ))
-
-        return sorted(notes, key=lambda x: x.start)
+        super().__init__(
+            "xylophone",
+            params=params,
+            pattern=pattern,
+            note_density=note_density,
+        )
 
 
 class DulcimerGenerator(_ChromaticPercussionBase):
@@ -486,56 +198,9 @@ class DulcimerGenerator(_ChromaticPercussionBase):
         pattern: str = "rapid_arpeggio",  # rapid_arpeggio, hammered_roll
         note_density: float = 1.0,
     ) -> None:
-        super().__init__(params, note_density=note_density)
-        self.pattern = pattern
-
-    def render(
-        self,
-        chords: list[ChordLabel],
-        key: Scale,
-        duration_beats: float,
-        context: RenderContext | None = None,
-    ) -> list[NoteInfo]:
-        chords = self._apply_note_density(chords)
-        if not chords:
-            return []
-
-        notes: list[NoteInfo] = []
-        low = max(48, self.params.key_range_low)
-        high = min(84, self.params.key_range_high)
-        mid = (low + high) // 2
-
-        for chord in chords:
-            pcs = chord.pitch_classes()
-            if not pcs:
-                continue
-
-            if self.pattern == "hammered_roll":
-                # High speed hammer bounce effect
-                bounce_speed = 0.125
-                steps = max(1, int(chord.duration / bounce_speed))
-                for s in range(steps):
-                    pc = pcs[s % len(pcs)]
-                    pitch = self._resolve_pitch(pc, mid, key, low, high)
-                    # Tremolo volume shapes
-                    vel_mod = 12 if s % 2 == 0 else -12
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start + s * bounce_speed, 6),
-                        duration=0.25,  # ringing sustain
-                        velocity=max(1, min(127, self._velocity(72) + vel_mod)),
-                    ))
-            else:
-                # Ringing arpeggios
-                sub_dur = chord.duration / 3.0
-                for s in range(3):
-                    pc = pcs[s % len(pcs)]
-                    pitch = self._resolve_pitch(pc, mid + 6, key, low, high)
-                    notes.append(NoteInfo(
-                        pitch=pitch,
-                        start=round(chord.start + s * sub_dur, 6),
-                        duration=round(sub_dur * 1.6, 6),  # beautiful ringing sustain overlap
-                        velocity=self._velocity(76),
-                    ))
-
-        return sorted(notes, key=lambda x: x.start)
+        super().__init__(
+            "dulcimer",
+            params=params,
+            pattern=pattern,
+            note_density=note_density,
+        )

@@ -1,0 +1,18 @@
+# Glockenspiel Instrument Profile
+id = "glockenspiel"
+family = "mallet"
+name = "Glockenspiel"
+gm_program = 9
+range = { low = "C5", high = "C8" }  # 72 - 108
+max_polyphony = 1
+default_pattern = "melodic_accent"
+base_velocity = 82
+velocity_jitter = 8
+
+[sustain]
+pedal = false
+factor = 0.8
+
+[defaults]
+pattern = "melodic_accent"
+note_density = 1.0

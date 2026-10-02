@@ -1,0 +1,27 @@
+# Vibraphone Instrument Profile
+id = "vibraphone"
+family = "mallet"
+name = "Vibraphone"
+gm_program = 11
+range = { low = "F3", high = "F6" }  # 53 - 89
+max_polyphony = 4
+default_pattern = "warm_chords"
+base_velocity = 70
+velocity_jitter = 8
+
+[sustain]
+pedal = true
+factor = 0.95
+
+[features.motor_vibrato]
+enabled = true
+cc = 11
+speed_hz = 6.0
+depth = 15
+base_val = 85
+
+[defaults]
+pattern = "warm_chords"
+motor_speed_hz = 6.0
+pedal = true
+note_density = 1.0
