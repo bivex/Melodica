@@ -23,7 +23,7 @@ class _PluckedSoloBase(PluckedFamily, _SoloInstrumentBase, ABC):
 
     def __init__(
         self,
-        profile_id: str,
+        profile_or_params: str | InstrumentProfile | GeneratorParams | None = None,
         params: GeneratorParams | None = None,
         *,
         style: str | None = None,
@@ -32,9 +32,19 @@ class _PluckedSoloBase(PluckedFamily, _SoloInstrumentBase, ABC):
         pop_intensity: float | None = None,
         note_density: float = 1.0,
     ) -> None:
+        if isinstance(profile_or_params, GeneratorParams):
+            actual_params = profile_or_params
+            actual_profile = None
+        elif isinstance(profile_or_params, str) or hasattr(profile_or_params, "id"):
+            actual_profile = profile_or_params
+            actual_params = params
+        else:
+            actual_profile = None
+            actual_params = params
+
         super().__init__(
-            profile=profile_id,
-            params=params,
+            profile=actual_profile,
+            params=actual_params,
             style=style,
             pedal=pedal,
             acoustic_type=acoustic_type,

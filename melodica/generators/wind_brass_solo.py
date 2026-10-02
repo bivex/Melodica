@@ -25,7 +25,7 @@ class _WindBrassSoloBase(WindBrassFamily, _SoloInstrumentBase, ABC):
 
     def __init__(
         self,
-        profile_id: str,
+        profile_or_params: str | InstrumentProfile | GeneratorParams | None = None,
         params: GeneratorParams | None = None,
         *,
         brass_type: str | None = None,
@@ -36,9 +36,19 @@ class _WindBrassSoloBase(WindBrassFamily, _SoloInstrumentBase, ABC):
         harmony_count: int = 3,
         note_density: float = 1.0,
     ) -> None:
+        if isinstance(profile_or_params, GeneratorParams):
+            actual_params = profile_or_params
+            actual_profile = None
+        elif isinstance(profile_or_params, str) or hasattr(profile_or_params, "id"):
+            actual_profile = profile_or_params
+            actual_params = params
+        else:
+            actual_profile = None
+            actual_params = params
+
         super().__init__(
-            profile=profile_id,
-            params=params,
+            profile=actual_profile,
+            params=actual_params,
             brass_type=brass_type,
             instrument=instrument,
             plunger_wah=plunger_wah,

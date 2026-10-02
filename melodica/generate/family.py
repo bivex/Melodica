@@ -48,12 +48,12 @@ class FamilyGenerator(PhraseGenerator, ABC):
     Bound to an InstrumentProfile and uses shared kernel logic.
     """
 
-    profile: InstrumentProfile
+    profile: InstrumentProfile | None = None
     note_density: float = 1.0
 
     def __init__(
         self,
-        profile: InstrumentProfile | str,
+        profile: InstrumentProfile | str | None = None,
         params: GeneratorParams | None = None,
         *,
         note_density: float = 1.0,
@@ -64,9 +64,10 @@ class FamilyGenerator(PhraseGenerator, ABC):
         self.profile = profile
         self.note_density = note_density
 
-        # Clamp generator range to instrument physical profile boundaries
-        self.params.key_range_low = max(self.params.key_range_low, self.profile.range_low)
-        self.params.key_range_high = min(self.params.key_range_high, self.profile.range_high)
+        # Clamp generator range to instrument physical profile boundaries if profile provided
+        if self.profile is not None:
+            self.params.key_range_low = max(self.params.key_range_low, self.profile.range_low)
+            self.params.key_range_high = min(self.params.key_range_high, self.profile.range_high)
 
     def _apply_note_density(self, chords: Sequence[ChordLabel]) -> list[ChordLabel]:
         return apply_note_density(chords, self.note_density)
@@ -78,7 +79,7 @@ class FamilyGenerator(PhraseGenerator, ABC):
         if self.params.velocity_range:
             v_min, v_max = self.params.velocity_range
             return random.randint(v_min, v_max)
-        jit = jitter if jitter is not None else self.profile.velocity_jitter
+        jit = jitter if jitter is not None else (self.profile.velocity_jitter if self.profile else 8)
         return max(1, min(127, base_val + random.randint(-jit, jit)))
 
 
@@ -401,7 +402,7 @@ class PluckedFamily(FamilyGenerator):
 
     def __init__(
         self,
-        profile: InstrumentProfile | str = "grand_piano",
+        profile: InstrumentProfile | str | None = "grand_piano",
         params: GeneratorParams | None = None,
         *,
         style: str | None = None,
@@ -411,13 +412,13 @@ class PluckedFamily(FamilyGenerator):
         note_density: float = 1.0,
     ) -> None:
         super().__init__(profile, params, note_density=note_density)
-        self.style = style or self.profile.default_pattern or "fingerpicking"
-        self.pedal = self.profile.sustain_pedal if pedal is None else pedal
-        self.acoustic_type = acoustic_type or self.profile.id
+        self.style = style or (self.profile.default_pattern if self.profile else "fingerpicking") or "fingerpicking"
+        self.pedal = (self.profile.sustain_pedal if self.profile else False) if pedal is None else pedal
+        self.acoustic_type = acoustic_type or (self.profile.id if self.profile else "nylon_guitar")
         self.pop_intensity = (
             max(0.0, min(1.0, pop_intensity))
             if pop_intensity is not None
-            else float(self.profile.features.get("pop_intensity", 0.5))
+            else float(self.profile.features.get("pop_intensity", 0.5) if self.profile else 0.5)
         )
 
     def render(
@@ -681,7 +682,7 @@ class WindBrassFamily(FamilyGenerator):
 
     def __init__(
         self,
-        profile: InstrumentProfile | str = "muted_trumpet",
+        profile: InstrumentProfile | str | None = "muted_trumpet",
         params: GeneratorParams | None = None,
         *,
         brass_type: str | None = None,
@@ -693,8 +694,8 @@ class WindBrassFamily(FamilyGenerator):
         note_density: float = 1.0,
     ) -> None:
         super().__init__(profile, params, note_density=note_density)
-        self.brass_type = brass_type or self.profile.id
-        self.instrument = instrument or self.profile.id
+        self.brass_type = brass_type or (self.profile.id if self.profile else "muted_trumpet")
+        self.instrument = instrument or (self.profile.id if self.profile else "muted_trumpet")
         self.plunger_wah = plunger_wah
         self.breath_vibrato = breath_vibrato
         self.vibrato = vibrato
